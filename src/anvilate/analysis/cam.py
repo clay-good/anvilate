@@ -40,8 +40,42 @@ from math import atan2, cos, degrees, pi, radians, sin, sqrt, tan
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_CAM_DESIGN_SOURCE = "the cam design specification (profile, rise, and rise angle)"
+_CAM_DRAWING_SOURCE = "the cam drawing (base-circle radius and follower offset)"
+_SPEED_SOURCE = "the camshaft's rated or measured speed"
+_POSE_SOURCE = "the cam angle of interest within the rise"
+_MOTION_SOURCE = "the follower motion computed from the cam profile"
+_DESIGN_LIMIT_SOURCE = "the follower's allowable pressure angle from the design basis"
+
+
+class _CamInputError(RefusalError, ValueError):
+    """A cam-follower input that cannot be used without correction."""
+
+
+def _cam_refusal(message: str, *, subject: str, source: str) -> _CamInputError:
+    return _CamInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _cam_input_source(name: str) -> str:
+    if name == "cam_angle":
+        return _POSE_SOURCE
+    if name == "cam_speed":
+        return _SPEED_SOURCE
+    if name in {"base_circle_radius", "offset"}:
+        return _CAM_DRAWING_SOURCE
+    if name in {"follower_displacement", "lift_gradient"}:
+        return _MOTION_SOURCE
+    if name == "max_pressure_angle":
+        return _DESIGN_LIMIT_SOURCE
+    return _CAM_DESIGN_SOURCE
+
 
 __all__ = [
     "CamMotion",
@@ -55,10 +89,16 @@ _PROFILES = ("shm", "cycloidal", "parabolic", "poly345")
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _cam_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_cam_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _cam_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_cam_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -109,20 +149,36 @@ def cam_follower_motion(
     in m/s²).
     """
     if profile not in _PROFILES:
-        raise ValueError(f"profile must be one of {list(_PROFILES)}; got {profile!r}")
+        raise _cam_refusal(
+            f"profile must be one of {list(_PROFILES)}; got {profile!r}",
+            subject="profile",
+            source=_CAM_DESIGN_SOURCE,
+        )
     _require(rise, "[length]", "rise")
     if not isinstance(cam_speed, Quantity):
-        raise ValueError(f"cam_speed must be a [frequency] quantity; got {cam_speed!r}")
+        raise _cam_refusal(
+            f"cam_speed must be a [frequency] quantity; got {cam_speed!r}",
+            subject="cam_speed",
+            source=_SPEED_SOURCE,
+        )
     if not cam_speed.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _cam_refusal(
             f"cam_speed must be a rotational-speed ([frequency]) quantity; got "
-            f"{cam_speed.dimensionality} ({cam_speed})"
+            f"{cam_speed.dimensionality} ({cam_speed})",
+            subject="cam_speed",
+            source=_SPEED_SOURCE,
         )
     if rise_angle <= 0:
-        raise ValueError(f"rise_angle (degrees) must be positive; got {rise_angle}")
+        raise _cam_refusal(
+            f"rise_angle (degrees) must be positive; got {rise_angle}",
+            subject="rise_angle",
+            source=_CAM_DESIGN_SOURCE,
+        )
     if not 0 <= cam_angle <= rise_angle:
-        raise ValueError(
-            f"cam_angle (degrees) must lie in [0, rise_angle={rise_angle}]; got {cam_angle}"
+        raise _cam_refusal(
+            f"cam_angle (degrees) must lie in [0, rise_angle={rise_angle}]; got {cam_angle}",
+            subject="cam_angle",
+            source=_POSE_SOURCE,
         )
     ell = rise.to("m").magnitude
     beta = radians(rise_angle)
@@ -189,16 +245,26 @@ def cam_pressure_angle(
     s = follower_displacement.to("mm").magnitude
     r_b = base_circle_radius.to("mm").magnitude
     if r_b <= 0:
-        raise ValueError(f"base_circle_radius must be positive; got {base_circle_radius}")
+        raise _cam_refusal(
+            f"base_circle_radius must be positive; got {base_circle_radius}",
+            subject="base_circle_radius",
+            source=_CAM_DRAWING_SOURCE,
+        )
     if s < 0:
-        raise ValueError(f"follower_displacement must be non-negative; got {follower_displacement}")
+        raise _cam_refusal(
+            f"follower_displacement must be non-negative; got {follower_displacement}",
+            subject="follower_displacement",
+            source=_MOTION_SOURCE,
+        )
     e = 0.0
     if offset is not None:
         _require(offset, "[length]", "offset")
         e = offset.to("mm").magnitude
     if abs(e) >= r_b:
-        raise ValueError(
-            f"offset ({offset}) must be smaller than the base_circle_radius ({base_circle_radius})"
+        raise _cam_refusal(
+            f"offset ({offset}) must be smaller than the base_circle_radius ({base_circle_radius})",
+            subject="offset and base_circle_radius",
+            source=_CAM_DRAWING_SOURCE,
         )
     angle = atan2(dsdtheta - e, sqrt(r_b**2 - e**2) + s)
     return Quantity(magnitude=degrees(angle), unit="degree")
@@ -226,12 +292,18 @@ def cam_base_circle_for_pressure_angle(
     _require(lift_gradient, "[length]", "lift_gradient")
     _require(follower_displacement, "[length]", "follower_displacement")
     if not 0 < max_pressure_angle < 90:
-        raise ValueError(
-            f"max_pressure_angle (degrees) must lie in (0, 90); got {max_pressure_angle}"
+        raise _cam_refusal(
+            f"max_pressure_angle (degrees) must lie in (0, 90); got {max_pressure_angle}",
+            subject="max_pressure_angle",
+            source=_DESIGN_LIMIT_SOURCE,
         )
     dsdtheta = lift_gradient.to("mm").magnitude
     s = follower_displacement.to("mm").magnitude
     if s < 0:
-        raise ValueError(f"follower_displacement must be non-negative; got {follower_displacement}")
+        raise _cam_refusal(
+            f"follower_displacement must be non-negative; got {follower_displacement}",
+            subject="follower_displacement",
+            source=_MOTION_SOURCE,
+        )
     r_b = dsdtheta / tan(radians(max_pressure_angle)) - s
     return Quantity(magnitude=r_b, unit="mm")

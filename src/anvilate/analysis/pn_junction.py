@@ -22,7 +22,35 @@ from __future__ import annotations
 
 from math import log, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DOPING_SOURCE = "the device process record (acceptor and donor doping densities)"
+_SEMICONDUCTOR_SOURCE = "the cited semiconductor properties (intrinsic density and permittivity)"
+_STATE_SOURCE = "the junction's absolute operating temperature"
+_JUNCTION_SOURCE = "the computed built-in potential and depletion width"
+
+
+class _PnJunctionInputError(RefusalError, ValueError):
+    """A pn-junction input that cannot be used without correction."""
+
+
+def _pn_junction_refusal(message: str, *, subject: str, source: str) -> _PnJunctionInputError:
+    return _PnJunctionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _pn_junction_input_source(name: str) -> str:
+    if name in {"acceptor_density", "donor_density"}:
+        return _DOPING_SOURCE
+    if name in {"intrinsic_density", "permittivity"}:
+        return _SEMICONDUCTOR_SOURCE
+    if name == "temperature":
+        return _STATE_SOURCE
+    return _JUNCTION_SOURCE
+
 
 _BOLTZMANN = 1.380649e-23  # J/K
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
@@ -57,12 +85,25 @@ def built_in_potential(
     n_d = donor_density.to("1/m**3").magnitude
     n_i = intrinsic_density.to("1/m**3").magnitude
     t = temperature.to("K").magnitude
-    if n_a <= 0 or n_d <= 0:
-        raise ValueError("acceptor_density and donor_density must be positive")
+    for subject, magnitude in (("acceptor_density", n_a), ("donor_density", n_d)):
+        if magnitude <= 0:
+            raise _pn_junction_refusal(
+                "acceptor_density and donor_density must be positive",
+                subject=subject,
+                source=_DOPING_SOURCE,
+            )
     if n_i <= 0:
-        raise ValueError("intrinsic_density must be positive")
+        raise _pn_junction_refusal(
+            "intrinsic_density must be positive",
+            subject="intrinsic_density",
+            source=_SEMICONDUCTOR_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _pn_junction_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     v_bi = (_BOLTZMANN * t / _ELEMENTARY_CHARGE) * log(n_a * n_d / (n_i * n_i))
     return Quantity(magnitude=v_bi, unit="V")
 
@@ -90,11 +131,22 @@ def depletion_width(
     n_a = acceptor_density.to("1/m**3").magnitude
     n_d = donor_density.to("1/m**3").magnitude
     if v_bi <= 0:
-        raise ValueError("built_in_potential must be positive")
+        raise _pn_junction_refusal(
+            "built_in_potential must be positive",
+            subject="built_in_potential",
+            source=_JUNCTION_SOURCE,
+        )
     if eps <= 0:
-        raise ValueError("permittivity must be positive")
-    if n_a <= 0 or n_d <= 0:
-        raise ValueError("acceptor_density and donor_density must be positive")
+        raise _pn_junction_refusal(
+            "permittivity must be positive", subject="permittivity", source=_SEMICONDUCTOR_SOURCE
+        )
+    for subject, magnitude in (("acceptor_density", n_a), ("donor_density", n_d)):
+        if magnitude <= 0:
+            raise _pn_junction_refusal(
+                "acceptor_density and donor_density must be positive",
+                subject=subject,
+                source=_DOPING_SOURCE,
+            )
     w = sqrt(2.0 * eps * v_bi / _ELEMENTARY_CHARGE * (1.0 / n_a + 1.0 / n_d))
     return Quantity(magnitude=w, unit="m")
 
@@ -112,18 +164,28 @@ def junction_capacitance_per_area(*, permittivity: Quantity, depletion_width: Qu
     eps = permittivity.to("F/m").magnitude
     w = depletion_width.to("m").magnitude
     if eps <= 0:
-        raise ValueError("permittivity must be positive")
+        raise _pn_junction_refusal(
+            "permittivity must be positive", subject="permittivity", source=_SEMICONDUCTOR_SOURCE
+        )
     if w <= 0:
-        raise ValueError("depletion_width must be positive")
+        raise _pn_junction_refusal(
+            "depletion_width must be positive", subject="depletion_width", source=_JUNCTION_SOURCE
+        )
     return Quantity(magnitude=eps / w, unit="F/m**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _pn_junction_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_pn_junction_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _pn_junction_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_pn_junction_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -161,7 +223,13 @@ def junction_peak_electric_field(
     v = built_in_potential.to("V").magnitude
     w = depletion_width.to("m").magnitude
     if v <= 0:
-        raise ValueError("built_in_potential must be positive")
+        raise _pn_junction_refusal(
+            "built_in_potential must be positive",
+            subject="built_in_potential",
+            source=_JUNCTION_SOURCE,
+        )
     if w <= 0:
-        raise ValueError("depletion_width must be positive")
+        raise _pn_junction_refusal(
+            "depletion_width must be positive", subject="depletion_width", source=_JUNCTION_SOURCE
+        )
     return Quantity(magnitude=2.0 * v / w, unit="V/m")

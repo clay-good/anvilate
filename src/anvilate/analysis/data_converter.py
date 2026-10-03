@@ -26,8 +26,36 @@ from __future__ import annotations
 
 from math import log10, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_CONVERTER_SOURCE = "the converter datasheet (resolution, full-scale range, and aperture jitter)"
+_SAMPLING_SOURCE = "the sampling design (oversampling ratio or required extra resolution)"
+_SIGNAL_SOURCE = "the input signal's highest frequency of interest"
+_MEASUREMENT_SOURCE = "the measured signal-to-noise ratio of the converter"
+
+
+class _DataConverterInputError(RefusalError, ValueError):
+    """A data-converter input that cannot be used without correction."""
+
+
+def _data_converter_refusal(message: str, *, subject: str, source: str) -> _DataConverterInputError:
+    return _DataConverterInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _data_converter_input_source(name: str) -> str:
+    if name in {"extra_bits", "oversampling_ratio"}:
+        return _SAMPLING_SOURCE
+    if name == "input_frequency":
+        return _SIGNAL_SOURCE
+    if name == "snr_db":
+        return _MEASUREMENT_SOURCE
+    return _CONVERTER_SOURCE
+
 
 __all__ = [
     "effective_number_of_bits",
@@ -48,7 +76,9 @@ def quantization_snr(*, bits: float) -> float:
     the SNR in dB as a plain float.
     """
     if bits <= 0:
-        raise ValueError("bits must be positive")
+        raise _data_converter_refusal(
+            "bits must be positive", subject="bits", source=_CONVERTER_SOURCE
+        )
     return 6.02 * bits + 1.76
 
 
@@ -63,9 +93,15 @@ def quantization_step(*, full_scale_voltage: Quantity, bits: float) -> Quantity:
     _check(full_scale_voltage, "[electric_potential]", "full_scale_voltage")
     v_fs = full_scale_voltage.to("V").magnitude
     if v_fs <= 0:
-        raise ValueError("full_scale_voltage must be positive")
+        raise _data_converter_refusal(
+            "full_scale_voltage must be positive",
+            subject="full_scale_voltage",
+            source=_CONVERTER_SOURCE,
+        )
     if bits <= 0:
-        raise ValueError("bits must be positive")
+        raise _data_converter_refusal(
+            "bits must be positive", subject="bits", source=_CONVERTER_SOURCE
+        )
     return Quantity(magnitude=v_fs / (2.0**bits), unit="V")
 
 
@@ -81,9 +117,15 @@ def quantization_noise_voltage(*, full_scale_voltage: Quantity, bits: float) -> 
     _check(full_scale_voltage, "[electric_potential]", "full_scale_voltage")
     v_fs = full_scale_voltage.to("V").magnitude
     if v_fs <= 0:
-        raise ValueError("full_scale_voltage must be positive")
+        raise _data_converter_refusal(
+            "full_scale_voltage must be positive",
+            subject="full_scale_voltage",
+            source=_CONVERTER_SOURCE,
+        )
     if bits <= 0:
-        raise ValueError("bits must be positive")
+        raise _data_converter_refusal(
+            "bits must be positive", subject="bits", source=_CONVERTER_SOURCE
+        )
     return Quantity(magnitude=v_fs / (2.0**bits * sqrt(12.0)), unit="V")
 
 
@@ -97,7 +139,11 @@ def oversampling_snr_gain(*, oversampling_ratio: float) -> float:
     in dB as a plain float.
     """
     if oversampling_ratio < 1:
-        raise ValueError(f"oversampling_ratio must be at least 1; got {oversampling_ratio}")
+        raise _data_converter_refusal(
+            f"oversampling_ratio must be at least 1; got {oversampling_ratio}",
+            subject="oversampling_ratio",
+            source=_SAMPLING_SOURCE,
+        )
     return 10.0 * log10(oversampling_ratio)
 
 
@@ -112,7 +158,11 @@ def oversampling_ratio_for_bits(*, extra_bits: float) -> float:
     """
     require_finite(extra_bits, name="extra_bits")
     if extra_bits < 0:
-        raise ValueError(f"extra_bits must be non-negative; got {extra_bits}")
+        raise _data_converter_refusal(
+            f"extra_bits must be non-negative; got {extra_bits}",
+            subject="extra_bits",
+            source=_SAMPLING_SOURCE,
+        )
     return 2.0 ** (2.0 * extra_bits)
 
 
@@ -131,9 +181,13 @@ def aperture_jitter_snr_limit(*, input_frequency: Quantity, rms_jitter: Quantity
     f_in = count_rate_per_second(input_frequency, name="input_frequency")
     t_j = rms_jitter.to("s").magnitude
     if f_in <= 0:
-        raise ValueError("input_frequency must be positive")
+        raise _data_converter_refusal(
+            "input_frequency must be positive", subject="input_frequency", source=_SIGNAL_SOURCE
+        )
     if t_j <= 0:
-        raise ValueError("rms_jitter must be positive")
+        raise _data_converter_refusal(
+            "rms_jitter must be positive", subject="rms_jitter", source=_CONVERTER_SOURCE
+        )
     return -20.0 * log10(2.0 * pi * f_in * t_j)
 
 
@@ -152,19 +206,27 @@ def effective_number_of_bits(*, snr_db: float) -> float:
     message.
     """
     if snr_db <= 1.76:
-        raise ValueError(
+        raise _data_converter_refusal(
             f"snr_db must exceed 1.76 dB (one bit of resolution); got {snr_db} dB, which "
-            f"inverts to {(snr_db - 1.76) / 6.02:.4g} bits"
+            f"inverts to {(snr_db - 1.76) / 6.02:.4g} bits",
+            subject="snr_db",
+            source=_MEASUREMENT_SOURCE,
         )
     return (snr_db - 1.76) / 6.02
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _data_converter_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_data_converter_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _data_converter_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_data_converter_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -29,7 +29,33 @@ from __future__ import annotations
 
 from math import cosh, sinh, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LOAD_SOURCE = "the cable's self-weight plus attached load per unit length from the load case"
+_LAYOUT_SOURCE = "the cable layout drawing (span and design sag)"
+_TENSION_SOURCE = "the stringing tension or measured horizontal tension"
+_SCOPE_SOURCE = "the load, span, and tension, or the catenary forms for a deep sag"
+
+
+class _CableInputError(RefusalError, ValueError):
+    """A cable-statics input that cannot be used without correction."""
+
+
+def _cable_refusal(message: str, *, subject: str, source: str) -> _CableInputError:
+    return _CableInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _cable_input_source(name: str) -> str:
+    if name == "weight_per_length":
+        return _LOAD_SOURCE
+    if name == "horizontal_tension":
+        return _TENSION_SOURCE
+    return _LAYOUT_SOURCE
+
 
 __all__ = [
     "parabolic_cable_sag",
@@ -43,10 +69,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _cable_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_cable_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _cable_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_cable_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -61,9 +93,15 @@ def _inputs(weight_per_length: Quantity, span: Quantity) -> tuple[float, float]:
     w = weight_per_length.to("N/m").magnitude
     length = span.to("m").magnitude
     if w <= 0:
-        raise ValueError(f"weight_per_length must be positive; got {weight_per_length}")
+        raise _cable_refusal(
+            f"weight_per_length must be positive; got {weight_per_length}",
+            subject="weight_per_length",
+            source=_LOAD_SOURCE,
+        )
     if length <= 0:
-        raise ValueError(f"span must be positive; got {span}")
+        raise _cable_refusal(
+            f"span must be positive; got {span}", subject="span", source=_LAYOUT_SOURCE
+        )
     return w, length
 
 
@@ -81,12 +119,14 @@ def _check_shallow_sag(w: float, length: float, h: float) -> None:
     """Refuse a sag ratio past the shallow-sag scope of the parabolic forms."""
     ratio = w * length / (8.0 * h)
     if ratio > _SHALLOW_SAG_RATIO_LIMIT:
-        raise ValueError(
+        raise _cable_refusal(
             f"the sag ratio d/L = {ratio:.4g} is past the shallow-sag scope of the parabolic "
             f"forms (d/L <= {_SHALLOW_SAG_RATIO_LIMIT:g}, where the error is about 1%). Both the "
             f"sag and the peak tension come out UNDER the exact values here, which overstates "
             f"clearance and understates the anchor load. Use catenary_sag and "
-            f"catenary_max_tension, which take the same arguments and are exact."
+            f"catenary_max_tension, which take the same arguments and are exact.",
+            subject="weight_per_length, span, and horizontal_tension",
+            source=_SCOPE_SOURCE,
         )
 
 
@@ -106,7 +146,11 @@ def parabolic_cable_sag(
     _require(horizontal_tension, "[force]", "horizontal_tension")
     h = horizontal_tension.to("N").magnitude
     if h <= 0:
-        raise ValueError(f"horizontal_tension must be positive; got {horizontal_tension}")
+        raise _cable_refusal(
+            f"horizontal_tension must be positive; got {horizontal_tension}",
+            subject="horizontal_tension",
+            source=_TENSION_SOURCE,
+        )
     _check_shallow_sag(w, length, h)
     return Quantity(magnitude=w * length**2 / (8.0 * h), unit="m")
 
@@ -127,7 +171,11 @@ def parabolic_cable_max_tension(
     _require(horizontal_tension, "[force]", "horizontal_tension")
     h = horizontal_tension.to("N").magnitude
     if h <= 0:
-        raise ValueError(f"horizontal_tension must be positive; got {horizontal_tension}")
+        raise _cable_refusal(
+            f"horizontal_tension must be positive; got {horizontal_tension}",
+            subject="horizontal_tension",
+            source=_TENSION_SOURCE,
+        )
     _check_shallow_sag(w, length, h)
     vertical_reaction = w * length / 2.0
     return Quantity(magnitude=sqrt(h**2 + vertical_reaction**2), unit="N")
@@ -149,9 +197,13 @@ def parabolic_cable_length(*, span: Quantity, sag: Quantity) -> Quantity:
     length = span.to("m").magnitude
     d = sag.to("m").magnitude
     if length <= 0:
-        raise ValueError(f"span must be positive; got {span}")
+        raise _cable_refusal(
+            f"span must be positive; got {span}", subject="span", source=_LAYOUT_SOURCE
+        )
     if d <= 0:
-        raise ValueError(f"sag must be positive; got {sag}")
+        raise _cable_refusal(
+            f"sag must be positive; got {sag}", subject="sag", source=_LAYOUT_SOURCE
+        )
     return Quantity(magnitude=length + 8.0 * d**2 / (3.0 * length), unit="m")
 
 
@@ -170,11 +222,21 @@ def _catenary_inputs(
     h = horizontal_tension.to("N").magnitude
     length = span.to("m").magnitude
     if w <= 0:
-        raise ValueError(f"weight_per_length must be positive; got {weight_per_length}")
+        raise _cable_refusal(
+            f"weight_per_length must be positive; got {weight_per_length}",
+            subject="weight_per_length",
+            source=_LOAD_SOURCE,
+        )
     if h <= 0:
-        raise ValueError(f"horizontal_tension must be positive; got {horizontal_tension}")
+        raise _cable_refusal(
+            f"horizontal_tension must be positive; got {horizontal_tension}",
+            subject="horizontal_tension",
+            source=_TENSION_SOURCE,
+        )
     if length <= 0:
-        raise ValueError(f"span must be positive; got {span}")
+        raise _cable_refusal(
+            f"span must be positive; got {span}", subject="span", source=_LAYOUT_SOURCE
+        )
     return h / w, length / 2.0, w
 
 

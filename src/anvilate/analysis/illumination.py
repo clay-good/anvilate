@@ -29,7 +29,43 @@ from __future__ import annotations
 
 from math import cos, pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ROOM_SOURCE = "the architectural drawing (room dimensions, cavity height, and area)"
+_LUMINAIRE_SOURCE = "the luminaire photometric report (intensity, lumens, input watts, and CU)"
+_SURFACE_SOURCE = "the surface finish's measured or cited reflectance"
+_LAYOUT_SOURCE = "the lighting layout (luminaire count, distances, and aiming angles)"
+_DESIGN_SOURCE = "the lighting design criterion (target level and light loss factor)"
+
+
+class _IlluminationInputError(RefusalError, ValueError):
+    """A lighting-design input that cannot be used without correction."""
+
+
+def _illumination_refusal(message: str, *, subject: str, source: str) -> _IlluminationInputError:
+    return _IlluminationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _illumination_input_source(name: str) -> str:
+    if name in {"area", "cavity_height", "room_length", "room_width"}:
+        return _ROOM_SOURCE
+    if name in {
+        "coefficient_of_utilization",
+        "input_watts_per_luminaire",
+        "lumens_per_luminaire",
+        "luminous_intensity",
+    }:
+        return _LUMINAIRE_SOURCE
+    if name == "reflectance":
+        return _SURFACE_SOURCE
+    if name in {"distance", "incidence_angle", "luminaire_count"}:
+        return _LAYOUT_SOURCE
+    return _DESIGN_SOURCE
+
 
 __all__ = [
     "diffuse_surface_luminance",
@@ -64,8 +100,17 @@ def room_cavity_ratio(
     h = cavity_height.to("m").magnitude
     length = room_length.to("m").magnitude
     width = room_width.to("m").magnitude
-    if h <= 0 or length <= 0 or width <= 0:
-        raise ValueError("cavity_height, room_length, and room_width must be positive")
+    for subject, magnitude in (
+        ("cavity_height", h),
+        ("room_length", length),
+        ("room_width", width),
+    ):
+        if magnitude <= 0:
+            raise _illumination_refusal(
+                "cavity_height, room_length, and room_width must be positive",
+                subject=subject,
+                source=_ROOM_SOURCE,
+            )
     return 5.0 * h * (length + width) / (length * width)
 
 
@@ -88,9 +133,15 @@ def point_source_illuminance(
     _check(distance, "[length]", "distance")
     d = distance.to("m").magnitude
     if d <= 0:
-        raise ValueError("distance must be positive")
+        raise _illumination_refusal(
+            "distance must be positive", subject="distance", source=_LAYOUT_SOURCE
+        )
     if not -1.5707963267948966 <= incidence_angle <= 1.5707963267948966:
-        raise ValueError("incidence_angle (radians) must be within ±π/2 of the surface normal")
+        raise _illumination_refusal(
+            "incidence_angle (radians) must be within ±π/2 of the surface normal",
+            subject="incidence_angle",
+            source=_LAYOUT_SOURCE,
+        )
     intensity = luminous_intensity.to("cd").magnitude
     e = intensity * cos(incidence_angle) / d**2
     return Quantity(magnitude=e, unit="lux")
@@ -111,7 +162,9 @@ def diffuse_surface_luminance(*, illuminance: Quantity, reflectance: float) -> Q
     _check_coefficient(reflectance, "reflectance")
     e = illuminance.to("lux").magnitude
     if e < 0:
-        raise ValueError("illuminance must be non-negative")
+        raise _illumination_refusal(
+            "illuminance must be non-negative", subject="illuminance", source=_DESIGN_SOURCE
+        )
     return Quantity(magnitude=reflectance * e / pi, unit="cd/m**2")
 
 
@@ -127,10 +180,18 @@ def illuminance_for_target_luminance(*, target_luminance: Quantity, reflectance:
     """
     _check(target_luminance, "[luminosity]/[area]", "target_luminance")
     if not 0.0 < reflectance <= 1.0:
-        raise ValueError(f"reflectance must be in (0, 1]; got {reflectance}")
+        raise _illumination_refusal(
+            f"reflectance must be in (0, 1]; got {reflectance}",
+            subject="reflectance",
+            source=_SURFACE_SOURCE,
+        )
     lum = target_luminance.to("cd/m**2").magnitude
     if lum < 0:
-        raise ValueError("target_luminance must be non-negative")
+        raise _illumination_refusal(
+            "target_luminance must be non-negative",
+            subject="target_luminance",
+            source=_DESIGN_SOURCE,
+        )
     return Quantity(magnitude=pi * lum / reflectance, unit="lux")
 
 
@@ -154,12 +215,14 @@ def lumen_method_illuminance(
     _check(lumens_per_luminaire, "[luminosity]", "lumens_per_luminaire")
     _check(area, "[length]**2", "area")
     if luminaire_count <= 0:
-        raise ValueError("luminaire_count must be positive")
+        raise _illumination_refusal(
+            "luminaire_count must be positive", subject="luminaire_count", source=_LAYOUT_SOURCE
+        )
     _check_coefficient(coefficient_of_utilization, "coefficient_of_utilization")
     _check_coefficient(light_loss_factor, "light_loss_factor")
     a = area.to("m**2").magnitude
     if a <= 0:
-        raise ValueError("area must be positive")
+        raise _illumination_refusal("area must be positive", subject="area", source=_ROOM_SOURCE)
     phi = lumens_per_luminaire.to("lumen").magnitude
     e = luminaire_count * phi * coefficient_of_utilization * light_loss_factor / a
     return Quantity(magnitude=e, unit="lux")
@@ -190,8 +253,17 @@ def lumen_method_luminaire_count(
     e = target_illuminance.to("lux").magnitude
     a = area.to("m**2").magnitude
     phi = lumens_per_luminaire.to("lumen").magnitude
-    if e <= 0 or a <= 0 or phi <= 0:
-        raise ValueError("target_illuminance, area, and lumens_per_luminaire must be positive")
+    for subject, magnitude in (
+        ("target_illuminance", e),
+        ("area", a),
+        ("lumens_per_luminaire", phi),
+    ):
+        if magnitude <= 0:
+            raise _illumination_refusal(
+                "target_illuminance, area, and lumens_per_luminaire must be positive",
+                subject=subject,
+                source=_illumination_input_source(subject),
+            )
     return e * a / (phi * coefficient_of_utilization * light_loss_factor)
 
 
@@ -212,20 +284,28 @@ def lighting_power_density(
     _check(input_watts_per_luminaire, "[power]", "input_watts_per_luminaire")
     _check(area, "[length]**2", "area")
     if luminaire_count <= 0:
-        raise ValueError("luminaire_count must be positive")
+        raise _illumination_refusal(
+            "luminaire_count must be positive", subject="luminaire_count", source=_LAYOUT_SOURCE
+        )
     a = area.to("m**2").magnitude
     if a <= 0:
-        raise ValueError("area must be positive")
+        raise _illumination_refusal("area must be positive", subject="area", source=_ROOM_SOURCE)
     watts = input_watts_per_luminaire.to("W").magnitude
     return Quantity(magnitude=luminaire_count * watts / a, unit="W/m**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _illumination_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_illumination_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _illumination_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_illumination_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -237,4 +317,8 @@ def _check(value: Quantity, expected: str, name: str) -> None:
 
 def _check_coefficient(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be in (0, 1]; got {value}")
+        raise _illumination_refusal(
+            f"{name} must be in (0, 1]; got {value}",
+            subject=name,
+            source=_illumination_input_source(name),
+        )

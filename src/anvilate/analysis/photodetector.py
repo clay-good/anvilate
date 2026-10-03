@@ -25,8 +25,33 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_DETECTOR_SOURCE = "the photodetector datasheet (quantum efficiency, responsivity, and active area)"
+_SIGNAL_SOURCE = "the optical link budget (wavelength and received power)"
+_RECEIVER_SOURCE = "the receiver design (bandwidth) and the measured or computed currents"
+
+
+class _PhotodetectorInputError(RefusalError, ValueError):
+    """A photodetector input that cannot be used without correction."""
+
+
+def _photodetector_refusal(message: str, *, subject: str, source: str) -> _PhotodetectorInputError:
+    return _PhotodetectorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _photodetector_input_source(name: str) -> str:
+    if name in {"active_area", "noise_equivalent_power", "quantum_efficiency", "responsivity"}:
+        return _DETECTOR_SOURCE
+    if name in {"optical_power", "wavelength"}:
+        return _SIGNAL_SOURCE
+    return _RECEIVER_SOURCE
+
 
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
 _PLANCK = 6.62607015e-34  # J*s
@@ -52,9 +77,15 @@ def photodiode_responsivity(*, quantum_efficiency: float, wavelength: Quantity) 
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if not 0.0 < quantum_efficiency <= 1.0:
-        raise ValueError("quantum_efficiency must be in (0, 1]")
+        raise _photodetector_refusal(
+            "quantum_efficiency must be in (0, 1]",
+            subject="quantum_efficiency",
+            source=_DETECTOR_SOURCE,
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _photodetector_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SIGNAL_SOURCE
+        )
     r = quantum_efficiency * _ELEMENTARY_CHARGE * lam / (_PLANCK * _SPEED_OF_LIGHT)
     return Quantity(magnitude=r, unit="A/W")
 
@@ -72,9 +103,13 @@ def photodiode_current(*, responsivity: Quantity, optical_power: Quantity) -> Qu
     r = responsivity.to("A/W").magnitude
     p = optical_power.to("W").magnitude
     if r < 0:
-        raise ValueError("responsivity must be non-negative")
+        raise _photodetector_refusal(
+            "responsivity must be non-negative", subject="responsivity", source=_DETECTOR_SOURCE
+        )
     if p < 0:
-        raise ValueError("optical_power must be non-negative")
+        raise _photodetector_refusal(
+            "optical_power must be non-negative", subject="optical_power", source=_SIGNAL_SOURCE
+        )
     return Quantity(magnitude=r * p, unit="A")
 
 
@@ -92,9 +127,13 @@ def shot_noise_current(*, current: Quantity, bandwidth: Quantity) -> Quantity:
     i = current.to("A").magnitude
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if i < 0:
-        raise ValueError("current must be non-negative")
+        raise _photodetector_refusal(
+            "current must be non-negative", subject="current", source=_RECEIVER_SOURCE
+        )
     if b < 0:
-        raise ValueError("bandwidth must be non-negative")
+        raise _photodetector_refusal(
+            "bandwidth must be non-negative", subject="bandwidth", source=_RECEIVER_SOURCE
+        )
     return Quantity(magnitude=(2.0 * _ELEMENTARY_CHARGE * i * b) ** 0.5, unit="A")
 
 
@@ -119,18 +158,28 @@ def noise_equivalent_power(*, noise_current: Quantity, responsivity: Quantity) -
     i_n = noise_current.to("A").magnitude
     r = responsivity.to("A/W").magnitude
     if i_n < 0:
-        raise ValueError("noise_current must be non-negative")
+        raise _photodetector_refusal(
+            "noise_current must be non-negative", subject="noise_current", source=_RECEIVER_SOURCE
+        )
     if r <= 0:
-        raise ValueError("responsivity must be positive")
+        raise _photodetector_refusal(
+            "responsivity must be positive", subject="responsivity", source=_DETECTOR_SOURCE
+        )
     return Quantity(magnitude=i_n / r, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _photodetector_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_photodetector_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _photodetector_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_photodetector_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -169,9 +218,17 @@ def specific_detectivity(
     area_cm2 = active_area.to("cm**2").magnitude
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if nep <= 0:
-        raise ValueError("noise_equivalent_power must be positive")
+        raise _photodetector_refusal(
+            "noise_equivalent_power must be positive",
+            subject="noise_equivalent_power",
+            source=_DETECTOR_SOURCE,
+        )
     if area_cm2 <= 0:
-        raise ValueError("active_area must be positive")
+        raise _photodetector_refusal(
+            "active_area must be positive", subject="active_area", source=_DETECTOR_SOURCE
+        )
     if b <= 0:
-        raise ValueError("bandwidth must be positive")
+        raise _photodetector_refusal(
+            "bandwidth must be positive", subject="bandwidth", source=_RECEIVER_SOURCE
+        )
     return Quantity(magnitude=sqrt(area_cm2 * b) / nep, unit="cm*Hz**0.5/W")

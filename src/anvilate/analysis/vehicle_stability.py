@@ -24,7 +24,37 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_VEHICLE_SOURCE = "the vehicle's measured mass properties (track, wheelbase, CG height, axle loads)"
+_TIRE_SOURCE = "the tire test data's cornering stiffnesses"
+_MANEUVER_SOURCE = "the maneuver specification (curve radius and lateral acceleration)"
+_DERIVED_SOURCE = "the computed stability factor or understeer gradient for the vehicle"
+
+
+class _VehicleStabilityInputError(RefusalError, ValueError):
+    """A vehicle-stability input that cannot be used without correction."""
+
+
+def _vehicle_stability_refusal(
+    message: str, *, subject: str, source: str
+) -> _VehicleStabilityInputError:
+    return _VehicleStabilityInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _vehicle_stability_input_source(name: str) -> str:
+    if name in {"front_cornering_stiffness", "rear_cornering_stiffness"}:
+        return _TIRE_SOURCE
+    if name in {"curve_radius", "lateral_acceleration"}:
+        return _MANEUVER_SOURCE
+    if name in {"static_stability_factor", "understeer_gradient"}:
+        return _DERIVED_SOURCE
+    return _VEHICLE_SOURCE
+
 
 _STANDARD_GRAVITY = 9.80665  # m/s**2
 
@@ -51,9 +81,15 @@ def static_stability_factor(*, track_width: Quantity, center_of_gravity_height: 
     t = track_width.to("m").magnitude
     h = center_of_gravity_height.to("m").magnitude
     if t <= 0:
-        raise ValueError("track_width must be positive")
+        raise _vehicle_stability_refusal(
+            "track_width must be positive", subject="track_width", source=_VEHICLE_SOURCE
+        )
     if h <= 0:
-        raise ValueError("center_of_gravity_height must be positive")
+        raise _vehicle_stability_refusal(
+            "center_of_gravity_height must be positive",
+            subject="center_of_gravity_height",
+            source=_VEHICLE_SOURCE,
+        )
     return t / (2.0 * h)
 
 
@@ -67,11 +103,17 @@ def rollover_threshold_speed(*, static_stability_factor: float, curve_radius: Qu
     raises the speed. ``static_stability_factor`` must be positive. Returns the speed in m/s.
     """
     if static_stability_factor <= 0:
-        raise ValueError("static_stability_factor must be positive")
+        raise _vehicle_stability_refusal(
+            "static_stability_factor must be positive",
+            subject="static_stability_factor",
+            source=_DERIVED_SOURCE,
+        )
     _check(curve_radius, "[length]", "curve_radius")
     r = curve_radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("curve_radius must be positive")
+        raise _vehicle_stability_refusal(
+            "curve_radius must be positive", subject="curve_radius", source=_MANEUVER_SOURCE
+        )
     return Quantity(magnitude=sqrt(static_stability_factor * _STANDARD_GRAVITY * r), unit="m/s")
 
 
@@ -99,13 +141,25 @@ def lateral_load_transfer(
     h = center_of_gravity_height.to("m").magnitude
     t = track_width.to("m").magnitude
     if m <= 0:
-        raise ValueError("vehicle_mass must be positive")
+        raise _vehicle_stability_refusal(
+            "vehicle_mass must be positive", subject="vehicle_mass", source=_VEHICLE_SOURCE
+        )
     if a_y < 0:
-        raise ValueError("lateral_acceleration must be non-negative")
+        raise _vehicle_stability_refusal(
+            "lateral_acceleration must be non-negative",
+            subject="lateral_acceleration",
+            source=_MANEUVER_SOURCE,
+        )
     if h <= 0:
-        raise ValueError("center_of_gravity_height must be positive")
+        raise _vehicle_stability_refusal(
+            "center_of_gravity_height must be positive",
+            subject="center_of_gravity_height",
+            source=_VEHICLE_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("track_width must be positive")
+        raise _vehicle_stability_refusal(
+            "track_width must be positive", subject="track_width", source=_VEHICLE_SOURCE
+        )
     return Quantity(magnitude=m * a_y * h / t, unit="N")
 
 
@@ -148,10 +202,19 @@ def understeer_gradient(
     w_r = rear_axle_load.to("N").magnitude
     c_f = front_cornering_stiffness.to("N").magnitude
     c_r = rear_cornering_stiffness.to("N").magnitude
-    if w_f <= 0 or w_r <= 0:
-        raise ValueError("front_axle_load and rear_axle_load must be positive")
+    for subject, magnitude in (("front_axle_load", w_f), ("rear_axle_load", w_r)):
+        if magnitude <= 0:
+            raise _vehicle_stability_refusal(
+                "front_axle_load and rear_axle_load must be positive",
+                subject=subject,
+                source=_VEHICLE_SOURCE,
+            )
     if c_f <= 0 or c_r <= 0:
-        raise ValueError("cornering stiffnesses must be positive")
+        raise _vehicle_stability_refusal(
+            "cornering stiffnesses must be positive",
+            subject="front_cornering_stiffness and rear_cornering_stiffness",
+            source=_TIRE_SOURCE,
+        )
     return w_f / c_f - w_r / c_r
 
 
@@ -177,23 +240,35 @@ def vehicle_characteristic_speed(*, understeer_gradient: float, wheelbase: Quant
     _check(wheelbase, "[length]", "wheelbase")
     length = wheelbase.to("m").magnitude
     if length <= 0:
-        raise ValueError(f"wheelbase must be positive; got {wheelbase}")
+        raise _vehicle_stability_refusal(
+            f"wheelbase must be positive; got {wheelbase}",
+            subject="wheelbase",
+            source=_VEHICLE_SOURCE,
+        )
     if understeer_gradient <= 0:
-        raise ValueError(
+        raise _vehicle_stability_refusal(
             f"understeer_gradient must be positive for a characteristic speed; got "
             f"{understeer_gradient}. A neutral car (K = 0) has none, and for an oversteering car "
             f"(K < 0) the same expression with |K| is the CRITICAL speed above which the yaw "
-            f"response diverges -- a different quantity with a different meaning."
+            f"response diverges -- a different quantity with a different meaning.",
+            subject="understeer_gradient",
+            source=_DERIVED_SOURCE,
         )
     return Quantity(magnitude=sqrt(length * 9.80665 / understeer_gradient), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _vehicle_stability_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_vehicle_stability_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _vehicle_stability_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_vehicle_stability_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

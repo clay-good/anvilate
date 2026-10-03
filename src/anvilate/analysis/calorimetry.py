@@ -22,8 +22,36 @@ equilibrium temperature two mixed streams reach.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_BATCH_SOURCE = "the measured or specified mass of each body"
+_PROPERTY_SOURCE = "the cited specific or latent heat at the process temperature"
+_STATE_SOURCE = "the measured absolute temperatures or temperature change"
+_STEAM_TABLE_SOURCE = "the steam tables at the upstream and flash pressures"
+
+
+class _CalorimetryInputError(RefusalError, ValueError):
+    """A calorimetry input that cannot be used without correction."""
+
+
+def _calorimetry_refusal(message: str, *, subject: str, source: str) -> _CalorimetryInputError:
+    return _CalorimetryInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _calorimetry_input_source(name: str) -> str:
+    if name in {"mass", "mass1", "mass2"}:
+        return _BATCH_SOURCE
+    if name in {"temperature1", "temperature2", "temperature_change"}:
+        return _STATE_SOURCE
+    if name in {"final_latent_heat", "final_liquid_enthalpy", "initial_liquid_enthalpy"}:
+        return _STEAM_TABLE_SOURCE
+    return _PROPERTY_SOURCE
+
 
 __all__ = [
     "flash_steam_fraction",
@@ -50,9 +78,11 @@ def sensible_heat(
     c = specific_heat.to("J/(kg*K)").magnitude
     dt = temperature_difference_kelvin(temperature_change, name="temperature_change")
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _calorimetry_refusal("mass must be positive", subject="mass", source=_BATCH_SOURCE)
     if c <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _calorimetry_refusal(
+            "specific_heat must be positive", subject="specific_heat", source=_PROPERTY_SOURCE
+        )
     return Quantity(magnitude=m * c * dt, unit="J")
 
 
@@ -81,21 +111,29 @@ def flash_steam_fraction(
     h_f2 = final_liquid_enthalpy.to("J/kg").magnitude
     h_fg2 = final_latent_heat.to("J/kg").magnitude
     if h_fg2 <= 0:
-        raise ValueError("final_latent_heat must be positive")
+        raise _calorimetry_refusal(
+            "final_latent_heat must be positive",
+            subject="final_latent_heat",
+            source=_STEAM_TABLE_SOURCE,
+        )
     if h_f1 < h_f2:
-        raise ValueError(
+        raise _calorimetry_refusal(
             "initial_liquid_enthalpy must be at least the final saturated-liquid enthalpy "
-            "(a colder liquid does not flash)"
+            "(a colder liquid does not flash)",
+            subject="initial_liquid_enthalpy and final_liquid_enthalpy",
+            source=_STEAM_TABLE_SOURCE,
         )
     fraction = (h_f1 - h_f2) / h_fg2
     # The lower bound was guarded and the upper one was not, so an incoming enthalpy above the
     # downstream saturated VAPOUR enthalpy returned a mass fraction over 1 -- more steam than
     # there was water. That input is superheated vapour, not a flashing liquid.
     if fraction > 1.0:
-        raise ValueError(
+        raise _calorimetry_refusal(
             f"initial_liquid_enthalpy exceeds the downstream saturated-vapour enthalpy "
             f"(h_f2 + h_fg2), so the flash fraction comes out {fraction:.4f} -- more vapour "
-            f"than there is liquid. That stream is superheated vapour, not a flashing liquid."
+            f"than there is liquid. That stream is superheated vapour, not a flashing liquid.",
+            subject="initial_liquid_enthalpy, final_liquid_enthalpy, and final_latent_heat",
+            source=_STEAM_TABLE_SOURCE,
         )
     return fraction
 
@@ -113,9 +151,13 @@ def latent_heat(*, mass: Quantity, specific_latent_heat: Quantity) -> Quantity:
     m = mass.to("kg").magnitude
     lat = specific_latent_heat.to("J/kg").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _calorimetry_refusal("mass must be positive", subject="mass", source=_BATCH_SOURCE)
     if lat <= 0:
-        raise ValueError("specific_latent_heat must be positive")
+        raise _calorimetry_refusal(
+            "specific_latent_heat must be positive",
+            subject="specific_latent_heat",
+            source=_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=m * lat, unit="J")
 
 
@@ -148,22 +190,39 @@ def mixing_equilibrium_temperature(
     m2 = mass2.to("kg").magnitude
     c2 = specific_heat2.to("J/(kg*K)").magnitude
     t2 = temperature2.to("K").magnitude
-    if m1 <= 0 or m2 <= 0:
-        raise ValueError("masses must be positive")
-    if c1 <= 0 or c2 <= 0:
-        raise ValueError("specific heats must be positive")
-    if t1 <= 0 or t2 <= 0:
-        raise ValueError("temperatures must be positive (absolute temperature)")
+    for subject, magnitude in (("mass1", m1), ("mass2", m2)):
+        if magnitude <= 0:
+            raise _calorimetry_refusal(
+                "masses must be positive", subject=subject, source=_BATCH_SOURCE
+            )
+    for subject, magnitude in (("specific_heat1", c1), ("specific_heat2", c2)):
+        if magnitude <= 0:
+            raise _calorimetry_refusal(
+                "specific heats must be positive", subject=subject, source=_PROPERTY_SOURCE
+            )
+    for subject, magnitude in (("temperature1", t1), ("temperature2", t2)):
+        if magnitude <= 0:
+            raise _calorimetry_refusal(
+                "temperatures must be positive (absolute temperature)",
+                subject=subject,
+                source=_STATE_SOURCE,
+            )
     t_f = (m1 * c1 * t1 + m2 * c2 * t2) / (m1 * c1 + m2 * c2)
     return Quantity(magnitude=t_f, unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _calorimetry_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_calorimetry_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _calorimetry_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_calorimetry_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

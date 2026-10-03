@@ -18,7 +18,34 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SPRINKLER_SOURCE = "the sprinkler's listed K-factor from its data sheet"
+_HYDRAULIC_SOURCE = "the sprinkler system's hydraulic calculation (pressure or design flow)"
+_FLOW_TEST_SOURCE = "the hydrant flow-test record (outlet diameter, coefficient, and pitot reading)"
+
+
+class _FireProtectionInputError(RefusalError, ValueError):
+    """A fire-sprinkler hydraulic input that cannot be used without correction."""
+
+
+def _fire_protection_refusal(
+    message: str, *, subject: str, source: str
+) -> _FireProtectionInputError:
+    return _FireProtectionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fire_protection_input_source(name: str) -> str:
+    if name == "k_factor":
+        return _SPRINKLER_SOURCE
+    if name in {"discharge_coefficient", "outlet_diameter", "pitot_pressure"}:
+        return _FLOW_TEST_SOURCE
+    return _HYDRAULIC_SOURCE
+
 
 _K_DIMENSION = "[volume] / [time] / [pressure]**0.5"
 
@@ -40,19 +67,29 @@ def sprinkler_discharge(*, k_factor: Quantity, pressure: Quantity) -> Quantity:
     and ``pressure`` be a positive pressure. Returns the discharge in gallons per minute.
     """
     if not isinstance(k_factor, Quantity):
-        raise ValueError(f"k_factor must be a {_K_DIMENSION} quantity; got {k_factor!r}")
+        raise _fire_protection_refusal(
+            f"k_factor must be a {_K_DIMENSION} quantity; got {k_factor!r}",
+            subject="k_factor",
+            source=_SPRINKLER_SOURCE,
+        )
     if not k_factor.has_dimension(_K_DIMENSION):
-        raise ValueError(
+        raise _fire_protection_refusal(
             f"k_factor must be a {_K_DIMENSION} quantity; got "
-            f"{k_factor.dimensionality} ({k_factor})"
+            f"{k_factor.dimensionality} ({k_factor})",
+            subject="k_factor",
+            source=_SPRINKLER_SOURCE,
         )
     _check(pressure, "[pressure]", "pressure")
     k = k_factor.to("gallon/minute/psi**0.5").magnitude
     p = pressure.to("psi").magnitude
     if k <= 0:
-        raise ValueError("k_factor must be positive")
+        raise _fire_protection_refusal(
+            "k_factor must be positive", subject="k_factor", source=_SPRINKLER_SOURCE
+        )
     if p < 0:
-        raise ValueError("pressure must be non-negative")
+        raise _fire_protection_refusal(
+            "pressure must be non-negative", subject="pressure", source=_HYDRAULIC_SOURCE
+        )
     return Quantity(magnitude=k * sqrt(p), unit="gallon/minute")
 
 
@@ -67,19 +104,29 @@ def sprinkler_pressure_for_flow(*, k_factor: Quantity, flow_rate: Quantity) -> Q
     in psi.
     """
     if not isinstance(k_factor, Quantity):
-        raise ValueError(f"k_factor must be a {_K_DIMENSION} quantity; got {k_factor!r}")
+        raise _fire_protection_refusal(
+            f"k_factor must be a {_K_DIMENSION} quantity; got {k_factor!r}",
+            subject="k_factor",
+            source=_SPRINKLER_SOURCE,
+        )
     if not k_factor.has_dimension(_K_DIMENSION):
-        raise ValueError(
+        raise _fire_protection_refusal(
             f"k_factor must be a {_K_DIMENSION} quantity; got "
-            f"{k_factor.dimensionality} ({k_factor})"
+            f"{k_factor.dimensionality} ({k_factor})",
+            subject="k_factor",
+            source=_SPRINKLER_SOURCE,
         )
     _check(flow_rate, "[volume]/[time]", "flow_rate")
     k = k_factor.to("gallon/minute/psi**0.5").magnitude
     q = flow_rate.to("gallon/minute").magnitude
     if k <= 0:
-        raise ValueError("k_factor must be positive")
+        raise _fire_protection_refusal(
+            "k_factor must be positive", subject="k_factor", source=_SPRINKLER_SOURCE
+        )
     if q < 0:
-        raise ValueError("flow_rate must be non-negative")
+        raise _fire_protection_refusal(
+            "flow_rate must be non-negative", subject="flow_rate", source=_HYDRAULIC_SOURCE
+        )
     return Quantity(magnitude=(q / k) ** 2, unit="psi")
 
 
@@ -103,22 +150,38 @@ def hydrant_flow_test(
     _check(outlet_diameter, "[length]", "outlet_diameter")
     _check(pitot_pressure, "[pressure]", "pitot_pressure")
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+        raise _fire_protection_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_FLOW_TEST_SOURCE,
+        )
     d = outlet_diameter.to("inch").magnitude
     p = pitot_pressure.to("psi").magnitude
     if d <= 0:
-        raise ValueError("outlet_diameter must be positive")
+        raise _fire_protection_refusal(
+            "outlet_diameter must be positive", subject="outlet_diameter", source=_FLOW_TEST_SOURCE
+        )
     if p < 0:
-        raise ValueError("pitot_pressure must be non-negative")
+        raise _fire_protection_refusal(
+            "pitot_pressure must be non-negative",
+            subject="pitot_pressure",
+            source=_FLOW_TEST_SOURCE,
+        )
     return Quantity(magnitude=29.83 * discharge_coefficient * d**2 * sqrt(p), unit="gallon/minute")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _fire_protection_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_fire_protection_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _fire_protection_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fire_protection_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

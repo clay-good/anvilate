@@ -19,7 +19,40 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FIELD_SOURCE = "the magnet design or measured flux density and the conductor geometry"
+_COIL_SOURCE = "the coil datasheet or measured inductances and turn count"
+_EVENT_SOURCE = "the switching or motion event record (changes, speed, and duration)"
+
+
+class _ElectromagneticInductionInputError(RefusalError, ValueError):
+    """An electromagnetic-induction input that cannot be used without correction."""
+
+
+def _electromagnetic_induction_refusal(
+    message: str, *, subject: str, source: str
+) -> _ElectromagneticInductionInputError:
+    return _ElectromagneticInductionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _electromagnetic_induction_input_source(name: str) -> str:
+    if name in {"conductor_length", "magnetic_flux_density"}:
+        return _FIELD_SOURCE
+    if name in {
+        "inductance",
+        "mutual_inductance",
+        "primary_inductance",
+        "secondary_inductance",
+        "turns",
+    }:
+        return _COIL_SOURCE
+    return _EVENT_SOURCE
+
 
 __all__ = [
     "coupling_coefficient",
@@ -46,11 +79,19 @@ def motional_emf(
     ell = conductor_length.to("m").magnitude
     v = velocity.to("m/s").magnitude
     if b < 0:
-        raise ValueError("magnetic_flux_density must be non-negative")
+        raise _electromagnetic_induction_refusal(
+            "magnetic_flux_density must be non-negative",
+            subject="magnetic_flux_density",
+            source=_FIELD_SOURCE,
+        )
     if ell <= 0:
-        raise ValueError("conductor_length must be positive")
+        raise _electromagnetic_induction_refusal(
+            "conductor_length must be positive", subject="conductor_length", source=_FIELD_SOURCE
+        )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _electromagnetic_induction_refusal(
+            "velocity must be non-negative", subject="velocity", source=_EVENT_SOURCE
+        )
     return Quantity(magnitude=b * ell * v, unit="V")
 
 
@@ -68,9 +109,13 @@ def faraday_induced_emf(
     dphi = flux_change.to("Wb").magnitude
     dt = time_interval.to("s").magnitude
     if turns <= 0:
-        raise ValueError("turns must be positive")
+        raise _electromagnetic_induction_refusal(
+            "turns must be positive", subject="turns", source=_COIL_SOURCE
+        )
     if dt <= 0:
-        raise ValueError("time_interval must be positive")
+        raise _electromagnetic_induction_refusal(
+            "time_interval must be positive", subject="time_interval", source=_EVENT_SOURCE
+        )
     return Quantity(magnitude=abs(turns * dphi / dt), unit="V")
 
 
@@ -90,9 +135,13 @@ def self_induced_emf(
     di = current_change.to("A").magnitude
     dt = time_interval.to("s").magnitude
     if ell <= 0:
-        raise ValueError("inductance must be positive")
+        raise _electromagnetic_induction_refusal(
+            "inductance must be positive", subject="inductance", source=_COIL_SOURCE
+        )
     if dt <= 0:
-        raise ValueError("time_interval must be positive")
+        raise _electromagnetic_induction_refusal(
+            "time_interval must be positive", subject="time_interval", source=_EVENT_SOURCE
+        )
     return Quantity(magnitude=abs(ell * di / dt), unit="V")
 
 
@@ -115,9 +164,13 @@ def mutual_inductance_emf(
     di = current_change.to("A").magnitude
     dt = time_interval.to("s").magnitude
     if m <= 0:
-        raise ValueError("mutual_inductance must be positive")
+        raise _electromagnetic_induction_refusal(
+            "mutual_inductance must be positive", subject="mutual_inductance", source=_COIL_SOURCE
+        )
     if dt <= 0:
-        raise ValueError("time_interval must be positive")
+        raise _electromagnetic_induction_refusal(
+            "time_interval must be positive", subject="time_interval", source=_EVENT_SOURCE
+        )
     return Quantity(magnitude=abs(m * di / dt), unit="V")
 
 
@@ -145,23 +198,40 @@ def coupling_coefficient(
     l1 = primary_inductance.to("H").magnitude
     l2 = secondary_inductance.to("H").magnitude
     if m < 0:
-        raise ValueError("mutual_inductance must be non-negative")
-    if l1 <= 0 or l2 <= 0:
-        raise ValueError("primary_inductance and secondary_inductance must be positive")
+        raise _electromagnetic_induction_refusal(
+            "mutual_inductance must be non-negative",
+            subject="mutual_inductance",
+            source=_COIL_SOURCE,
+        )
+    for subject, magnitude in (("primary_inductance", l1), ("secondary_inductance", l2)):
+        if magnitude <= 0:
+            raise _electromagnetic_induction_refusal(
+                "primary_inductance and secondary_inductance must be positive",
+                subject=subject,
+                source=_COIL_SOURCE,
+            )
     k = m / sqrt(l1 * l2)
     if k > 1.0:
-        raise ValueError(
-            "mutual_inductance cannot exceed sqrt(L1*L2) (coupling coefficient would exceed 1)"
+        raise _electromagnetic_induction_refusal(
+            "mutual_inductance cannot exceed sqrt(L1*L2) (coupling coefficient would exceed 1)",
+            subject="mutual_inductance, primary_inductance, and secondary_inductance",
+            source=_COIL_SOURCE,
         )
     return k
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _electromagnetic_induction_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_electromagnetic_induction_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _electromagnetic_induction_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_electromagnetic_induction_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

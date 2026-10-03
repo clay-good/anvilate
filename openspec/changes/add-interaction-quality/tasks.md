@@ -150,6 +150,12 @@
       electrostatics, channel capacity, radiation pressure, comminution, pneumatics, vortex
       shedding, control valves, ultrasonic testing, plasma, colligative properties, naval
       architecture, op-amps, and cyclones), leaving 3,592 in 171.
+      Then 31 more (elastic waves, data converters, membranes, calorimetry, relativity,
+      cables, cams, cyclotrons, level turns, pn junctions, momentum, Hertz contact, fire
+      sprinklers, photodetectors, kinetic theory, keys and splines, vacuum systems, reaction
+      kinetics, cooling towers, diffusion, servo drivetrains, ideal gases, diodes, Peukert
+      batteries, capillary flow, transmission lines, projectiles, induction, vehicle
+      stability, the atmosphere, and illumination), leaving 3,189 in 140.
       tests/test_refusal_remedies_analysis.py pins one or two exact remedies per module and
       sweeps every public function of every migrated module with bare numbers: whatever it
       refuses must be a `RefusalError` whose subject names one of its parameters.

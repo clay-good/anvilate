@@ -22,7 +22,35 @@ from __future__ import annotations
 
 from math import erf, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DIFFUSIVITY_SOURCE = "the cited diffusivity for the species, host, and temperature"
+_GEOMETRY_SOURCE = "the part drawing (wall thickness or depth of interest)"
+_PROCESS_SOURCE = "the process record (exposure time and concentrations)"
+_STOKES_EINSTEIN_SOURCE = "the particle size and the fluid's absolute temperature and viscosity"
+
+
+class _DiffusionInputError(RefusalError, ValueError):
+    """A diffusion input that cannot be used without correction."""
+
+
+def _diffusion_refusal(message: str, *, subject: str, source: str) -> _DiffusionInputError:
+    return _DiffusionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _diffusion_input_source(name: str) -> str:
+    if name == "diffusivity":
+        return _DIFFUSIVITY_SOURCE
+    if name in {"depth", "diffusion_length", "thickness"}:
+        return _GEOMETRY_SOURCE
+    if name in {"dynamic_viscosity", "particle_radius", "temperature"}:
+        return _STOKES_EINSTEIN_SOURCE
+    return _PROCESS_SOURCE
+
 
 __all__ = [
     "diffusion_length",
@@ -53,9 +81,13 @@ def steady_diffusion_flux(
     dc = concentration_difference.to("mol/m**3").magnitude
     length = thickness.to("m").magnitude
     if d < 0:
-        raise ValueError("diffusivity must be non-negative")
+        raise _diffusion_refusal(
+            "diffusivity must be non-negative", subject="diffusivity", source=_DIFFUSIVITY_SOURCE
+        )
     if length <= 0:
-        raise ValueError("thickness must be positive")
+        raise _diffusion_refusal(
+            "thickness must be positive", subject="thickness", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=d * dc / length, unit="mol/(m**2*s)")
 
 
@@ -72,9 +104,13 @@ def diffusion_length(*, diffusivity: Quantity, time: Quantity) -> Quantity:
     d = diffusivity.to("m**2/s").magnitude
     t = time.to("s").magnitude
     if d < 0:
-        raise ValueError("diffusivity must be non-negative")
+        raise _diffusion_refusal(
+            "diffusivity must be non-negative", subject="diffusivity", source=_DIFFUSIVITY_SOURCE
+        )
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _diffusion_refusal(
+            "time must be non-negative", subject="time", source=_PROCESS_SOURCE
+        )
     return Quantity(magnitude=sqrt(d * t), unit="m")
 
 
@@ -91,9 +127,15 @@ def diffusion_time(*, diffusion_length: Quantity, diffusivity: Quantity) -> Quan
     x = diffusion_length.to("m").magnitude
     d = diffusivity.to("m**2/s").magnitude
     if x < 0:
-        raise ValueError("diffusion_length must be non-negative")
+        raise _diffusion_refusal(
+            "diffusion_length must be non-negative",
+            subject="diffusion_length",
+            source=_GEOMETRY_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("diffusivity must be positive")
+        raise _diffusion_refusal(
+            "diffusivity must be positive", subject="diffusivity", source=_DIFFUSIVITY_SOURCE
+        )
     return Quantity(magnitude=x * x / d, unit="s")
 
 
@@ -123,11 +165,15 @@ def error_function_concentration(
     d = diffusivity.to("m**2/s").magnitude
     t = time.to("s").magnitude
     if x < 0:
-        raise ValueError("depth must be non-negative")
+        raise _diffusion_refusal(
+            "depth must be non-negative", subject="depth", source=_GEOMETRY_SOURCE
+        )
     if d <= 0:
-        raise ValueError("diffusivity must be positive")
+        raise _diffusion_refusal(
+            "diffusivity must be positive", subject="diffusivity", source=_DIFFUSIVITY_SOURCE
+        )
     if t <= 0:
-        raise ValueError("time must be positive")
+        raise _diffusion_refusal("time must be positive", subject="time", source=_PROCESS_SOURCE)
     z = x / (2.0 * sqrt(d * t))
     return surface_concentration - (surface_concentration - initial_concentration) * erf(z)
 
@@ -157,20 +203,38 @@ def stokes_einstein_diffusivity(
     mu = dynamic_viscosity.to("Pa*s").magnitude
     r = particle_radius.to("m").magnitude
     if t <= 0:
-        raise ValueError("temperature must be a positive absolute temperature")
+        raise _diffusion_refusal(
+            "temperature must be a positive absolute temperature",
+            subject="temperature",
+            source=_STOKES_EINSTEIN_SOURCE,
+        )
     if mu <= 0:
-        raise ValueError("dynamic_viscosity must be positive")
+        raise _diffusion_refusal(
+            "dynamic_viscosity must be positive",
+            subject="dynamic_viscosity",
+            source=_STOKES_EINSTEIN_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("particle_radius must be positive")
+        raise _diffusion_refusal(
+            "particle_radius must be positive",
+            subject="particle_radius",
+            source=_STOKES_EINSTEIN_SOURCE,
+        )
     return Quantity(magnitude=_BOLTZMANN * t / (6.0 * pi * mu * r), unit="m**2/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _diffusion_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_diffusion_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _diffusion_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_diffusion_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

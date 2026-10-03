@@ -24,7 +24,35 @@ that reports them together.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ELEMENT_SOURCE = "the membrane element datasheet (water and salt permeabilities)"
+_OPERATING_SOURCE = "the feed pump pressure and the feed-permeate osmotic pressure difference"
+_WATER_QUALITY_SOURCE = "the feed and permeate water analyses"
+_FLUX_SOURCE = "the computed or measured water and salt fluxes"
+
+
+class _MembraneInputError(RefusalError, ValueError):
+    """A membrane-transport input that cannot be used without correction."""
+
+
+def _membrane_refusal(message: str, *, subject: str, source: str) -> _MembraneInputError:
+    return _MembraneInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _membrane_input_source(name: str) -> str:
+    if name in {"salt_permeability", "water_permeability"}:
+        return _ELEMENT_SOURCE
+    if name in {"concentration_difference", "feed_concentration", "permeate_concentration"}:
+        return _WATER_QUALITY_SOURCE
+    if name in {"salt_flux", "water_flux"}:
+        return _FLUX_SOURCE
+    return _OPERATING_SOURCE
+
 
 __all__ = [
     "membrane_permeate_concentration",
@@ -56,12 +84,22 @@ def reverse_osmosis_water_flux(
     dp = applied_pressure.to("Pa").magnitude
     dpi = osmotic_pressure_difference.to("Pa").magnitude
     if a <= 0:
-        raise ValueError("water_permeability must be positive")
+        raise _membrane_refusal(
+            "water_permeability must be positive",
+            subject="water_permeability",
+            source=_ELEMENT_SOURCE,
+        )
     if dpi < 0:
-        raise ValueError("osmotic_pressure_difference must be non-negative")
+        raise _membrane_refusal(
+            "osmotic_pressure_difference must be non-negative",
+            subject="osmotic_pressure_difference",
+            source=_OPERATING_SOURCE,
+        )
     if dp <= dpi:
-        raise ValueError(
-            "applied_pressure must exceed the osmotic pressure difference for net permeation"
+        raise _membrane_refusal(
+            "applied_pressure must exceed the osmotic pressure difference for net permeation",
+            subject="applied_pressure and osmotic_pressure_difference",
+            source=_OPERATING_SOURCE,
         )
     flux = a * (dp - dpi)  # m/s
     return Quantity(magnitude=flux, unit="m/s").to("L/(m**2*hour)")
@@ -83,9 +121,17 @@ def membrane_salt_flux(
     b = salt_permeability.to("m/s").magnitude
     dc = concentration_difference.to("kg/m**3").magnitude
     if b < 0:
-        raise ValueError("salt_permeability must be non-negative")
+        raise _membrane_refusal(
+            "salt_permeability must be non-negative",
+            subject="salt_permeability",
+            source=_ELEMENT_SOURCE,
+        )
     if dc < 0:
-        raise ValueError("concentration_difference must be non-negative")
+        raise _membrane_refusal(
+            "concentration_difference must be non-negative",
+            subject="concentration_difference",
+            source=_WATER_QUALITY_SOURCE,
+        )
     flux = b * dc  # kg/(m^2*s)
     return Quantity(magnitude=flux, unit="kg/(m**2*s)").to("g/(m**2*hour)")
 
@@ -107,9 +153,13 @@ def membrane_permeate_concentration(*, salt_flux: Quantity, water_flux: Quantity
     j_s = salt_flux.to("kg/(m**2*s)").magnitude
     j_w = water_flux.to("m/s").magnitude
     if j_s < 0:
-        raise ValueError("salt_flux must be non-negative")
+        raise _membrane_refusal(
+            "salt_flux must be non-negative", subject="salt_flux", source=_FLUX_SOURCE
+        )
     if j_w <= 0:
-        raise ValueError("water_flux must be positive")
+        raise _membrane_refusal(
+            "water_flux must be positive", subject="water_flux", source=_FLUX_SOURCE
+        )
     return Quantity(magnitude=j_s / j_w, unit="kg/m**3").to("g/L")
 
 
@@ -127,20 +177,38 @@ def salt_rejection(*, permeate_concentration: Quantity, feed_concentration: Quan
     c_p = permeate_concentration.to("kg/m**3").magnitude
     c_f = feed_concentration.to("kg/m**3").magnitude
     if c_p < 0:
-        raise ValueError("permeate_concentration must be non-negative")
+        raise _membrane_refusal(
+            "permeate_concentration must be non-negative",
+            subject="permeate_concentration",
+            source=_WATER_QUALITY_SOURCE,
+        )
     if c_f <= 0:
-        raise ValueError("feed_concentration must be positive")
+        raise _membrane_refusal(
+            "feed_concentration must be positive",
+            subject="feed_concentration",
+            source=_WATER_QUALITY_SOURCE,
+        )
     if c_p > c_f:
-        raise ValueError("permeate_concentration cannot exceed feed_concentration (R < 0)")
+        raise _membrane_refusal(
+            "permeate_concentration cannot exceed feed_concentration (R < 0)",
+            subject="permeate_concentration and feed_concentration",
+            source=_WATER_QUALITY_SOURCE,
+        )
     return 1.0 - c_p / c_f
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _membrane_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_membrane_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _membrane_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_membrane_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

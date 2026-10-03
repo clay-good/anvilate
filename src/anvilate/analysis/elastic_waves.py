@@ -22,7 +22,26 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_MATERIAL_SOURCE = "the material certificate or cited elastic constants and density"
+
+
+class _ElasticWavesInputError(RefusalError, ValueError):
+    """An elastic-wave input that cannot be used without correction."""
+
+
+def _elastic_waves_refusal(message: str, *, subject: str, source: str) -> _ElasticWavesInputError:
+    return _ElasticWavesInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _elastic_waves_input_source(name: str) -> str:
+    return _MATERIAL_SOURCE
+
 
 __all__ = [
     "bar_wave_speed",
@@ -45,9 +64,13 @@ def bar_wave_speed(*, elastic_modulus: Quantity, density: Quantity) -> Quantity:
     e = elastic_modulus.to("Pa").magnitude
     rho = density.to("kg/m**3").magnitude
     if e <= 0:
-        raise ValueError("elastic_modulus must be positive")
+        raise _elastic_waves_refusal(
+            "elastic_modulus must be positive", subject="elastic_modulus", source=_MATERIAL_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _elastic_waves_refusal(
+            "density must be positive", subject="density", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=sqrt(e / rho), unit="m/s")
 
 
@@ -64,9 +87,13 @@ def shear_wave_speed(*, shear_modulus: Quantity, density: Quantity) -> Quantity:
     g = shear_modulus.to("Pa").magnitude
     rho = density.to("kg/m**3").magnitude
     if g <= 0:
-        raise ValueError("shear_modulus must be positive")
+        raise _elastic_waves_refusal(
+            "shear_modulus must be positive", subject="shear_modulus", source=_MATERIAL_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _elastic_waves_refusal(
+            "density must be positive", subject="density", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=sqrt(g / rho), unit="m/s")
 
 
@@ -87,11 +114,17 @@ def bulk_longitudinal_wave_speed(
     g = shear_modulus.to("Pa").magnitude
     rho = density.to("kg/m**3").magnitude
     if k <= 0:
-        raise ValueError("bulk_modulus must be positive")
+        raise _elastic_waves_refusal(
+            "bulk_modulus must be positive", subject="bulk_modulus", source=_MATERIAL_SOURCE
+        )
     if g <= 0:
-        raise ValueError("shear_modulus must be positive")
+        raise _elastic_waves_refusal(
+            "shear_modulus must be positive", subject="shear_modulus", source=_MATERIAL_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _elastic_waves_refusal(
+            "density must be positive", subject="density", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=sqrt((k + 4.0 * g / 3.0) / rho), unit="m/s")
 
 
@@ -128,15 +161,23 @@ def rayleigh_wave_speed(
     g = shear_modulus.to("Pa").magnitude
     rho = density.to("kg/m**3").magnitude
     if g <= 0:
-        raise ValueError(f"shear_modulus must be positive; got {shear_modulus}")
+        raise _elastic_waves_refusal(
+            f"shear_modulus must be positive; got {shear_modulus}",
+            subject="shear_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError(f"density must be positive; got {density}")
+        raise _elastic_waves_refusal(
+            f"density must be positive; got {density}", subject="density", source=_MATERIAL_SOURCE
+        )
     if not 0.0 <= poissons_ratio < 0.5:
-        raise ValueError(
+        raise _elastic_waves_refusal(
             f"poissons_ratio must lie in [0, 0.5) — the domain Bergmann's approximation was "
             f"fitted to. Below nu = -0.756 its numerator changes sign and it returns a negative "
             f"wave speed, so an auxetic material needs the exact secular root. "
-            f"Got {poissons_ratio}"
+            f"Got {poissons_ratio}",
+            subject="poissons_ratio",
+            source=_MATERIAL_SOURCE,
         )
     shear_speed = sqrt(g / rho)
     ratio = (0.862 + 1.14 * poissons_ratio) / (1.0 + poissons_ratio)
@@ -145,10 +186,16 @@ def rayleigh_wave_speed(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _elastic_waves_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_elastic_waves_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _elastic_waves_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_elastic_waves_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

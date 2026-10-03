@@ -25,7 +25,35 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_STATE_SOURCE = "the gas's measured absolute temperature and pressure"
+_SPECIES_SOURCE = "the gas species' cited molar mass and kinetic diameter"
+_GEOMETRY_SOURCE = "the flow geometry's characteristic length"
+_PATH_SOURCE = "the computed mean free path at the operating state"
+
+
+class _KineticTheoryInputError(RefusalError, ValueError):
+    """A kinetic-theory input that cannot be used without correction."""
+
+
+def _kinetic_theory_refusal(message: str, *, subject: str, source: str) -> _KineticTheoryInputError:
+    return _KineticTheoryInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _kinetic_theory_input_source(name: str) -> str:
+    if name in {"molar_mass", "molecular_diameter"}:
+        return _SPECIES_SOURCE
+    if name == "characteristic_length":
+        return _GEOMETRY_SOURCE
+    if name == "mean_free_path":
+        return _PATH_SOURCE
+    return _STATE_SOURCE
+
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K)
 _BOLTZMANN = 1.380649e-23  # J/K
@@ -52,9 +80,15 @@ def rms_molecular_speed(*, temperature: Quantity, molar_mass: Quantity) -> Quant
     t = temperature.to("K").magnitude
     m = molar_mass.to("kg/mol").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _kinetic_theory_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if m <= 0:
-        raise ValueError("molar_mass must be positive")
+        raise _kinetic_theory_refusal(
+            "molar_mass must be positive", subject="molar_mass", source=_SPECIES_SOURCE
+        )
     return Quantity(magnitude=sqrt(3.0 * _GAS_CONSTANT * t / m), unit="m/s")
 
 
@@ -70,9 +104,15 @@ def mean_molecular_speed(*, temperature: Quantity, molar_mass: Quantity) -> Quan
     t = temperature.to("K").magnitude
     m = molar_mass.to("kg/mol").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _kinetic_theory_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if m <= 0:
-        raise ValueError("molar_mass must be positive")
+        raise _kinetic_theory_refusal(
+            "molar_mass must be positive", subject="molar_mass", source=_SPECIES_SOURCE
+        )
     return Quantity(magnitude=sqrt(8.0 * _GAS_CONSTANT * t / (pi * m)), unit="m/s")
 
 
@@ -93,11 +133,21 @@ def mean_free_path(
     p = pressure.to("Pa").magnitude
     d = molecular_diameter.to("m").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _kinetic_theory_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if p <= 0:
-        raise ValueError("pressure must be positive")
+        raise _kinetic_theory_refusal(
+            "pressure must be positive", subject="pressure", source=_STATE_SOURCE
+        )
     if d <= 0:
-        raise ValueError("molecular_diameter must be positive")
+        raise _kinetic_theory_refusal(
+            "molecular_diameter must be positive",
+            subject="molecular_diameter",
+            source=_SPECIES_SOURCE,
+        )
     return Quantity(magnitude=_BOLTZMANN * t / (sqrt(2.0) * pi * d * d * p), unit="m")
 
 
@@ -117,9 +167,15 @@ def knudsen_number(*, mean_free_path: Quantity, characteristic_length: Quantity)
     lam = mean_free_path.to("m").magnitude
     length = characteristic_length.to("m").magnitude
     if lam < 0:
-        raise ValueError("mean_free_path must be non-negative")
+        raise _kinetic_theory_refusal(
+            "mean_free_path must be non-negative", subject="mean_free_path", source=_PATH_SOURCE
+        )
     if length <= 0:
-        raise ValueError("characteristic_length must be positive")
+        raise _kinetic_theory_refusal(
+            "characteristic_length must be positive",
+            subject="characteristic_length",
+            source=_GEOMETRY_SOURCE,
+        )
     return lam / length
 
 
@@ -144,18 +200,30 @@ def most_probable_molecular_speed(*, temperature: Quantity, molar_mass: Quantity
     t = temperature.to("K").magnitude
     m = molar_mass.to("kg/mol").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _kinetic_theory_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if m <= 0:
-        raise ValueError("molar_mass must be positive")
+        raise _kinetic_theory_refusal(
+            "molar_mass must be positive", subject="molar_mass", source=_SPECIES_SOURCE
+        )
     return Quantity(magnitude=sqrt(2.0 * _GAS_CONSTANT * t / m), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _kinetic_theory_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_kinetic_theory_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _kinetic_theory_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_kinetic_theory_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

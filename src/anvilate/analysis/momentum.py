@@ -22,7 +22,35 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_BODY_SOURCE = "the body's measured or specified mass"
+_EVENT_SOURCE = "the impact or load event record (force, torque, velocity change, and duration)"
+_DROP_TEST_SOURCE = "the drop-test record (drop and rebound heights)"
+_RESTITUTION_SOURCE = "the cited or measured coefficient of restitution for the material pair"
+
+
+class _MomentumInputError(RefusalError, ValueError):
+    """A momentum-impulse input that cannot be used without correction."""
+
+
+def _momentum_refusal(message: str, *, subject: str, source: str) -> _MomentumInputError:
+    return _MomentumInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _momentum_input_source(name: str) -> str:
+    if name == "mass":
+        return _BODY_SOURCE
+    if name in {"drop_height", "rebound_height"}:
+        return _DROP_TEST_SOURCE
+    if name == "coefficient_of_restitution":
+        return _RESTITUTION_SOURCE
+    return _EVENT_SOURCE
+
 
 __all__ = [
     "angular_impulse",
@@ -45,7 +73,7 @@ def linear_momentum(*, mass: Quantity, velocity: Quantity) -> Quantity:
     m = mass.to("kg").magnitude
     v = velocity.to("m/s").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _momentum_refusal("mass must be positive", subject="mass", source=_BODY_SOURCE)
     return Quantity(magnitude=m * v, unit="kg*m/s")
 
 
@@ -61,7 +89,9 @@ def impulse(*, force: Quantity, time_interval: Quantity) -> Quantity:
     f = force.to("N").magnitude
     dt = time_interval.to("s").magnitude
     if dt <= 0:
-        raise ValueError("time_interval must be positive")
+        raise _momentum_refusal(
+            "time_interval must be positive", subject="time_interval", source=_EVENT_SOURCE
+        )
     return Quantity(magnitude=f * dt, unit="N*s")
 
 
@@ -80,7 +110,9 @@ def angular_impulse(*, torque: Quantity, time_interval: Quantity) -> Quantity:
     t = torque.to("N*m").magnitude
     dt = time_interval.to("s").magnitude
     if dt <= 0:
-        raise ValueError("time_interval must be positive")
+        raise _momentum_refusal(
+            "time_interval must be positive", subject="time_interval", source=_EVENT_SOURCE
+        )
     return Quantity(magnitude=t * dt, unit="N*m*s")
 
 
@@ -101,9 +133,11 @@ def average_impact_force(
     dv = velocity_change.to("m/s").magnitude
     dt = time_interval.to("s").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _momentum_refusal("mass must be positive", subject="mass", source=_BODY_SOURCE)
     if dt <= 0:
-        raise ValueError("time_interval must be positive")
+        raise _momentum_refusal(
+            "time_interval must be positive", subject="time_interval", source=_EVENT_SOURCE
+        )
     return Quantity(magnitude=abs(m * dv / dt), unit="N")
 
 
@@ -124,11 +158,21 @@ def coefficient_of_restitution_from_rebound(
     h = drop_height.to("m").magnitude
     h_r = rebound_height.to("m").magnitude
     if h <= 0:
-        raise ValueError("drop_height must be positive")
+        raise _momentum_refusal(
+            "drop_height must be positive", subject="drop_height", source=_DROP_TEST_SOURCE
+        )
     if h_r < 0:
-        raise ValueError("rebound_height must be non-negative")
+        raise _momentum_refusal(
+            "rebound_height must be non-negative",
+            subject="rebound_height",
+            source=_DROP_TEST_SOURCE,
+        )
     if h_r > h:
-        raise ValueError("rebound_height cannot exceed drop_height (a bounce cannot gain energy)")
+        raise _momentum_refusal(
+            "rebound_height cannot exceed drop_height (a bounce cannot gain energy)",
+            subject="rebound_height and drop_height",
+            source=_DROP_TEST_SOURCE,
+        )
     return sqrt(h_r / h)
 
 
@@ -144,18 +188,30 @@ def rebound_height(*, drop_height: Quantity, coefficient_of_restitution: float) 
     _check(drop_height, "[length]", "drop_height")
     h = drop_height.to("m").magnitude
     if h < 0:
-        raise ValueError("drop_height must be non-negative")
+        raise _momentum_refusal(
+            "drop_height must be non-negative", subject="drop_height", source=_DROP_TEST_SOURCE
+        )
     if not 0.0 <= coefficient_of_restitution <= 1.0:
-        raise ValueError("coefficient_of_restitution must be in [0, 1]")
+        raise _momentum_refusal(
+            "coefficient_of_restitution must be in [0, 1]",
+            subject="coefficient_of_restitution",
+            source=_RESTITUTION_SOURCE,
+        )
     return Quantity(magnitude=coefficient_of_restitution**2 * h, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _momentum_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_momentum_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _momentum_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_momentum_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

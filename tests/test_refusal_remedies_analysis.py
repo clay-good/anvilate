@@ -236,6 +236,94 @@ _CASES = (
         "characteristic_length",
         "the member drawing (cross-section width or diameter) and mass properties",
     ),
+    (
+        "salt_rejection",
+        {"permeate_concentration": _q("2 g/L"), "feed_concentration": _q("1 g/L")},
+        "permeate_concentration and feed_concentration",
+        "the feed and permeate water analyses",
+    ),
+    (
+        "relativistic_velocity_addition",
+        {"first_velocity": _q("3e8 m/s"), "second_velocity": _q("1 m/s")},
+        "first_velocity and second_velocity",
+        "the measured or specified speed relative to the observer",
+    ),
+    (
+        "parabolic_cable_sag",
+        {
+            "weight_per_length": _q("100 N/m"),
+            "span": _q("100 m"),
+            "horizontal_tension": _q("1 N"),
+        },
+        "weight_per_length, span, and horizontal_tension",
+        "the load, span, and tension, or the catenary forms for a deep sag",
+    ),
+    (
+        "coefficient_of_restitution_from_rebound",
+        {"drop_height": _q("1 m"), "rebound_height": _q("2 m")},
+        "rebound_height and drop_height",
+        "the drop-test record (drop and rebound heights)",
+    ),
+    (
+        "cooling_tower_approach",
+        {"cold_water_temperature": _q("290 K"), "wet_bulb_temperature": _q("295 K")},
+        "cold_water_temperature and wet_bulb_temperature",
+        "the tower's design or measured water and wet-bulb temperatures",
+    ),
+    (
+        "led_series_resistor",
+        {
+            "supply_voltage": _q("2 V"),
+            "forward_voltage": _q("3 V"),
+            "forward_current": _q("20 mA"),
+        },
+        "supply_voltage and forward_voltage",
+        "the LED datasheet's forward voltage and current and the supply rail",
+    ),
+    (
+        "voltage_standing_wave_ratio",
+        {"reflection_coefficient": 1.0},
+        "reflection_coefficient",
+        "the measured or computed reflection coefficient or VSWR",
+    ),
+    (
+        "projectile_launch_angle_for_range",
+        {"launch_speed": _q("10 m/s"), "target_range": _q("1 km"), "high_trajectory": False},
+        "target_range and launch_speed",
+        "the target's surveyed range",
+    ),
+    (
+        "coupling_coefficient",
+        {
+            "mutual_inductance": _q("2 H"),
+            "primary_inductance": _q("1 H"),
+            "secondary_inductance": _q("1 H"),
+        },
+        "mutual_inductance, primary_inductance, and secondary_inductance",
+        "the coil datasheet or measured inductances and turn count",
+    ),
+    (
+        "barometric_altitude",
+        {
+            "sea_level_pressure": _q("101325 Pa"),
+            "pressure": _q("110000 Pa"),
+            "temperature": _q("288 K"),
+        },
+        "pressure and sea_level_pressure",
+        "the site's surveyed altitude or measured pressure",
+    ),
+    (
+        "point_source_illuminance",
+        {"luminous_intensity": _q("100 cd"), "distance": _q("2 m"), "incidence_angle": 2.0},
+        "incidence_angle",
+        "the lighting layout (luminaire count, distances, and aiming angles)",
+    ),
+    (
+        "rms_torque_over_cycle",
+        {"torques": [_q("1 N*m"), _q("-1 N*m")], "durations": [_q("1 s"), _q("1 s")]},
+        "torques",
+        "the motion profile (travel, move time, acceleration, and duty cycle)",
+    ),
 )
 
 

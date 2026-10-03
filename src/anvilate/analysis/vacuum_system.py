@@ -29,7 +29,35 @@ from __future__ import annotations
 
 from math import log, pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CHAMBER_SOURCE = "the chamber drawing volume and the process pressure targets"
+_PUMP_SOURCE = "the pump datasheet's pumping-speed curve at the operating pressure"
+_LINE_SOURCE = "the pumping-line drawing (tube or aperture dimensions) and its computed conductance"
+_GAS_SOURCE = "the gas species' mean molecular speed at the operating temperature"
+
+
+class _VacuumSystemInputError(RefusalError, ValueError):
+    """A vacuum-system input that cannot be used without correction."""
+
+
+def _vacuum_system_refusal(message: str, *, subject: str, source: str) -> _VacuumSystemInputError:
+    return _VacuumSystemInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _vacuum_system_input_source(name: str) -> str:
+    if name == "pumping_speed":
+        return _PUMP_SOURCE
+    if name in {"aperture_area", "conductance", "tube_diameter", "tube_length"}:
+        return _LINE_SOURCE
+    if name == "mean_molecular_speed":
+        return _GAS_SOURCE
+    return _CHAMBER_SOURCE
+
 
 __all__ = [
     "aperture_molecular_conductance",
@@ -64,13 +92,23 @@ def vacuum_pump_down_time(
     s = pumping_speed.to("m**3/s").magnitude
     p1 = initial_pressure.to("Pa").magnitude
     p2 = final_pressure.to("Pa").magnitude
-    if v <= 0 or s <= 0:
-        raise ValueError("chamber_volume and pumping_speed must be positive")
-    if p1 <= 0 or p2 <= 0:
-        raise ValueError("pressures must be positive")
+    for subject, magnitude in (("chamber_volume", v), ("pumping_speed", s)):
+        if magnitude <= 0:
+            raise _vacuum_system_refusal(
+                "chamber_volume and pumping_speed must be positive",
+                subject=subject,
+                source=_vacuum_system_input_source(subject),
+            )
+    for subject, magnitude in (("initial_pressure", p1), ("final_pressure", p2)):
+        if magnitude <= 0:
+            raise _vacuum_system_refusal(
+                "pressures must be positive", subject=subject, source=_CHAMBER_SOURCE
+            )
     if p2 >= p1:
-        raise ValueError(
-            "final_pressure must be below initial_pressure (the chamber is pumped down)"
+        raise _vacuum_system_refusal(
+            "final_pressure must be below initial_pressure (the chamber is pumped down)",
+            subject="final_pressure and initial_pressure",
+            source=_CHAMBER_SOURCE,
         )
     return Quantity(magnitude=v / s * log(p1 / p2), unit="s")
 
@@ -89,9 +127,13 @@ def vacuum_throughput(*, pumping_speed: Quantity, pressure: Quantity) -> Quantit
     s = pumping_speed.to("m**3/s").magnitude
     p = pressure.to("Pa").magnitude
     if s < 0:
-        raise ValueError("pumping_speed must be non-negative")
+        raise _vacuum_system_refusal(
+            "pumping_speed must be non-negative", subject="pumping_speed", source=_PUMP_SOURCE
+        )
     if p < 0:
-        raise ValueError("pressure must be non-negative")
+        raise _vacuum_system_refusal(
+            "pressure must be non-negative", subject="pressure", source=_CHAMBER_SOURCE
+        )
     return Quantity(magnitude=s * p, unit="Pa*m**3/s")
 
 
@@ -125,9 +167,18 @@ def molecular_flow_tube_conductance(
     d = tube_diameter.to("m").magnitude
     length = tube_length.to("m").magnitude
     if v_bar <= 0:
-        raise ValueError("mean_molecular_speed must be positive")
-    if d <= 0 or length <= 0:
-        raise ValueError("tube_diameter and tube_length must be positive")
+        raise _vacuum_system_refusal(
+            "mean_molecular_speed must be positive",
+            subject="mean_molecular_speed",
+            source=_GAS_SOURCE,
+        )
+    for subject, magnitude in (("tube_diameter", d), ("tube_length", length)):
+        if magnitude <= 0:
+            raise _vacuum_system_refusal(
+                "tube_diameter and tube_length must be positive",
+                subject=subject,
+                source=_LINE_SOURCE,
+            )
     # The docstring's "valid for L ≫ d" is computable here and the extrapolation is not
     # merely inaccurate, it is impossible: the long-tube form grows without bound as L
     # shrinks, and at L/d = 1.33 it already crosses the aperture conductance — the
@@ -135,13 +186,15 @@ def molecular_flow_tube_conductance(
     # returns 3076 L/s where the ceiling is 231. Dushman's short-tube correction is the
     # right tool below this seam; refusing is the honest stand-in for not having it.
     if length / d < _LONG_TUBE_RATIO_LIMIT:
-        raise ValueError(
+        raise _vacuum_system_refusal(
             f"tube_length/tube_diameter = {length / d:.4g} is below the L/d = "
             f"{_LONG_TUBE_RATIO_LIMIT:.0f} this long-tube form needs (it assumes L ≫ d). "
             f"Below it the formula exceeds the aperture conductance — more throughput than "
             f"an open hole of the same area can pass — crossing that ceiling at L/d = 1.33. "
             f"Use Dushman's short-tube correction, or the aperture conductance for a "
-            f"near-zero-length opening."
+            f"near-zero-length opening.",
+            subject="tube_length and tube_diameter",
+            source=_LINE_SOURCE,
         )
     return Quantity(magnitude=pi / 12.0 * v_bar * d**3 / length, unit="m**3/s")
 
@@ -162,17 +215,28 @@ def effective_pumping_speed(*, pumping_speed: Quantity, conductance: Quantity) -
     _check(conductance, "[volume]/[time]", "conductance")
     s = pumping_speed.to("m**3/s").magnitude
     c = conductance.to("m**3/s").magnitude
-    if s <= 0 or c <= 0:
-        raise ValueError("pumping_speed and conductance must be positive")
+    for subject, magnitude in (("pumping_speed", s), ("conductance", c)):
+        if magnitude <= 0:
+            raise _vacuum_system_refusal(
+                "pumping_speed and conductance must be positive",
+                subject=subject,
+                source=_vacuum_system_input_source(subject),
+            )
     return Quantity(magnitude=s * c / (s + c), unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _vacuum_system_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_vacuum_system_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _vacuum_system_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_vacuum_system_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -209,7 +273,13 @@ def aperture_molecular_conductance(
     speed = mean_molecular_speed.to("m/s").magnitude
     area = aperture_area.to("m**2").magnitude
     if speed <= 0:
-        raise ValueError("mean_molecular_speed must be positive")
+        raise _vacuum_system_refusal(
+            "mean_molecular_speed must be positive",
+            subject="mean_molecular_speed",
+            source=_GAS_SOURCE,
+        )
     if area <= 0:
-        raise ValueError("aperture_area must be positive")
+        raise _vacuum_system_refusal(
+            "aperture_area must be positive", subject="aperture_area", source=_LINE_SOURCE
+        )
     return Quantity(magnitude=speed * area / 4.0, unit="m**3/s")

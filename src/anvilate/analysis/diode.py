@@ -24,7 +24,35 @@ from __future__ import annotations
 
 from math import expm1, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DEVICE_SOURCE = "the diode datasheet (saturation current and ideality factor)"
+_STATE_SOURCE = "the junction's absolute operating temperature"
+_OPERATING_SOURCE = "the circuit's bias voltage or current"
+_LED_SOURCE = "the LED datasheet's forward voltage and current and the supply rail"
+
+
+class _DiodeInputError(RefusalError, ValueError):
+    """A diode input that cannot be used without correction."""
+
+
+def _diode_refusal(message: str, *, subject: str, source: str) -> _DiodeInputError:
+    return _DiodeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _diode_input_source(name: str) -> str:
+    if name in {"ideality_factor", "saturation_current"}:
+        return _DEVICE_SOURCE
+    if name == "temperature":
+        return _STATE_SOURCE
+    if name in {"forward_current", "forward_voltage", "supply_voltage"}:
+        return _LED_SOURCE
+    return _OPERATING_SOURCE
+
 
 _BOLTZMANN = 1.380649e-23  # J/K
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
@@ -48,7 +76,11 @@ def thermal_voltage(*, temperature: Quantity) -> Quantity:
     _check(temperature, "[temperature]", "temperature")
     t = temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _diode_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=_BOLTZMANN * t / _ELEMENTARY_CHARGE, unit="V")
 
 
@@ -74,11 +106,21 @@ def diode_current(
     v = voltage.to("V").magnitude
     t = temperature.to("K").magnitude
     if i_s <= 0:
-        raise ValueError("saturation_current must be positive")
+        raise _diode_refusal(
+            "saturation_current must be positive",
+            subject="saturation_current",
+            source=_DEVICE_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _diode_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if ideality_factor <= 0:
-        raise ValueError("ideality_factor must be positive")
+        raise _diode_refusal(
+            "ideality_factor must be positive", subject="ideality_factor", source=_DEVICE_SOURCE
+        )
     v_t = _BOLTZMANN * t / _ELEMENTARY_CHARGE
     return Quantity(magnitude=i_s * expm1(v / (ideality_factor * v_t)), unit="A")
 
@@ -104,13 +146,25 @@ def diode_voltage(
     i_s = saturation_current.to("A").magnitude
     t = temperature.to("K").magnitude
     if i <= 0:
-        raise ValueError("current must be positive")
+        raise _diode_refusal(
+            "current must be positive", subject="current", source=_OPERATING_SOURCE
+        )
     if i_s <= 0:
-        raise ValueError("saturation_current must be positive")
+        raise _diode_refusal(
+            "saturation_current must be positive",
+            subject="saturation_current",
+            source=_DEVICE_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _diode_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if ideality_factor <= 0:
-        raise ValueError("ideality_factor must be positive")
+        raise _diode_refusal(
+            "ideality_factor must be positive", subject="ideality_factor", source=_DEVICE_SOURCE
+        )
     v_t = _BOLTZMANN * t / _ELEMENTARY_CHARGE
     return Quantity(magnitude=ideality_factor * v_t * log(i / i_s + 1.0), unit="V")
 
@@ -137,10 +191,14 @@ def led_series_resistor(
     v_f = forward_voltage.to("V").magnitude
     i_f = forward_current.to("A").magnitude
     if i_f <= 0:
-        raise ValueError("forward_current must be positive")
+        raise _diode_refusal(
+            "forward_current must be positive", subject="forward_current", source=_LED_SOURCE
+        )
     if v_s <= v_f:
-        raise ValueError(
-            "supply_voltage must exceed forward_voltage (no headroom to set the LED current)"
+        raise _diode_refusal(
+            "supply_voltage must exceed forward_voltage (no headroom to set the LED current)",
+            subject="supply_voltage and forward_voltage",
+            source=_LED_SOURCE,
         )
     return Quantity(magnitude=(v_s - v_f) / i_f, unit="ohm")
 
@@ -166,20 +224,30 @@ def led_resistor_power(
     v_f = forward_voltage.to("V").magnitude
     i_f = forward_current.to("A").magnitude
     if i_f <= 0:
-        raise ValueError("forward_current must be positive")
+        raise _diode_refusal(
+            "forward_current must be positive", subject="forward_current", source=_LED_SOURCE
+        )
     if v_s <= v_f:
-        raise ValueError(
-            "supply_voltage must exceed forward_voltage (no headroom to set the LED current)"
+        raise _diode_refusal(
+            "supply_voltage must exceed forward_voltage (no headroom to set the LED current)",
+            subject="supply_voltage and forward_voltage",
+            source=_LED_SOURCE,
         )
     return Quantity(magnitude=(v_s - v_f) * i_f, unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _diode_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_diode_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _diode_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_diode_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

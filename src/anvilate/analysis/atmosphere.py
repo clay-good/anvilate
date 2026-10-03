@@ -23,7 +23,36 @@ from __future__ import annotations
 
 from math import exp, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DATUM_SOURCE = "the site's datum pressure and absolute temperature (or the ISA values)"
+_GAS_SOURCE = "the cited molar mass of the gas column"
+_SITE_SOURCE = "the site's surveyed altitude or measured pressure"
+_LAPSE_SOURCE = "the lapse rate from the ISA or a measured sounding"
+_SCOPE_SOURCE = "an altitude within the model's range, or a layered atmosphere model"
+
+
+class _AtmosphereInputError(RefusalError, ValueError):
+    """An atmosphere-model input that cannot be used without correction."""
+
+
+def _atmosphere_refusal(message: str, *, subject: str, source: str) -> _AtmosphereInputError:
+    return _AtmosphereInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _atmosphere_input_source(name: str) -> str:
+    if name == "molar_mass":
+        return _GAS_SOURCE
+    if name in {"altitude", "pressure"}:
+        return _SITE_SOURCE
+    if name == "lapse_rate":
+        return _LAPSE_SOURCE
+    return _DATUM_SOURCE
+
 
 _UNIVERSAL_GAS_CONSTANT = 8.314462618  # J/(mol*K)
 _STANDARD_GRAVITY = 9.80665  # m/s**2
@@ -50,7 +79,11 @@ def scale_height(*, temperature: Quantity, molar_mass: Quantity | None = None) -
     _check(temperature, "[temperature]", "temperature")
     t = temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _atmosphere_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_DATUM_SOURCE,
+        )
     m = _molar_mass_value(molar_mass)
     h = _UNIVERSAL_GAS_CONSTANT * t / (m * _STANDARD_GRAVITY)
     return Quantity(magnitude=h, unit="m")
@@ -77,9 +110,17 @@ def barometric_pressure(
     h = altitude.to("m").magnitude
     t = temperature.to("K").magnitude
     if p0 <= 0:
-        raise ValueError("sea_level_pressure must be positive")
+        raise _atmosphere_refusal(
+            "sea_level_pressure must be positive",
+            subject="sea_level_pressure",
+            source=_DATUM_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _atmosphere_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_DATUM_SOURCE,
+        )
     m = _molar_mass_value(molar_mass)
     scale = _UNIVERSAL_GAS_CONSTANT * t / (m * _STANDARD_GRAVITY)
     return Quantity(magnitude=p0 * exp(-h / scale), unit="Pa")
@@ -106,12 +147,25 @@ def barometric_altitude(
     p0 = sea_level_pressure.to("Pa").magnitude
     p = pressure.to("Pa").magnitude
     t = temperature.to("K").magnitude
-    if p0 <= 0 or p <= 0:
-        raise ValueError("pressures must be positive")
+    for subject, magnitude in (("sea_level_pressure", p0), ("pressure", p)):
+        if magnitude <= 0:
+            raise _atmosphere_refusal(
+                "pressures must be positive",
+                subject=subject,
+                source=_atmosphere_input_source(subject),
+            )
     if p > p0:
-        raise ValueError("pressure must not exceed sea_level_pressure (altitude at or above datum)")
+        raise _atmosphere_refusal(
+            "pressure must not exceed sea_level_pressure (altitude at or above datum)",
+            subject="pressure and sea_level_pressure",
+            source=_SITE_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _atmosphere_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_DATUM_SOURCE,
+        )
     m = _molar_mass_value(molar_mass)
     scale = _UNIVERSAL_GAS_CONSTANT * t / (m * _STANDARD_GRAVITY)
     return Quantity(magnitude=scale * log(p0 / p), unit="m")
@@ -146,19 +200,33 @@ def lapse_rate_pressure(
     h = altitude.to("m").magnitude
     t0 = sea_level_temperature.to("K").magnitude
     if p0 <= 0:
-        raise ValueError("sea_level_pressure must be positive")
+        raise _atmosphere_refusal(
+            "sea_level_pressure must be positive",
+            subject="sea_level_pressure",
+            source=_DATUM_SOURCE,
+        )
     if t0 <= 0:
-        raise ValueError("sea_level_temperature must be positive (absolute temperature)")
+        raise _atmosphere_refusal(
+            "sea_level_temperature must be positive (absolute temperature)",
+            subject="sea_level_temperature",
+            source=_DATUM_SOURCE,
+        )
     if lapse_rate is None:
         rate = _ISA_LAPSE_RATE
     else:
         _check(lapse_rate, "[temperature]/[length]", "lapse_rate")
         rate = lapse_rate.to("K/m").magnitude
         if rate <= 0:
-            raise ValueError("lapse_rate must be positive (temperature falling with height)")
+            raise _atmosphere_refusal(
+                "lapse_rate must be positive (temperature falling with height)",
+                subject="lapse_rate",
+                source=_LAPSE_SOURCE,
+            )
     if h >= t0 / rate:
-        raise ValueError(
-            "altitude is at or above T0/L, where the lapse-rate model reaches absolute zero"
+        raise _atmosphere_refusal(
+            "altitude is at or above T0/L, where the lapse-rate model reaches absolute zero",
+            subject="altitude, sea_level_temperature, and lapse_rate",
+            source=_SCOPE_SOURCE,
         )
     # Two limits are documented and only the weak one (T0/L ≈ 44.3 km) was enforced, so
     # the accepted range ran four times past the real one. The 11 km tropopause is not a
@@ -168,12 +236,14 @@ def lapse_rate_pressure(
     # Only the ISA lapse rate is bounded here; a caller supplying their own rate is
     # describing their own layer and owns its extent.
     if lapse_rate is None and h > _ISA_TROPOPAUSE_ALTITUDE:
-        raise ValueError(
+        raise _atmosphere_refusal(
             f"altitude {altitude} is above the {_ISA_TROPOPAUSE_ALTITUDE / 1000:.0f} km ISA "
             f"tropopause, where the temperature stops falling and this constant-lapse-rate "
             f"form no longer describes the atmosphere. Extrapolating understates the "
             f"pressure — 4.2x at 30 km. Use the isothermal stratosphere relation above the "
-            f"tropopause, or pass an explicit lapse_rate for the layer you mean."
+            f"tropopause, or pass an explicit lapse_rate for the layer you mean.",
+            subject="altitude",
+            source=_SCOPE_SOURCE,
         )
     m = _molar_mass_value(molar_mass)
     exponent = _STANDARD_GRAVITY * m / (_UNIVERSAL_GAS_CONSTANT * rate)
@@ -186,16 +256,24 @@ def _molar_mass_value(molar_mass: Quantity | None) -> float:
     _check(molar_mass, "[mass]/[substance]", "molar_mass")
     m = molar_mass.to("kg/mol").magnitude
     if m <= 0:
-        raise ValueError("molar_mass must be positive")
+        raise _atmosphere_refusal(
+            "molar_mass must be positive", subject="molar_mass", source=_GAS_SOURCE
+        )
     return m
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _atmosphere_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_atmosphere_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _atmosphere_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_atmosphere_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -43,7 +43,35 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_MOTOR_SOURCE = "the servo motor datasheet's rotor inertia"
+_LOAD_SOURCE = "the load's CAD mass properties (inertia at the load shaft)"
+_GEARING_SOURCE = "the gearbox datasheet ratio"
+_PROFILE_SOURCE = "the motion profile (travel, move time, acceleration, and duty cycle)"
+
+
+class _ServoInputError(RefusalError, ValueError):
+    """A servo-drivetrain input that cannot be used without correction."""
+
+
+def _servo_refusal(message: str, *, subject: str, source: str) -> _ServoInputError:
+    return _ServoInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _servo_input_source(name: str) -> str:
+    if name == "motor_inertia":
+        return _MOTOR_SOURCE
+    if name == "load_inertia":
+        return _LOAD_SOURCE
+    if name == "gear_ratio":
+        return _GEARING_SOURCE
+    return _PROFILE_SOURCE
+
 
 __all__ = [
     "reflected_load_inertia",
@@ -58,10 +86,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _servo_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_servo_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _servo_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_servo_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -74,13 +108,19 @@ def _inertia_kgm2(value: Quantity, name: str) -> float:
     _require(value, "[mass] * [length]**2", name)
     magnitude = value.to("kg*m**2").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _servo_refusal(
+            f"{name} must be positive; got {value}", subject=name, source=_servo_input_source(name)
+        )
     return magnitude
 
 
 def _check_ratio(gear_ratio: float) -> float:
     if gear_ratio <= 0:
-        raise ValueError(f"gear_ratio must be positive; got {gear_ratio}")
+        raise _servo_refusal(
+            f"gear_ratio must be positive; got {gear_ratio}",
+            subject="gear_ratio",
+            source=_GEARING_SOURCE,
+        )
     return gear_ratio
 
 
@@ -136,19 +176,25 @@ def motor_acceleration_torque(
     j_load = _inertia_kgm2(load_inertia, "load_inertia")
     i = _check_ratio(gear_ratio)
     if not isinstance(load_angular_acceleration, Quantity):
-        raise ValueError(
+        raise _servo_refusal(
             f"load_angular_acceleration must be a 1 / [time]**2 quantity; "
-            f"got {load_angular_acceleration!r}"
+            f"got {load_angular_acceleration!r}",
+            subject="load_angular_acceleration",
+            source=_PROFILE_SOURCE,
         )
     if not load_angular_acceleration.has_dimension("1 / [time]**2"):
-        raise ValueError(
+        raise _servo_refusal(
             "load_angular_acceleration must be an angular acceleration quantity; "
-            f"got {load_angular_acceleration.dimensionality}"
+            f"got {load_angular_acceleration.dimensionality}",
+            subject="load_angular_acceleration",
+            source=_PROFILE_SOURCE,
         )
     alpha = load_angular_acceleration.to("rad/s**2").magnitude
     if alpha <= 0:
-        raise ValueError(
-            f"load_angular_acceleration must be positive; got {load_angular_acceleration}"
+        raise _servo_refusal(
+            f"load_angular_acceleration must be positive; got {load_angular_acceleration}",
+            subject="load_angular_acceleration",
+            source=_PROFILE_SOURCE,
         )
     return Quantity(magnitude=(j_motor * i + j_load / i) * alpha, unit="N*m")
 
@@ -188,13 +234,23 @@ def rms_torque_over_cycle(
     still fail the cycle. Returns the RMS torque in N·m.
     """
     if not isinstance(torques, Sequence):
-        raise ValueError(f"torques must be a sequence, not a single value; got {torques!r}")
+        raise _servo_refusal(
+            f"torques must be a sequence, not a single value; got {torques!r}",
+            subject="torques",
+            source=_PROFILE_SOURCE,
+        )
     if not isinstance(durations, Sequence):
-        raise ValueError(f"durations must be a sequence, not a single value; got {durations!r}")
+        raise _servo_refusal(
+            f"durations must be a sequence, not a single value; got {durations!r}",
+            subject="durations",
+            source=_PROFILE_SOURCE,
+        )
     if len(torques) != len(durations) or not torques:
-        raise ValueError(
+        raise _servo_refusal(
             "torques and durations must be non-empty sequences of the same length; "
-            f"got {len(torques)} torques and {len(durations)} durations"
+            f"got {len(torques)} torques and {len(durations)} durations",
+            subject="torques and durations",
+            source=_PROFILE_SOURCE,
         )
     weighted = 0.0
     total_time = 0.0
@@ -204,9 +260,17 @@ def rms_torque_over_cycle(
         t = torque.to("N*m").magnitude
         dt = duration.to("s").magnitude
         if t < 0:
-            raise ValueError(f"torques[{index}] must be non-negative; got {torque}")
+            raise _servo_refusal(
+                f"torques[{index}] must be non-negative; got {torque}",
+                subject="torques",
+                source=_PROFILE_SOURCE,
+            )
         if dt <= 0:
-            raise ValueError(f"durations[{index}] must be positive; got {duration}")
+            raise _servo_refusal(
+                f"durations[{index}] must be positive; got {duration}",
+                subject="durations",
+                source=_PROFILE_SOURCE,
+            )
         weighted += t**2 * dt
         total_time += dt
     return Quantity(magnitude=sqrt(weighted / total_time), unit="N*m")
@@ -214,7 +278,11 @@ def rms_torque_over_cycle(
 
 def _check_accel_fraction(accel_fraction: float) -> float:
     if not 0 < accel_fraction <= 0.5:
-        raise ValueError(f"accel_fraction must be in (0, 0.5]; got {accel_fraction}")
+        raise _servo_refusal(
+            f"accel_fraction must be in (0, 0.5]; got {accel_fraction}",
+            subject="accel_fraction",
+            source=_PROFILE_SOURCE,
+        )
     return accel_fraction
 
 
@@ -237,8 +305,11 @@ def trapezoidal_move_peak_velocity(
     _require(move_time, "[time]", "move_time")
     d = travel.to("m").magnitude
     t = move_time.to("s").magnitude
-    if d <= 0 or t <= 0:
-        raise ValueError("travel and move_time must be positive")
+    for subject, magnitude in (("travel", d), ("move_time", t)):
+        if magnitude <= 0:
+            raise _servo_refusal(
+                "travel and move_time must be positive", subject=subject, source=_PROFILE_SOURCE
+            )
     f = _check_accel_fraction(accel_fraction)
     return Quantity(magnitude=d / ((1 - f) * t), unit="m/s")
 

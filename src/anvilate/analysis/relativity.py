@@ -23,9 +23,34 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
 from ._flags import require_flag
+
+_KINEMATICS_SOURCE = "the measured or specified speed relative to the observer"
+_REST_FRAME_SOURCE = "the rest-frame (proper) quantity measured by a co-moving observer"
+_SOURCE_SPEC = "the emitter's rest-frame frequency specification"
+
+
+class _RelativityInputError(RefusalError, ValueError):
+    """A special-relativity input that cannot be used without correction."""
+
+
+def _relativity_refusal(message: str, *, subject: str, source: str) -> _RelativityInputError:
+    return _RelativityInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _relativity_input_source(name: str) -> str:
+    if name in {"mass", "proper_length", "proper_time"}:
+        return _REST_FRAME_SOURCE
+    if name == "source_frequency":
+        return _SOURCE_SPEC
+    return _KINEMATICS_SOURCE
+
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
@@ -50,9 +75,15 @@ def lorentz_factor(*, velocity: Quantity) -> float:
     _check(velocity, "[length]/[time]", "velocity")
     v = velocity.to("m/s").magnitude
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _relativity_refusal(
+            "velocity must be non-negative", subject="velocity", source=_KINEMATICS_SOURCE
+        )
     if v >= _SPEED_OF_LIGHT:
-        raise ValueError("velocity must be below the speed of light")
+        raise _relativity_refusal(
+            "velocity must be below the speed of light",
+            subject="velocity",
+            source=_KINEMATICS_SOURCE,
+        )
     beta = v / _SPEED_OF_LIGHT
     return 1.0 / sqrt(1.0 - beta * beta)
 
@@ -68,7 +99,9 @@ def time_dilation(*, proper_time: Quantity, velocity: Quantity) -> Quantity:
     _check(proper_time, "[time]", "proper_time")
     t0 = proper_time.to("s").magnitude
     if t0 < 0:
-        raise ValueError("proper_time must be non-negative")
+        raise _relativity_refusal(
+            "proper_time must be non-negative", subject="proper_time", source=_REST_FRAME_SOURCE
+        )
     gamma = lorentz_factor(velocity=velocity)
     return Quantity(magnitude=gamma * t0, unit="s")
 
@@ -84,7 +117,9 @@ def relativistic_kinetic_energy(*, mass: Quantity, velocity: Quantity) -> Quanti
     _check(mass, "[mass]", "mass")
     m = mass.to("kg").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _relativity_refusal(
+            "mass must be positive", subject="mass", source=_REST_FRAME_SOURCE
+        )
     gamma = lorentz_factor(velocity=velocity)
     return Quantity(magnitude=(gamma - 1.0) * m * _SPEED_OF_LIGHT * _SPEED_OF_LIGHT, unit="J")
 
@@ -100,7 +135,9 @@ def length_contraction(*, proper_length: Quantity, velocity: Quantity) -> Quanti
     _check(proper_length, "[length]", "proper_length")
     ell0 = proper_length.to("m").magnitude
     if ell0 < 0:
-        raise ValueError("proper_length must be non-negative")
+        raise _relativity_refusal(
+            "proper_length must be non-negative", subject="proper_length", source=_REST_FRAME_SOURCE
+        )
     gamma = lorentz_factor(velocity=velocity)
     return Quantity(magnitude=ell0 / gamma, unit="m")
 
@@ -118,7 +155,9 @@ def relativistic_momentum(*, mass: Quantity, velocity: Quantity) -> Quantity:
     m = mass.to("kg").magnitude
     v = velocity.to("m/s").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _relativity_refusal(
+            "mass must be positive", subject="mass", source=_REST_FRAME_SOURCE
+        )
     gamma = lorentz_factor(velocity=velocity)
     return Quantity(magnitude=gamma * m * v, unit="kg*m/s")
 
@@ -144,11 +183,19 @@ def relativistic_doppler_frequency(
     f0 = count_rate_per_second(source_frequency, name="source_frequency")
     v = velocity.to("m/s").magnitude
     if f0 <= 0:
-        raise ValueError("source_frequency must be positive")
+        raise _relativity_refusal(
+            "source_frequency must be positive", subject="source_frequency", source=_SOURCE_SPEC
+        )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _relativity_refusal(
+            "velocity must be non-negative", subject="velocity", source=_KINEMATICS_SOURCE
+        )
     if v >= _SPEED_OF_LIGHT:
-        raise ValueError("velocity must be below the speed of light")
+        raise _relativity_refusal(
+            "velocity must be below the speed of light",
+            subject="velocity",
+            source=_KINEMATICS_SOURCE,
+        )
     beta = v / _SPEED_OF_LIGHT
     ratio = sqrt((1.0 + beta) / (1.0 - beta)) if approaching else sqrt((1.0 - beta) / (1.0 + beta))
     return Quantity(magnitude=f0 * ratio, unit="Hz")
@@ -171,7 +218,11 @@ def relativistic_velocity_addition(
     u1 = first_velocity.to("m/s").magnitude
     u2 = second_velocity.to("m/s").magnitude
     if abs(u1) >= _SPEED_OF_LIGHT or abs(u2) >= _SPEED_OF_LIGHT:
-        raise ValueError("each speed must be below the speed of light")
+        raise _relativity_refusal(
+            "each speed must be below the speed of light",
+            subject="first_velocity and second_velocity",
+            source=_KINEMATICS_SOURCE,
+        )
     c2 = _SPEED_OF_LIGHT * _SPEED_OF_LIGHT
     u = (u1 + u2) / (1.0 + u1 * u2 / c2)
     return Quantity(magnitude=u, unit="m/s")
@@ -179,10 +230,16 @@ def relativistic_velocity_addition(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _relativity_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_relativity_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _relativity_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_relativity_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -23,7 +23,35 @@ from __future__ import annotations
 
 from math import cos, radians, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LIQUID_SOURCE = "the liquid's cited surface tension and viscosity at the process temperature"
+_MEDIUM_SOURCE = "the porous medium's measured pore radius"
+_WETTING_SOURCE = "the measured contact angle for the liquid-solid pair"
+_PROCESS_SOURCE = "the process requirement (wicking time or penetration length)"
+
+
+class _CapillaryFlowInputError(RefusalError, ValueError):
+    """A capillary-flow input that cannot be used without correction."""
+
+
+def _capillary_flow_refusal(message: str, *, subject: str, source: str) -> _CapillaryFlowInputError:
+    return _CapillaryFlowInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _capillary_flow_input_source(name: str) -> str:
+    if name in {"surface_tension", "viscosity"}:
+        return _LIQUID_SOURCE
+    if name == "pore_radius":
+        return _MEDIUM_SOURCE
+    if name == "contact_angle":
+        return _WETTING_SOURCE
+    return _PROCESS_SOURCE
+
 
 __all__ = [
     "washburn_capillary_pressure",
@@ -47,9 +75,13 @@ def washburn_capillary_pressure(
     sigma = surface_tension.to("N/m").magnitude
     r = pore_radius.to("m").magnitude
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _capillary_flow_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_LIQUID_SOURCE
+        )
     if r <= 0:
-        raise ValueError("pore_radius must be positive")
+        raise _capillary_flow_refusal(
+            "pore_radius must be positive", subject="pore_radius", source=_MEDIUM_SOURCE
+        )
     return Quantity(magnitude=2.0 * sigma * cos(radians(contact_angle)) / r, unit="Pa")
 
 
@@ -78,15 +110,27 @@ def washburn_penetration_length(
     t = time.to("s").magnitude
     cos_theta = cos(radians(contact_angle))
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _capillary_flow_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_LIQUID_SOURCE
+        )
     if r <= 0:
-        raise ValueError("pore_radius must be positive")
+        raise _capillary_flow_refusal(
+            "pore_radius must be positive", subject="pore_radius", source=_MEDIUM_SOURCE
+        )
     if mu <= 0:
-        raise ValueError("viscosity must be positive")
+        raise _capillary_flow_refusal(
+            "viscosity must be positive", subject="viscosity", source=_LIQUID_SOURCE
+        )
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _capillary_flow_refusal(
+            "time must be non-negative", subject="time", source=_PROCESS_SOURCE
+        )
     if cos_theta <= 0:
-        raise ValueError("contact_angle must be below 90 degrees for the liquid to wick in")
+        raise _capillary_flow_refusal(
+            "contact_angle must be below 90 degrees for the liquid to wick in",
+            subject="contact_angle",
+            source=_WETTING_SOURCE,
+        )
     return Quantity(magnitude=sqrt(sigma * r * cos_theta * t / (2.0 * mu)), unit="m")
 
 
@@ -115,24 +159,42 @@ def washburn_penetration_time(
     ell = length.to("m").magnitude
     cos_theta = cos(radians(contact_angle))
     if sigma <= 0:
-        raise ValueError("surface_tension must be positive")
+        raise _capillary_flow_refusal(
+            "surface_tension must be positive", subject="surface_tension", source=_LIQUID_SOURCE
+        )
     if r <= 0:
-        raise ValueError("pore_radius must be positive")
+        raise _capillary_flow_refusal(
+            "pore_radius must be positive", subject="pore_radius", source=_MEDIUM_SOURCE
+        )
     if mu <= 0:
-        raise ValueError("viscosity must be positive")
+        raise _capillary_flow_refusal(
+            "viscosity must be positive", subject="viscosity", source=_LIQUID_SOURCE
+        )
     if ell < 0:
-        raise ValueError("length must be non-negative")
+        raise _capillary_flow_refusal(
+            "length must be non-negative", subject="length", source=_PROCESS_SOURCE
+        )
     if cos_theta <= 0:
-        raise ValueError("contact_angle must be below 90 degrees for the liquid to wick in")
+        raise _capillary_flow_refusal(
+            "contact_angle must be below 90 degrees for the liquid to wick in",
+            subject="contact_angle",
+            source=_WETTING_SOURCE,
+        )
     return Quantity(magnitude=2.0 * mu * ell * ell / (sigma * r * cos_theta), unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _capillary_flow_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_capillary_flow_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _capillary_flow_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_capillary_flow_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

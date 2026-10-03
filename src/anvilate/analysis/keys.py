@@ -17,7 +17,35 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SHAFT_DRAWING_SOURCE = "the shaft and hub drawing (shaft diameter, key or spline dimensions)"
+_DUTY_SOURCE = "the shaft's design torque from the load case"
+_ALLOWABLE_SOURCE = "the key or spline material's allowable stresses from the design basis"
+_SPLINE_STANDARD_SOURCE = "the spline standard (tooth count and load-sharing fraction)"
+
+
+class _KeysInputError(RefusalError, ValueError):
+    """A shaft-key or spline input that cannot be used without correction."""
+
+
+def _keys_refusal(message: str, *, subject: str, source: str) -> _KeysInputError:
+    return _KeysInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _keys_input_source(name: str) -> str:
+    if name == "torque":
+        return _DUTY_SOURCE
+    if name in {"allowable_bearing", "allowable_pressure", "allowable_shear"}:
+        return _ALLOWABLE_SOURCE
+    if name in {"load_fraction", "number_of_teeth"}:
+        return _SPLINE_STANDARD_SOURCE
+    return _SHAFT_DRAWING_SOURCE
+
 
 __all__ = [
     "key_tangential_force",
@@ -31,10 +59,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _keys_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_keys_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _keys_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_keys_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -52,7 +86,11 @@ def key_tangential_force(*, torque: Quantity, shaft_diameter: Quantity) -> Quant
     _require(torque, "[force] * [length]", "torque")
     _require(shaft_diameter, "[length]", "shaft_diameter")
     if shaft_diameter.magnitude <= 0:
-        raise ValueError(f"shaft_diameter must be positive; got {shaft_diameter}")
+        raise _keys_refusal(
+            f"shaft_diameter must be positive; got {shaft_diameter}",
+            subject="shaft_diameter",
+            source=_SHAFT_DRAWING_SOURCE,
+        )
     force = 2 * torque.pint / shaft_diameter.pint
     converted = force.to("N")
     return Quantity(magnitude=float(converted.magnitude), unit="N")
@@ -72,10 +110,18 @@ def key_shear_stress(
     """
     _require(key_width, "[length]", "key_width")
     if key_width.magnitude <= 0:
-        raise ValueError(f"key_width must be positive; got {key_width}")
+        raise _keys_refusal(
+            f"key_width must be positive; got {key_width}",
+            subject="key_width",
+            source=_SHAFT_DRAWING_SOURCE,
+        )
     _require(key_length, "[length]", "key_length")
     if key_length.magnitude <= 0:
-        raise ValueError(f"key_length must be positive; got {key_length}")
+        raise _keys_refusal(
+            f"key_length must be positive; got {key_length}",
+            subject="key_length",
+            source=_SHAFT_DRAWING_SOURCE,
+        )
     force = key_tangential_force(torque=torque, shaft_diameter=shaft_diameter)
     stress = force.pint / (key_width.pint * key_length.pint)
     converted = stress.to("MPa")
@@ -97,10 +143,18 @@ def key_bearing_stress(
     """
     _require(key_height, "[length]", "key_height")
     if key_height.magnitude <= 0:
-        raise ValueError(f"key_height must be positive; got {key_height}")
+        raise _keys_refusal(
+            f"key_height must be positive; got {key_height}",
+            subject="key_height",
+            source=_SHAFT_DRAWING_SOURCE,
+        )
     _require(key_length, "[length]", "key_length")
     if key_length.magnitude <= 0:
-        raise ValueError(f"key_length must be positive; got {key_length}")
+        raise _keys_refusal(
+            f"key_length must be positive; got {key_length}",
+            subject="key_length",
+            source=_SHAFT_DRAWING_SOURCE,
+        )
     force = key_tangential_force(torque=torque, shaft_diameter=shaft_diameter)
     stress = force.pint / ((key_height.pint / 2) * key_length.pint)
     converted = stress.to("MPa")
@@ -146,14 +200,30 @@ def key_length_for_torque(
     """
     _require(key_width, "[length]", "key_width")
     if key_width.magnitude <= 0:
-        raise ValueError(f"key_width must be positive; got {key_width}")
+        raise _keys_refusal(
+            f"key_width must be positive; got {key_width}",
+            subject="key_width",
+            source=_SHAFT_DRAWING_SOURCE,
+        )
     _require(key_height, "[length]", "key_height")
     if key_height.magnitude <= 0:
-        raise ValueError(f"key_height must be positive; got {key_height}")
+        raise _keys_refusal(
+            f"key_height must be positive; got {key_height}",
+            subject="key_height",
+            source=_SHAFT_DRAWING_SOURCE,
+        )
     _require(allowable_shear, "[pressure]", "allowable_shear")
     _require(allowable_bearing, "[pressure]", "allowable_bearing")
-    if allowable_shear.to("MPa").magnitude <= 0 or allowable_bearing.to("MPa").magnitude <= 0:
-        raise ValueError("allowable_shear and allowable_bearing must be positive")
+    for subject, magnitude in (
+        ("allowable_shear", allowable_shear.to("MPa").magnitude),
+        ("allowable_bearing", allowable_bearing.to("MPa").magnitude),
+    ):
+        if magnitude <= 0:
+            raise _keys_refusal(
+                "allowable_shear and allowable_bearing must be positive",
+                subject=subject,
+                source=_ALLOWABLE_SOURCE,
+            )
     # abs(): the key must carry the torque whichever way the shaft drives, and the length it
     # needs depends on the magnitude. Without it a reversing drive's negative torque flipped
     # the max() below into picking the LESS negative length — the shorter key — and named the
@@ -198,14 +268,32 @@ def spline_torque_capacity(
     # Ahead of the coercion: `int(inf)` raises OverflowError before the refusal below.
     require_finite(number_of_teeth, name="number_of_teeth")
     if int(number_of_teeth) != number_of_teeth or number_of_teeth <= 0:
-        raise ValueError(f"number_of_teeth must be a positive whole number; got {number_of_teeth}")
+        raise _keys_refusal(
+            f"number_of_teeth must be a positive whole number; got {number_of_teeth}",
+            subject="number_of_teeth",
+            source=_SPLINE_STANDARD_SOURCE,
+        )
     if not 0 < load_fraction <= 1:
-        raise ValueError(f"load_fraction must be in (0, 1]; got {load_fraction}")
+        raise _keys_refusal(
+            f"load_fraction must be in (0, 1]; got {load_fraction}",
+            subject="load_fraction",
+            source=_SPLINE_STANDARD_SOURCE,
+        )
     p = allowable_pressure.to("MPa").magnitude
     r = mean_radius.to("mm").magnitude
     h = tooth_height.to("mm").magnitude
     length = spline_length.to("mm").magnitude
-    if p <= 0 or r <= 0 or h <= 0 or length <= 0:
-        raise ValueError("pressure, mean_radius, tooth_height, and spline_length must be positive")
+    for subject, magnitude in (
+        ("allowable_pressure", p),
+        ("mean_radius", r),
+        ("tooth_height", h),
+        ("spline_length", length),
+    ):
+        if magnitude <= 0:
+            raise _keys_refusal(
+                "pressure, mean_radius, tooth_height, and spline_length must be positive",
+                subject=subject,
+                source=_keys_input_source(subject),
+            )
     torque_n_mm = load_fraction * p * number_of_teeth * h * length * r
     return Quantity(magnitude=torque_n_mm / 1000.0, unit="N*m")

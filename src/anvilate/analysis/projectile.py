@@ -21,7 +21,29 @@ from __future__ import annotations
 
 from math import asin, cos, degrees, radians, sin, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LAUNCH_SOURCE = "the launcher specification (launch speed, angle, and height)"
+_TARGET_SOURCE = "the target's surveyed range"
+
+
+class _ProjectileInputError(RefusalError, ValueError):
+    """A projectile-trajectory input that cannot be used without correction."""
+
+
+def _projectile_refusal(message: str, *, subject: str, source: str) -> _ProjectileInputError:
+    return _ProjectileInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _projectile_input_source(name: str) -> str:
+    if name == "target_range":
+        return _TARGET_SOURCE
+    return _LAUNCH_SOURCE
+
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -45,9 +67,13 @@ def projectile_range(*, launch_speed: Quantity, launch_angle: float) -> Quantity
     _check(launch_speed, "[length]/[time]", "launch_speed")
     v = launch_speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("launch_speed must be positive")
+        raise _projectile_refusal(
+            "launch_speed must be positive", subject="launch_speed", source=_LAUNCH_SOURCE
+        )
     if not 0.0 < launch_angle < 90.0:
-        raise ValueError("launch_angle must be in (0, 90) degrees")
+        raise _projectile_refusal(
+            "launch_angle must be in (0, 90) degrees", subject="launch_angle", source=_LAUNCH_SOURCE
+        )
     theta = radians(launch_angle)
     return Quantity(magnitude=v * v * sin(2.0 * theta) / STANDARD_GRAVITY_M_PER_S2, unit="m")
 
@@ -63,9 +89,13 @@ def projectile_max_height(*, launch_speed: Quantity, launch_angle: float) -> Qua
     _check(launch_speed, "[length]/[time]", "launch_speed")
     v = launch_speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("launch_speed must be positive")
+        raise _projectile_refusal(
+            "launch_speed must be positive", subject="launch_speed", source=_LAUNCH_SOURCE
+        )
     if not 0.0 < launch_angle <= 90.0:
-        raise ValueError("launch_angle must be in (0, 90] degrees")
+        raise _projectile_refusal(
+            "launch_angle must be in (0, 90] degrees", subject="launch_angle", source=_LAUNCH_SOURCE
+        )
     vy = v * sin(radians(launch_angle))
     return Quantity(magnitude=vy * vy / (2.0 * STANDARD_GRAVITY_M_PER_S2), unit="m")
 
@@ -81,9 +111,13 @@ def projectile_time_of_flight(*, launch_speed: Quantity, launch_angle: float) ->
     _check(launch_speed, "[length]/[time]", "launch_speed")
     v = launch_speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("launch_speed must be positive")
+        raise _projectile_refusal(
+            "launch_speed must be positive", subject="launch_speed", source=_LAUNCH_SOURCE
+        )
     if not 0.0 < launch_angle <= 90.0:
-        raise ValueError("launch_angle must be in (0, 90] degrees")
+        raise _projectile_refusal(
+            "launch_angle must be in (0, 90] degrees", subject="launch_angle", source=_LAUNCH_SOURCE
+        )
     return Quantity(
         magnitude=2.0 * v * sin(radians(launch_angle)) / STANDARD_GRAVITY_M_PER_S2, unit="s"
     )
@@ -106,14 +140,20 @@ def projectile_launch_angle_for_range(
     v = launch_speed.to("m/s").magnitude
     r = target_range.to("m").magnitude
     if v <= 0:
-        raise ValueError("launch_speed must be positive")
+        raise _projectile_refusal(
+            "launch_speed must be positive", subject="launch_speed", source=_LAUNCH_SOURCE
+        )
     if r <= 0:
-        raise ValueError("target_range must be positive")
+        raise _projectile_refusal(
+            "target_range must be positive", subject="target_range", source=_TARGET_SOURCE
+        )
     ratio = STANDARD_GRAVITY_M_PER_S2 * r / (v * v)
     if ratio > 1.0:
-        raise ValueError(
+        raise _projectile_refusal(
             "target_range exceeds the maximum range v²/g at this speed (unreachable); "
-            "increase the launch speed"
+            "increase the launch speed",
+            subject="target_range and launch_speed",
+            source=_TARGET_SOURCE,
         )
     low_angle = 0.5 * degrees(asin(ratio))
     return 90.0 - low_angle if high_trajectory else low_angle
@@ -137,11 +177,17 @@ def projectile_range_from_height(
     v = launch_speed.to("m/s").magnitude
     h = launch_height.to("m").magnitude
     if v <= 0:
-        raise ValueError("launch_speed must be positive")
+        raise _projectile_refusal(
+            "launch_speed must be positive", subject="launch_speed", source=_LAUNCH_SOURCE
+        )
     if h < 0:
-        raise ValueError("launch_height must be non-negative")
+        raise _projectile_refusal(
+            "launch_height must be non-negative", subject="launch_height", source=_LAUNCH_SOURCE
+        )
     if not 0.0 <= launch_angle < 90.0:
-        raise ValueError("launch_angle must be in [0, 90) degrees")
+        raise _projectile_refusal(
+            "launch_angle must be in [0, 90) degrees", subject="launch_angle", source=_LAUNCH_SOURCE
+        )
     theta = radians(launch_angle)
     vy = v * sin(theta)
     vx = v * cos(theta)
@@ -152,10 +198,16 @@ def projectile_range_from_height(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _projectile_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_projectile_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _projectile_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_projectile_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

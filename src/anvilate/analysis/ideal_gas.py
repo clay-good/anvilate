@@ -20,7 +20,32 @@ follows it.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_STATE_SOURCE = "the gas's measured absolute pressure and temperature"
+_CONTAINMENT_SOURCE = "the vessel drawing volume"
+_CHARGE_SOURCE = "the gas charge record (amount of substance)"
+
+
+class _IdealGasInputError(RefusalError, ValueError):
+    """An ideal-gas input that cannot be used without correction."""
+
+
+def _ideal_gas_refusal(message: str, *, subject: str, source: str) -> _IdealGasInputError:
+    return _IdealGasInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _ideal_gas_input_source(name: str) -> str:
+    if name == "volume":
+        return _CONTAINMENT_SOURCE
+    if name == "amount":
+        return _CHARGE_SOURCE
+    return _STATE_SOURCE
+
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K), universal
 
@@ -46,11 +71,17 @@ def ideal_gas_pressure(*, amount: Quantity, volume: Quantity, temperature: Quant
     v = volume.to("m**3").magnitude
     t = temperature.to("K").magnitude
     if n <= 0:
-        raise ValueError("amount must be positive")
+        raise _ideal_gas_refusal("amount must be positive", subject="amount", source=_CHARGE_SOURCE)
     if v <= 0:
-        raise ValueError("volume must be positive")
+        raise _ideal_gas_refusal(
+            "volume must be positive", subject="volume", source=_CONTAINMENT_SOURCE
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _ideal_gas_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=n * _GAS_CONSTANT * t / v, unit="Pa")
 
 
@@ -68,11 +99,17 @@ def ideal_gas_volume(*, amount: Quantity, pressure: Quantity, temperature: Quant
     p = pressure.to("Pa").magnitude
     t = temperature.to("K").magnitude
     if n <= 0:
-        raise ValueError("amount must be positive")
+        raise _ideal_gas_refusal("amount must be positive", subject="amount", source=_CHARGE_SOURCE)
     if p <= 0:
-        raise ValueError("pressure must be positive")
+        raise _ideal_gas_refusal(
+            "pressure must be positive", subject="pressure", source=_STATE_SOURCE
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _ideal_gas_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=n * _GAS_CONSTANT * t / p, unit="m**3")
 
 
@@ -90,11 +127,19 @@ def ideal_gas_moles(*, pressure: Quantity, volume: Quantity, temperature: Quanti
     v = volume.to("m**3").magnitude
     t = temperature.to("K").magnitude
     if p <= 0:
-        raise ValueError("pressure must be positive")
+        raise _ideal_gas_refusal(
+            "pressure must be positive", subject="pressure", source=_STATE_SOURCE
+        )
     if v <= 0:
-        raise ValueError("volume must be positive")
+        raise _ideal_gas_refusal(
+            "volume must be positive", subject="volume", source=_CONTAINMENT_SOURCE
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _ideal_gas_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=p * v / (_GAS_CONSTANT * t), unit="mol")
 
 
@@ -114,20 +159,30 @@ def ideal_gas_temperature(*, pressure: Quantity, volume: Quantity, amount: Quant
     v = volume.to("m**3").magnitude
     n = amount.to("mol").magnitude
     if p <= 0:
-        raise ValueError("pressure must be positive")
+        raise _ideal_gas_refusal(
+            "pressure must be positive", subject="pressure", source=_STATE_SOURCE
+        )
     if v <= 0:
-        raise ValueError("volume must be positive")
+        raise _ideal_gas_refusal(
+            "volume must be positive", subject="volume", source=_CONTAINMENT_SOURCE
+        )
     if n <= 0:
-        raise ValueError("amount must be positive")
+        raise _ideal_gas_refusal("amount must be positive", subject="amount", source=_CHARGE_SOURCE)
     return Quantity(magnitude=p * v / (n * _GAS_CONSTANT), unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _ideal_gas_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_ideal_gas_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _ideal_gas_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_ideal_gas_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

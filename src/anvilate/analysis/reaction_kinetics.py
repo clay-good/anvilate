@@ -24,7 +24,34 @@ from __future__ import annotations
 
 from math import exp, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_KINETICS_SOURCE = "the cited or fitted rate constant at the reaction temperature"
+_CHARGE_SOURCE = "the batch charge record (initial concentration)"
+_PROCESS_SOURCE = "the batch schedule (elapsed time) or target conversion"
+
+
+class _ReactionKineticsInputError(RefusalError, ValueError):
+    """A reaction-kinetics input that cannot be used without correction."""
+
+
+def _reaction_kinetics_refusal(
+    message: str, *, subject: str, source: str
+) -> _ReactionKineticsInputError:
+    return _ReactionKineticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _reaction_kinetics_input_source(name: str) -> str:
+    if name == "initial_concentration":
+        return _CHARGE_SOURCE
+    if name in {"conversion", "time"}:
+        return _PROCESS_SOURCE
+    return _KINETICS_SOURCE
+
 
 __all__ = [
     "first_order_half_life",
@@ -47,7 +74,9 @@ def first_order_half_life(*, rate_constant: Quantity) -> Quantity:
     _check(rate_constant, "1/[time]", "rate_constant")
     k = rate_constant.to("1/s").magnitude
     if k <= 0:
-        raise ValueError("rate_constant must be positive")
+        raise _reaction_kinetics_refusal(
+            "rate_constant must be positive", subject="rate_constant", source=_KINETICS_SOURCE
+        )
     return Quantity(magnitude=log(2.0) / k, unit="s")
 
 
@@ -69,11 +98,19 @@ def first_order_concentration(
     k = rate_constant.to("1/s").magnitude
     t = time.to("s").magnitude
     if c0 < 0:
-        raise ValueError("initial_concentration must be non-negative")
+        raise _reaction_kinetics_refusal(
+            "initial_concentration must be non-negative",
+            subject="initial_concentration",
+            source=_CHARGE_SOURCE,
+        )
     if k <= 0:
-        raise ValueError("rate_constant must be positive")
+        raise _reaction_kinetics_refusal(
+            "rate_constant must be positive", subject="rate_constant", source=_KINETICS_SOURCE
+        )
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _reaction_kinetics_refusal(
+            "time must be non-negative", subject="time", source=_PROCESS_SOURCE
+        )
     return Quantity(magnitude=c0 * exp(-k * t), unit="mol/m**3")
 
 
@@ -89,9 +126,15 @@ def first_order_time_for_conversion(*, rate_constant: Quantity, conversion: floa
     _check(rate_constant, "1/[time]", "rate_constant")
     k = rate_constant.to("1/s").magnitude
     if k <= 0:
-        raise ValueError("rate_constant must be positive")
+        raise _reaction_kinetics_refusal(
+            "rate_constant must be positive", subject="rate_constant", source=_KINETICS_SOURCE
+        )
     if not 0.0 <= conversion < 1.0:
-        raise ValueError(f"conversion must be in [0, 1); got {conversion}")
+        raise _reaction_kinetics_refusal(
+            f"conversion must be in [0, 1); got {conversion}",
+            subject="conversion",
+            source=_PROCESS_SOURCE,
+        )
     return Quantity(magnitude=-log(1.0 - conversion) / k, unit="s")
 
 
@@ -109,9 +152,15 @@ def second_order_half_life(*, rate_constant: Quantity, initial_concentration: Qu
     k = rate_constant.to("m**3/(mol*s)").magnitude
     c0 = initial_concentration.to("mol/m**3").magnitude
     if k <= 0:
-        raise ValueError("rate_constant must be positive")
+        raise _reaction_kinetics_refusal(
+            "rate_constant must be positive", subject="rate_constant", source=_KINETICS_SOURCE
+        )
     if c0 <= 0:
-        raise ValueError("initial_concentration must be positive")
+        raise _reaction_kinetics_refusal(
+            "initial_concentration must be positive",
+            subject="initial_concentration",
+            source=_CHARGE_SOURCE,
+        )
     return Quantity(magnitude=1.0 / (k * c0), unit="s")
 
 
@@ -133,20 +182,34 @@ def second_order_concentration(
     k = rate_constant.to("m**3/(mol*s)").magnitude
     t = time.to("s").magnitude
     if c0 < 0:
-        raise ValueError("initial_concentration must be non-negative")
+        raise _reaction_kinetics_refusal(
+            "initial_concentration must be non-negative",
+            subject="initial_concentration",
+            source=_CHARGE_SOURCE,
+        )
     if k <= 0:
-        raise ValueError("rate_constant must be positive")
+        raise _reaction_kinetics_refusal(
+            "rate_constant must be positive", subject="rate_constant", source=_KINETICS_SOURCE
+        )
     if t < 0:
-        raise ValueError("time must be non-negative")
+        raise _reaction_kinetics_refusal(
+            "time must be non-negative", subject="time", source=_PROCESS_SOURCE
+        )
     return Quantity(magnitude=c0 / (1.0 + k * c0 * t), unit="mol/m**3")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _reaction_kinetics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_reaction_kinetics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _reaction_kinetics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_reaction_kinetics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

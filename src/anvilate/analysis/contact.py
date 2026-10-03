@@ -28,7 +28,32 @@ import math
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_MATERIAL_SOURCE = "the material certificates of both bodies (modulus and Poisson ratio)"
+_GEOMETRY_SOURCE = "the drawing of both contacting bodies (diameters and contact length)"
+_LOAD_SOURCE = "the compressive contact load from the load case"
+
+
+class _ContactInputError(RefusalError, ValueError):
+    """A Hertzian contact input that cannot be used without correction."""
+
+
+def _contact_refusal(message: str, *, subject: str, source: str) -> _ContactInputError:
+    return _ContactInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _contact_input_source(name: str) -> str:
+    if name in {"diameter1", "diameter2", "length"}:
+        return _GEOMETRY_SOURCE
+    if name == "force":
+        return _LOAD_SOURCE
+    return _MATERIAL_SOURCE
+
 
 __all__ = [
     "hertz_effective_modulus",
@@ -42,10 +67,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _contact_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_contact_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _contact_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_contact_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -143,14 +174,21 @@ def hertz_effective_modulus(
     _require(modulus2, "[pressure]", "modulus2")
     e1 = modulus1.to("MPa").magnitude
     e2 = modulus2.to("MPa").magnitude
-    if e1 <= 0 or e2 <= 0:
-        raise ValueError("both moduli must be positive")
+    for subject, magnitude in (("modulus1", e1), ("modulus2", e2)):
+        if magnitude <= 0:
+            raise _contact_refusal(
+                "both moduli must be positive", subject=subject, source=_MATERIAL_SOURCE
+            )
     # Unvalidated, nu = 1 zeroed a body's compliance term and nu > 1 made it negative, so E*
     # came back negative and every Hertz patch built on it inverted. (-1, 0.5) is the
     # isotropic thermodynamic range this library enforces everywhere else.
     for name, nu in (("poisson1", poisson1), ("poisson2", poisson2)):
         if not -1.0 < nu < 0.5:
-            raise ValueError(f"{name} must lie in (-1, 0.5); got {nu}")
+            raise _contact_refusal(
+                f"{name} must lie in (-1, 0.5); got {nu}",
+                subject=name,
+                source=_contact_input_source(name),
+            )
     inv_e_star = (1.0 - poisson1**2) / e1 + (1.0 - poisson2**2) / e2
     return Quantity(magnitude=1.0 / inv_e_star, unit="MPa")
 
@@ -179,7 +217,11 @@ def hertz_sphere_contact(
 
     d1 = diameter1.to("mm").magnitude
     if d1 <= 0:
-        raise ValueError(f"diameter1 must be positive; got {diameter1}")
+        raise _contact_refusal(
+            f"diameter1 must be positive; got {diameter1}",
+            subject="diameter1",
+            source=_GEOMETRY_SOURCE,
+        )
     r1 = d1 / 2
     if diameter2 is None:
         inv_r = 1.0 / r1  # sphere on a flat: 1/R2 -> 0
@@ -187,7 +229,11 @@ def hertz_sphere_contact(
         _require(diameter2, "[length]", "diameter2")
         d2 = diameter2.to("mm").magnitude
         if d2 <= 0:
-            raise ValueError(f"diameter2 must be positive; got {diameter2}")
+            raise _contact_refusal(
+                f"diameter2 must be positive; got {diameter2}",
+                subject="diameter2",
+                source=_GEOMETRY_SOURCE,
+            )
         inv_r = 1.0 / r1 + 1.0 / (d2 / 2)
     effective_radius = 1.0 / inv_r  # R in mm
 
@@ -233,7 +279,11 @@ def hertz_sphere_approach(
     _require(diameter1, "[length]", "diameter1")
     d1 = diameter1.to("mm").magnitude
     if d1 <= 0:
-        raise ValueError(f"diameter1 must be positive; got {diameter1}")
+        raise _contact_refusal(
+            f"diameter1 must be positive; got {diameter1}",
+            subject="diameter1",
+            source=_GEOMETRY_SOURCE,
+        )
     r1 = d1 / 2
     if diameter2 is None:
         inv_r = 1.0 / r1
@@ -241,7 +291,11 @@ def hertz_sphere_approach(
         _require(diameter2, "[length]", "diameter2")
         d2 = diameter2.to("mm").magnitude
         if d2 <= 0:
-            raise ValueError(f"diameter2 must be positive; got {diameter2}")
+            raise _contact_refusal(
+                f"diameter2 must be positive; got {diameter2}",
+                subject="diameter2",
+                source=_GEOMETRY_SOURCE,
+            )
         inv_r = 1.0 / r1 + 1.0 / (d2 / 2)
     effective_radius = 1.0 / inv_r  # mm
     e_star = (
@@ -344,25 +398,37 @@ def hertz_cylinder_contact(
     # root, was not: a negative force returned a COMPLEX half-width out of a function
     # annotated to return a real quantity, and zero divided by zero.
     if force.to("N").magnitude <= 0:
-        raise ValueError(
+        raise _contact_refusal(
             f"force must be positive; got {force}. A Hertz contact is a compressive "
             f"contact — bodies that are not pressed together are not in contact, and a "
-            f"sign-reversed load produced a complex contact half-width."
+            f"sign-reversed load produced a complex contact half-width.",
+            subject="force",
+            source=_LOAD_SOURCE,
         )
 
     d1 = diameter1.to("mm").magnitude
     length_mm = length.to("mm").magnitude
     if d1 <= 0:
-        raise ValueError(f"diameter1 must be positive; got {diameter1}")
+        raise _contact_refusal(
+            f"diameter1 must be positive; got {diameter1}",
+            subject="diameter1",
+            source=_GEOMETRY_SOURCE,
+        )
     if length_mm <= 0:
-        raise ValueError(f"length must be positive; got {length}")
+        raise _contact_refusal(
+            f"length must be positive; got {length}", subject="length", source=_GEOMETRY_SOURCE
+        )
     if diameter2 is None:
         inv_d = 1.0 / d1  # cylinder on a flat: 1/d2 -> 0
     else:
         _require(diameter2, "[length]", "diameter2")
         d2 = diameter2.to("mm").magnitude
         if d2 <= 0:
-            raise ValueError(f"diameter2 must be positive; got {diameter2}")
+            raise _contact_refusal(
+                f"diameter2 must be positive; got {diameter2}",
+                subject="diameter2",
+                source=_GEOMETRY_SOURCE,
+            )
         inv_d = 1.0 / d1 + 1.0 / d2
 
     inv_e_star = (

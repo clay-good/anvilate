@@ -17,7 +17,34 @@ from __future__ import annotations
 
 from math import log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DATASHEET_SOURCE = "the battery datasheet (rated capacity, rated current, and Peukert exponent)"
+_LOAD_SOURCE = "the load's discharge-current profile"
+_TEST_SOURCE = "the two constant-current discharge test records (currents and runtimes)"
+
+
+class _BatteryPeukertInputError(RefusalError, ValueError):
+    """A battery Peukert input that cannot be used without correction."""
+
+
+def _battery_peukert_refusal(
+    message: str, *, subject: str, source: str
+) -> _BatteryPeukertInputError:
+    return _BatteryPeukertInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _battery_peukert_input_source(name: str) -> str:
+    if name in {"peukert_exponent", "rated_capacity", "rated_current"}:
+        return _DATASHEET_SOURCE
+    if name == "discharge_current":
+        return _LOAD_SOURCE
+    return _TEST_SOURCE
+
 
 __all__ = [
     "peukert_effective_capacity",
@@ -51,13 +78,23 @@ def peukert_runtime(
     i_r = rated_current.to("A").magnitude
     i = discharge_current.to("A").magnitude
     if c <= 0:
-        raise ValueError("rated_capacity must be positive")
+        raise _battery_peukert_refusal(
+            "rated_capacity must be positive", subject="rated_capacity", source=_DATASHEET_SOURCE
+        )
     if i_r <= 0:
-        raise ValueError("rated_current must be positive")
+        raise _battery_peukert_refusal(
+            "rated_current must be positive", subject="rated_current", source=_DATASHEET_SOURCE
+        )
     if i <= 0:
-        raise ValueError("discharge_current must be positive")
+        raise _battery_peukert_refusal(
+            "discharge_current must be positive", subject="discharge_current", source=_LOAD_SOURCE
+        )
     if peukert_exponent < 1.0:
-        raise ValueError("peukert_exponent must be at least 1")
+        raise _battery_peukert_refusal(
+            "peukert_exponent must be at least 1",
+            subject="peukert_exponent",
+            source=_DATASHEET_SOURCE,
+        )
     return Quantity(magnitude=(c / i_r) * (i_r / i) ** peukert_exponent, unit="hr")
 
 
@@ -86,13 +123,23 @@ def peukert_effective_capacity(
     i_r = rated_current.to("A").magnitude
     i = discharge_current.to("A").magnitude
     if c <= 0:
-        raise ValueError("rated_capacity must be positive")
+        raise _battery_peukert_refusal(
+            "rated_capacity must be positive", subject="rated_capacity", source=_DATASHEET_SOURCE
+        )
     if i_r <= 0:
-        raise ValueError("rated_current must be positive")
+        raise _battery_peukert_refusal(
+            "rated_current must be positive", subject="rated_current", source=_DATASHEET_SOURCE
+        )
     if i <= 0:
-        raise ValueError("discharge_current must be positive")
+        raise _battery_peukert_refusal(
+            "discharge_current must be positive", subject="discharge_current", source=_LOAD_SOURCE
+        )
     if peukert_exponent < 1.0:
-        raise ValueError("peukert_exponent must be at least 1")
+        raise _battery_peukert_refusal(
+            "peukert_exponent must be at least 1",
+            subject="peukert_exponent",
+            source=_DATASHEET_SOURCE,
+        )
     return Quantity(magnitude=c * (i_r / i) ** (peukert_exponent - 1.0), unit="A*hr")
 
 
@@ -118,32 +165,50 @@ def peukert_exponent_from_two_rates(
     t1 = runtime_low.to("hr").magnitude
     i2 = current_high.to("A").magnitude
     t2 = runtime_high.to("hr").magnitude
-    if i1 <= 0 or i2 <= 0:
-        raise ValueError("currents must be positive")
-    if t1 <= 0 or t2 <= 0:
-        raise ValueError("runtimes must be positive")
+    for subject, magnitude in (("current_low", i1), ("current_high", i2)):
+        if magnitude <= 0:
+            raise _battery_peukert_refusal(
+                "currents must be positive", subject=subject, source=_TEST_SOURCE
+            )
+    for subject, magnitude in (("runtime_low", t1), ("runtime_high", t2)):
+        if magnitude <= 0:
+            raise _battery_peukert_refusal(
+                "runtimes must be positive", subject=subject, source=_TEST_SOURCE
+            )
     if i2 <= i1:
-        raise ValueError("current_high must exceed current_low")
+        raise _battery_peukert_refusal(
+            "current_high must exceed current_low",
+            subject="current_low and current_high",
+            source=_TEST_SOURCE,
+        )
     exponent = log(t1 / t2) / log(i2 / i1)
     # The two functions that CONSUME an exponent both refuse k < 1, but the one that fits it
     # from measurements did not, so a mis-paired test (the higher current apparently lasting
     # longer) handed back a k that the rest of the module rejects.
     if exponent < 1.0:
-        raise ValueError(
+        raise _battery_peukert_refusal(
             f"the two tests fit a Peukert exponent of {exponent:.4f}, below the k >= 1 floor "
             f"the rest of this module enforces: the higher current did not shorten the runtime "
             f"enough. Check that runtime_low pairs with current_low and runtime_high with "
-            f"current_high."
+            f"current_high.",
+            subject="current_low, runtime_low, current_high, and runtime_high",
+            source=_TEST_SOURCE,
         )
     return exponent
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _battery_peukert_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_battery_peukert_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _battery_peukert_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_battery_peukert_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

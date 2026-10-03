@@ -23,8 +23,33 @@ from __future__ import annotations
 
 from math import acos, atan, cos, degrees, radians, sqrt, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_MANEUVER_SOURCE = "the maneuver specification (bank angle, load factor, or turn rate)"
+_SPEED_SOURCE = "the airspeed of the flight condition"
+_AIRCRAFT_SOURCE = "the aircraft's flight-test or certified level stall speed"
+
+
+class _LevelTurnInputError(RefusalError, ValueError):
+    """A level-turn flight input that cannot be used without correction."""
+
+
+def _level_turn_refusal(message: str, *, subject: str, source: str) -> _LevelTurnInputError:
+    return _LevelTurnInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _level_turn_input_source(name: str) -> str:
+    if name == "speed":
+        return _SPEED_SOURCE
+    if name == "level_stall_speed":
+        return _AIRCRAFT_SOURCE
+    return _MANEUVER_SOURCE
+
 
 _STANDARD_GRAVITY = 9.80665  # m/s**2
 
@@ -40,10 +65,16 @@ __all__ = [
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _level_turn_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_level_turn_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _level_turn_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_level_turn_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -63,7 +94,11 @@ def load_factor_from_bank_angle(*, bank_angle: float) -> float:
     demand infinite lift and cannot hold altitude. Returns the dimensionless load factor (≥ 1).
     """
     if not 0 <= bank_angle < 90:
-        raise ValueError(f"bank_angle (degrees) must lie in [0, 90); got {bank_angle}")
+        raise _level_turn_refusal(
+            f"bank_angle (degrees) must lie in [0, 90); got {bank_angle}",
+            subject="bank_angle",
+            source=_MANEUVER_SOURCE,
+        )
     return 1.0 / cos(radians(bank_angle))
 
 
@@ -77,7 +112,11 @@ def bank_angle_for_load_factor(*, load_factor: float) -> float:
     in [0, 90).
     """
     if load_factor < 1:
-        raise ValueError(f"load_factor must be at least 1; got {load_factor}")
+        raise _level_turn_refusal(
+            f"load_factor must be at least 1; got {load_factor}",
+            subject="load_factor",
+            source=_MANEUVER_SOURCE,
+        )
     return degrees(acos(1.0 / load_factor))
 
 
@@ -92,10 +131,14 @@ def turn_radius(*, speed: Quantity, bank_angle: float) -> Quantity:
     """
     _check(speed, "[velocity]", "speed")
     if not 0 < bank_angle < 90:
-        raise ValueError(f"bank_angle (degrees) must lie in (0, 90); got {bank_angle}")
+        raise _level_turn_refusal(
+            f"bank_angle (degrees) must lie in (0, 90); got {bank_angle}",
+            subject="bank_angle",
+            source=_MANEUVER_SOURCE,
+        )
     v = speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("speed must be positive")
+        raise _level_turn_refusal("speed must be positive", subject="speed", source=_SPEED_SOURCE)
     return Quantity(magnitude=v * v / (_STANDARD_GRAVITY * tan(radians(bank_angle))), unit="m")
 
 
@@ -110,10 +153,14 @@ def turn_rate(*, speed: Quantity, bank_angle: float) -> Quantity:
     """
     _check(speed, "[velocity]", "speed")
     if not 0 < bank_angle < 90:
-        raise ValueError(f"bank_angle (degrees) must lie in (0, 90); got {bank_angle}")
+        raise _level_turn_refusal(
+            f"bank_angle (degrees) must lie in (0, 90); got {bank_angle}",
+            subject="bank_angle",
+            source=_MANEUVER_SOURCE,
+        )
     v = speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("speed must be positive")
+        raise _level_turn_refusal("speed must be positive", subject="speed", source=_SPEED_SOURCE)
     omega = _STANDARD_GRAVITY * tan(radians(bank_angle)) / v  # rad/s
     return Quantity(magnitude=degrees(omega), unit="deg/s")
 
@@ -130,10 +177,18 @@ def accelerated_stall_speed(*, level_stall_speed: Quantity, load_factor: float) 
     """
     _check(level_stall_speed, "[velocity]", "level_stall_speed")
     if load_factor < 1:
-        raise ValueError(f"load_factor must be at least 1; got {load_factor}")
+        raise _level_turn_refusal(
+            f"load_factor must be at least 1; got {load_factor}",
+            subject="load_factor",
+            source=_MANEUVER_SOURCE,
+        )
     vs = level_stall_speed.to("m/s").magnitude
     if vs <= 0:
-        raise ValueError("level_stall_speed must be positive")
+        raise _level_turn_refusal(
+            "level_stall_speed must be positive",
+            subject="level_stall_speed",
+            source=_AIRCRAFT_SOURCE,
+        )
     return Quantity(magnitude=vs * sqrt(load_factor), unit="m/s")
 
 
@@ -151,8 +206,10 @@ def bank_angle_for_turn_rate(*, speed: Quantity, turn_rate: Quantity) -> float:
     _check(turn_rate, "1/[time]", "turn_rate")
     v = speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("speed must be positive")
+        raise _level_turn_refusal("speed must be positive", subject="speed", source=_SPEED_SOURCE)
     omega = angular_speed_rad_per_s(turn_rate, name="turn_rate")
     if omega <= 0:
-        raise ValueError("turn_rate must be positive")
+        raise _level_turn_refusal(
+            "turn_rate must be positive", subject="turn_rate", source=_MANEUVER_SOURCE
+        )
     return degrees(atan(omega * v / _STANDARD_GRAVITY))

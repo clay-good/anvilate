@@ -23,8 +23,33 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_PARTICLE_SOURCE = "the particle species' cited charge and rest mass"
+_FIELD_SOURCE = "the magnet design or measured magnetic flux density"
+_BEAM_SOURCE = "the beam's measured speed or RF frequency"
+
+
+class _CyclotronInputError(RefusalError, ValueError):
+    """A cyclotron-motion input that cannot be used without correction."""
+
+
+def _cyclotron_refusal(message: str, *, subject: str, source: str) -> _CyclotronInputError:
+    return _CyclotronInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _cyclotron_input_source(name: str) -> str:
+    if name == "magnetic_flux_density":
+        return _FIELD_SOURCE
+    if name in {"frequency", "speed"}:
+        return _BEAM_SOURCE
+    return _PARTICLE_SOURCE
+
 
 __all__ = [
     "cyclotron_frequency",
@@ -51,11 +76,17 @@ def cyclotron_frequency(
     b = magnetic_flux_density.to("T").magnitude
     m = mass.to("kg").magnitude
     if q <= 0:
-        raise ValueError("charge must be positive")
+        raise _cyclotron_refusal(
+            "charge must be positive", subject="charge", source=_PARTICLE_SOURCE
+        )
     if b <= 0:
-        raise ValueError("magnetic_flux_density must be positive")
+        raise _cyclotron_refusal(
+            "magnetic_flux_density must be positive",
+            subject="magnetic_flux_density",
+            source=_FIELD_SOURCE,
+        )
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _cyclotron_refusal("mass must be positive", subject="mass", source=_PARTICLE_SOURCE)
     return Quantity(magnitude=q * b / (2.0 * pi * m), unit="Hz")
 
 
@@ -78,13 +109,19 @@ def larmor_radius(
     q = charge.to("C").magnitude
     b = magnetic_flux_density.to("T").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _cyclotron_refusal("mass must be positive", subject="mass", source=_PARTICLE_SOURCE)
     if v < 0:
-        raise ValueError("speed must be non-negative")
+        raise _cyclotron_refusal("speed must be non-negative", subject="speed", source=_BEAM_SOURCE)
     if q <= 0:
-        raise ValueError("charge must be positive")
+        raise _cyclotron_refusal(
+            "charge must be positive", subject="charge", source=_PARTICLE_SOURCE
+        )
     if b <= 0:
-        raise ValueError("magnetic_flux_density must be positive")
+        raise _cyclotron_refusal(
+            "magnetic_flux_density must be positive",
+            subject="magnetic_flux_density",
+            source=_FIELD_SOURCE,
+        )
     return Quantity(magnitude=m * v / (q * b), unit="m")
 
 
@@ -106,20 +143,34 @@ def cyclotron_mass_from_frequency(
     b = magnetic_flux_density.to("T").magnitude
     f = count_rate_per_second(frequency, name="frequency")
     if q <= 0:
-        raise ValueError("charge must be positive")
+        raise _cyclotron_refusal(
+            "charge must be positive", subject="charge", source=_PARTICLE_SOURCE
+        )
     if b <= 0:
-        raise ValueError("magnetic_flux_density must be positive")
+        raise _cyclotron_refusal(
+            "magnetic_flux_density must be positive",
+            subject="magnetic_flux_density",
+            source=_FIELD_SOURCE,
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _cyclotron_refusal(
+            "frequency must be positive", subject="frequency", source=_BEAM_SOURCE
+        )
     return Quantity(magnitude=q * b / (2.0 * pi * f), unit="kg")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _cyclotron_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_cyclotron_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _cyclotron_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_cyclotron_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

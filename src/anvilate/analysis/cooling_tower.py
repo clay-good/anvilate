@@ -23,8 +23,33 @@ Technology Institute practice for the range, approach and evaporation relations.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_THERMAL_SOURCE = "the tower's design or measured water and wet-bulb temperatures"
+_WATER_BALANCE_SOURCE = "the tower's water balance (evaporation, blowdown, drift, and cycles)"
+_FLOW_SOURCE = "the circulating-water flow and its cited specific and latent heats"
+
+
+class _CoolingTowerInputError(RefusalError, ValueError):
+    """A cooling-tower input that cannot be used without correction."""
+
+
+def _cooling_tower_refusal(message: str, *, subject: str, source: str) -> _CoolingTowerInputError:
+    return _CoolingTowerInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _cooling_tower_input_source(name: str) -> str:
+    if name in {"blowdown_rate", "cycles_of_concentration", "drift_rate", "evaporation_rate"}:
+        return _WATER_BALANCE_SOURCE
+    if name in {"circulating_flow", "latent_heat", "specific_heat"}:
+        return _FLOW_SOURCE
+    return _THERMAL_SOURCE
+
 
 __all__ = [
     "cooling_tower_approach",
@@ -54,7 +79,11 @@ def cooling_tower_range(
     t_hot = hot_water_temperature.to("K").magnitude
     t_cold = cold_water_temperature.to("K").magnitude
     if t_hot <= t_cold:
-        raise ValueError("hot_water_temperature must exceed cold_water_temperature")
+        raise _cooling_tower_refusal(
+            "hot_water_temperature must exceed cold_water_temperature",
+            subject="hot_water_temperature and cold_water_temperature",
+            source=_THERMAL_SOURCE,
+        )
     return Quantity(magnitude=t_hot - t_cold, unit="K")
 
 
@@ -78,9 +107,11 @@ def cooling_tower_approach(
     t_cold = cold_water_temperature.to("K").magnitude
     t_wb = wet_bulb_temperature.to("K").magnitude
     if t_cold <= t_wb:
-        raise ValueError(
+        raise _cooling_tower_refusal(
             "cold_water_temperature must exceed wet_bulb_temperature "
-            "(a tower cannot cool below the wet-bulb)"
+            "(a tower cannot cool below the wet-bulb)",
+            subject="cold_water_temperature and wet_bulb_temperature",
+            source=_THERMAL_SOURCE,
         )
     return Quantity(magnitude=t_cold - t_wb, unit="K")
 
@@ -100,9 +131,17 @@ def cooling_tower_effectiveness(*, range_: Quantity, approach: Quantity) -> floa
     r = temperature_difference_kelvin(range_, name="range_")
     a = temperature_difference_kelvin(approach, name="approach")
     if r <= 0:
-        raise ValueError("range_ must be a positive temperature difference")
+        raise _cooling_tower_refusal(
+            "range_ must be a positive temperature difference",
+            subject="range_",
+            source=_THERMAL_SOURCE,
+        )
     if a < 0:
-        raise ValueError("approach must be a non-negative temperature difference")
+        raise _cooling_tower_refusal(
+            "approach must be a non-negative temperature difference",
+            subject="approach",
+            source=_THERMAL_SOURCE,
+        )
     return r / (r + a)
 
 
@@ -125,9 +164,17 @@ def cooling_tower_blowdown_rate(
     _check(evaporation_rate, "[volume]/[time]", "evaporation_rate")
     e = evaporation_rate.to("m**3/s").magnitude
     if e < 0:
-        raise ValueError("evaporation_rate must be non-negative")
+        raise _cooling_tower_refusal(
+            "evaporation_rate must be non-negative",
+            subject="evaporation_rate",
+            source=_WATER_BALANCE_SOURCE,
+        )
     if cycles_of_concentration <= 1.0:
-        raise ValueError("cycles_of_concentration must be greater than 1")
+        raise _cooling_tower_refusal(
+            "cycles_of_concentration must be greater than 1",
+            subject="cycles_of_concentration",
+            source=_WATER_BALANCE_SOURCE,
+        )
     return Quantity(magnitude=e / (cycles_of_concentration - 1.0), unit="m**3/s")
 
 
@@ -166,11 +213,24 @@ def cooling_tower_evaporation_rate(
     c = specific_heat.to("J/kg/K").magnitude
     h_fg = latent_heat.to("J/kg").magnitude
     if v < 0:
-        raise ValueError(f"circulating_flow must be non-negative; got {circulating_flow}")
+        raise _cooling_tower_refusal(
+            f"circulating_flow must be non-negative; got {circulating_flow}",
+            subject="circulating_flow",
+            source=_FLOW_SOURCE,
+        )
     if r < 0:
-        raise ValueError(f"cooling_range must be non-negative; got {cooling_range}")
-    if c <= 0 or h_fg <= 0:
-        raise ValueError("specific_heat and latent_heat must be positive")
+        raise _cooling_tower_refusal(
+            f"cooling_range must be non-negative; got {cooling_range}",
+            subject="cooling_range",
+            source=_THERMAL_SOURCE,
+        )
+    for subject, magnitude in (("specific_heat", c), ("latent_heat", h_fg)):
+        if magnitude <= 0:
+            raise _cooling_tower_refusal(
+                "specific_heat and latent_heat must be positive",
+                subject=subject,
+                source=_FLOW_SOURCE,
+            )
     return Quantity(magnitude=v * c * r / h_fg, unit="m**3/s")
 
 
@@ -198,18 +258,33 @@ def cooling_tower_makeup_rate(
         _check(drift_rate, "[volume]/[time]", "drift_rate")
         d = drift_rate.to("m**3/s").magnitude
         if d < 0:
-            raise ValueError("drift_rate must be non-negative")
-    if e < 0 or b < 0:
-        raise ValueError("evaporation_rate and blowdown_rate must be non-negative")
+            raise _cooling_tower_refusal(
+                "drift_rate must be non-negative",
+                subject="drift_rate",
+                source=_WATER_BALANCE_SOURCE,
+            )
+    for subject, magnitude in (("evaporation_rate", e), ("blowdown_rate", b)):
+        if magnitude < 0:
+            raise _cooling_tower_refusal(
+                "evaporation_rate and blowdown_rate must be non-negative",
+                subject=subject,
+                source=_WATER_BALANCE_SOURCE,
+            )
     return Quantity(magnitude=e + b + d, unit="m**3/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _cooling_tower_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_cooling_tower_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _cooling_tower_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_cooling_tower_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

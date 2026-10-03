@@ -22,7 +22,39 @@ from __future__ import annotations
 
 from math import log, log10, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LINE_SOURCE = "the cable datasheet (conductor radii, dielectric, and characteristic impedance)"
+_LOAD_SOURCE = "the load and source impedances measured or specified at the frequency"
+_MATCH_SOURCE = "the measured or computed reflection coefficient or VSWR"
+
+
+class _TransmissionLineInputError(RefusalError, ValueError):
+    """A transmission-line input that cannot be used without correction."""
+
+
+def _transmission_line_refusal(
+    message: str, *, subject: str, source: str
+) -> _TransmissionLineInputError:
+    return _TransmissionLineInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _transmission_line_input_source(name: str) -> str:
+    if name in {
+        "characteristic_impedance",
+        "inner_radius",
+        "outer_radius",
+        "relative_permittivity",
+    }:
+        return _LINE_SOURCE
+    if name in {"load_impedance", "source_impedance"}:
+        return _LOAD_SOURCE
+    return _MATCH_SOURCE
+
 
 __all__ = [
     "coaxial_characteristic_impedance",
@@ -63,11 +95,19 @@ def coaxial_characteristic_impedance(
     a = inner_radius.to("m").magnitude
     b = outer_radius.to("m").magnitude
     if a <= 0:
-        raise ValueError("inner_radius must be positive")
+        raise _transmission_line_refusal(
+            "inner_radius must be positive", subject="inner_radius", source=_LINE_SOURCE
+        )
     if b <= a:
-        raise ValueError("outer_radius must exceed inner_radius")
+        raise _transmission_line_refusal(
+            "outer_radius must exceed inner_radius", subject="outer_radius", source=_LINE_SOURCE
+        )
     if relative_permittivity < 1:
-        raise ValueError("relative_permittivity must be at least 1")
+        raise _transmission_line_refusal(
+            "relative_permittivity must be at least 1",
+            subject="relative_permittivity",
+            source=_LINE_SOURCE,
+        )
     eta = sqrt(_VACUUM_PERMEABILITY / _VACUUM_PERMITTIVITY)
     return Quantity(magnitude=eta / (2 * pi * sqrt(relative_permittivity)) * log(b / a), unit="ohm")
 
@@ -87,9 +127,15 @@ def reflection_coefficient(
     z_l = load_impedance.to("ohm").magnitude
     z_0 = characteristic_impedance.to("ohm").magnitude
     if z_l < 0:
-        raise ValueError("load_impedance must be non-negative")
+        raise _transmission_line_refusal(
+            "load_impedance must be non-negative", subject="load_impedance", source=_LOAD_SOURCE
+        )
     if z_0 <= 0:
-        raise ValueError("characteristic_impedance must be positive")
+        raise _transmission_line_refusal(
+            "characteristic_impedance must be positive",
+            subject="characteristic_impedance",
+            source=_LINE_SOURCE,
+        )
     return (z_l - z_0) / (z_l + z_0)
 
 
@@ -103,7 +149,11 @@ def voltage_standing_wave_ratio(*, reflection_coefficient: float) -> float:
     """
     g = abs(reflection_coefficient)
     if g >= 1.0:
-        raise ValueError("|reflection_coefficient| must be below 1 (a full reflection is infinite)")
+        raise _transmission_line_refusal(
+            "|reflection_coefficient| must be below 1 (a full reflection is infinite)",
+            subject="reflection_coefficient",
+            source=_MATCH_SOURCE,
+        )
     return (1.0 + g) / (1.0 - g)
 
 
@@ -117,11 +167,17 @@ def return_loss(*, reflection_coefficient: float) -> float:
     """
     g = abs(reflection_coefficient)
     if g <= 0.0:
-        raise ValueError(
-            "reflection_coefficient must be non-zero (a perfect match has infinite RL)"
+        raise _transmission_line_refusal(
+            "reflection_coefficient must be non-zero (a perfect match has infinite RL)",
+            subject="reflection_coefficient",
+            source=_MATCH_SOURCE,
         )
     if g > 1.0:
-        raise ValueError("|reflection_coefficient| must not exceed 1")
+        raise _transmission_line_refusal(
+            "|reflection_coefficient| must not exceed 1",
+            subject="reflection_coefficient",
+            source=_MATCH_SOURCE,
+        )
     return -20.0 * log10(g)
 
 
@@ -137,7 +193,11 @@ def mismatch_loss(*, reflection_coefficient: float) -> float:
     """
     g = abs(reflection_coefficient)
     if g >= 1.0:
-        raise ValueError("|reflection_coefficient| must be below 1 (a full reflection loses all)")
+        raise _transmission_line_refusal(
+            "|reflection_coefficient| must be below 1 (a full reflection loses all)",
+            subject="reflection_coefficient",
+            source=_MATCH_SOURCE,
+        )
     return -10.0 * log10(1.0 - g * g)
 
 
@@ -152,7 +212,11 @@ def reflection_coefficient_from_vswr(*, voltage_standing_wave_ratio: float) -> f
     (0 to 1) as a plain float.
     """
     if voltage_standing_wave_ratio < 1.0:
-        raise ValueError("voltage_standing_wave_ratio must be at least 1")
+        raise _transmission_line_refusal(
+            "voltage_standing_wave_ratio must be at least 1",
+            subject="voltage_standing_wave_ratio",
+            source=_MATCH_SOURCE,
+        )
     s = voltage_standing_wave_ratio
     return (s - 1.0) / (s + 1.0)
 
@@ -174,18 +238,28 @@ def quarter_wave_transformer_impedance(
     z0 = source_impedance.to("ohm").magnitude
     zl = load_impedance.to("ohm").magnitude
     if z0 <= 0:
-        raise ValueError("source_impedance must be positive")
+        raise _transmission_line_refusal(
+            "source_impedance must be positive", subject="source_impedance", source=_LOAD_SOURCE
+        )
     if zl <= 0:
-        raise ValueError("load_impedance must be positive")
+        raise _transmission_line_refusal(
+            "load_impedance must be positive", subject="load_impedance", source=_LOAD_SOURCE
+        )
     return Quantity(magnitude=sqrt(z0 * zl), unit="ohm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _transmission_line_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_transmission_line_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _transmission_line_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_transmission_line_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
