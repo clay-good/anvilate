@@ -101,6 +101,62 @@ def _crashes() -> tuple[list[str], int]:
     return crashes, probes
 
 
+def _non_finite_outcomes() -> tuple[list[str], int]:
+    """Every number set to NaN and to infinity in turn: refused, reported, never a PASS.
+
+    A YAML document can write `.nan` and `.inf`, and a Python caller can pass either.
+    Quantities were refused for both; plain-number fields were not, and an infinite
+    `drop_limit_percent` screened a feeder as PASS: every drop is within an unbounded
+    limit. Two infinite requirement factors ended inside the screen as a pydantic error.
+    """
+    from math import inf, nan
+
+    from anvilate.scorecard import CheckStatus
+
+    registry = element_registry()
+    problems, probes = [], 0
+    for tag, element_type, document in _corpus():
+        model, screen = registry[element_type]
+        parameters = inspect.signature(screen).parameters
+        keywords = {"required_safety_factor": 2.0} if "required_safety_factor" in parameters else {}
+        for path in _numbers(document):
+            where = ".".join(str(part) for part in path)
+            for value in (nan, inf):
+                probes += 1
+                try:
+                    element = model.model_validate(_with(document, path, value))
+                except (ValidationError, ValueError, LookupError):
+                    continue
+                try:
+                    card = screen(element, **keywords)
+                except ValidationError as failure:
+                    problems.append(f"{tag}.{where} = {value} -> {type(failure).__name__}")
+                    continue
+                except (ValueError, LookupError):
+                    continue
+                except Exception as failure:  # noqa: BLE001 - reporting what escaped is the point
+                    problems.append(f"{tag}.{where} = {value} -> {type(failure).__name__}")
+                    continue
+                if card.status is CheckStatus.PASS:
+                    problems.append(f"{tag}.{where} = {value} -> a PASS card")
+    return problems, probes
+
+
+def test_no_element_passes_or_crashes_on_a_non_finite_number():
+    problems, probes = _non_finite_outcomes()
+    assert probes >= 360, f"only {probes} numbers were made non-finite"
+    assert not problems, "\n".join(problems)
+
+
+def test_the_non_finite_sweep_finds_the_pass_an_unchecked_float_lets_through(monkeypatch):
+    """The adversary: without the plain-number finiteness rule, the feeder passes again."""
+    import anvilate.packs._guarded as guarded
+
+    monkeypatch.setattr(guarded, "isfinite", lambda value: True)
+    problems, _probes = _non_finite_outcomes()
+    assert any("drop_limit_percent = inf -> a PASS card" in p for p in problems), problems
+
+
 def test_the_parameter_corpus_is_one_valid_document_per_registered_element():
     registry = element_registry()
     documents = _documents()

@@ -4,14 +4,14 @@ The front-door probe binds every argument to ``1.0`` and so reaches only the fir
 check. This sweep builds a call that *succeeds* — each Quantity argument in the SI unit of
 the dimension its function checks it against, read from the function's own
 ``_check``/``_require`` calls, and each plain number a small positive value — and then
-moves one argument at a time to -1, 0 and NaN.
+moves one argument at a time to -1, 0, NaN and infinity.
 
 Whatever the function does with that is allowed except three things:
 
 - raising anything that is not a structured refusal (a ``ZeroDivisionError``, a
   ``math domain error``, a complex number handed to a Quantity);
 - refusing with a remedy whose subject names none of the function's parameters;
-- accepting a NaN, or refusing one without naming the argument that carried it.
+- accepting a NaN or an infinity, or refusing one without naming the argument.
 
 Its first run found sixteen crashes and 164 NaN arguments answered with a NaN result.
 """
@@ -162,7 +162,7 @@ def _moved(value: object, dimension: str | None, magnitude: float) -> object | N
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return None if math.isnan(magnitude) else int(magnitude)
+        return None if not math.isfinite(magnitude) else int(magnitude)
     return magnitude
 
 
@@ -185,7 +185,7 @@ def test_every_out_of_range_argument_meets_a_structured_refusal_or_a_number() ->
         tally["swept"] += 1
         parameters = set(inspect.signature(function).parameters)
         for argument, value in kwargs.items():
-            for magnitude in (-1.0, 0.0, math.nan):
+            for magnitude in (-1.0, 0.0, math.nan, math.inf):
                 moved = _moved(value, dimensions[name].get(argument), magnitude)
                 if moved is None:
                     continue
@@ -197,13 +197,13 @@ def test_every_out_of_range_argument_meets_a_structured_refusal_or_a_number() ->
                     named = set(re.findall(r"\w+", " ".join(r.subject for r in refusal.remedies)))
                     if not named & parameters:
                         failures.append(f"{label}: remedy names no parameter: {named}")
-                    elif math.isnan(magnitude) and argument not in named:
+                    elif not math.isfinite(magnitude) and argument not in named:
                         failures.append(f"{label}: NaN refused without naming {argument}")
                 except Exception as slip:  # noqa: BLE001 - the class is the thing under test
                     failures.append(f"{label}: {type(slip).__name__}: {str(slip)[:80]}")
                 else:
                     tally["accepted"] += 1
-                    if math.isnan(magnitude):
+                    if not math.isfinite(magnitude):
                         failures.append(f"{label}: NaN accepted, returned {result!r:.80}")
 
     # The floor goes first: a binder that stopped building calls would pass with nothing swept.

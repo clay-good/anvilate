@@ -139,6 +139,17 @@ class GuardedInputs(RevalidatedModel):
         signed = set(type(self).signed_fields)
         for name in type(self).model_fields:
             value = getattr(self, name, None)
+            # A plain number gets the quantity's finiteness rule too. An infinite
+            # `drop_limit_percent` screened a feeder as PASS — every drop is within an
+            # unbounded limit — and a NaN requirement reached a FAIL nobody could read.
+            if isinstance(value, float) and not isfinite(value):
+                raise _guarded_pack_refusal(
+                    f"{name} must be a finite number; got {value}. A NaN or an infinity "
+                    f"here is an arithmetic accident upstream, and an infinite limit "
+                    f"passes everything.",
+                    subject=name,
+                    source=_guarded_pack_input_source(name),
+                )
             if (
                 name in type(self).positive_fields
                 and isinstance(value, int | float)
