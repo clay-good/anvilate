@@ -30,7 +30,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Self, TypeVar
 
 import yaml
-from pydantic import AfterValidator, BaseModel, PlainSerializer, model_validator
+from pydantic import AfterValidator, BaseModel, PlainSerializer, ValidationInfo, model_validator
 
 __all__ = [
     "EMPTY_MAP",
@@ -134,12 +134,15 @@ def cited(states: str) -> Any:
     :data:`_LONGEST_CITED` is what a citation can be and still be one.
     """
 
-    def refuse_a_blank(value: str) -> str:
+    def refuse_a_blank(value: str, info: ValidationInfo) -> str:
+        # The field's own name, so the remedy names what to correct; a value validated
+        # outside a model (a TypeAdapter) has none, and says so.
+        field = info.field_name or "value"
         if not value.strip():
             raise _input_refusal(
                 f"this field must state {states}",
-                subject="the field at this error's location",
-                source=f"text that states {states}, within the length limit",
+                subject=field,
+                source=f"text that states {states}",
             )
         if len(value) > _LONGEST_CITED:
             # The blank refusal's sentence, from the other end. `cited` states BOTH rules for
@@ -148,8 +151,8 @@ def cited(states: str) -> Any:
             raise _input_refusal(
                 f"this field is {len(value):,} characters, and nothing longer than "
                 f"{_LONGEST_CITED:,} is one a reader can follow; it must state {states}",
-                subject="the field at this error's location",
-                source=f"text that states {states}, within the length limit",
+                subject=field,
+                source=f"a text of at most {_LONGEST_CITED:,} characters that states {states}",
             )
         return value
 

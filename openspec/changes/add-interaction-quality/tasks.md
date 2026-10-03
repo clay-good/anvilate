@@ -342,12 +342,19 @@
 - [x] 7.2 Ctrl-C during export leaves no partial artifact presented as complete — DXF writes
       go to a hidden sibling renamed on completion, and the STEP writer removes its file on
       a KeyboardInterrupt as well as on an error
-- [ ] 7.3 Every refusal in the suite carries a remedy with a resolvable subject
+- [x] 7.3 Every refusal in the suite carries a remedy with a resolvable subject
       — progress: in the analysis package, every literal remedy subject (1,117 of them) names a
       parameter or public model field of its module, held by
       tests/test_refusal_remedies_analysis.py. Fifty had been prose ("sun and ring tooth
       counts", "doubly reinforced section inputs") that a person can follow and a program
-      cannot resolve. Open until the ledger of bare refusals (2.1) is empty.
+      cannot resolve. Closed 2026-10-03 with 2.1: every raised refusal of input carries a
+      structured remedy, and tests/test_remedy_subjects.py extends the subject gate to the
+      rest of the package. There a subject resolves when it names a public parameter,
+      method parameter or model field of its module, a command-line flag, or a Design Spec
+      document path; a guard marked `pragma: no cover` names the artifact to rebuild
+      instead. Its last three failures were fixed: a cited field now names itself (from
+      pydantic's ValidationInfo), and the STEP importer and exporter name `path` and
+      `schema and tolerances`.
 - [x] 7.4 Rendering with color disabled loses no information — the terminal carries no
       ANSI escape (tests/test_cli.py), and every coloured status in the HTML report is a word
       (tests/test_report.py)

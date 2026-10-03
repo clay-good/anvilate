@@ -1245,7 +1245,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
                 raise _ExchangeGeometryError(
                     "a cylindrical face could not be assigned to one imported solid",
                     action="repair",
-                    subject="the ambiguous cylindrical face in the imported assembly",
+                    subject="path",
                     source=f"one owning solid in STEP file {path}",
                 )
             axis_origin, axis_direction = _canonical_axis(axis_point, direction)
@@ -1335,7 +1335,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
             raise _ExchangeGeometryError(
                 "a planar face could not be assigned to exactly one imported solid",
                 action="repair",
-                subject="the ambiguous planar face in the imported assembly",
+                subject="path",
                 source=f"exactly one owning solid in STEP file {path}",
             )
         solid_id = containing[0] if len(solids) > 1 else None
@@ -3140,7 +3140,7 @@ def write_step(
             "semantic PMI is an AP242 construct and AP214 cannot carry it; write AP242, or "
             "write AP214 without the tolerances",
             action="select",
-            subject="AP242 for the STEP export with semantic PMI",
+            subject="schema and tolerances",
             source="the STEP schema's semantic-PMI capability",
         )
     if schema not in {"ap242", "ap214"}:
