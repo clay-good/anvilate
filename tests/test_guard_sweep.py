@@ -252,6 +252,33 @@ def _discovered(function) -> dict[str, object] | None:
     return None
 
 
+# Results that are infinite by the function's own documented contract, not by accident.
+_DOCUMENTED_INFINITE = {
+    # The far limit of the depth of field runs to infinity when the focus reaches the
+    # hyperfocal distance, and the docstring says it returns ``inf`` there.
+    "depth_of_field_far_limit",
+}
+
+
+def _non_finite(result: object, depth: int = 0) -> bool:
+    """Whether a returned value carries a NaN or an infinity anywhere a reader would see it."""
+    from pydantic import BaseModel
+
+    if depth > 4 or isinstance(result, bool):
+        return False
+    if isinstance(result, float):
+        return not math.isfinite(result)
+    if isinstance(result, Quantity):
+        return not math.isfinite(result.magnitude)
+    if isinstance(result, tuple | list):
+        return any(_non_finite(item, depth + 1) for item in result)
+    if isinstance(result, dict):
+        return any(_non_finite(item, depth + 1) for item in result.values())
+    if isinstance(result, BaseModel):
+        return any(_non_finite(getattr(result, f), depth + 1) for f in type(result).model_fields)
+    return False
+
+
 def _moved(value: object, dimension: str | None, magnitude: float) -> object | None:
     if isinstance(value, Quantity):
         return Quantity(magnitude=magnitude, unit=value.unit)
@@ -299,6 +326,12 @@ def test_every_out_of_range_argument_meets_a_structured_refusal_or_a_number() ->
                     failures.append(f"{label}: {type(slip).__name__}: {str(slip)[:80]}")
                 else:
                     tally["accepted"] += 1
+                    if math.isfinite(magnitude) and name not in _DOCUMENTED_INFINITE:
+                        # The other half of a silent result: a finite input the function
+                        # accepts and answers with NaN or infinity. A compressive mean
+                        # gave Goodman an infinite safety factor this way.
+                        if _non_finite(result):
+                            failures.append(f"{label}: accepted, gave {result!r:.70}")
                     if not math.isfinite(magnitude):
                         failures.append(f"{label}: non-finite accepted, gave {result!r:.70}")
 
