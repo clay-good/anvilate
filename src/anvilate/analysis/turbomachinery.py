@@ -20,8 +20,35 @@ from __future__ import annotations
 
 from math import pi, radians, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_second
+
+_IMPELLER_SOURCE = "the impeller drawing (diameter, blade angle, and blade count)"
+_SPEED_SOURCE = "the machine's rated speed from its datasheet"
+_TRIANGLE_SOURCE = "the velocity triangles from the stage design calculation"
+
+
+class _TurbomachineryInputError(RefusalError, ValueError):
+    """A turbomachinery input that cannot be used without correction."""
+
+
+def _turbomachinery_refusal(
+    message: str, *, subject: str, source: str
+) -> _TurbomachineryInputError:
+    return _TurbomachineryInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _turbomachinery_input_source(name: str) -> str:
+    if name in {"blade_angle", "blade_count", "diameter"}:
+        return _IMPELLER_SOURCE
+    if name == "rotational_speed":
+        return _SPEED_SOURCE
+    return _TRIANGLE_SOURCE
+
 
 _STANDARD_GRAVITY = Quantity(magnitude=9.80665, unit="m/s**2")
 
@@ -44,18 +71,28 @@ def blade_tip_speed(*, diameter: Quantity, rotational_speed: Quantity) -> Quanti
     """
     _check(diameter, "[length]", "diameter")
     if not isinstance(rotational_speed, Quantity):
-        raise ValueError(f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}")
+        raise _turbomachinery_refusal(
+            f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}",
+            subject="rotational_speed",
+            source=_SPEED_SOURCE,
+        )
     if not rotational_speed.has_dimension("1/[time]"):
-        raise ValueError(
+        raise _turbomachinery_refusal(
             f"rotational_speed must be a 1/[time] quantity; got "
-            f"{rotational_speed.dimensionality} ({rotational_speed})"
+            f"{rotational_speed.dimensionality} ({rotational_speed})",
+            subject="rotational_speed",
+            source=_SPEED_SOURCE,
         )
     d = diameter.to("m").magnitude
     n = revolutions_per_second(rotational_speed, name="rotational_speed")
     if d <= 0:
-        raise ValueError("diameter must be positive")
+        raise _turbomachinery_refusal(
+            "diameter must be positive", subject="diameter", source=_IMPELLER_SOURCE
+        )
     if n <= 0:
-        raise ValueError("rotational_speed must be positive")
+        raise _turbomachinery_refusal(
+            "rotational_speed must be positive", subject="rotational_speed", source=_SPEED_SOURCE
+        )
     return Quantity(magnitude=pi * d * n, unit="m/s")
 
 
@@ -78,11 +115,21 @@ def impeller_outlet_swirl_velocity(
     u = blade_speed.to("m/s").magnitude
     cm = meridional_velocity.to("m/s").magnitude
     if u <= 0:
-        raise ValueError("blade_speed must be positive")
+        raise _turbomachinery_refusal(
+            "blade_speed must be positive", subject="blade_speed", source=_TRIANGLE_SOURCE
+        )
     if cm <= 0:
-        raise ValueError("meridional_velocity must be positive")
+        raise _turbomachinery_refusal(
+            "meridional_velocity must be positive",
+            subject="meridional_velocity",
+            source=_TRIANGLE_SOURCE,
+        )
     if not 0.0 < blade_angle < 180.0:
-        raise ValueError("blade_angle must be in (0, 180) degrees")
+        raise _turbomachinery_refusal(
+            "blade_angle must be in (0, 180) degrees",
+            subject="blade_angle",
+            source=_IMPELLER_SOURCE,
+        )
     ctheta = u - cm / tan(radians(blade_angle))
     return Quantity(magnitude=ctheta, unit="m/s")
 
@@ -107,14 +154,22 @@ def euler_head(
     u2 = outlet_blade_speed.to("m/s").magnitude
     ct2 = outlet_swirl_velocity.to("m/s").magnitude
     if u2 <= 0:
-        raise ValueError("outlet_blade_speed must be positive")
+        raise _turbomachinery_refusal(
+            "outlet_blade_speed must be positive",
+            subject="outlet_blade_speed",
+            source=_TRIANGLE_SOURCE,
+        )
     if inlet_blade_speed is None:
         u1 = 0.0
     else:
         _check(inlet_blade_speed, "[length]/[time]", "inlet_blade_speed")
         u1 = inlet_blade_speed.to("m/s").magnitude
         if u1 < 0:
-            raise ValueError("inlet_blade_speed must be non-negative")
+            raise _turbomachinery_refusal(
+                "inlet_blade_speed must be non-negative",
+                subject="inlet_blade_speed",
+                source=_TRIANGLE_SOURCE,
+            )
     if inlet_swirl_velocity is None:
         ct1 = 0.0
     else:
@@ -123,8 +178,14 @@ def euler_head(
     g = _STANDARD_GRAVITY.to("m/s**2").magnitude
     head = (u2 * ct2 - u1 * ct1) / g
     if head <= 0:
-        raise ValueError(
-            "Euler head is non-positive; the outlet swirl work does not exceed the inlet swirl work"
+        raise _turbomachinery_refusal(
+            "Euler head is non-positive; the outlet swirl work does not exceed the inlet swirl "
+            "work",
+            subject=(
+                "outlet_blade_speed, outlet_swirl_velocity, inlet_blade_speed, and "
+                "inlet_swirl_velocity"
+            ),
+            source=_TRIANGLE_SOURCE,
         )
     return Quantity(magnitude=head, unit="m")
 
@@ -144,9 +205,13 @@ def flow_coefficient(*, axial_velocity: Quantity, blade_speed: Quantity) -> floa
     c_a = axial_velocity.to("m/s").magnitude
     u = blade_speed.to("m/s").magnitude
     if c_a <= 0:
-        raise ValueError("axial_velocity must be positive")
+        raise _turbomachinery_refusal(
+            "axial_velocity must be positive", subject="axial_velocity", source=_TRIANGLE_SOURCE
+        )
     if u <= 0:
-        raise ValueError("blade_speed must be positive")
+        raise _turbomachinery_refusal(
+            "blade_speed must be positive", subject="blade_speed", source=_TRIANGLE_SOURCE
+        )
     return c_a / u
 
 
@@ -165,9 +230,13 @@ def stage_loading_coefficient(*, specific_work: Quantity, blade_speed: Quantity)
     dh0 = specific_work.to("m**2/s**2").magnitude
     u = blade_speed.to("m/s").magnitude
     if dh0 <= 0:
-        raise ValueError("specific_work must be positive")
+        raise _turbomachinery_refusal(
+            "specific_work must be positive", subject="specific_work", source=_TRIANGLE_SOURCE
+        )
     if u <= 0:
-        raise ValueError("blade_speed must be positive")
+        raise _turbomachinery_refusal(
+            "blade_speed must be positive", subject="blade_speed", source=_TRIANGLE_SOURCE
+        )
     return dh0 / u**2
 
 
@@ -190,21 +259,33 @@ def stanitz_slip_factor(*, blade_count: int) -> float:
     """
     require_finite(blade_count, name="blade_count")
     if int(blade_count) != blade_count:
-        raise ValueError(f"blade_count must be a whole number of blades; got {blade_count}")
+        raise _turbomachinery_refusal(
+            f"blade_count must be a whole number of blades; got {blade_count}",
+            subject="blade_count",
+            source=_IMPELLER_SOURCE,
+        )
     z = int(blade_count)
     if z <= 0.63 * pi:
-        raise ValueError(
-            f"blade_count must exceed 0.63*pi ~ 1.98 for the Stanitz correlation; got {z}"
+        raise _turbomachinery_refusal(
+            f"blade_count must exceed 0.63*pi ~ 1.98 for the Stanitz correlation; got {z}",
+            subject="blade_count",
+            source=_IMPELLER_SOURCE,
         )
     return 1.0 - 0.63 * pi / z
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _turbomachinery_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_turbomachinery_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _turbomachinery_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_turbomachinery_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

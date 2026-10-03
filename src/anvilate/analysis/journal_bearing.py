@@ -26,8 +26,38 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s, revolutions_per_second
+
+_BEARING_SOURCE = "the bearing drawing (journal size, length, clearance, finish)"
+_LUBRICANT_SOURCE = "the lubricant datasheet viscosity at the film temperature"
+_OPERATING_SOURCE = "the operating case (shaft speed and radial load)"
+_FILM_SOURCE = "the film thickness from the bearing performance chart"
+
+
+class _JournalBearingInputError(RefusalError, ValueError):
+    """A journal-bearing input that cannot be used without correction."""
+
+
+def _journal_bearing_refusal(
+    message: str, *, subject: str, source: str
+) -> _JournalBearingInputError:
+    return _JournalBearingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _journal_bearing_input_source(name: str) -> str:
+    if name == "viscosity":
+        return _LUBRICANT_SOURCE
+    if name in {"radial_load", "speed", "unit_load"}:
+        return _OPERATING_SOURCE
+    if name in {"eccentricity_ratio", "minimum_film_thickness"}:
+        return _FILM_SOURCE
+    return _BEARING_SOURCE
+
 
 __all__ = [
     "petroff_friction_coefficient",
@@ -42,10 +72,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _journal_bearing_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_journal_bearing_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _journal_bearing_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_journal_bearing_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -67,10 +103,16 @@ def _petroff_torque_nm(
     _require(bearing_length, "[length]", "bearing_length")
     _require(radial_clearance, "[length]", "radial_clearance")
     if not isinstance(speed, Quantity):
-        raise ValueError(f"speed must be a [frequency] quantity; got {speed!r}")
+        raise _journal_bearing_refusal(
+            f"speed must be a [frequency] quantity; got {speed!r}",
+            subject="speed",
+            source=_OPERATING_SOURCE,
+        )
     if not speed.has_dimension("[frequency]"):
-        raise ValueError(
-            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
+        raise _journal_bearing_refusal(
+            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})",
+            subject="speed",
+            source=_OPERATING_SOURCE,
         )
     mu = viscosity.to("Pa*s").magnitude
     n = revolutions_per_second(speed, name="speed")  # revolutions per second
@@ -78,12 +120,22 @@ def _petroff_torque_nm(
     ell = bearing_length.to("m").magnitude
     c = radial_clearance.to("m").magnitude
     if mu <= 0:
-        raise ValueError(f"viscosity must be positive; got {viscosity}")
+        raise _journal_bearing_refusal(
+            f"viscosity must be positive; got {viscosity}",
+            subject="viscosity",
+            source=_LUBRICANT_SOURCE,
+        )
     if n <= 0:
-        raise ValueError(f"speed must be positive; got {speed}")
+        raise _journal_bearing_refusal(
+            f"speed must be positive; got {speed}", subject="speed", source=_OPERATING_SOURCE
+        )
     for value, name in ((r, "journal_radius"), (ell, "bearing_length"), (c, "radial_clearance")):
         if value <= 0:
-            raise ValueError(f"{name} must be positive; got {value} m")
+            raise _journal_bearing_refusal(
+                f"{name} must be positive; got {value} m",
+                subject=name,
+                source=_journal_bearing_input_source(name),
+            )
     return 4.0 * pi**2 * mu * n * ell * r**3 / c
 
 
@@ -148,8 +200,13 @@ def journal_bearing_unit_load(
     _require(bearing_length, "[length]", "bearing_length")
     d = journal_diameter.to("mm").magnitude
     ell = bearing_length.to("mm").magnitude
-    if d <= 0 or ell <= 0:
-        raise ValueError("journal_diameter and bearing_length must be positive")
+    for subject, magnitude in (("journal_diameter", d), ("bearing_length", ell)):
+        if magnitude <= 0:
+            raise _journal_bearing_refusal(
+                "journal_diameter and bearing_length must be positive",
+                subject=subject,
+                source=_BEARING_SOURCE,
+            )
     pressure = radial_load.pint / (journal_diameter.pint * bearing_length.pint)
     return Quantity(magnitude=float(pressure.to("MPa").magnitude), unit="MPa")
 
@@ -177,20 +234,36 @@ def sommerfeld_number(
     _require(viscosity, "[pressure] * [time]", "viscosity")
     _require(unit_load, "[pressure]", "unit_load")
     if not isinstance(speed, Quantity):
-        raise ValueError(f"speed must be a [frequency] quantity; got {speed!r}")
+        raise _journal_bearing_refusal(
+            f"speed must be a [frequency] quantity; got {speed!r}",
+            subject="speed",
+            source=_OPERATING_SOURCE,
+        )
     if not speed.has_dimension("[frequency]"):
-        raise ValueError(
-            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
+        raise _journal_bearing_refusal(
+            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})",
+            subject="speed",
+            source=_OPERATING_SOURCE,
         )
     r = journal_radius.to("m").magnitude
     c = radial_clearance.to("m").magnitude
     mu = viscosity.to("Pa*s").magnitude
     n = revolutions_per_second(speed, name="speed")
     p = unit_load.to("Pa").magnitude
-    if c <= 0 or r <= 0:
-        raise ValueError("journal_radius and radial_clearance must be positive")
-    if mu <= 0 or n <= 0 or p <= 0:
-        raise ValueError("viscosity, speed, and unit_load must be positive")
+    for subject, magnitude in (("radial_clearance", c), ("journal_radius", r)):
+        if magnitude <= 0:
+            raise _journal_bearing_refusal(
+                "journal_radius and radial_clearance must be positive",
+                subject=subject,
+                source=_BEARING_SOURCE,
+            )
+    for subject, magnitude in (("viscosity", mu), ("speed", n), ("unit_load", p)):
+        if magnitude <= 0:
+            raise _journal_bearing_refusal(
+                "viscosity, speed, and unit_load must be positive",
+                subject=subject,
+                source=_journal_bearing_input_source(subject),
+            )
     return (r / c) ** 2 * (mu * n / p)
 
 
@@ -213,10 +286,18 @@ def journal_bearing_minimum_film_thickness(
     """
     _require(radial_clearance, "[length]", "radial_clearance")
     if not 0 <= eccentricity_ratio < 1:
-        raise ValueError(f"eccentricity_ratio must lie in [0, 1); got {eccentricity_ratio}")
+        raise _journal_bearing_refusal(
+            f"eccentricity_ratio must lie in [0, 1); got {eccentricity_ratio}",
+            subject="eccentricity_ratio",
+            source=_FILM_SOURCE,
+        )
     c = radial_clearance.to("um").magnitude
     if c <= 0:
-        raise ValueError(f"radial_clearance must be positive; got {radial_clearance}")
+        raise _journal_bearing_refusal(
+            f"radial_clearance must be positive; got {radial_clearance}",
+            subject="radial_clearance",
+            source=_BEARING_SOURCE,
+        )
     return Quantity(magnitude=c * (1.0 - eccentricity_ratio), unit="um")
 
 
@@ -246,9 +327,18 @@ def specific_film_ratio(
     ra_j = journal_roughness.to("um").magnitude
     ra_b = bush_roughness.to("um").magnitude
     if h0 <= 0:
-        raise ValueError(f"minimum_film_thickness must be positive; got {minimum_film_thickness}")
-    if ra_j <= 0 or ra_b <= 0:
-        raise ValueError("journal_roughness and bush_roughness must be positive")
+        raise _journal_bearing_refusal(
+            f"minimum_film_thickness must be positive; got {minimum_film_thickness}",
+            subject="minimum_film_thickness",
+            source=_FILM_SOURCE,
+        )
+    for subject, magnitude in (("journal_roughness", ra_j), ("bush_roughness", ra_b)):
+        if magnitude <= 0:
+            raise _journal_bearing_refusal(
+                "journal_roughness and bush_roughness must be positive",
+                subject=subject,
+                source=_BEARING_SOURCE,
+            )
     composite = (ra_j**2 + ra_b**2) ** 0.5
     return h0 / composite
 
@@ -286,18 +376,34 @@ def petroff_friction_coefficient(
     _require(viscosity, "[pressure] * [time]", "viscosity")
     _require(unit_load, "[pressure]", "unit_load")
     if not isinstance(speed, Quantity):
-        raise ValueError(f"speed must be a [frequency] quantity; got {speed!r}")
+        raise _journal_bearing_refusal(
+            f"speed must be a [frequency] quantity; got {speed!r}",
+            subject="speed",
+            source=_OPERATING_SOURCE,
+        )
     if not speed.has_dimension("[frequency]"):
-        raise ValueError(
-            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})"
+        raise _journal_bearing_refusal(
+            f"speed must be a [frequency] quantity; got {speed.dimensionality} ({speed})",
+            subject="speed",
+            source=_OPERATING_SOURCE,
         )
     r = journal_radius.to("m").magnitude
     c = radial_clearance.to("m").magnitude
     mu = viscosity.to("Pa*s").magnitude
     n = revolutions_per_second(speed, name="speed")
     p_load = unit_load.to("Pa").magnitude
-    if c <= 0 or r <= 0:
-        raise ValueError("journal_radius and radial_clearance must be positive")
-    if mu <= 0 or n <= 0 or p_load <= 0:
-        raise ValueError("viscosity, speed, and unit_load must be positive")
+    for subject, magnitude in (("radial_clearance", c), ("journal_radius", r)):
+        if magnitude <= 0:
+            raise _journal_bearing_refusal(
+                "journal_radius and radial_clearance must be positive",
+                subject=subject,
+                source=_BEARING_SOURCE,
+            )
+    for subject, magnitude in (("viscosity", mu), ("speed", n), ("unit_load", p_load)):
+        if magnitude <= 0:
+            raise _journal_bearing_refusal(
+                "viscosity, speed, and unit_load must be positive",
+                subject=subject,
+                source=_journal_bearing_input_source(subject),
+            )
     return 2.0 * pi**2 * (mu * n / p_load) * (r / c)

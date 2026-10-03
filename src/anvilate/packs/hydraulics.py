@@ -25,6 +25,7 @@ from ..analysis import (
     reynolds_number,
 )
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import (
     CheckStatus,
     Direction,
@@ -228,6 +229,10 @@ def screen_pump_duty(
     return Scorecard(entries=(motor_entry, npsh_entry))
 
 
+class _PipeRunInputError(RefusalError, ValueError):
+    """A pipe-run input that cannot be used without correction."""
+
+
 class PipeRun(GuardedInputs):
     """A pressurized pipe run and the head available to drive it, and its screen inputs.
 
@@ -251,10 +256,17 @@ class PipeRun(GuardedInputs):
     @model_validator(mode="after")
     def _a_loss_coefficient(self) -> PipeRun:
         if not self.fitting_loss_coefficient >= 0:
-            raise ValueError(
+            raise _PipeRunInputError(
                 "fitting_loss_coefficient must not be negative; got "
                 f"{self.fitting_loss_coefficient}. It sums the fittings' K values, and no "
-                "fitting recovers head"
+                "fitting recovers head",
+                remedies=(
+                    Remedy(
+                        action="replace",
+                        subject="fitting_loss_coefficient",
+                        source="the summed K values of the run's fittings from a cited table",
+                    ),
+                ),
             )
         return self
 

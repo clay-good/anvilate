@@ -24,7 +24,38 @@ second-law efficiency that grades the machine against that ceiling.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ENGINE_SOURCE = "the engine's specification sheet (compression, cutoff, and pressure ratios)"
+_GAS_PROPERTY_SOURCE = "the working gas's specific-heat ratio from a property table"
+_RESERVOIR_SOURCE = "the operating case's source and sink temperatures"
+_TEST_SOURCE = "the engine dynamometer test record (brake power and fuel flow)"
+_FUEL_SOURCE = "the fuel's certificate of analysis (lower heating value)"
+
+
+class _PowerCyclesInputError(RefusalError, ValueError):
+    """A power-cycle input that cannot be used without correction."""
+
+
+def _power_cycles_refusal(message: str, *, subject: str, source: str) -> _PowerCyclesInputError:
+    return _PowerCyclesInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _power_cycles_input_source(name: str) -> str:
+    if name == "specific_heat_ratio":
+        return _GAS_PROPERTY_SOURCE
+    if name in {"carnot_efficiency", "cold_temperature", "hot_temperature"}:
+        return _RESERVOIR_SOURCE
+    if name in {"brake_power", "fuel_mass_flow", "net_work_per_cycle", "thermal_efficiency"}:
+        return _TEST_SOURCE
+    if name == "fuel_heating_value":
+        return _FUEL_SOURCE
+    return _ENGINE_SOURCE
+
 
 __all__ = [
     "brake_specific_fuel_consumption",
@@ -50,9 +81,17 @@ def otto_cycle_efficiency(*, compression_ratio: float, specific_heat_ratio: floa
     require_finite(compression_ratio, name="compression_ratio")
     require_finite(specific_heat_ratio, name="specific_heat_ratio")
     if compression_ratio <= 1:
-        raise ValueError("compression_ratio must be greater than 1")
+        raise _power_cycles_refusal(
+            "compression_ratio must be greater than 1",
+            subject="compression_ratio",
+            source=_ENGINE_SOURCE,
+        )
     if specific_heat_ratio <= 1:
-        raise ValueError("specific_heat_ratio must be greater than 1")
+        raise _power_cycles_refusal(
+            "specific_heat_ratio must be greater than 1",
+            subject="specific_heat_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     return 1.0 - 1.0 / compression_ratio ** (specific_heat_ratio - 1.0)
 
 
@@ -75,21 +114,33 @@ def diesel_cycle_efficiency(
     require_finite(cutoff_ratio, name="cutoff_ratio")
     require_finite(specific_heat_ratio, name="specific_heat_ratio")
     if compression_ratio <= 1:
-        raise ValueError("compression_ratio must be greater than 1")
+        raise _power_cycles_refusal(
+            "compression_ratio must be greater than 1",
+            subject="compression_ratio",
+            source=_ENGINE_SOURCE,
+        )
     if cutoff_ratio <= 1:
-        raise ValueError("cutoff_ratio must be greater than 1")
+        raise _power_cycles_refusal(
+            "cutoff_ratio must be greater than 1", subject="cutoff_ratio", source=_ENGINE_SOURCE
+        )
     if specific_heat_ratio <= 1:
-        raise ValueError("specific_heat_ratio must be greater than 1")
+        raise _power_cycles_refusal(
+            "specific_heat_ratio must be greater than 1",
+            subject="specific_heat_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     # The geometry the cycle is drawn on: V3 = r_c*V2 is where combustion ends, and it
     # cannot be past V1 = r*V2, which is bottom dead centre. Nothing enforced it, so a
     # cutoff ratio above the compression ratio returned a plausible-looking 0.161 at
     # (18, 25) and a *negative* efficiency at (18, 40) — a heat engine consuming work,
     # from a formula whose every individual guard had passed.
     if cutoff_ratio > compression_ratio:
-        raise ValueError(
+        raise _power_cycles_refusal(
             f"cutoff_ratio ({cutoff_ratio}) cannot exceed compression_ratio "
             f"({compression_ratio}): combustion would end past bottom dead centre, which "
-            "is not a cycle the air-standard analysis describes"
+            "is not a cycle the air-standard analysis describes",
+            subject="cutoff_ratio and compression_ratio",
+            source=_ENGINE_SOURCE,
         )
     g = specific_heat_ratio
     cutoff_term = (cutoff_ratio**g - 1.0) / (g * (cutoff_ratio - 1.0))
@@ -107,9 +158,15 @@ def brayton_cycle_efficiency(*, pressure_ratio: float, specific_heat_ratio: floa
     require_finite(pressure_ratio, name="pressure_ratio")
     require_finite(specific_heat_ratio, name="specific_heat_ratio")
     if pressure_ratio <= 1:
-        raise ValueError("pressure_ratio must be greater than 1")
+        raise _power_cycles_refusal(
+            "pressure_ratio must be greater than 1", subject="pressure_ratio", source=_ENGINE_SOURCE
+        )
     if specific_heat_ratio <= 1:
-        raise ValueError("specific_heat_ratio must be greater than 1")
+        raise _power_cycles_refusal(
+            "specific_heat_ratio must be greater than 1",
+            subject="specific_heat_ratio",
+            source=_GAS_PROPERTY_SOURCE,
+        )
     g = specific_heat_ratio
     return 1.0 - 1.0 / pressure_ratio ** ((g - 1.0) / g)
 
@@ -130,9 +187,17 @@ def carnot_efficiency(*, cold_temperature: Quantity, hot_temperature: Quantity) 
     t_c = cold_temperature.to("K").magnitude
     t_h = hot_temperature.to("K").magnitude
     if t_c <= 0 or t_h <= 0:
-        raise ValueError("temperatures must be positive (absolute)")
+        raise _power_cycles_refusal(
+            "temperatures must be positive (absolute)",
+            subject="cold_temperature and hot_temperature",
+            source=_RESERVOIR_SOURCE,
+        )
     if t_h <= t_c:
-        raise ValueError("hot_temperature must exceed cold_temperature")
+        raise _power_cycles_refusal(
+            "hot_temperature must exceed cold_temperature",
+            subject="cold_temperature and hot_temperature",
+            source=_RESERVOIR_SOURCE,
+        )
     return 1.0 - t_c / t_h
 
 
@@ -152,12 +217,22 @@ def heat_engine_second_law_efficiency(
     beat Carnot). Returns the dimensionless efficiency.
     """
     if not 0.0 < thermal_efficiency < 1.0:
-        raise ValueError(f"thermal_efficiency must be in (0, 1); got {thermal_efficiency}")
+        raise _power_cycles_refusal(
+            f"thermal_efficiency must be in (0, 1); got {thermal_efficiency}",
+            subject="thermal_efficiency",
+            source=_TEST_SOURCE,
+        )
     if not 0.0 < carnot_efficiency < 1.0:
-        raise ValueError(f"carnot_efficiency must be in (0, 1); got {carnot_efficiency}")
+        raise _power_cycles_refusal(
+            f"carnot_efficiency must be in (0, 1); got {carnot_efficiency}",
+            subject="carnot_efficiency",
+            source=_RESERVOIR_SOURCE,
+        )
     if thermal_efficiency > carnot_efficiency:
-        raise ValueError(
-            "thermal_efficiency cannot exceed the Carnot efficiency (that would beat Carnot)"
+        raise _power_cycles_refusal(
+            "thermal_efficiency cannot exceed the Carnot efficiency (that would beat Carnot)",
+            subject="thermal_efficiency and carnot_efficiency",
+            source=_TEST_SOURCE,
         )
     return thermal_efficiency / carnot_efficiency
 
@@ -182,9 +257,13 @@ def brake_specific_fuel_consumption(
     m_dot = fuel_mass_flow.to("kg/s").magnitude
     p = brake_power.to("W").magnitude
     if m_dot < 0:
-        raise ValueError("fuel_mass_flow must be non-negative")
+        raise _power_cycles_refusal(
+            "fuel_mass_flow must be non-negative", subject="fuel_mass_flow", source=_TEST_SOURCE
+        )
     if p <= 0:
-        raise ValueError("brake_power must be positive")
+        raise _power_cycles_refusal(
+            "brake_power must be positive", subject="brake_power", source=_TEST_SOURCE
+        )
     return Quantity(magnitude=m_dot / p, unit="kg/J")
 
 
@@ -212,15 +291,23 @@ def brake_thermal_efficiency(
     m_dot = fuel_mass_flow.to("kg/s").magnitude
     lhv = fuel_heating_value.to("J/kg").magnitude
     if p <= 0:
-        raise ValueError("brake_power must be positive")
+        raise _power_cycles_refusal(
+            "brake_power must be positive", subject="brake_power", source=_TEST_SOURCE
+        )
     if m_dot <= 0:
-        raise ValueError("fuel_mass_flow must be positive")
+        raise _power_cycles_refusal(
+            "fuel_mass_flow must be positive", subject="fuel_mass_flow", source=_TEST_SOURCE
+        )
     if lhv <= 0:
-        raise ValueError("fuel_heating_value must be positive")
+        raise _power_cycles_refusal(
+            "fuel_heating_value must be positive", subject="fuel_heating_value", source=_FUEL_SOURCE
+        )
     eta = p / (m_dot * lhv)
     if eta > 1.0:
-        raise ValueError(
-            "brake_power exceeds the fuel energy rate (η > 1 is impossible); check inputs"
+        raise _power_cycles_refusal(
+            "brake_power exceeds the fuel energy rate (η > 1 is impossible); check inputs",
+            subject="brake_power, fuel_mass_flow, and fuel_heating_value",
+            source=_TEST_SOURCE,
         )
     return eta
 
@@ -245,18 +332,30 @@ def mean_effective_pressure(
     w = net_work_per_cycle.to("J").magnitude
     v_d = displacement_volume.to("m**3").magnitude
     if w <= 0:
-        raise ValueError("net_work_per_cycle must be positive")
+        raise _power_cycles_refusal(
+            "net_work_per_cycle must be positive", subject="net_work_per_cycle", source=_TEST_SOURCE
+        )
     if v_d <= 0:
-        raise ValueError("displacement_volume must be positive")
+        raise _power_cycles_refusal(
+            "displacement_volume must be positive",
+            subject="displacement_volume",
+            source=_ENGINE_SOURCE,
+        )
     return Quantity(magnitude=w / v_d, unit="Pa").to("kPa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _power_cycles_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_power_cycles_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _power_cycles_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_power_cycles_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

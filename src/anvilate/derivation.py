@@ -27,6 +27,7 @@ from enum import StrEnum
 from pydantic import ConfigDict, Field, field_validator
 
 from ._models import Provenance, StatableModel
+from .refusal import RefusalError, Remedy
 from .units import Quantity, UnitSystem, render
 
 __all__ = [
@@ -97,6 +98,10 @@ class DerivationAbsence(StrEnum):
     NUMERIC_RESULT = "numeric_result"
 
 
+class _UnderivedInputError(RefusalError, ValueError):
+    """An Underived declaration that cannot be recorded without correction."""
+
+
 class Underived(StatableModel):
     """A check's own statement that it has no formula to show, and why.
 
@@ -119,9 +124,16 @@ class Underived(StatableModel):
     @classmethod
     def _reason_must_say_something(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError(
+            raise _UnderivedInputError(
                 "an Underived declaration needs a stated reason; a blank one is the "
-                "silence the declaration exists to replace"
+                "silence the declaration exists to replace",
+                remedies=(
+                    Remedy(
+                        action="replace",
+                        subject="reason",
+                        source="why the check has no derivation (tabular-only, or cited elsewhere)",
+                    ),
+                ),
             )
         return value
 

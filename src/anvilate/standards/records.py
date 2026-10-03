@@ -65,6 +65,10 @@ _BASIS_ORDER: tuple[AllowableBasis, ...] = (
 )
 
 
+class _CitationInputError(RefusalError, ValueError):
+    """A property citation that cannot be recorded without correction."""
+
+
 class PropertyCitation(_Base):
     """Where a single property value came from and under what condition.
 
@@ -103,7 +107,16 @@ class PropertyCitation(_Base):
     @model_validator(mode="after")
     def _estimate_names_method(self) -> PropertyCitation:
         if self.estimated and not self.method:
-            raise ValueError("an estimated property must name the estimation method")
+            raise _CitationInputError(
+                "an estimated property must name the estimation method",
+                remedies=(
+                    Remedy(
+                        action="replace",
+                        subject="method",
+                        source="the estimation method the property value was derived by",
+                    ),
+                ),
+            )
         return self
 
 

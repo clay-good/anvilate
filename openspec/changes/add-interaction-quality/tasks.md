@@ -156,6 +156,14 @@
       kinetics, cooling towers, diffusion, servo drivetrains, ideal gases, diodes, Peukert
       batteries, capillary flow, transmission lines, projectiles, induction, vehicle
       stability, the atmosphere, and illumination), leaving 3,189 in 140.
+      Then 42 more analysis modules with 15 to 24 sites each (vehicle dynamics through wing
+      aerodynamics), and the one-site core refusals: the task-store path, a frozen schema
+      version that would change, a screening depth that is not deeper, an empty noise
+      survey, report pagination, a Design Spec that is not a mapping, an estimated property
+      without its method, a verification outcome missing a field, an Underived declaration
+      without a reason, and a negative pipe-run fitting coefficient. That leaves 2,399 in 88.
+      refusal.py's own two refusals (a blank rendered remedy, a refusal with no remedies) stay:
+      they guard the construction of a remedy, so they cannot carry one.
       tests/test_refusal_remedies_analysis.py pins one or two exact remedies per module and
       sweeps every public function of every migrated module with bare numbers: whatever it
       refuses must be a `RefusalError` whose subject names one of its parameters.

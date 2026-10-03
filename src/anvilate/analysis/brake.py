@@ -42,9 +42,34 @@ from __future__ import annotations
 
 from math import exp
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ._flags import require_flag
 from .belt import belt_max_transmissible_force, belt_slack_tension, capstan_tension_ratio
+
+_GEOMETRY_SOURCE = "the brake assembly drawing (drum, band, and lever dimensions)"
+_LINING_SOURCE = "the lining manufacturer's friction coefficient datasheet"
+_LOAD_SOURCE = "the braking torque or actuation force from the duty cycle"
+
+
+class _BrakeInputError(RefusalError, ValueError):
+    """A drum-brake input that cannot be used without correction."""
+
+
+def _brake_refusal(message: str, *, subject: str, source: str) -> _BrakeInputError:
+    return _BrakeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _brake_input_source(name: str) -> str:
+    if name in {"actuation_force", "normal_force", "tight_tension", "torque"}:
+        return _LOAD_SOURCE
+    if name == "friction_coefficient":
+        return _LINING_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 __all__ = [
     "band_brake_torque",
@@ -60,10 +85,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _brake_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_brake_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _brake_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_brake_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -76,7 +107,11 @@ def _drum_radius_m(drum_diameter: Quantity) -> float:
     _require(drum_diameter, "[length]", "drum_diameter")
     d = drum_diameter.to("m").magnitude
     if d <= 0:
-        raise ValueError(f"drum_diameter must be positive; got {drum_diameter}")
+        raise _brake_refusal(
+            f"drum_diameter must be positive; got {drum_diameter}",
+            subject="drum_diameter",
+            source=_GEOMETRY_SOURCE,
+        )
     return d / 2.0
 
 
@@ -123,12 +158,22 @@ def band_brake_tight_tension_for_torque(
     """
     _require(torque, "[force] * [length]", "torque")
     if friction_coefficient <= 0:
-        raise ValueError(f"friction_coefficient must be positive; got {friction_coefficient}")
+        raise _brake_refusal(
+            f"friction_coefficient must be positive; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     if wrap_angle <= 0:
-        raise ValueError(f"wrap_angle (radians) must be positive; got {wrap_angle}")
+        raise _brake_refusal(
+            f"wrap_angle (radians) must be positive; got {wrap_angle}",
+            subject="wrap_angle",
+            source=_GEOMETRY_SOURCE,
+        )
     t = torque.to("N*m").magnitude
     if t <= 0:
-        raise ValueError(f"torque must be positive; got {torque}")
+        raise _brake_refusal(
+            f"torque must be positive; got {torque}", subject="torque", source=_LOAD_SOURCE
+        )
     radius = _drum_radius_m(drum_diameter)
     grip = 1.0 - exp(-friction_coefficient * wrap_angle)
     return Quantity(magnitude=t / (radius * grip), unit="N")
@@ -153,15 +198,27 @@ def band_brake_max_lining_pressure(
     _require(band_width, "[length]", "band_width")
     t1 = tight_tension.to("N").magnitude
     if t1 < 0:
-        raise ValueError(f"tight_tension must be non-negative; got {tight_tension}")
+        raise _brake_refusal(
+            f"tight_tension must be non-negative; got {tight_tension}",
+            subject="tight_tension",
+            source=_LOAD_SOURCE,
+        )
     b = band_width.to("mm").magnitude
     if b <= 0:
-        raise ValueError(f"band_width must be positive; got {band_width}")
+        raise _brake_refusal(
+            f"band_width must be positive; got {band_width}",
+            subject="band_width",
+            source=_GEOMETRY_SOURCE,
+        )
     # The third quantity, and the one the list at the top of this function stopped at.
     _require(drum_diameter, "[length]", "drum_diameter")
     d = drum_diameter.to("mm").magnitude
     if d <= 0:
-        raise ValueError(f"drum_diameter must be positive; got {drum_diameter}")
+        raise _brake_refusal(
+            f"drum_diameter must be positive; got {drum_diameter}",
+            subject="drum_diameter",
+            source=_GEOMETRY_SOURCE,
+        )
     return Quantity(magnitude=2.0 * t1 / (b * d), unit="MPa")
 
 
@@ -169,7 +226,9 @@ def _positive_length_m(value: Quantity, name: str) -> float:
     _require(value, "[length]", name)
     magnitude = value.to("m").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _brake_refusal(
+            f"{name} must be positive; got {value}", subject=name, source=_brake_input_source(name)
+        )
     return magnitude
 
 
@@ -194,7 +253,11 @@ def short_shoe_is_self_locking(
     # number nobody has. See units.require_finite.
     require_finite(friction_coefficient, name="friction_coefficient")
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _brake_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     b = _positive_length_m(normal_arm, "normal_arm")
     a = _positive_length_m(friction_arm, "friction_arm")
     return b <= friction_coefficient * a
@@ -229,18 +292,28 @@ def short_shoe_normal_force(
     _require(actuation_force, "[force]", "actuation_force")
     f = actuation_force.to("N").magnitude
     if f < 0:
-        raise ValueError(f"actuation_force must be non-negative; got {actuation_force}")
+        raise _brake_refusal(
+            f"actuation_force must be non-negative; got {actuation_force}",
+            subject="actuation_force",
+            source=_LOAD_SOURCE,
+        )
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _brake_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     c = _positive_length_m(force_arm, "force_arm")
     b = _positive_length_m(normal_arm, "normal_arm")
     a = _positive_length_m(friction_arm, "friction_arm")
     if self_energizing:
         denominator = b - friction_coefficient * a
         if denominator <= 0:
-            raise ValueError(
+            raise _brake_refusal(
                 f"self-locking geometry: normal_arm ({normal_arm}) <= mu*friction_arm "
-                f"({friction_coefficient} * {friction_arm}); the shoe grabs without force"
+                f"({friction_coefficient} * {friction_arm}); the shoe grabs without force",
+                subject="normal_arm, friction_arm, and friction_coefficient",
+                source=_GEOMETRY_SOURCE,
             )
     else:
         denominator = b + friction_coefficient * a
@@ -262,9 +335,17 @@ def short_shoe_brake_torque(
     _require(normal_force, "[force]", "normal_force")
     n = normal_force.to("N").magnitude
     if n < 0:
-        raise ValueError(f"normal_force must be non-negative; got {normal_force}")
+        raise _brake_refusal(
+            f"normal_force must be non-negative; got {normal_force}",
+            subject="normal_force",
+            source=_LOAD_SOURCE,
+        )
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _brake_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     radius = _drum_radius_m(drum_diameter)
     return Quantity(magnitude=friction_coefficient * n * radius, unit="N*m")
 
@@ -301,7 +382,11 @@ def differential_band_brake_actuation_force(
     _require(tight_arm, "[length]", "tight_arm")
     b = tight_arm.to("m").magnitude
     if b < 0:
-        raise ValueError(f"tight_arm must be non-negative; got {tight_arm}")
+        raise _brake_refusal(
+            f"tight_arm must be non-negative; got {tight_arm}",
+            subject="tight_arm",
+            source=_GEOMETRY_SOURCE,
+        )
     length = _positive_length_m(lever_length, "lever_length")
     t1 = tight_tension.to("N").magnitude
     t2 = slack.to("N").magnitude
@@ -329,5 +414,9 @@ def differential_band_brake_is_self_locking(
     _require(tight_arm, "[length]", "tight_arm")
     b = tight_arm.to("m").magnitude
     if b < 0:
-        raise ValueError(f"tight_arm must be non-negative; got {tight_arm}")
+        raise _brake_refusal(
+            f"tight_arm must be non-negative; got {tight_arm}",
+            subject="tight_arm",
+            source=_GEOMETRY_SOURCE,
+        )
     return a <= b * ratio

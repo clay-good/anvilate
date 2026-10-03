@@ -22,7 +22,43 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ATMOSPHERE_SOURCE = "the standard-atmosphere table at the flight altitude"
+_FLIGHT_SOURCE = "the flight condition (airspeed, altitude, and weight) from the mission profile"
+_PLANFORM_SOURCE = "the wing planform drawing (area, aspect ratio, and Oswald efficiency)"
+_AIRFOIL_SOURCE = "the airfoil's wind-tunnel data or the aircraft's drag polar"
+
+
+class _WingAerodynamicsInputError(RefusalError, ValueError):
+    """A wing-aerodynamics input that cannot be used without correction."""
+
+
+def _wing_aerodynamics_refusal(
+    message: str, *, subject: str, source: str
+) -> _WingAerodynamicsInputError:
+    return _WingAerodynamicsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _wing_aerodynamics_input_source(name: str) -> str:
+    if name == "air_density":
+        return _ATMOSPHERE_SOURCE
+    if name in {"airspeed", "altitude", "lift", "weight"}:
+        return _FLIGHT_SOURCE
+    if name in {
+        "drag_coefficient",
+        "lift_coefficient",
+        "lift_to_drag_ratio",
+        "max_lift_coefficient",
+        "section_lift_curve_slope",
+    }:
+        return _AIRFOIL_SOURCE
+    return _PLANFORM_SOURCE
+
 
 __all__ = [
     "finite_wing_lift_curve_slope",
@@ -57,11 +93,17 @@ def lift_force(
     v = airspeed.to("m/s").magnitude
     s = wing_area.to("m**2").magnitude
     if rho <= 0:
-        raise ValueError("air_density must be positive")
+        raise _wing_aerodynamics_refusal(
+            "air_density must be positive", subject="air_density", source=_ATMOSPHERE_SOURCE
+        )
     if v < 0:
-        raise ValueError("airspeed must be non-negative")
+        raise _wing_aerodynamics_refusal(
+            "airspeed must be non-negative", subject="airspeed", source=_FLIGHT_SOURCE
+        )
     if s <= 0:
-        raise ValueError("wing_area must be positive")
+        raise _wing_aerodynamics_refusal(
+            "wing_area must be positive", subject="wing_area", source=_PLANFORM_SOURCE
+        )
     return Quantity(magnitude=0.5 * rho * v * v * s * lift_coefficient, unit="N")
 
 
@@ -90,13 +132,21 @@ def lift_coefficient_required(
     v = airspeed.to("m/s").magnitude
     s = wing_area.to("m**2").magnitude
     if lift_n < 0:
-        raise ValueError("lift must be non-negative")
+        raise _wing_aerodynamics_refusal(
+            "lift must be non-negative", subject="lift", source=_FLIGHT_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("air_density must be positive")
+        raise _wing_aerodynamics_refusal(
+            "air_density must be positive", subject="air_density", source=_ATMOSPHERE_SOURCE
+        )
     if v <= 0:
-        raise ValueError("airspeed must be positive")
+        raise _wing_aerodynamics_refusal(
+            "airspeed must be positive", subject="airspeed", source=_FLIGHT_SOURCE
+        )
     if s <= 0:
-        raise ValueError("wing_area must be positive")
+        raise _wing_aerodynamics_refusal(
+            "wing_area must be positive", subject="wing_area", source=_PLANFORM_SOURCE
+        )
     return 2.0 * lift_n / (rho * v * v * s)
 
 
@@ -111,9 +161,15 @@ def induced_drag_coefficient(
     smaller induced-drag penalty for the same lift. Returns the induced-drag coefficient as a float.
     """
     if aspect_ratio <= 0:
-        raise ValueError("aspect_ratio must be positive")
+        raise _wing_aerodynamics_refusal(
+            "aspect_ratio must be positive", subject="aspect_ratio", source=_PLANFORM_SOURCE
+        )
     if not 0.0 < oswald_efficiency <= 1.0:
-        raise ValueError(f"oswald_efficiency must be in (0, 1]; got {oswald_efficiency}")
+        raise _wing_aerodynamics_refusal(
+            f"oswald_efficiency must be in (0, 1]; got {oswald_efficiency}",
+            subject="oswald_efficiency",
+            source=_PLANFORM_SOURCE,
+        )
     return lift_coefficient**2 / (pi * oswald_efficiency * aspect_ratio)
 
 
@@ -138,13 +194,23 @@ def stall_speed(
     rho = air_density.to("kg/m**3").magnitude
     s = wing_area.to("m**2").magnitude
     if w <= 0:
-        raise ValueError("weight must be positive")
+        raise _wing_aerodynamics_refusal(
+            "weight must be positive", subject="weight", source=_FLIGHT_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("air_density must be positive")
+        raise _wing_aerodynamics_refusal(
+            "air_density must be positive", subject="air_density", source=_ATMOSPHERE_SOURCE
+        )
     if s <= 0:
-        raise ValueError("wing_area must be positive")
+        raise _wing_aerodynamics_refusal(
+            "wing_area must be positive", subject="wing_area", source=_PLANFORM_SOURCE
+        )
     if max_lift_coefficient <= 0:
-        raise ValueError("max_lift_coefficient must be positive")
+        raise _wing_aerodynamics_refusal(
+            "max_lift_coefficient must be positive",
+            subject="max_lift_coefficient",
+            source=_AIRFOIL_SOURCE,
+        )
     return Quantity(magnitude=sqrt(2.0 * w / (rho * s * max_lift_coefficient)), unit="m/s")
 
 
@@ -158,9 +224,15 @@ def lift_to_drag_ratio(*, lift_coefficient: float, drag_coefficient: float) -> f
     dimensionless and taken at the same flight condition. Returns the dimensionless L/D.
     """
     if lift_coefficient < 0:
-        raise ValueError("lift_coefficient must be non-negative")
+        raise _wing_aerodynamics_refusal(
+            "lift_coefficient must be non-negative",
+            subject="lift_coefficient",
+            source=_AIRFOIL_SOURCE,
+        )
     if drag_coefficient <= 0:
-        raise ValueError("drag_coefficient must be positive")
+        raise _wing_aerodynamics_refusal(
+            "drag_coefficient must be positive", subject="drag_coefficient", source=_AIRFOIL_SOURCE
+        )
     return lift_coefficient / drag_coefficient
 
 
@@ -175,9 +247,15 @@ def glide_range(*, lift_to_drag_ratio: float, altitude: Quantity) -> Quantity:
     _check(altitude, "[length]", "altitude")
     h = altitude.to("m").magnitude
     if lift_to_drag_ratio < 0:
-        raise ValueError("lift_to_drag_ratio must be non-negative")
+        raise _wing_aerodynamics_refusal(
+            "lift_to_drag_ratio must be non-negative",
+            subject="lift_to_drag_ratio",
+            source=_AIRFOIL_SOURCE,
+        )
     if h < 0:
-        raise ValueError("altitude must be non-negative")
+        raise _wing_aerodynamics_refusal(
+            "altitude must be non-negative", subject="altitude", source=_FLIGHT_SOURCE
+        )
     return Quantity(magnitude=lift_to_drag_ratio * h, unit="m")
 
 
@@ -195,9 +273,13 @@ def wing_loading(*, weight: Quantity, wing_area: Quantity) -> Quantity:
     w = weight.to("N").magnitude
     s = wing_area.to("m**2").magnitude
     if w < 0:
-        raise ValueError("weight must be non-negative")
+        raise _wing_aerodynamics_refusal(
+            "weight must be non-negative", subject="weight", source=_FLIGHT_SOURCE
+        )
     if s <= 0:
-        raise ValueError("wing_area must be positive")
+        raise _wing_aerodynamics_refusal(
+            "wing_area must be positive", subject="wing_area", source=_PLANFORM_SOURCE
+        )
     return Quantity(magnitude=w / s, unit="Pa")
 
 
@@ -229,13 +311,23 @@ def finite_wing_lift_curve_slope(
     typical straight wing. Returns the finite-wing slope per radian as a plain float.
     """
     if section_lift_curve_slope <= 0:
-        raise ValueError(
-            f"section_lift_curve_slope must be positive; got {section_lift_curve_slope}"
+        raise _wing_aerodynamics_refusal(
+            f"section_lift_curve_slope must be positive; got {section_lift_curve_slope}",
+            subject="section_lift_curve_slope",
+            source=_AIRFOIL_SOURCE,
         )
     if aspect_ratio <= 0:
-        raise ValueError(f"aspect_ratio must be positive; got {aspect_ratio}")
+        raise _wing_aerodynamics_refusal(
+            f"aspect_ratio must be positive; got {aspect_ratio}",
+            subject="aspect_ratio",
+            source=_PLANFORM_SOURCE,
+        )
     if not 0.0 < oswald_efficiency <= 1.0:
-        raise ValueError(f"oswald_efficiency must lie in (0, 1]; got {oswald_efficiency}")
+        raise _wing_aerodynamics_refusal(
+            f"oswald_efficiency must lie in (0, 1]; got {oswald_efficiency}",
+            subject="oswald_efficiency",
+            source=_PLANFORM_SOURCE,
+        )
     return section_lift_curve_slope / (
         1.0 + section_lift_curve_slope / (pi * oswald_efficiency * aspect_ratio)
     )
@@ -243,10 +335,16 @@ def finite_wing_lift_curve_slope(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _wing_aerodynamics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_wing_aerodynamics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _wing_aerodynamics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_wing_aerodynamics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

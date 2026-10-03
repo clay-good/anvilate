@@ -27,7 +27,42 @@ velocity); the inputs are dimension-checked :class:`~anvilate.units.Quantity` va
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_PROPERTY_SOURCE = "the fluid property table at the film temperature and composition"
+_FLOW_SOURCE = "the flow case (velocity, geometry, and dimensionless groups)"
+_COEFFICIENT_SOURCE = "the cited transfer-coefficient correlation or test record"
+_EQUILIBRIUM_SOURCE = "the cited phase-equilibrium data (Henry's-law slope)"
+
+
+class _MassTransferInputError(RefusalError, ValueError):
+    """A mass-transfer input that cannot be used without correction."""
+
+
+def _mass_transfer_refusal(message: str, *, subject: str, source: str) -> _MassTransferInputError:
+    return _MassTransferInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _mass_transfer_input_source(name: str) -> str:
+    if name in {
+        "gas_film_coefficient",
+        "heat_transfer_coefficient",
+        "liquid_film_coefficient",
+        "mass_transfer_coefficient",
+        "nusselt_number",
+        "stanton_number",
+    }:
+        return _COEFFICIENT_SOURCE
+    if name in {"characteristic_length", "reynolds_number", "velocity"}:
+        return _FLOW_SOURCE
+    if name == "equilibrium_slope":
+        return _EQUILIBRIUM_SOURCE
+    return _PROPERTY_SOURCE
+
 
 __all__ = [
     "schmidt_number",
@@ -59,9 +94,15 @@ def schmidt_number(*, kinematic_viscosity: Quantity, mass_diffusivity: Quantity)
     nu = kinematic_viscosity.to("m**2/s").magnitude
     d = mass_diffusivity.to("m**2/s").magnitude
     if nu < 0:
-        raise ValueError("kinematic_viscosity must be non-negative")
+        raise _mass_transfer_refusal(
+            "kinematic_viscosity must be non-negative",
+            subject="kinematic_viscosity",
+            source=_PROPERTY_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("mass_diffusivity must be positive")
+        raise _mass_transfer_refusal(
+            "mass_diffusivity must be positive", subject="mass_diffusivity", source=_PROPERTY_SOURCE
+        )
     return nu / d
 
 
@@ -90,11 +131,21 @@ def sherwood_number(
     length = characteristic_length.to("m").magnitude
     d = mass_diffusivity.to("m**2/s").magnitude
     if kc < 0:
-        raise ValueError("mass_transfer_coefficient must be non-negative")
+        raise _mass_transfer_refusal(
+            "mass_transfer_coefficient must be non-negative",
+            subject="mass_transfer_coefficient",
+            source=_COEFFICIENT_SOURCE,
+        )
     if length <= 0:
-        raise ValueError("characteristic_length must be positive")
+        raise _mass_transfer_refusal(
+            "characteristic_length must be positive",
+            subject="characteristic_length",
+            source=_FLOW_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("mass_diffusivity must be positive")
+        raise _mass_transfer_refusal(
+            "mass_diffusivity must be positive", subject="mass_diffusivity", source=_PROPERTY_SOURCE
+        )
     return kc * length / d
 
 
@@ -115,9 +166,15 @@ def lewis_number(*, thermal_diffusivity: Quantity, mass_diffusivity: Quantity) -
     alpha = thermal_diffusivity.to("m**2/s").magnitude
     d = mass_diffusivity.to("m**2/s").magnitude
     if alpha < 0:
-        raise ValueError("thermal_diffusivity must be non-negative")
+        raise _mass_transfer_refusal(
+            "thermal_diffusivity must be non-negative",
+            subject="thermal_diffusivity",
+            source=_PROPERTY_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("mass_diffusivity must be positive")
+        raise _mass_transfer_refusal(
+            "mass_diffusivity must be positive", subject="mass_diffusivity", source=_PROPERTY_SOURCE
+        )
     return alpha / d
 
 
@@ -144,10 +201,17 @@ def mass_peclet_number(
     v = velocity.to("m/s").magnitude
     length = characteristic_length.to("m").magnitude
     d = mass_diffusivity.to("m**2/s").magnitude
-    if length <= 0 or d <= 0:
-        raise ValueError("characteristic_length and mass_diffusivity must be positive")
+    for subject, magnitude in (("characteristic_length", length), ("mass_diffusivity", d)):
+        if magnitude <= 0:
+            raise _mass_transfer_refusal(
+                "characteristic_length and mass_diffusivity must be positive",
+                subject=subject,
+                source=_mass_transfer_input_source(subject),
+            )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _mass_transfer_refusal(
+            "velocity must be non-negative", subject="velocity", source=_FLOW_SOURCE
+        )
     return v * length / d
 
 
@@ -162,11 +226,19 @@ def stanton_number(
     Chilton-Colburn analogies work in. Returns the dimensionless Stanton number as a plain float.
     """
     if reynolds_number <= 0:
-        raise ValueError("reynolds_number must be positive")
+        raise _mass_transfer_refusal(
+            "reynolds_number must be positive", subject="reynolds_number", source=_FLOW_SOURCE
+        )
     if prandtl_number <= 0:
-        raise ValueError("prandtl_number must be positive")
+        raise _mass_transfer_refusal(
+            "prandtl_number must be positive", subject="prandtl_number", source=_PROPERTY_SOURCE
+        )
     if nusselt_number < 0:
-        raise ValueError("nusselt_number must be non-negative")
+        raise _mass_transfer_refusal(
+            "nusselt_number must be non-negative",
+            subject="nusselt_number",
+            source=_COEFFICIENT_SOURCE,
+        )
     return nusselt_number / (reynolds_number * prandtl_number)
 
 
@@ -180,9 +252,15 @@ def colburn_j_factor(*, stanton_number: float, prandtl_number: float) -> float:
     dimensionless j-factor as a plain float.
     """
     if stanton_number < 0:
-        raise ValueError("stanton_number must be non-negative")
+        raise _mass_transfer_refusal(
+            "stanton_number must be non-negative",
+            subject="stanton_number",
+            source=_COEFFICIENT_SOURCE,
+        )
     if prandtl_number <= 0:
-        raise ValueError("prandtl_number must be positive")
+        raise _mass_transfer_refusal(
+            "prandtl_number must be positive", subject="prandtl_number", source=_PROPERTY_SOURCE
+        )
     return stanton_number * prandtl_number ** (2.0 / 3.0)
 
 
@@ -212,11 +290,22 @@ def chilton_colburn_mass_transfer_coefficient(
     rho = density.to("kg/m**3").magnitude
     cp = specific_heat.to("J/(kg*K)").magnitude
     if h < 0:
-        raise ValueError("heat_transfer_coefficient must be non-negative")
-    if rho <= 0 or cp <= 0:
-        raise ValueError("density and specific_heat must be positive")
+        raise _mass_transfer_refusal(
+            "heat_transfer_coefficient must be non-negative",
+            subject="heat_transfer_coefficient",
+            source=_COEFFICIENT_SOURCE,
+        )
+    for subject, magnitude in (("density", rho), ("specific_heat", cp)):
+        if magnitude <= 0:
+            raise _mass_transfer_refusal(
+                "density and specific_heat must be positive",
+                subject=subject,
+                source=_PROPERTY_SOURCE,
+            )
     if lewis_number <= 0:
-        raise ValueError("lewis_number must be positive")
+        raise _mass_transfer_refusal(
+            "lewis_number must be positive", subject="lewis_number", source=_PROPERTY_SOURCE
+        )
     kc = h / (rho * cp * lewis_number ** (2.0 / 3.0))
     return Quantity(magnitude=kc, unit="m/s")
 
@@ -252,19 +341,34 @@ def overall_mass_transfer_coefficient(
     _check(liquid_film_coefficient, "[length]/[time]", "liquid_film_coefficient")
     k_g = gas_film_coefficient.to("m/s").magnitude
     k_l = liquid_film_coefficient.to("m/s").magnitude
-    if k_g <= 0 or k_l <= 0:
-        raise ValueError("gas_film_coefficient and liquid_film_coefficient must be positive")
+    for subject, magnitude in (("gas_film_coefficient", k_g), ("liquid_film_coefficient", k_l)):
+        if magnitude <= 0:
+            raise _mass_transfer_refusal(
+                "gas_film_coefficient and liquid_film_coefficient must be positive",
+                subject=subject,
+                source=_COEFFICIENT_SOURCE,
+            )
     if equilibrium_slope <= 0:
-        raise ValueError(f"equilibrium_slope must be positive; got {equilibrium_slope}")
+        raise _mass_transfer_refusal(
+            f"equilibrium_slope must be positive; got {equilibrium_slope}",
+            subject="equilibrium_slope",
+            source=_EQUILIBRIUM_SOURCE,
+        )
     return Quantity(magnitude=1.0 / (1.0 / k_g + equilibrium_slope / k_l), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _mass_transfer_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_mass_transfer_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _mass_transfer_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_mass_transfer_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

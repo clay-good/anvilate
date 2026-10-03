@@ -21,6 +21,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from ..refusal import RefusalError, Remedy
 from . import _glyphs
 
 __all__ = ["BODY_LINES", "COLUMNS", "Block", "paginate", "render", "wrap"]
@@ -85,11 +86,22 @@ def wrap(line: str, columns: int = COLUMNS) -> list[str]:
     return rows
 
 
+class _PaginationInputError(RefusalError, ValueError):
+    """Report content that cannot be laid out onto pages."""
+
+
 def paginate(blocks: Sequence[Block], lines_per_page: int = BODY_LINES) -> list[list[str]]:
     """The blocks laid out onto pages, one blank line between blocks."""
     if isinstance(blocks, str | bytes) or not all(isinstance(b, Block) for b in blocks):
-        raise ValueError(
-            f"paginate lays out a sequence of Block objects; got {type(blocks).__name__}"
+        raise _PaginationInputError(
+            f"paginate lays out a sequence of Block objects; got {type(blocks).__name__}",
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject="blocks",
+                    source="the report's text blocks, as a sequence of Block objects",
+                ),
+            ),
         )
     pages: list[list[str]] = [[]]
     for block in blocks:

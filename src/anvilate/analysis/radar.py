@@ -20,8 +20,36 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_TRANSMITTER_SOURCE = "the radar's transmitter specification (frequency, power, PRF, pulse width)"
+_ANTENNA_SOURCE = "the antenna datasheet's gain at the operating frequency"
+_RECEIVER_SOURCE = "the receiver specification's minimum detectable signal"
+_TARGET_SOURCE = "the target's RCS table and the engagement geometry (range and velocity)"
+
+
+class _RadarInputError(RefusalError, ValueError):
+    """A radar input that cannot be used without correction."""
+
+
+def _radar_refusal(message: str, *, subject: str, source: str) -> _RadarInputError:
+    return _RadarInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _radar_input_source(name: str) -> str:
+    if name in {"radial_velocity", "target_cross_section", "target_range"}:
+        return _TARGET_SOURCE
+    if name in {"doppler_shift", "min_detectable_power"}:
+        return _RECEIVER_SOURCE
+    if name == "antenna_gain":
+        return _ANTENNA_SOURCE
+    return _TRANSMITTER_SOURCE
+
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 
@@ -50,9 +78,15 @@ def radar_doppler_shift(*, transmit_frequency: Quantity, radial_velocity: Quanti
     f0 = count_rate_per_second(transmit_frequency, name="transmit_frequency")
     v = radial_velocity.to("m/s").magnitude
     if f0 <= 0:
-        raise ValueError("transmit_frequency must be positive")
+        raise _radar_refusal(
+            "transmit_frequency must be positive",
+            subject="transmit_frequency",
+            source=_TRANSMITTER_SOURCE,
+        )
     if v < 0:
-        raise ValueError("radial_velocity must be non-negative")
+        raise _radar_refusal(
+            "radial_velocity must be non-negative", subject="radial_velocity", source=_TARGET_SOURCE
+        )
     return Quantity(magnitude=2.0 * v * f0 / _SPEED_OF_LIGHT, unit="Hz")
 
 
@@ -70,9 +104,15 @@ def radial_velocity_from_doppler(
     f0 = count_rate_per_second(transmit_frequency, name="transmit_frequency")
     fd = count_rate_per_second(doppler_shift, name="doppler_shift")
     if f0 <= 0:
-        raise ValueError("transmit_frequency must be positive")
+        raise _radar_refusal(
+            "transmit_frequency must be positive",
+            subject="transmit_frequency",
+            source=_TRANSMITTER_SOURCE,
+        )
     if fd < 0:
-        raise ValueError("doppler_shift must be non-negative")
+        raise _radar_refusal(
+            "doppler_shift must be non-negative", subject="doppler_shift", source=_RECEIVER_SOURCE
+        )
     return Quantity(magnitude=fd * _SPEED_OF_LIGHT / (2.0 * f0), unit="m/s")
 
 
@@ -91,9 +131,17 @@ def max_unambiguous_velocity(
     f0 = count_rate_per_second(transmit_frequency, name="transmit_frequency")
     prf = count_rate_per_second(pulse_repetition_frequency, name="pulse_repetition_frequency")
     if f0 <= 0:
-        raise ValueError("transmit_frequency must be positive")
+        raise _radar_refusal(
+            "transmit_frequency must be positive",
+            subject="transmit_frequency",
+            source=_TRANSMITTER_SOURCE,
+        )
     if prf <= 0:
-        raise ValueError("pulse_repetition_frequency must be positive")
+        raise _radar_refusal(
+            "pulse_repetition_frequency must be positive",
+            subject="pulse_repetition_frequency",
+            source=_TRANSMITTER_SOURCE,
+        )
     return Quantity(magnitude=prf * _SPEED_OF_LIGHT / (4.0 * f0), unit="m/s")
 
 
@@ -108,7 +156,11 @@ def max_unambiguous_range(*, pulse_repetition_frequency: Quantity) -> Quantity:
     _check(pulse_repetition_frequency, "1/[time]", "pulse_repetition_frequency")
     prf = count_rate_per_second(pulse_repetition_frequency, name="pulse_repetition_frequency")
     if prf <= 0:
-        raise ValueError("pulse_repetition_frequency must be positive")
+        raise _radar_refusal(
+            "pulse_repetition_frequency must be positive",
+            subject="pulse_repetition_frequency",
+            source=_TRANSMITTER_SOURCE,
+        )
     return Quantity(magnitude=_SPEED_OF_LIGHT / (2.0 * prf), unit="m")
 
 
@@ -125,7 +177,9 @@ def radar_range_resolution(*, pulse_width: Quantity) -> Quantity:
     _check(pulse_width, "[time]", "pulse_width")
     tau = pulse_width.to("s").magnitude
     if tau <= 0:
-        raise ValueError("pulse_width must be positive")
+        raise _radar_refusal(
+            "pulse_width must be positive", subject="pulse_width", source=_TRANSMITTER_SOURCE
+        )
     return Quantity(magnitude=_SPEED_OF_LIGHT * tau / 2.0, unit="m")
 
 
@@ -153,15 +207,27 @@ def radar_received_power(
     sigma = target_cross_section.to("m**2").magnitude
     r = target_range.to("m").magnitude
     if p_t <= 0:
-        raise ValueError("transmit_power must be positive")
+        raise _radar_refusal(
+            "transmit_power must be positive", subject="transmit_power", source=_TRANSMITTER_SOURCE
+        )
     if antenna_gain <= 0:
-        raise ValueError("antenna_gain must be positive")
+        raise _radar_refusal(
+            "antenna_gain must be positive", subject="antenna_gain", source=_ANTENNA_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _radar_refusal(
+            "wavelength must be positive", subject="wavelength", source=_TRANSMITTER_SOURCE
+        )
     if sigma <= 0:
-        raise ValueError("target_cross_section must be positive")
+        raise _radar_refusal(
+            "target_cross_section must be positive",
+            subject="target_cross_section",
+            source=_TARGET_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("target_range must be positive")
+        raise _radar_refusal(
+            "target_range must be positive", subject="target_range", source=_TARGET_SOURCE
+        )
     p_r = p_t * antenna_gain**2 * lam**2 * sigma / ((4.0 * pi) ** 3 * r**4)
     return Quantity(magnitude=p_r, unit="W")
 
@@ -191,25 +257,45 @@ def radar_max_range(
     sigma = target_cross_section.to("m**2").magnitude
     p_min = min_detectable_power.to("W").magnitude
     if p_t <= 0:
-        raise ValueError("transmit_power must be positive")
+        raise _radar_refusal(
+            "transmit_power must be positive", subject="transmit_power", source=_TRANSMITTER_SOURCE
+        )
     if antenna_gain <= 0:
-        raise ValueError("antenna_gain must be positive")
+        raise _radar_refusal(
+            "antenna_gain must be positive", subject="antenna_gain", source=_ANTENNA_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _radar_refusal(
+            "wavelength must be positive", subject="wavelength", source=_TRANSMITTER_SOURCE
+        )
     if sigma <= 0:
-        raise ValueError("target_cross_section must be positive")
+        raise _radar_refusal(
+            "target_cross_section must be positive",
+            subject="target_cross_section",
+            source=_TARGET_SOURCE,
+        )
     if p_min <= 0:
-        raise ValueError("min_detectable_power must be positive")
+        raise _radar_refusal(
+            "min_detectable_power must be positive",
+            subject="min_detectable_power",
+            source=_RECEIVER_SOURCE,
+        )
     r4 = p_t * antenna_gain**2 * lam**2 * sigma / ((4.0 * pi) ** 3 * p_min)
     return Quantity(magnitude=r4**0.25, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _radar_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_radar_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _radar_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_radar_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -247,14 +333,24 @@ def radar_average_power(
     tau = pulse_width.to("s").magnitude
     prf = count_rate_per_second(pulse_repetition_frequency, name="pulse_repetition_frequency")
     if p_t <= 0:
-        raise ValueError("peak_power must be positive")
+        raise _radar_refusal(
+            "peak_power must be positive", subject="peak_power", source=_TRANSMITTER_SOURCE
+        )
     if tau <= 0:
-        raise ValueError("pulse_width must be positive")
+        raise _radar_refusal(
+            "pulse_width must be positive", subject="pulse_width", source=_TRANSMITTER_SOURCE
+        )
     if prf <= 0:
-        raise ValueError("pulse_repetition_frequency must be positive")
+        raise _radar_refusal(
+            "pulse_repetition_frequency must be positive",
+            subject="pulse_repetition_frequency",
+            source=_TRANSMITTER_SOURCE,
+        )
     if tau * prf >= 1.0:
-        raise ValueError(
+        raise _radar_refusal(
             f"the duty cycle pulse_width*PRF = {tau * prf} must be below 1: the pulses would "
-            "overlap"
+            "overlap",
+            subject="pulse_width and pulse_repetition_frequency",
+            source=_TRANSMITTER_SOURCE,
         )
     return Quantity(magnitude=p_t * tau * prf, unit="W")

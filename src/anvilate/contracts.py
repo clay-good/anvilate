@@ -45,6 +45,7 @@ from .geometry import (
     StepInterfaceCandidates,
     ViewportImage,
 )
+from .refusal import RefusalError, Remedy
 from .scorecard import Scorecard
 from .spec import SCHEMA_VERSION, DesignSpec
 
@@ -621,6 +622,10 @@ def released_path(directory: Path, name: str, version: str) -> Path:
     return directory / RELEASED_DIRECTORY / f"{name.removesuffix('.schema.json')}-{version}.json"
 
 
+class _FrozenSchemaChanged(RefusalError, ValueError):
+    """A released schema version whose frozen content would change."""
+
+
 def freeze_release(directory: Path) -> list[Path]:
     """Freeze each schema's current version, and refuse to change a version already frozen.
 
@@ -650,10 +655,17 @@ def freeze_release(directory: Path) -> list[Path]:
                 # documented to raise `ValueError`.
                 frozen = None
             if frozen != serialized:
-                raise ValueError(
+                raise _FrozenSchemaChanged(
                     f"{name} version {version} is already frozen with different content. "
                     "Bump the schema version instead — a released version whose meaning "
-                    "changes is a breaking change no client can see"
+                    "changes is a breaking change no client can see",
+                    remedies=(
+                        Remedy(
+                            action="bump",
+                            subject=f"{name} schema version {version}",
+                            source="the schema's version constant, raised for the changed meaning",
+                        ),
+                    ),
                 )
             continue
         path.parent.mkdir(parents=True, exist_ok=True)

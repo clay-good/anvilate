@@ -28,7 +28,54 @@ from __future__ import annotations
 
 from math import cos, radians, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FIBER_SOURCE = "the fiber manufacturer's datasheet properties"
+_MATRIX_SOURCE = "the resin system datasheet properties"
+_LAYUP_SOURCE = "the laminate layup specification (fiber content and ply angle)"
+_PLY_SOURCE = "the ply allowables from the material qualification test record"
+_STRESS_SOURCE = "the ply stresses from the laminate analysis load case"
+
+
+class _CompositeInputError(RefusalError, ValueError):
+    """A composite-micromechanics input that cannot be used without correction."""
+
+
+def _composite_refusal(message: str, *, subject: str, source: str) -> _CompositeInputError:
+    return _CompositeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _composite_input_source(name: str) -> str:
+    if name in {"angle", "fiber_fraction", "fiber_weight_fraction"}:
+        return _LAYUP_SOURCE
+    if name in {
+        "matrix_cte",
+        "matrix_density",
+        "matrix_modulus",
+        "matrix_poisson",
+        "matrix_shear_modulus",
+        "matrix_stress_at_fiber_failure",
+    }:
+        return _MATRIX_SOURCE
+    if name in {
+        "interface_shear_strength",
+        "longitudinal_modulus",
+        "longitudinal_strength",
+        "major_poisson",
+        "shear_modulus",
+        "shear_strength",
+        "transverse_modulus",
+        "transverse_strength",
+    }:
+        return _PLY_SOURCE
+    if name in {"longitudinal_stress", "shear_stress", "transverse_stress"}:
+        return _STRESS_SOURCE
+    return _FIBER_SOURCE
+
 
 __all__ = [
     "fiber_volume_fraction_from_weight_fraction",
@@ -46,10 +93,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _composite_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_composite_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _composite_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_composite_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -60,7 +113,11 @@ def _require(value: Quantity, expected: str, name: str) -> None:
 
 def _fraction(fiber_fraction: float) -> float:
     if not 0.0 <= fiber_fraction <= 1.0:
-        raise ValueError(f"fiber_fraction must lie in [0, 1]; got {fiber_fraction}")
+        raise _composite_refusal(
+            f"fiber_fraction must lie in [0, 1]; got {fiber_fraction}",
+            subject="fiber_fraction",
+            source=_LAYUP_SOURCE,
+        )
     return fiber_fraction
 
 
@@ -84,8 +141,13 @@ def rule_of_mixtures_modulus(
     vf = _fraction(fiber_fraction)
     ef = fiber_modulus.to("MPa").magnitude
     em = matrix_modulus.to("MPa").magnitude
-    if ef <= 0 or em <= 0:
-        raise ValueError("fiber_modulus and matrix_modulus must be positive")
+    for subject, magnitude in (("fiber_modulus", ef), ("matrix_modulus", em)):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "fiber_modulus and matrix_modulus must be positive",
+                subject=subject,
+                source=_composite_input_source(subject),
+            )
     return Quantity(magnitude=vf * ef + (1.0 - vf) * em, unit="MPa")
 
 
@@ -110,8 +172,13 @@ def transverse_modulus_inverse_rule(
     vf = _fraction(fiber_fraction)
     ef = fiber_modulus.to("MPa").magnitude
     em = matrix_modulus.to("MPa").magnitude
-    if ef <= 0 or em <= 0:
-        raise ValueError("fiber_modulus and matrix_modulus must be positive")
+    for subject, magnitude in (("fiber_modulus", ef), ("matrix_modulus", em)):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "fiber_modulus and matrix_modulus must be positive",
+                subject=subject,
+                source=_composite_input_source(subject),
+            )
     return Quantity(magnitude=1.0 / (vf / ef + (1.0 - vf) / em), unit="MPa")
 
 
@@ -137,8 +204,10 @@ def rule_of_mixtures_strength(
     sf = fiber_strength.to("MPa").magnitude
     sm = matrix_stress_at_fiber_failure.to("MPa").magnitude
     if sf <= 0 or sm < 0:
-        raise ValueError(
-            "fiber_strength must be positive and matrix_stress_at_fiber_failure non-negative"
+        raise _composite_refusal(
+            "fiber_strength must be positive and matrix_stress_at_fiber_failure non-negative",
+            subject="fiber_strength",
+            source=_FIBER_SOURCE,
         )
     return Quantity(magnitude=vf * sf + (1.0 - vf) * sm, unit="MPa")
 
@@ -164,7 +233,11 @@ def composite_major_poisson_ratio(
     vf = _fraction(fiber_fraction)
     for value, name in ((fiber_poisson, "fiber_poisson"), (matrix_poisson, "matrix_poisson")):
         if not 0.0 <= value < 0.5:
-            raise ValueError(f"{name} must lie in [0, 0.5); got {value}")
+            raise _composite_refusal(
+                f"{name} must lie in [0, 0.5); got {value}",
+                subject=name,
+                source=_composite_input_source(name),
+            )
     return vf * fiber_poisson + (1.0 - vf) * matrix_poisson
 
 
@@ -188,8 +261,13 @@ def composite_shear_modulus_inverse_rule(
     vf = _fraction(fiber_fraction)
     gf = fiber_shear_modulus.to("MPa").magnitude
     gm = matrix_shear_modulus.to("MPa").magnitude
-    if gf <= 0 or gm <= 0:
-        raise ValueError("fiber_shear_modulus and matrix_shear_modulus must be positive")
+    for subject, magnitude in (("fiber_shear_modulus", gf), ("matrix_shear_modulus", gm)):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "fiber_shear_modulus and matrix_shear_modulus must be positive",
+                subject=subject,
+                source=_composite_input_source(subject),
+            )
     return Quantity(magnitude=1.0 / (vf / gf + (1.0 - vf) / gm), unit="MPa")
 
 
@@ -216,24 +294,41 @@ def composite_longitudinal_cte(
     _require(fiber_modulus, "[pressure]", "fiber_modulus")
     _require(matrix_modulus, "[pressure]", "matrix_modulus")
     if not isinstance(fiber_cte, Quantity):
-        raise ValueError(f"fiber_cte must be a 1 / [temperature] quantity; got {fiber_cte!r}")
+        raise _composite_refusal(
+            f"fiber_cte must be a 1 / [temperature] quantity; got {fiber_cte!r}",
+            subject="fiber_cte",
+            source=_FIBER_SOURCE,
+        )
     if not fiber_cte.has_dimension("1 / [temperature]"):
-        raise ValueError(
-            f"fiber_cte must have units of 1/temperature; got {fiber_cte.dimensionality}"
+        raise _composite_refusal(
+            f"fiber_cte must have units of 1/temperature; got {fiber_cte.dimensionality}",
+            subject="fiber_cte",
+            source=_FIBER_SOURCE,
         )
     if not isinstance(matrix_cte, Quantity):
-        raise ValueError(f"matrix_cte must be a 1 / [temperature] quantity; got {matrix_cte!r}")
+        raise _composite_refusal(
+            f"matrix_cte must be a 1 / [temperature] quantity; got {matrix_cte!r}",
+            subject="matrix_cte",
+            source=_MATRIX_SOURCE,
+        )
     if not matrix_cte.has_dimension("1 / [temperature]"):
-        raise ValueError(
-            f"matrix_cte must have units of 1/temperature; got {matrix_cte.dimensionality}"
+        raise _composite_refusal(
+            f"matrix_cte must have units of 1/temperature; got {matrix_cte.dimensionality}",
+            subject="matrix_cte",
+            source=_MATRIX_SOURCE,
         )
     vf = _fraction(fiber_fraction)
     ef = fiber_modulus.to("MPa").magnitude
     em = matrix_modulus.to("MPa").magnitude
     af = fiber_cte.to("1/K").magnitude
     am = matrix_cte.to("1/K").magnitude
-    if ef <= 0 or em <= 0:
-        raise ValueError("fiber_modulus and matrix_modulus must be positive")
+    for subject, magnitude in (("fiber_modulus", ef), ("matrix_modulus", em)):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "fiber_modulus and matrix_modulus must be positive",
+                subject=subject,
+                source=_composite_input_source(subject),
+            )
     stiffness = vf * ef + (1.0 - vf) * em
     alpha1 = (vf * ef * af + (1.0 - vf) * em * am) / stiffness
     return Quantity(magnitude=alpha1, unit="1/K")
@@ -262,8 +357,17 @@ def critical_fiber_length(
     sfu = fiber_strength.to("MPa").magnitude
     d = fiber_diameter.to("mm").magnitude
     tau = interface_shear_strength.to("MPa").magnitude
-    if sfu <= 0 or d <= 0 or tau <= 0:
-        raise ValueError("all inputs must be positive")
+    for subject, magnitude in (
+        ("fiber_strength", sfu),
+        ("fiber_diameter", d),
+        ("interface_shear_strength", tau),
+    ):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "all inputs must be positive",
+                subject=subject,
+                source=_composite_input_source(subject),
+            )
     return Quantity(magnitude=sfu * d / (2.0 * tau), unit="mm")
 
 
@@ -302,8 +406,15 @@ def tsai_hill_failure_index(
     x = longitudinal_strength.to("MPa").magnitude
     y = transverse_strength.to("MPa").magnitude
     s = shear_strength.to("MPa").magnitude
-    if x <= 0 or y <= 0 or s <= 0:
-        raise ValueError("the strengths must be positive")
+    for subject, magnitude in (
+        ("longitudinal_strength", x),
+        ("transverse_strength", y),
+        ("shear_strength", s),
+    ):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "the strengths must be positive", subject=subject, source=_PLY_SOURCE
+            )
     return (s1 / x) ** 2 - s1 * s2 / x**2 + (s2 / y) ** 2 + (t12 / s) ** 2
 
 
@@ -336,16 +447,33 @@ def off_axis_modulus(
     e1 = longitudinal_modulus.to("MPa").magnitude
     e2 = transverse_modulus.to("MPa").magnitude
     g12 = shear_modulus.to("MPa").magnitude
-    if e1 <= 0 or e2 <= 0 or g12 <= 0:
-        raise ValueError("the moduli must be positive")
+    for subject, magnitude in (
+        ("longitudinal_modulus", e1),
+        ("transverse_modulus", e2),
+        ("shear_modulus", g12),
+    ):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "the moduli must be positive", subject=subject, source=_PLY_SOURCE
+            )
     if not -0.5 < major_poisson < 1.0:
-        raise ValueError(f"major_poisson is out of a physical range; got {major_poisson}")
+        raise _composite_refusal(
+            f"major_poisson is out of a physical range; got {major_poisson}",
+            subject="major_poisson",
+            source=_PLY_SOURCE,
+        )
     theta = radians(angle)
     c = cos(theta)
     s = sin(theta)
     compliance = c**4 / e1 + (1.0 / g12 - 2.0 * major_poisson / e1) * s**2 * c**2 + s**4 / e2
     if compliance <= 0:
-        raise ValueError("the computed compliance is non-positive; check the ply constants")
+        raise _composite_refusal(
+            "the computed compliance is non-positive; check the ply constants",
+            subject=(
+                "angle, longitudinal_modulus, transverse_modulus, shear_modulus, and major_poisson"
+            ),
+            source=_PLY_SOURCE,
+        )
     return Quantity(magnitude=1.0 / compliance, unit="MPa")
 
 
@@ -375,11 +503,20 @@ def fiber_volume_fraction_from_weight_fraction(
     _require(fiber_density, "[mass]/[volume]", "fiber_density")
     _require(matrix_density, "[mass]/[volume]", "matrix_density")
     if not 0.0 <= fiber_weight_fraction <= 1.0:
-        raise ValueError(f"fiber_weight_fraction must lie in [0, 1]; got {fiber_weight_fraction}")
+        raise _composite_refusal(
+            f"fiber_weight_fraction must lie in [0, 1]; got {fiber_weight_fraction}",
+            subject="fiber_weight_fraction",
+            source=_LAYUP_SOURCE,
+        )
     rho_f = fiber_density.to("kg/m**3").magnitude
     rho_m = matrix_density.to("kg/m**3").magnitude
-    if rho_f <= 0 or rho_m <= 0:
-        raise ValueError("fiber_density and matrix_density must be positive")
+    for subject, magnitude in (("fiber_density", rho_f), ("matrix_density", rho_m)):
+        if magnitude <= 0:
+            raise _composite_refusal(
+                "fiber_density and matrix_density must be positive",
+                subject=subject,
+                source=_composite_input_source(subject),
+            )
     fiber_volume = fiber_weight_fraction / rho_f
     matrix_volume = (1.0 - fiber_weight_fraction) / rho_m
     return fiber_volume / (fiber_volume + matrix_volume)

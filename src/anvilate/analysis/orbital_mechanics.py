@@ -22,7 +22,34 @@ from __future__ import annotations
 
 from math import degrees, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_BODY_SOURCE = "the central body's standard gravitational parameter (IAU/JPL constants)"
+_ORBIT_SOURCE = "the mission design's orbit elements (radii, apsides, and semi-major axis)"
+_PERIOD_SOURCE = "the two bodies' orbital periods from the JPL ephemeris"
+
+
+class _OrbitalMechanicsInputError(RefusalError, ValueError):
+    """An orbital-mechanics input that cannot be used without correction."""
+
+
+def _orbital_mechanics_refusal(
+    message: str, *, subject: str, source: str
+) -> _OrbitalMechanicsInputError:
+    return _OrbitalMechanicsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _orbital_mechanics_input_source(name: str) -> str:
+    if name == "gravitational_parameter":
+        return _BODY_SOURCE
+    if name in {"first_period", "second_period"}:
+        return _PERIOD_SOURCE
+    return _ORBIT_SOURCE
+
 
 __all__ = [
     "circular_orbit_velocity",
@@ -55,9 +82,15 @@ def circular_orbit_velocity(
     mu = gravitational_parameter.to("m**3/s**2").magnitude
     r = orbital_radius.to("m").magnitude
     if mu <= 0:
-        raise ValueError("gravitational_parameter must be positive")
+        raise _orbital_mechanics_refusal(
+            "gravitational_parameter must be positive",
+            subject="gravitational_parameter",
+            source=_BODY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("orbital_radius must be positive")
+        raise _orbital_mechanics_refusal(
+            "orbital_radius must be positive", subject="orbital_radius", source=_ORBIT_SOURCE
+        )
     return Quantity(magnitude=sqrt(mu / r), unit="m/s")
 
 
@@ -76,9 +109,15 @@ def orbital_period(*, gravitational_parameter: Quantity, orbital_radius: Quantit
     mu = gravitational_parameter.to("m**3/s**2").magnitude
     r = orbital_radius.to("m").magnitude
     if mu <= 0:
-        raise ValueError("gravitational_parameter must be positive")
+        raise _orbital_mechanics_refusal(
+            "gravitational_parameter must be positive",
+            subject="gravitational_parameter",
+            source=_BODY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("orbital_radius must be positive")
+        raise _orbital_mechanics_refusal(
+            "orbital_radius must be positive", subject="orbital_radius", source=_ORBIT_SOURCE
+        )
     return Quantity(magnitude=2.0 * pi * sqrt(r**3 / mu), unit="s")
 
 
@@ -97,9 +136,17 @@ def synodic_period(*, first_period: Quantity, second_period: Quantity) -> Quanti
     t1 = first_period.to("s").magnitude
     t2 = second_period.to("s").magnitude
     if t1 <= 0 or t2 <= 0:
-        raise ValueError("orbital periods must be positive")
+        raise _orbital_mechanics_refusal(
+            "orbital periods must be positive",
+            subject="first_period and second_period",
+            source=_PERIOD_SOURCE,
+        )
     if t1 == t2:
-        raise ValueError("periods must differ (identical periods never lap: infinite synodic)")
+        raise _orbital_mechanics_refusal(
+            "periods must differ (identical periods never lap: infinite synodic)",
+            subject="first_period and second_period",
+            source=_PERIOD_SOURCE,
+        )
     return Quantity(magnitude=t1 * t2 / abs(t2 - t1), unit="s").to("day")
 
 
@@ -118,9 +165,15 @@ def escape_velocity(*, gravitational_parameter: Quantity, orbital_radius: Quanti
     mu = gravitational_parameter.to("m**3/s**2").magnitude
     r = orbital_radius.to("m").magnitude
     if mu <= 0:
-        raise ValueError("gravitational_parameter must be positive")
+        raise _orbital_mechanics_refusal(
+            "gravitational_parameter must be positive",
+            subject="gravitational_parameter",
+            source=_BODY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("orbital_radius must be positive")
+        raise _orbital_mechanics_refusal(
+            "orbital_radius must be positive", subject="orbital_radius", source=_ORBIT_SOURCE
+        )
     return Quantity(magnitude=sqrt(2.0 * mu / r), unit="m/s")
 
 
@@ -143,14 +196,26 @@ def vis_viva_velocity(
     r = radius.to("m").magnitude
     a = semi_major_axis.to("m").magnitude
     if mu <= 0:
-        raise ValueError("gravitational_parameter must be positive")
+        raise _orbital_mechanics_refusal(
+            "gravitational_parameter must be positive",
+            subject="gravitational_parameter",
+            source=_BODY_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _orbital_mechanics_refusal(
+            "radius must be positive", subject="radius", source=_ORBIT_SOURCE
+        )
     if a <= 0:
-        raise ValueError("semi_major_axis must be positive")
+        raise _orbital_mechanics_refusal(
+            "semi_major_axis must be positive", subject="semi_major_axis", source=_ORBIT_SOURCE
+        )
     term = 2.0 / r - 1.0 / a
     if term <= 0:
-        raise ValueError("radius must be within the orbit (2/r must exceed 1/a)")
+        raise _orbital_mechanics_refusal(
+            "radius must be within the orbit (2/r must exceed 1/a)",
+            subject="radius and semi_major_axis",
+            source=_ORBIT_SOURCE,
+        )
     return Quantity(magnitude=sqrt(mu * term), unit="m/s")
 
 
@@ -170,9 +235,15 @@ def orbit_specific_energy(
     mu = gravitational_parameter.to("m**3/s**2").magnitude
     a = semi_major_axis.to("m").magnitude
     if mu <= 0:
-        raise ValueError("gravitational_parameter must be positive")
+        raise _orbital_mechanics_refusal(
+            "gravitational_parameter must be positive",
+            subject="gravitational_parameter",
+            source=_BODY_SOURCE,
+        )
     if a <= 0:
-        raise ValueError("semi_major_axis must be positive")
+        raise _orbital_mechanics_refusal(
+            "semi_major_axis must be positive", subject="semi_major_axis", source=_ORBIT_SOURCE
+        )
     return Quantity(magnitude=-mu / (2.0 * a), unit="J/kg")
 
 
@@ -192,9 +263,15 @@ def semi_major_axis_from_apsides(
     r_p = periapsis_radius.to("m").magnitude
     r_a = apoapsis_radius.to("m").magnitude
     if r_p <= 0:
-        raise ValueError("periapsis_radius must be positive")
+        raise _orbital_mechanics_refusal(
+            "periapsis_radius must be positive", subject="periapsis_radius", source=_ORBIT_SOURCE
+        )
     if r_a < r_p:
-        raise ValueError("apoapsis_radius must not be less than periapsis_radius")
+        raise _orbital_mechanics_refusal(
+            "apoapsis_radius must not be less than periapsis_radius",
+            subject="periapsis_radius and apoapsis_radius",
+            source=_ORBIT_SOURCE,
+        )
     return Quantity(magnitude=(r_p + r_a) / 2.0, unit="m").to("km")
 
 
@@ -220,10 +297,19 @@ def hohmann_phase_angle(
     _check(final_radius, "[length]", "final_radius")
     r1 = initial_radius.to("m").magnitude
     r2 = final_radius.to("m").magnitude
-    if r1 <= 0 or r2 <= 0:
-        raise ValueError("initial_radius and final_radius must be positive")
+    for subject, magnitude in (("initial_radius", r1), ("final_radius", r2)):
+        if magnitude <= 0:
+            raise _orbital_mechanics_refusal(
+                "initial_radius and final_radius must be positive",
+                subject=subject,
+                source=_ORBIT_SOURCE,
+            )
     if r1 == r2:
-        raise ValueError("final_radius must differ from initial_radius (a transfer changes orbit)")
+        raise _orbital_mechanics_refusal(
+            "final_radius must differ from initial_radius (a transfer changes orbit)",
+            subject="initial_radius and final_radius",
+            source=_ORBIT_SOURCE,
+        )
     return degrees(pi * (1.0 - ((r1 + r2) / (2.0 * r2)) ** 1.5))
 
 
@@ -238,13 +324,25 @@ def _hohmann_inputs(
     r1 = initial_radius.to("m").magnitude
     r2 = final_radius.to("m").magnitude
     if mu <= 0:
-        raise ValueError("gravitational_parameter must be positive")
+        raise _orbital_mechanics_refusal(
+            "gravitational_parameter must be positive",
+            subject="gravitational_parameter",
+            source=_BODY_SOURCE,
+        )
     if r1 <= 0:
-        raise ValueError("initial_radius must be positive")
+        raise _orbital_mechanics_refusal(
+            "initial_radius must be positive", subject="initial_radius", source=_ORBIT_SOURCE
+        )
     if r2 <= 0:
-        raise ValueError("final_radius must be positive")
+        raise _orbital_mechanics_refusal(
+            "final_radius must be positive", subject="final_radius", source=_ORBIT_SOURCE
+        )
     if r2 == r1:
-        raise ValueError("final_radius must differ from initial_radius (a transfer changes orbit)")
+        raise _orbital_mechanics_refusal(
+            "final_radius must differ from initial_radius (a transfer changes orbit)",
+            subject="initial_radius and final_radius",
+            source=_ORBIT_SOURCE,
+        )
     return mu, r1, r2, (r1 + r2) / 2.0
 
 
@@ -298,10 +396,16 @@ def hohmann_transfer_time(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _orbital_mechanics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_orbital_mechanics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _orbital_mechanics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_orbital_mechanics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

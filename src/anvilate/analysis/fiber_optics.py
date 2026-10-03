@@ -26,7 +26,32 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FIBER_SOURCE = "the fiber datasheet (core radius, indices, NA, dispersion)"
+_SOURCE_SOURCE = "the transmitter datasheet's wavelength and spectral width"
+_LINK_SOURCE = "the link design (span length and bit rate)"
+
+
+class _FiberOpticsInputError(RefusalError, ValueError):
+    """A fiber-optic input that cannot be used without correction."""
+
+
+def _fiber_optics_refusal(message: str, *, subject: str, source: str) -> _FiberOpticsInputError:
+    return _FiberOpticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fiber_optics_input_source(name: str) -> str:
+    if name in {"bit_rate", "length", "pulse_broadening"}:
+        return _LINK_SOURCE
+    if name in {"spectral_width", "wavelength"}:
+        return _SOURCE_SOURCE
+    return _FIBER_SOURCE
+
 
 _SINGLE_MODE_CUTOFF_V = 2.405  # first zero of the Bessel function J0
 _SPEED_OF_LIGHT = 299792458.0  # m/s
@@ -58,9 +83,13 @@ def chromatic_dispersion_broadening(
     ell = length.to("m").magnitude
     dlam = spectral_width.to("m").magnitude
     if ell < 0:
-        raise ValueError("length must be non-negative")
+        raise _fiber_optics_refusal(
+            "length must be non-negative", subject="length", source=_LINK_SOURCE
+        )
     if dlam < 0:
-        raise ValueError("spectral_width must be non-negative")
+        raise _fiber_optics_refusal(
+            "spectral_width must be non-negative", subject="spectral_width", source=_SOURCE_SOURCE
+        )
     return Quantity(magnitude=abs(d) * ell * dlam, unit="s")
 
 
@@ -74,7 +103,9 @@ def dispersion_limited_bit_rate(*, pulse_broadening: Quantity) -> Quantity:
     _check(pulse_broadening, "[time]", "pulse_broadening")
     dtau = pulse_broadening.to("s").magnitude
     if dtau <= 0:
-        raise ValueError("pulse_broadening must be positive")
+        raise _fiber_optics_refusal(
+            "pulse_broadening must be positive", subject="pulse_broadening", source=_LINK_SOURCE
+        )
     return Quantity(magnitude=1.0 / (4.0 * dtau), unit="1/s")
 
 
@@ -95,11 +126,19 @@ def dispersion_limited_distance(
     d = abs(dispersion_parameter.to("s/m**2").magnitude)
     dlam = spectral_width.to("m").magnitude
     if b <= 0:
-        raise ValueError("bit_rate must be positive")
+        raise _fiber_optics_refusal(
+            "bit_rate must be positive", subject="bit_rate", source=_LINK_SOURCE
+        )
     if d <= 0:
-        raise ValueError("dispersion_parameter must be nonzero")
+        raise _fiber_optics_refusal(
+            "dispersion_parameter must be nonzero",
+            subject="dispersion_parameter",
+            source=_FIBER_SOURCE,
+        )
     if dlam <= 0:
-        raise ValueError("spectral_width must be positive")
+        raise _fiber_optics_refusal(
+            "spectral_width must be positive", subject="spectral_width", source=_SOURCE_SOURCE
+        )
     return Quantity(magnitude=1.0 / (4.0 * b * d * dlam), unit="m")
 
 
@@ -124,11 +163,19 @@ def fiber_v_number(
     a = core_radius.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if a <= 0:
-        raise ValueError("core_radius must be positive")
+        raise _fiber_optics_refusal(
+            "core_radius must be positive", subject="core_radius", source=_FIBER_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _fiber_optics_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SOURCE
+        )
     if numerical_aperture <= 0:
-        raise ValueError("numerical_aperture must be positive")
+        raise _fiber_optics_refusal(
+            "numerical_aperture must be positive",
+            subject="numerical_aperture",
+            source=_FIBER_SOURCE,
+        )
     return 2.0 * pi * a / lam * numerical_aperture
 
 
@@ -144,16 +191,20 @@ def fiber_mode_count(*, v_number: float) -> float:
     as a plain float.
     """
     if v_number <= 0:
-        raise ValueError("v_number must be positive")
+        raise _fiber_optics_refusal(
+            "v_number must be positive", subject="v_number", source=_FIBER_SOURCE
+        )
     # V is this function's only argument, so the 2.405 cutoff it names is trivially
     # checkable. Below it the fiber is single-mode and M is 1 by definition, while V**2/2
     # returned 0.125 — a fraction of a mode — and 2.89 at the cutoff itself.
     if v_number <= _SINGLE_MODE_CUTOFF_V:
-        raise ValueError(
+        raise _fiber_optics_refusal(
             f"v_number V = {v_number:.4g} is at or below the {_SINGLE_MODE_CUTOFF_V} "
             f"single-mode "
             f"cutoff, where the fiber carries exactly one mode. M = V²/2 is an asymptotic "
-            f"estimate for V well above cutoff and returns {v_number**2 / 2.0:.4g} here"
+            f"estimate for V well above cutoff and returns {v_number**2 / 2.0:.4g} here",
+            subject="v_number",
+            source=_FIBER_SOURCE,
         )
     return v_number**2 / 2.0
 
@@ -175,18 +226,30 @@ def fiber_single_mode_cutoff_wavelength(
     _check(core_radius, "[length]", "core_radius")
     a = core_radius.to("m").magnitude
     if a <= 0:
-        raise ValueError("core_radius must be positive")
+        raise _fiber_optics_refusal(
+            "core_radius must be positive", subject="core_radius", source=_FIBER_SOURCE
+        )
     if numerical_aperture <= 0:
-        raise ValueError("numerical_aperture must be positive")
+        raise _fiber_optics_refusal(
+            "numerical_aperture must be positive",
+            subject="numerical_aperture",
+            source=_FIBER_SOURCE,
+        )
     return Quantity(magnitude=2.0 * pi * a * numerical_aperture / _SINGLE_MODE_CUTOFF_V, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _fiber_optics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_fiber_optics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _fiber_optics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fiber_optics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -221,14 +284,22 @@ def modal_dispersion_broadening(
     """
     _check(length, "[length]", "length")
     if core_index <= 0 or cladding_index <= 0:
-        raise ValueError("core_index and cladding_index must be positive")
+        raise _fiber_optics_refusal(
+            "core_index and cladding_index must be positive",
+            subject="core_index and cladding_index",
+            source=_FIBER_SOURCE,
+        )
     if cladding_index >= core_index:
-        raise ValueError(
+        raise _fiber_optics_refusal(
             f"core_index {core_index} must exceed cladding_index {cladding_index} for the fiber "
-            "to guide"
+            "to guide",
+            subject="core_index and cladding_index",
+            source=_FIBER_SOURCE,
         )
     length_m = length.to("m").magnitude
     if length_m <= 0:
-        raise ValueError("length must be positive")
+        raise _fiber_optics_refusal(
+            "length must be positive", subject="length", source=_LINK_SOURCE
+        )
     delta = (core_index - cladding_index) / core_index
     return Quantity(magnitude=core_index * length_m * delta / _SPEED_OF_LIGHT, unit="s")

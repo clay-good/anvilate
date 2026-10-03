@@ -29,6 +29,7 @@ from typing import Any
 from pydantic import ConfigDict, Field
 
 from ._models import ItemCollection, Named, StatableModel
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, Scorecard
 
 __all__ = [
@@ -153,6 +154,10 @@ class DepthChange(StatableModel):
         return "\n".join(lines)
 
 
+class _NotDeeper(RefusalError, ValueError):
+    """A requested screening depth that is not deeper than the declared one."""
+
+
 def deepening(spec: Any, to_depth: Any) -> DepthChange:
     """Screen ``spec`` again at ``to_depth`` and report what the raise costs and returns.
 
@@ -168,10 +173,17 @@ def deepening(spec: Any, to_depth: Any) -> DepthChange:
 
     declared = spec.acceptance.depth
     if DEPTH_ORDER.index(to_depth) <= DEPTH_ORDER.index(declared):
-        raise ValueError(
+        raise _NotDeeper(
             f"this document is screened at {declared.value} and {to_depth.value} is not "
             f"deeper than it; the depths from shallowest are "
-            f"{', '.join(depth.value for depth in DEPTH_ORDER)}"
+            f"{', '.join(depth.value for depth in DEPTH_ORDER)}",
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject="to_depth",
+                    source=f"a depth deeper than acceptance.depth ({declared.value})",
+                ),
+            ),
         )
     shallow = screen_spec(spec)
     deeper = screen_spec(

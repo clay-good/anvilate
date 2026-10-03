@@ -23,8 +23,34 @@ from __future__ import annotations
 
 from math import log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_PARTICLE_SOURCE = "the particle size distribution and solids density from the lab report"
+_FLUID_SOURCE = "the liquid's density and viscosity at process temperature from its datasheet"
+_BOWL_SOURCE = "the centrifuge bowl drawing (radii) and rated speed from its datasheet"
+_SCOPE_SOURCE = "a finer particle or lower speed, or an iterated drag-coefficient solve"
+
+
+class _CentrifugeInputError(RefusalError, ValueError):
+    """A centrifugal-separation input that cannot be used without correction."""
+
+
+def _centrifuge_refusal(message: str, *, subject: str, source: str) -> _CentrifugeInputError:
+    return _CentrifugeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _centrifuge_input_source(name: str) -> str:
+    if name in {"density_particle", "particle_diameter"}:
+        return _PARTICLE_SOURCE
+    if name in {"density_fluid", "viscosity"}:
+        return _FLUID_SOURCE
+    return _BOWL_SOURCE
+
 
 __all__ = [
     "centrifugal_sedimentation_velocity",
@@ -52,12 +78,17 @@ def _reject_beyond_stokes(
     """
     reynolds = density_fluid * abs(velocity) * diameter / viscosity
     if reynolds > _STOKES_REYNOLDS_LIMIT:
-        raise ValueError(
+        raise _centrifuge_refusal(
             f"the centrifugal Stokes form is the creeping-flow limit and {where} implies a "
             f"particle Reynolds number of {reynolds:.4g}, past the "
             f"~{_STOKES_REYNOLDS_LIMIT:.0f} where it holds: the flow separates and this "
             f"result is an overprediction (6.7x for 100 um sand in water at 3,000 rpm). "
-            f"Iterate on drag.sphere_drag_coefficient instead."
+            f"Iterate on drag.sphere_drag_coefficient instead.",
+            subject=(
+                "particle_diameter, density_particle, density_fluid, viscosity, and "
+                "rotational_speed"
+            ),
+            source=_SCOPE_SOURCE,
         )
 
 
@@ -87,11 +118,17 @@ def centrifugal_sedimentation_velocity(
     _check(viscosity, "[pressure]*[time]", "viscosity")
     _check(radius, "[length]", "radius")
     if not isinstance(rotational_speed, Quantity):
-        raise ValueError(f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}")
+        raise _centrifuge_refusal(
+            f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}",
+            subject="rotational_speed",
+            source=_BOWL_SOURCE,
+        )
     if not rotational_speed.has_dimension("1/[time]"):
-        raise ValueError(
+        raise _centrifuge_refusal(
             f"rotational_speed must be a 1/[time] quantity; got "
-            f"{rotational_speed.dimensionality} ({rotational_speed})"
+            f"{rotational_speed.dimensionality} ({rotational_speed})",
+            subject="rotational_speed",
+            source=_BOWL_SOURCE,
         )
     d = particle_diameter.to("m").magnitude
     rho_p = density_particle.to("kg/m**3").magnitude
@@ -100,15 +137,27 @@ def centrifugal_sedimentation_velocity(
     r = radius.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if d <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _centrifuge_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_PARTICLE_SOURCE,
+        )
     if mu <= 0:
-        raise ValueError("viscosity must be positive")
+        raise _centrifuge_refusal(
+            "viscosity must be positive", subject="viscosity", source=_FLUID_SOURCE
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _centrifuge_refusal("radius must be positive", subject="radius", source=_BOWL_SOURCE)
     if omega <= 0:
-        raise ValueError("rotational_speed must be positive")
+        raise _centrifuge_refusal(
+            "rotational_speed must be positive", subject="rotational_speed", source=_BOWL_SOURCE
+        )
     if rho_p <= rho_f:
-        raise ValueError("density_particle must exceed density_fluid for outward sedimentation")
+        raise _centrifuge_refusal(
+            "density_particle must exceed density_fluid for outward sedimentation",
+            subject="density_particle and density_fluid",
+            source=_PARTICLE_SOURCE,
+        )
     v = d * d * (rho_p - rho_f) * omega * omega * r / (18.0 * mu)
     _reject_beyond_stokes(
         velocity=v,
@@ -150,11 +199,17 @@ def centrifuge_settling_time(
     _check(inner_radius, "[length]", "inner_radius")
     _check(outer_radius, "[length]", "outer_radius")
     if not isinstance(rotational_speed, Quantity):
-        raise ValueError(f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}")
+        raise _centrifuge_refusal(
+            f"rotational_speed must be a 1/[time] quantity; got {rotational_speed!r}",
+            subject="rotational_speed",
+            source=_BOWL_SOURCE,
+        )
     if not rotational_speed.has_dimension("1/[time]"):
-        raise ValueError(
+        raise _centrifuge_refusal(
             f"rotational_speed must be a 1/[time] quantity; got "
-            f"{rotational_speed.dimensionality} ({rotational_speed})"
+            f"{rotational_speed.dimensionality} ({rotational_speed})",
+            subject="rotational_speed",
+            source=_BOWL_SOURCE,
         )
     d = particle_diameter.to("m").magnitude
     rho_p = density_particle.to("kg/m**3").magnitude
@@ -164,15 +219,31 @@ def centrifuge_settling_time(
     r_o = outer_radius.to("m").magnitude
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     if d <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _centrifuge_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_PARTICLE_SOURCE,
+        )
     if mu <= 0:
-        raise ValueError("viscosity must be positive")
+        raise _centrifuge_refusal(
+            "viscosity must be positive", subject="viscosity", source=_FLUID_SOURCE
+        )
     if not 0.0 < r_i < r_o:
-        raise ValueError("inner_radius must be positive and less than outer_radius")
+        raise _centrifuge_refusal(
+            "inner_radius must be positive and less than outer_radius",
+            subject="inner_radius and outer_radius",
+            source=_BOWL_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError("rotational_speed must be positive")
+        raise _centrifuge_refusal(
+            "rotational_speed must be positive", subject="rotational_speed", source=_BOWL_SOURCE
+        )
     if rho_p <= rho_f:
-        raise ValueError("density_particle must exceed density_fluid for outward sedimentation")
+        raise _centrifuge_refusal(
+            "density_particle must exceed density_fluid for outward sedimentation",
+            subject="density_particle and density_fluid",
+            source=_PARTICLE_SOURCE,
+        )
     _reject_beyond_stokes(
         velocity=d * d * (rho_p - rho_f) * omega * omega * r_o / (18.0 * mu),
         diameter=d,
@@ -186,10 +257,16 @@ def centrifuge_settling_time(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _centrifuge_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_centrifuge_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _centrifuge_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_centrifuge_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

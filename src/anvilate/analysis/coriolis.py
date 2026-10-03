@@ -24,8 +24,33 @@ from __future__ import annotations
 
 from math import radians, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_FRAME_SOURCE = "the rotating frame's rate and the site latitude from the survey"
+_FLOW_SOURCE = "the flow case (velocity and length scale of the motion)"
+_FLUID_SOURCE = "the fluid property table viscosity at the flow temperature"
+
+
+class _CoriolisInputError(RefusalError, ValueError):
+    """A rotating-frame input that cannot be used without correction."""
+
+
+def _coriolis_refusal(message: str, *, subject: str, source: str) -> _CoriolisInputError:
+    return _CoriolisInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _coriolis_input_source(name: str) -> str:
+    if name in {"length_scale", "velocity"}:
+        return _FLOW_SOURCE
+    if name == "kinematic_viscosity":
+        return _FLUID_SOURCE
+    return _FRAME_SOURCE
+
 
 __all__ = [
     "coriolis_acceleration",
@@ -47,19 +72,29 @@ def coriolis_acceleration(*, angular_velocity: Quantity, velocity: Quantity) -> 
     m/s**2.
     """
     if not isinstance(angular_velocity, Quantity):
-        raise ValueError(f"angular_velocity must be a 1/[time] quantity; got {angular_velocity!r}")
+        raise _coriolis_refusal(
+            f"angular_velocity must be a 1/[time] quantity; got {angular_velocity!r}",
+            subject="angular_velocity",
+            source=_FRAME_SOURCE,
+        )
     if not angular_velocity.has_dimension("1/[time]"):
-        raise ValueError(
+        raise _coriolis_refusal(
             f"angular_velocity must be a 1/[time] quantity; got "
-            f"{angular_velocity.dimensionality} ({angular_velocity})"
+            f"{angular_velocity.dimensionality} ({angular_velocity})",
+            subject="angular_velocity",
+            source=_FRAME_SOURCE,
         )
     _check(velocity, "[length]/[time]", "velocity")
     omega = angular_speed_rad_per_s(angular_velocity, name="angular_velocity")
     v = velocity.to("m/s").magnitude
     if omega <= 0:
-        raise ValueError("angular_velocity must be positive")
+        raise _coriolis_refusal(
+            "angular_velocity must be positive", subject="angular_velocity", source=_FRAME_SOURCE
+        )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _coriolis_refusal(
+            "velocity must be non-negative", subject="velocity", source=_FLOW_SOURCE
+        )
     return Quantity(magnitude=2.0 * omega * v, unit="m/s**2")
 
 
@@ -72,17 +107,27 @@ def coriolis_parameter(*, angular_velocity: Quantity, latitude: float) -> Quanti
     geostrophic balance in weather and ocean flow. Returns the Coriolis parameter in 1/s.
     """
     if not isinstance(angular_velocity, Quantity):
-        raise ValueError(f"angular_velocity must be a 1/[time] quantity; got {angular_velocity!r}")
+        raise _coriolis_refusal(
+            f"angular_velocity must be a 1/[time] quantity; got {angular_velocity!r}",
+            subject="angular_velocity",
+            source=_FRAME_SOURCE,
+        )
     if not angular_velocity.has_dimension("1/[time]"):
-        raise ValueError(
+        raise _coriolis_refusal(
             f"angular_velocity must be a 1/[time] quantity; got "
-            f"{angular_velocity.dimensionality} ({angular_velocity})"
+            f"{angular_velocity.dimensionality} ({angular_velocity})",
+            subject="angular_velocity",
+            source=_FRAME_SOURCE,
         )
     omega = angular_speed_rad_per_s(angular_velocity, name="angular_velocity")
     if omega <= 0:
-        raise ValueError("angular_velocity must be positive")
+        raise _coriolis_refusal(
+            "angular_velocity must be positive", subject="angular_velocity", source=_FRAME_SOURCE
+        )
     if not -90.0 <= latitude <= 90.0:
-        raise ValueError("latitude must be in [-90, 90] degrees")
+        raise _coriolis_refusal(
+            "latitude must be in [-90, 90] degrees", subject="latitude", source=_FRAME_SOURCE
+        )
     return Quantity(magnitude=2.0 * omega * sin(radians(latitude)), unit="1/s")
 
 
@@ -98,12 +143,16 @@ def foucault_precession_period(*, latitude: float) -> Quantity:
     and within ±90°. Returns the precession period in hours.
     """
     if not -90.0 <= latitude <= 90.0:
-        raise ValueError("latitude must be in [-90, 90] degrees")
+        raise _coriolis_refusal(
+            "latitude must be in [-90, 90] degrees", subject="latitude", source=_FRAME_SOURCE
+        )
     s = abs(sin(radians(latitude)))
     if s == 0.0:
-        raise ValueError(
+        raise _coriolis_refusal(
             "latitude must be nonzero: a Foucault pendulum at the equator does not precess "
-            "(infinite period)"
+            "(infinite period)",
+            subject="latitude",
+            source=_FRAME_SOURCE,
         )
     return Quantity(magnitude=_SIDEREAL_DAY_HOURS / s, unit="hour")
 
@@ -120,22 +169,32 @@ def rossby_number(
     """
     _check(velocity, "[length]/[time]", "velocity")
     if not isinstance(coriolis_parameter, Quantity):
-        raise ValueError(
-            f"coriolis_parameter must be a 1/[time] quantity; got {coriolis_parameter!r}"
+        raise _coriolis_refusal(
+            f"coriolis_parameter must be a 1/[time] quantity; got {coriolis_parameter!r}",
+            subject="coriolis_parameter",
+            source=_FRAME_SOURCE,
         )
     if not coriolis_parameter.has_dimension("1/[time]"):
-        raise ValueError(
+        raise _coriolis_refusal(
             f"coriolis_parameter must be a 1/[time] quantity; got "
-            f"{coriolis_parameter.dimensionality} ({coriolis_parameter})"
+            f"{coriolis_parameter.dimensionality} ({coriolis_parameter})",
+            subject="coriolis_parameter",
+            source=_FRAME_SOURCE,
         )
     _check(length_scale, "[length]", "length_scale")
     u = velocity.to("m/s").magnitude
     f = coriolis_parameter.to("1/s").magnitude
     length = length_scale.to("m").magnitude
     if f <= 0:
-        raise ValueError("coriolis_parameter must be positive")
+        raise _coriolis_refusal(
+            "coriolis_parameter must be positive",
+            subject="coriolis_parameter",
+            source=_FRAME_SOURCE,
+        )
     if length <= 0:
-        raise ValueError("length_scale must be positive")
+        raise _coriolis_refusal(
+            "length_scale must be positive", subject="length_scale", source=_FLOW_SOURCE
+        )
     return u / (f * length)
 
 
@@ -156,33 +215,53 @@ def ekman_number(
     """
     _check(kinematic_viscosity, "[length]**2/[time]", "kinematic_viscosity")
     if not isinstance(coriolis_parameter, Quantity):
-        raise ValueError(
-            f"coriolis_parameter must be a 1/[time] quantity; got {coriolis_parameter!r}"
+        raise _coriolis_refusal(
+            f"coriolis_parameter must be a 1/[time] quantity; got {coriolis_parameter!r}",
+            subject="coriolis_parameter",
+            source=_FRAME_SOURCE,
         )
     if not coriolis_parameter.has_dimension("1/[time]"):
-        raise ValueError(
+        raise _coriolis_refusal(
             f"coriolis_parameter must be a 1/[time] quantity; got "
-            f"{coriolis_parameter.dimensionality} ({coriolis_parameter})"
+            f"{coriolis_parameter.dimensionality} ({coriolis_parameter})",
+            subject="coriolis_parameter",
+            source=_FRAME_SOURCE,
         )
     _check(length_scale, "[length]", "length_scale")
     nu = kinematic_viscosity.to("m**2/s").magnitude
     f = coriolis_parameter.to("1/s").magnitude
     length = length_scale.to("m").magnitude
     if nu <= 0:
-        raise ValueError("kinematic_viscosity must be positive")
+        raise _coriolis_refusal(
+            "kinematic_viscosity must be positive",
+            subject="kinematic_viscosity",
+            source=_FLUID_SOURCE,
+        )
     if f <= 0:
-        raise ValueError("coriolis_parameter must be positive")
+        raise _coriolis_refusal(
+            "coriolis_parameter must be positive",
+            subject="coriolis_parameter",
+            source=_FRAME_SOURCE,
+        )
     if length <= 0:
-        raise ValueError("length_scale must be positive")
+        raise _coriolis_refusal(
+            "length_scale must be positive", subject="length_scale", source=_FLOW_SOURCE
+        )
     return nu / (f * length**2)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _coriolis_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_coriolis_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _coriolis_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_coriolis_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

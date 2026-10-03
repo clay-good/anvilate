@@ -19,7 +19,35 @@ relation, C-rate and round-trip efficiency) as given in Linden's *Handbook of Ba
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LOAD_SOURCE = "the backup load list and required autonomy from the design basis"
+_BATTERY_SOURCE = "the battery datasheet (rated capacity, voltage, depth of discharge)"
+_TEST_SOURCE = "the battery's charge/discharge test record"
+_CHARGER_SOURCE = "the inverter or charger datasheet's conversion efficiency"
+
+
+class _EnergyStorageInputError(RefusalError, ValueError):
+    """An energy-storage input that cannot be used without correction."""
+
+
+def _energy_storage_refusal(message: str, *, subject: str, source: str) -> _EnergyStorageInputError:
+    return _EnergyStorageInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _energy_storage_input_source(name: str) -> str:
+    if name in {"autonomy_time", "current", "load_power"}:
+        return _LOAD_SOURCE
+    if name == "efficiency":
+        return _CHARGER_SOURCE
+    if name in {"energy_charged", "energy_discharged", "round_trip_efficiency"}:
+        return _TEST_SOURCE
+    return _BATTERY_SOURCE
+
 
 __all__ = [
     "battery_backup_time",
@@ -55,11 +83,17 @@ def battery_bank_capacity(
     _fraction(depth_of_discharge, "depth_of_discharge")
     _fraction(efficiency, "efficiency")
     if load_power.to("W").magnitude <= 0:
-        raise ValueError("load_power must be positive")
+        raise _energy_storage_refusal(
+            "load_power must be positive", subject="load_power", source=_LOAD_SOURCE
+        )
     if autonomy_time.to("s").magnitude <= 0:
-        raise ValueError("autonomy_time must be positive")
+        raise _energy_storage_refusal(
+            "autonomy_time must be positive", subject="autonomy_time", source=_LOAD_SOURCE
+        )
     if system_voltage.to("V").magnitude <= 0:
-        raise ValueError("system_voltage must be positive")
+        raise _energy_storage_refusal(
+            "system_voltage must be positive", subject="system_voltage", source=_BATTERY_SOURCE
+        )
     energy = load_power.pint * autonomy_time.pint
     capacity = energy / (system_voltage.pint * depth_of_discharge * efficiency)
     return Quantity(magnitude=float(capacity.to("A*hour").magnitude), unit="A*hour")
@@ -84,9 +118,13 @@ def usable_battery_energy(
     _fraction(depth_of_discharge, "depth_of_discharge")
     _fraction(efficiency, "efficiency")
     if rated_capacity.to("A*hour").magnitude <= 0:
-        raise ValueError("rated_capacity must be positive")
+        raise _energy_storage_refusal(
+            "rated_capacity must be positive", subject="rated_capacity", source=_BATTERY_SOURCE
+        )
     if system_voltage.to("V").magnitude <= 0:
-        raise ValueError("system_voltage must be positive")
+        raise _energy_storage_refusal(
+            "system_voltage must be positive", subject="system_voltage", source=_BATTERY_SOURCE
+        )
     energy = rated_capacity.pint * system_voltage.pint * depth_of_discharge * efficiency
     return Quantity(magnitude=float(energy.to("W*hour").magnitude), unit="W*hour")
 
@@ -108,7 +146,9 @@ def battery_backup_time(
     """
     _check(load_power, "[power]", "load_power")
     if load_power.to("W").magnitude <= 0:
-        raise ValueError("load_power must be positive")
+        raise _energy_storage_refusal(
+            "load_power must be positive", subject="load_power", source=_LOAD_SOURCE
+        )
     energy = usable_battery_energy(
         rated_capacity=rated_capacity,
         system_voltage=system_voltage,
@@ -138,9 +178,17 @@ def battery_round_trip_efficiency(
     e_out = energy_discharged.to("J").magnitude
     e_in = energy_charged.to("J").magnitude
     if e_out < 0 or e_in <= 0:
-        raise ValueError("energy_charged must be positive and energy_discharged non-negative")
+        raise _energy_storage_refusal(
+            "energy_charged must be positive and energy_discharged non-negative",
+            subject="energy_charged and energy_discharged",
+            source=_TEST_SOURCE,
+        )
     if e_out > e_in:
-        raise ValueError("energy_discharged cannot exceed energy_charged (η > 1 is impossible)")
+        raise _energy_storage_refusal(
+            "energy_discharged cannot exceed energy_charged (η > 1 is impossible)",
+            subject="energy_discharged and energy_charged",
+            source=_TEST_SOURCE,
+        )
     return e_out / e_in
 
 
@@ -162,7 +210,9 @@ def battery_delivered_energy(
     _fraction(round_trip_efficiency, "round_trip_efficiency")
     e = stored_energy.to("kWh").magnitude
     if e < 0:
-        raise ValueError("stored_energy must be non-negative")
+        raise _energy_storage_refusal(
+            "stored_energy must be non-negative", subject="stored_energy", source=_BATTERY_SOURCE
+        )
     return Quantity(magnitude=e * round_trip_efficiency, unit="kWh")
 
 
@@ -182,9 +232,13 @@ def c_rate(*, current: Quantity, capacity: Quantity) -> float:
     i = current.to("A").magnitude
     cap = capacity.to("A*hour").magnitude
     if i < 0:
-        raise ValueError("current must be non-negative")
+        raise _energy_storage_refusal(
+            "current must be non-negative", subject="current", source=_LOAD_SOURCE
+        )
     if cap <= 0:
-        raise ValueError("capacity must be positive")
+        raise _energy_storage_refusal(
+            "capacity must be positive", subject="capacity", source=_BATTERY_SOURCE
+        )
     return i / cap
 
 
@@ -199,9 +253,13 @@ def current_from_c_rate(*, c_rate: float, capacity: Quantity) -> Quantity:
     _check(capacity, "[current]*[time]", "capacity")
     cap = capacity.to("A*hour").magnitude
     if c_rate < 0:
-        raise ValueError("c_rate must be non-negative")
+        raise _energy_storage_refusal(
+            "c_rate must be non-negative", subject="c_rate", source=_BATTERY_SOURCE
+        )
     if cap <= 0:
-        raise ValueError("capacity must be positive")
+        raise _energy_storage_refusal(
+            "capacity must be positive", subject="capacity", source=_BATTERY_SOURCE
+        )
     return Quantity(magnitude=c_rate * cap, unit="A")
 
 
@@ -215,21 +273,33 @@ def discharge_time_from_c_rate(*, c_rate: float) -> Quantity:
     optimistic upper bound. Returns the discharge time in hours.
     """
     if c_rate <= 0:
-        raise ValueError("c_rate must be positive")
+        raise _energy_storage_refusal(
+            "c_rate must be positive", subject="c_rate", source=_BATTERY_SOURCE
+        )
     return Quantity(magnitude=1.0 / c_rate, unit="hour")
 
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be in (0, 1]; got {value}")
+        raise _energy_storage_refusal(
+            f"{name} must be in (0, 1]; got {value}",
+            subject=name,
+            source=_energy_storage_input_source(name),
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _energy_storage_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_energy_storage_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _energy_storage_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_energy_storage_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

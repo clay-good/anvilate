@@ -20,8 +20,42 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_SITE_SOURCE = "the site wind resource assessment (met-mast speeds, heights, shear)"
+_TURBINE_SOURCE = "the turbine manufacturer's datasheet (rotor size, speed, rating, Cp/Ct)"
+_AIR_SOURCE = "the site air density at hub height from the design basis"
+_PRODUCTION_SOURCE = "the turbine's metered production record for the period"
+
+
+class _WindPowerInputError(RefusalError, ValueError):
+    """A wind-turbine power input that cannot be used without correction."""
+
+
+def _wind_power_refusal(message: str, *, subject: str, source: str) -> _WindPowerInputError:
+    return _WindPowerInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _wind_power_input_source(name: str) -> str:
+    if name in {
+        "reference_height",
+        "reference_speed",
+        "shear_exponent",
+        "target_height",
+        "wind_speed",
+    }:
+        return _SITE_SOURCE
+    if name == "air_density":
+        return _AIR_SOURCE
+    if name in {"energy_produced", "period"}:
+        return _PRODUCTION_SOURCE
+    return _TURBINE_SOURCE
+
 
 __all__ = [
     "BETZ_LIMIT",
@@ -67,11 +101,20 @@ def wind_shear_speed(
     h1 = reference_height.to("m").magnitude
     h2 = target_height.to("m").magnitude
     if v1 < 0:
-        raise ValueError("reference_speed must be non-negative")
-    if h1 <= 0 or h2 <= 0:
-        raise ValueError("reference_height and target_height must be positive")
+        raise _wind_power_refusal(
+            "reference_speed must be non-negative", subject="reference_speed", source=_SITE_SOURCE
+        )
+    for subject, magnitude in (("reference_height", h1), ("target_height", h2)):
+        if magnitude <= 0:
+            raise _wind_power_refusal(
+                "reference_height and target_height must be positive",
+                subject=subject,
+                source=_SITE_SOURCE,
+            )
     if shear_exponent < 0:
-        raise ValueError("shear_exponent must be non-negative")
+        raise _wind_power_refusal(
+            "shear_exponent must be non-negative", subject="shear_exponent", source=_SITE_SOURCE
+        )
     return Quantity(magnitude=v1 * (h2 / h1) ** shear_exponent, unit="m/s")
 
 
@@ -88,9 +131,13 @@ def wind_power_density(*, air_density: Quantity, wind_speed: Quantity) -> Quanti
     rho = air_density.to("kg/m**3").magnitude
     v = wind_speed.to("m/s").magnitude
     if rho <= 0:
-        raise ValueError("air_density must be positive")
+        raise _wind_power_refusal(
+            "air_density must be positive", subject="air_density", source=_AIR_SOURCE
+        )
     if v < 0:
-        raise ValueError("wind_speed must be non-negative")
+        raise _wind_power_refusal(
+            "wind_speed must be non-negative", subject="wind_speed", source=_SITE_SOURCE
+        )
     return Quantity(magnitude=0.5 * rho * v**3, unit="W/m**2")
 
 
@@ -115,12 +162,23 @@ def wind_turbine_power(
     rho = air_density.to("kg/m**3").magnitude
     d = rotor_diameter.to("m").magnitude
     v = wind_speed.to("m/s").magnitude
-    if rho <= 0 or d <= 0:
-        raise ValueError("air_density and rotor_diameter must be positive")
+    for subject, magnitude in (("air_density", rho), ("rotor_diameter", d)):
+        if magnitude <= 0:
+            raise _wind_power_refusal(
+                "air_density and rotor_diameter must be positive",
+                subject=subject,
+                source=_wind_power_input_source(subject),
+            )
     if v < 0:
-        raise ValueError("wind_speed must be non-negative")
+        raise _wind_power_refusal(
+            "wind_speed must be non-negative", subject="wind_speed", source=_SITE_SOURCE
+        )
     if not 0.0 < power_coefficient <= BETZ_LIMIT:
-        raise ValueError(f"power_coefficient must be in (0, {BETZ_LIMIT:.4f}] (the Betz limit)")
+        raise _wind_power_refusal(
+            f"power_coefficient must be in (0, {BETZ_LIMIT:.4f}] (the Betz limit)",
+            subject="power_coefficient",
+            source=_TURBINE_SOURCE,
+        )
     area = pi * d**2 / 4.0
     return Quantity(magnitude=0.5 * rho * area * v**3 * power_coefficient, unit="W")
 
@@ -147,8 +205,13 @@ def wind_turbine_tip_speed_ratio(
     omega = angular_speed_rad_per_s(rotor_speed, name="rotor_speed")
     r = rotor_radius.to("m").magnitude
     v = wind_speed.to("m/s").magnitude
-    if omega <= 0 or r <= 0 or v <= 0:
-        raise ValueError("rotor_speed, rotor_radius, and wind_speed must be positive")
+    for subject, magnitude in (("rotor_speed", omega), ("rotor_radius", r), ("wind_speed", v)):
+        if magnitude <= 0:
+            raise _wind_power_refusal(
+                "rotor_speed, rotor_radius, and wind_speed must be positive",
+                subject=subject,
+                source=_wind_power_input_source(subject),
+            )
     return omega * r / v
 
 
@@ -174,10 +237,18 @@ def capacity_factor(
     p = rated_power.to("W").magnitude
     t = period.to("s").magnitude
     if e < 0 or p <= 0 or t <= 0:
-        raise ValueError("rated_power and period must be positive, energy non-negative")
+        raise _wind_power_refusal(
+            "rated_power and period must be positive, energy non-negative",
+            subject="energy_produced, rated_power, and period",
+            source=_PRODUCTION_SOURCE,
+        )
     cf = e / (p * t)
     if cf > 1.0:
-        raise ValueError("energy_produced exceeds the rated output for the period (CF > 1)")
+        raise _wind_power_refusal(
+            "energy_produced exceeds the rated output for the period (CF > 1)",
+            subject="energy_produced, rated_power, and period",
+            source=_PRODUCTION_SOURCE,
+        )
     return cf
 
 
@@ -196,9 +267,11 @@ def actuator_disc_power_coefficient(*, axial_induction_factor: float) -> float:
     """
     a = axial_induction_factor
     if not 0.0 <= a <= 0.5:
-        raise ValueError(
+        raise _wind_power_refusal(
             f"axial_induction_factor must lie in [0, 0.5]; above 0.5 momentum theory predicts a "
-            f"reversed wake and no longer holds. Got {a}"
+            f"reversed wake and no longer holds. Got {a}",
+            subject="axial_induction_factor",
+            source=_TURBINE_SOURCE,
         )
     return 4.0 * a * (1.0 - a) ** 2
 
@@ -214,7 +287,11 @@ def actuator_disc_thrust_coefficient(*, axial_induction_factor: float) -> float:
     """
     a = axial_induction_factor
     if not 0.0 <= a <= 0.5:
-        raise ValueError(f"axial_induction_factor must lie in [0, 0.5]; got {a}")
+        raise _wind_power_refusal(
+            f"axial_induction_factor must lie in [0, 0.5]; got {a}",
+            subject="axial_induction_factor",
+            source=_TURBINE_SOURCE,
+        )
     return 4.0 * a * (1.0 - a)
 
 
@@ -246,23 +323,45 @@ def wind_turbine_rotor_thrust(
     d = rotor_diameter.to("m").magnitude
     v = wind_speed.to("m/s").magnitude
     if rho <= 0:
-        raise ValueError(f"air_density must be positive; got {air_density}")
+        raise _wind_power_refusal(
+            f"air_density must be positive; got {air_density}",
+            subject="air_density",
+            source=_AIR_SOURCE,
+        )
     if d <= 0:
-        raise ValueError(f"rotor_diameter must be positive; got {rotor_diameter}")
+        raise _wind_power_refusal(
+            f"rotor_diameter must be positive; got {rotor_diameter}",
+            subject="rotor_diameter",
+            source=_TURBINE_SOURCE,
+        )
     if v < 0:
-        raise ValueError(f"wind_speed must be non-negative; got {wind_speed}")
+        raise _wind_power_refusal(
+            f"wind_speed must be non-negative; got {wind_speed}",
+            subject="wind_speed",
+            source=_SITE_SOURCE,
+        )
     if not 0.0 <= thrust_coefficient <= 1.0:
-        raise ValueError(f"thrust_coefficient must lie in [0, 1]; got {thrust_coefficient}")
+        raise _wind_power_refusal(
+            f"thrust_coefficient must lie in [0, 1]; got {thrust_coefficient}",
+            subject="thrust_coefficient",
+            source=_TURBINE_SOURCE,
+        )
     area = pi * d * d / 4.0
     return Quantity(magnitude=0.5 * rho * area * v * v * thrust_coefficient / 1000.0, unit="kN")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _wind_power_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_wind_power_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _wind_power_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_wind_power_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

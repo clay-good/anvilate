@@ -20,7 +20,32 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LASER_SOURCE = "the laser manufacturer's datasheet (wavelength, waist, divergence, power)"
+_OPTICS_SOURCE = "the lens datasheet's focal length"
+_LAYOUT_SOURCE = "the optical layout drawing's propagation distances and beam radii"
+
+
+class _GaussianBeamInputError(RefusalError, ValueError):
+    """A Gaussian-beam input that cannot be used without correction."""
+
+
+def _gaussian_beam_refusal(message: str, *, subject: str, source: str) -> _GaussianBeamInputError:
+    return _GaussianBeamInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _gaussian_beam_input_source(name: str) -> str:
+    if name in {"beam_radius", "distance", "input_beam_radius"}:
+        return _LAYOUT_SOURCE
+    if name == "focal_length":
+        return _OPTICS_SOURCE
+    return _LASER_SOURCE
+
 
 __all__ = [
     "rayleigh_range",
@@ -49,9 +74,13 @@ def rayleigh_range(*, beam_waist: Quantity, wavelength: Quantity) -> Quantity:
     require_finite(wavelength, name="wavelength")
     lam = wavelength.to("m").magnitude
     if w0 <= 0:
-        raise ValueError("beam_waist must be positive")
+        raise _gaussian_beam_refusal(
+            "beam_waist must be positive", subject="beam_waist", source=_LASER_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _gaussian_beam_refusal(
+            "wavelength must be positive", subject="wavelength", source=_LASER_SOURCE
+        )
     return Quantity(magnitude=pi * w0**2 / lam, unit="m")
 
 
@@ -76,9 +105,13 @@ def beam_radius_at_distance(
     lam = wavelength.to("m").magnitude
     z = distance.to("m").magnitude
     if w0 <= 0:
-        raise ValueError("beam_waist must be positive")
+        raise _gaussian_beam_refusal(
+            "beam_waist must be positive", subject="beam_waist", source=_LASER_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _gaussian_beam_refusal(
+            "wavelength must be positive", subject="wavelength", source=_LASER_SOURCE
+        )
     z_r = pi * w0**2 / lam
     return Quantity(magnitude=w0 * sqrt(1.0 + (z / z_r) ** 2), unit="m")
 
@@ -97,9 +130,13 @@ def beam_divergence_half_angle(*, beam_waist: Quantity, wavelength: Quantity) ->
     w0 = beam_waist.to("m").magnitude
     lam = wavelength.to("m").magnitude
     if w0 <= 0:
-        raise ValueError("beam_waist must be positive")
+        raise _gaussian_beam_refusal(
+            "beam_waist must be positive", subject="beam_waist", source=_LASER_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _gaussian_beam_refusal(
+            "wavelength must be positive", subject="wavelength", source=_LASER_SOURCE
+        )
     return lam / (pi * w0)
 
 
@@ -115,9 +152,15 @@ def beam_waist_for_divergence(*, divergence_half_angle: float, wavelength: Quant
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if divergence_half_angle <= 0:
-        raise ValueError("divergence_half_angle must be positive")
+        raise _gaussian_beam_refusal(
+            "divergence_half_angle must be positive",
+            subject="divergence_half_angle",
+            source=_LASER_SOURCE,
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _gaussian_beam_refusal(
+            "wavelength must be positive", subject="wavelength", source=_LASER_SOURCE
+        )
     return Quantity(magnitude=lam / (pi * divergence_half_angle), unit="m")
 
 
@@ -139,11 +182,17 @@ def focused_spot_radius(
     f = focal_length.to("m").magnitude
     w = input_beam_radius.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _gaussian_beam_refusal(
+            "wavelength must be positive", subject="wavelength", source=_LASER_SOURCE
+        )
     if f <= 0:
-        raise ValueError("focal_length must be positive")
+        raise _gaussian_beam_refusal(
+            "focal_length must be positive", subject="focal_length", source=_OPTICS_SOURCE
+        )
     if w <= 0:
-        raise ValueError("input_beam_radius must be positive")
+        raise _gaussian_beam_refusal(
+            "input_beam_radius must be positive", subject="input_beam_radius", source=_LAYOUT_SOURCE
+        )
     return Quantity(magnitude=lam * f / (pi * w), unit="m")
 
 
@@ -163,18 +212,28 @@ def gaussian_beam_peak_intensity(*, power: Quantity, beam_radius: Quantity) -> Q
     p = power.to("W").magnitude
     w = beam_radius.to("m").magnitude
     if p < 0:
-        raise ValueError("power must be non-negative")
+        raise _gaussian_beam_refusal(
+            "power must be non-negative", subject="power", source=_LASER_SOURCE
+        )
     if w <= 0:
-        raise ValueError("beam_radius must be positive")
+        raise _gaussian_beam_refusal(
+            "beam_radius must be positive", subject="beam_radius", source=_LAYOUT_SOURCE
+        )
     return Quantity(magnitude=2.0 * p / (pi * w**2), unit="W/m**2")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _gaussian_beam_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_gaussian_beam_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _gaussian_beam_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_gaussian_beam_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

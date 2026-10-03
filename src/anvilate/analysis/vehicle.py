@@ -22,7 +22,38 @@ from __future__ import annotations
 
 from math import atan, degrees, radians, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_MASS_SOURCE = "the vehicle's gross vehicle weight rating or weighbridge record"
+_TIRE_SOURCE = "the tire manufacturer's rolling-resistance coefficient data"
+_ROUTE_SOURCE = "the route survey's road grade and the drive cycle's speeds"
+_DRIVELINE_SOURCE = "the drivetrain's tractive-effort curve at the operating point"
+_CHASSIS_SOURCE = "the chassis drawing's wheelbase and the turning-circle specification"
+
+
+class _VehicleInputError(RefusalError, ValueError):
+    """A vehicle road-load input that cannot be used without correction."""
+
+
+def _vehicle_refusal(message: str, *, subject: str, source: str) -> _VehicleInputError:
+    return _VehicleInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _vehicle_input_source(name: str) -> str:
+    if name == "vehicle_mass":
+        return _MASS_SOURCE
+    if name == "rolling_resistance_coefficient":
+        return _TIRE_SOURCE
+    if name in {"grade_angle", "speed"}:
+        return _ROUTE_SOURCE
+    if name == "tractive_force":
+        return _DRIVELINE_SOURCE
+    return _CHASSIS_SOURCE
+
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -47,9 +78,15 @@ def rolling_resistance_force(
     _check(vehicle_mass, "[mass]", "vehicle_mass")
     m = vehicle_mass.to("kg").magnitude
     if m <= 0:
-        raise ValueError("vehicle_mass must be positive")
+        raise _vehicle_refusal(
+            "vehicle_mass must be positive", subject="vehicle_mass", source=_MASS_SOURCE
+        )
     if rolling_resistance_coefficient < 0:
-        raise ValueError("rolling_resistance_coefficient must be non-negative")
+        raise _vehicle_refusal(
+            "rolling_resistance_coefficient must be non-negative",
+            subject="rolling_resistance_coefficient",
+            source=_TIRE_SOURCE,
+        )
     force = rolling_resistance_coefficient * m * STANDARD_GRAVITY_M_PER_S2
     return Quantity(magnitude=force, unit="N")
 
@@ -66,9 +103,13 @@ def grade_resistance_force(*, vehicle_mass: Quantity, grade_angle: float) -> Qua
     _check(vehicle_mass, "[mass]", "vehicle_mass")
     m = vehicle_mass.to("kg").magnitude
     if m <= 0:
-        raise ValueError("vehicle_mass must be positive")
+        raise _vehicle_refusal(
+            "vehicle_mass must be positive", subject="vehicle_mass", source=_MASS_SOURCE
+        )
     if not -90.0 <= grade_angle <= 90.0:
-        raise ValueError("grade_angle must be in [-90, 90] degrees")
+        raise _vehicle_refusal(
+            "grade_angle must be in [-90, 90] degrees", subject="grade_angle", source=_ROUTE_SOURCE
+        )
     return Quantity(magnitude=m * STANDARD_GRAVITY_M_PER_S2 * sin(radians(grade_angle)), unit="N")
 
 
@@ -87,9 +128,11 @@ def tractive_power(*, tractive_force: Quantity, speed: Quantity) -> Quantity:
     f = tractive_force.to("N").magnitude
     v = speed.to("m/s").magnitude
     if f <= 0:
-        raise ValueError("tractive_force must be positive")
+        raise _vehicle_refusal(
+            "tractive_force must be positive", subject="tractive_force", source=_DRIVELINE_SOURCE
+        )
     if v <= 0:
-        raise ValueError("speed must be positive")
+        raise _vehicle_refusal("speed must be positive", subject="speed", source=_ROUTE_SOURCE)
     return Quantity(magnitude=f * v / 1000.0, unit="kW")
 
 
@@ -107,18 +150,28 @@ def ackermann_steer_angle(*, wheelbase: Quantity, turn_radius: Quantity) -> Quan
     length = wheelbase.to("m").magnitude
     r = turn_radius.to("m").magnitude
     if length <= 0:
-        raise ValueError("wheelbase must be positive")
+        raise _vehicle_refusal(
+            "wheelbase must be positive", subject="wheelbase", source=_CHASSIS_SOURCE
+        )
     if r <= 0:
-        raise ValueError("turn_radius must be positive")
+        raise _vehicle_refusal(
+            "turn_radius must be positive", subject="turn_radius", source=_CHASSIS_SOURCE
+        )
     return Quantity(magnitude=degrees(atan(length / r)), unit="degree")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _vehicle_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_vehicle_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _vehicle_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_vehicle_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

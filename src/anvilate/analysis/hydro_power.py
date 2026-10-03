@@ -24,8 +24,39 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_SITE_SOURCE = "the site survey's gross head and the penstock head-loss calculation"
+_HYDROLOGY_SOURCE = "the hydrology study's design flow and water density"
+_TURBINE_SOURCE = "the turbine manufacturer's performance curve at the duty point"
+_TIDAL_SOURCE = "the tidal survey's basin area, tidal range, and tidal period"
+_DUTY_SOURCE = "the project design basis's target power output"
+
+
+class _HydroPowerInputError(RefusalError, ValueError):
+    """A hydro-power input that cannot be used without correction."""
+
+
+def _hydro_power_refusal(message: str, *, subject: str, source: str) -> _HydroPowerInputError:
+    return _HydroPowerInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _hydro_power_input_source(name: str) -> str:
+    if name in {"density", "flow_rate", "fluid_density", "water_density"}:
+        return _HYDROLOGY_SOURCE
+    if name in {"overall_efficiency", "power", "rotational_speed"}:
+        return _TURBINE_SOURCE
+    if name == "target_power":
+        return _DUTY_SOURCE
+    if name in {"basin_area", "tidal_period", "tidal_range"}:
+        return _TIDAL_SOURCE
+    return _SITE_SOURCE
+
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
 
@@ -55,12 +86,18 @@ def hydro_net_head(*, gross_head: Quantity, head_loss: Quantity) -> Quantity:
     h_gross = gross_head.to("m").magnitude
     h_loss = head_loss.to("m").magnitude
     if h_gross <= 0:
-        raise ValueError("gross_head must be positive")
+        raise _hydro_power_refusal(
+            "gross_head must be positive", subject="gross_head", source=_SITE_SOURCE
+        )
     if h_loss < 0:
-        raise ValueError("head_loss must be non-negative")
+        raise _hydro_power_refusal(
+            "head_loss must be non-negative", subject="head_loss", source=_SITE_SOURCE
+        )
     if h_loss >= h_gross:
-        raise ValueError(
-            "head_loss must be less than gross_head (no net head to drive the turbine)"
+        raise _hydro_power_refusal(
+            "head_loss must be less than gross_head (no net head to drive the turbine)",
+            subject="gross_head and head_loss",
+            source=_SITE_SOURCE,
         )
     return Quantity(magnitude=h_gross - h_loss, unit="m")
 
@@ -86,10 +123,19 @@ def hydro_turbine_power(
     q = flow_rate.to("m**3/s").magnitude
     h = net_head.to("m").magnitude
     rho = fluid_density.to("kg/m**3").magnitude
-    if q <= 0 or h <= 0 or rho <= 0:
-        raise ValueError("flow_rate, net_head, and fluid_density must be positive")
+    for subject, magnitude in (("flow_rate", q), ("net_head", h), ("fluid_density", rho)):
+        if magnitude <= 0:
+            raise _hydro_power_refusal(
+                "flow_rate, net_head, and fluid_density must be positive",
+                subject=subject,
+                source=_hydro_power_input_source(subject),
+            )
     if not 0.0 < overall_efficiency <= 1.0:
-        raise ValueError(f"overall_efficiency must be in (0, 1]; got {overall_efficiency}")
+        raise _hydro_power_refusal(
+            f"overall_efficiency must be in (0, 1]; got {overall_efficiency}",
+            subject="overall_efficiency",
+            source=_TURBINE_SOURCE,
+        )
     return Quantity(magnitude=rho * _GRAVITY * q * h * overall_efficiency, unit="W")
 
 
@@ -114,10 +160,19 @@ def hydro_flow_for_power(
     p = target_power.to("W").magnitude
     h = net_head.to("m").magnitude
     rho = fluid_density.to("kg/m**3").magnitude
-    if p <= 0 or h <= 0 or rho <= 0:
-        raise ValueError("target_power, net_head, and fluid_density must be positive")
+    for subject, magnitude in (("target_power", p), ("net_head", h), ("fluid_density", rho)):
+        if magnitude <= 0:
+            raise _hydro_power_refusal(
+                "target_power, net_head, and fluid_density must be positive",
+                subject=subject,
+                source=_hydro_power_input_source(subject),
+            )
     if not 0.0 < overall_efficiency <= 1.0:
-        raise ValueError(f"overall_efficiency must be in (0, 1]; got {overall_efficiency}")
+        raise _hydro_power_refusal(
+            f"overall_efficiency must be in (0, 1]; got {overall_efficiency}",
+            subject="overall_efficiency",
+            source=_TURBINE_SOURCE,
+        )
     q = p / (rho * _GRAVITY * h * overall_efficiency)
     return Quantity(magnitude=q, unit="m**3/s")
 
@@ -144,8 +199,13 @@ def tidal_barrage_energy(
     a = basin_area.to("m**2").magnitude
     h = tidal_range.to("m").magnitude
     rho = water_density.to("kg/m**3").magnitude
-    if a <= 0 or h <= 0 or rho <= 0:
-        raise ValueError("basin_area, tidal_range, and water_density must be positive")
+    for subject, magnitude in (("basin_area", a), ("tidal_range", h), ("water_density", rho)):
+        if magnitude <= 0:
+            raise _hydro_power_refusal(
+                "basin_area, tidal_range, and water_density must be positive",
+                subject=subject,
+                source=_hydro_power_input_source(subject),
+            )
     return Quantity(magnitude=0.5 * rho * _GRAVITY * a * h * h, unit="J")
 
 
@@ -168,7 +228,9 @@ def tidal_average_power(
     _check(tidal_period, "[time]", "tidal_period")
     period = tidal_period.to("s").magnitude
     if period <= 0:
-        raise ValueError("tidal_period must be positive")
+        raise _hydro_power_refusal(
+            "tidal_period must be positive", subject="tidal_period", source=_TIDAL_SOURCE
+        )
     energy = tidal_barrage_energy(
         basin_area=basin_area, tidal_range=tidal_range, water_density=water_density
     )
@@ -207,22 +269,34 @@ def turbine_specific_speed(
     rho = density.to("kg/m**3").magnitude
     h = head.to("m").magnitude
     if omega <= 0:
-        raise ValueError("rotational_speed must be positive")
+        raise _hydro_power_refusal(
+            "rotational_speed must be positive", subject="rotational_speed", source=_TURBINE_SOURCE
+        )
     if p_w <= 0:
-        raise ValueError("power must be positive")
+        raise _hydro_power_refusal(
+            "power must be positive", subject="power", source=_TURBINE_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _hydro_power_refusal(
+            "density must be positive", subject="density", source=_HYDROLOGY_SOURCE
+        )
     if h <= 0:
-        raise ValueError("head must be positive")
+        raise _hydro_power_refusal("head must be positive", subject="head", source=_SITE_SOURCE)
     return omega * sqrt(p_w / rho) / (_GRAVITY * h) ** 1.25
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _hydro_power_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_hydro_power_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _hydro_power_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_hydro_power_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

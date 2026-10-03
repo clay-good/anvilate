@@ -24,8 +24,46 @@ from __future__ import annotations
 
 from math import radians, sin, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_GEOMETRY_SOURCE = "the clutch or brake assembly drawing (friction radii, cone angle, shoes)"
+_LINING_SOURCE = "the friction lining manufacturer's datasheet friction coefficient"
+_ACTUATION_SOURCE = "the actuator or spring specification (clamp and spring forces)"
+_DRIVETRAIN_SOURCE = "the drivetrain inertia and speed record from the duty cycle"
+_DUTY_SOURCE = "the required torque from the drivetrain load case"
+
+
+class _ClutchInputError(RefusalError, ValueError):
+    """A clutch or brake input that cannot be used without correction."""
+
+
+def _clutch_refusal(message: str, *, subject: str, source: str) -> _ClutchInputError:
+    return _ClutchInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _clutch_input_source(name: str) -> str:
+    if name in {"actuating_force", "spring_force"}:
+        return _ACTUATION_SOURCE
+    if name in {"friction_coefficient", "theory"}:
+        return _LINING_SOURCE
+    if name == "torque":
+        return _DUTY_SOURCE
+    if name in {
+        "angular_speed",
+        "angular_velocity",
+        "driven_inertia",
+        "driving_inertia",
+        "inertia",
+        "speed_difference",
+    }:
+        return _DRIVETRAIN_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 UNIFORM_WEAR = "uniform_wear"
 UNIFORM_PRESSURE = "uniform_pressure"
@@ -45,10 +83,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _clutch_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_clutch_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _clutch_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_clutch_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -64,14 +108,26 @@ def _mean_radius_factor(outer_radius: Quantity, inner_radius: Quantity, theory: 
     ro = outer_radius.to("m").magnitude
     ri = inner_radius.to("m").magnitude
     if ri < 0:
-        raise ValueError(f"inner_radius must be non-negative; got {inner_radius}")
+        raise _clutch_refusal(
+            f"inner_radius must be non-negative; got {inner_radius}",
+            subject="inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if ro <= ri:
-        raise ValueError(f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})")
+        raise _clutch_refusal(
+            f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})",
+            subject="outer_radius and inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if theory == UNIFORM_WEAR:
         return (ro + ri) / 2.0
     if theory == UNIFORM_PRESSURE:
         return (2.0 / 3.0) * (ro**3 - ri**3) / (ro**2 - ri**2)
-    raise ValueError(f"theory must be {UNIFORM_WEAR!r} or {UNIFORM_PRESSURE!r}; got {theory!r}")
+    raise _clutch_refusal(
+        f"theory must be {UNIFORM_WEAR!r} or {UNIFORM_PRESSURE!r}; got {theory!r}",
+        subject="theory",
+        source=_LINING_SOURCE,
+    )
 
 
 def disc_clutch_torque(
@@ -95,9 +151,17 @@ def disc_clutch_torque(
     """
     _require(actuating_force, "[force]", "actuating_force")
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _clutch_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     if surfaces < 1:
-        raise ValueError(f"surfaces must be a positive integer; got {surfaces}")
+        raise _clutch_refusal(
+            f"surfaces must be a positive integer; got {surfaces}",
+            subject="surfaces",
+            source=_GEOMETRY_SOURCE,
+        )
     r_eff = _mean_radius_factor(outer_radius, inner_radius, theory)
     f = actuating_force.to("N").magnitude
     torque = friction_coefficient * f * surfaces * r_eff
@@ -122,9 +186,17 @@ def disc_clutch_force_for_torque(
     """
     _require(torque, "[force] * [length]", "torque")
     if friction_coefficient <= 0:
-        raise ValueError(f"friction_coefficient must be positive; got {friction_coefficient}")
+        raise _clutch_refusal(
+            f"friction_coefficient must be positive; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     if surfaces < 1:
-        raise ValueError(f"surfaces must be a positive integer; got {surfaces}")
+        raise _clutch_refusal(
+            f"surfaces must be a positive integer; got {surfaces}",
+            subject="surfaces",
+            source=_GEOMETRY_SOURCE,
+        )
     r_eff = _mean_radius_factor(outer_radius, inner_radius, theory)
     t = torque.to("N*m").magnitude
     force = t / (friction_coefficient * surfaces * r_eff)
@@ -155,9 +227,17 @@ def cone_clutch_torque(
     """
     _require(actuating_force, "[force]", "actuating_force")
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _clutch_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     if not 0 < cone_half_angle < 90:
-        raise ValueError(f"cone_half_angle (degrees) must lie in (0, 90); got {cone_half_angle}")
+        raise _clutch_refusal(
+            f"cone_half_angle (degrees) must lie in (0, 90); got {cone_half_angle}",
+            subject="cone_half_angle",
+            source=_GEOMETRY_SOURCE,
+        )
     r_eff = _mean_radius_factor(outer_radius, inner_radius, theory)
     f = actuating_force.to("N").magnitude
     torque = friction_coefficient * f * r_eff / sin(radians(cone_half_angle))
@@ -185,8 +265,13 @@ def clutch_engagement_energy(
     i1 = driving_inertia.to("kg*m**2").magnitude
     i2 = driven_inertia.to("kg*m**2").magnitude
     d_omega = angular_speed_rad_per_s(speed_difference, name="speed_difference")
-    if i1 <= 0 or i2 <= 0:
-        raise ValueError("driving_inertia and driven_inertia must be positive")
+    for subject, magnitude in (("driving_inertia", i1), ("driven_inertia", i2)):
+        if magnitude <= 0:
+            raise _clutch_refusal(
+                "driving_inertia and driven_inertia must be positive",
+                subject=subject,
+                source=_DRIVETRAIN_SOURCE,
+            )
     reduced = i1 * i2 / (i1 + i2)
     return Quantity(magnitude=0.5 * reduced * d_omega**2, unit="J")
 
@@ -206,7 +291,9 @@ def brake_absorbed_energy(*, inertia: Quantity, angular_velocity: Quantity) -> Q
     i = inertia.to("kg*m**2").magnitude
     omega = angular_speed_rad_per_s(angular_velocity, name="angular_velocity")
     if i <= 0:
-        raise ValueError("inertia must be positive")
+        raise _clutch_refusal(
+            "inertia must be positive", subject="inertia", source=_DRIVETRAIN_SOURCE
+        )
     return Quantity(magnitude=0.5 * i * omega**2, unit="J")
 
 
@@ -236,20 +323,39 @@ def centrifugal_clutch_torque(
     _require(drum_radius, "[length]", "drum_radius")
     _require(spring_force, "[force]", "spring_force")
     if shoe_count < 1:
-        raise ValueError("shoe_count must be a positive integer")
+        raise _clutch_refusal(
+            "shoe_count must be a positive integer", subject="shoe_count", source=_GEOMETRY_SOURCE
+        )
     m = shoe_mass.to("kg").magnitude
     r_cg = center_of_gravity_radius.to("m").magnitude
     omega = angular_speed_rad_per_s(angular_speed, name="angular_speed")
     r_drum = drum_radius.to("m").magnitude
     f_spring = spring_force.to("N").magnitude
-    if m <= 0 or r_cg <= 0 or r_drum <= 0:
-        raise ValueError("shoe_mass, center_of_gravity_radius, and drum_radius must be positive")
+    for subject, magnitude in (
+        ("shoe_mass", m),
+        ("center_of_gravity_radius", r_cg),
+        ("drum_radius", r_drum),
+    ):
+        if magnitude <= 0:
+            raise _clutch_refusal(
+                "shoe_mass, center_of_gravity_radius, and drum_radius must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     if omega < 0:
-        raise ValueError("angular_speed must be non-negative")
+        raise _clutch_refusal(
+            "angular_speed must be non-negative", subject="angular_speed", source=_DRIVETRAIN_SOURCE
+        )
     if friction_coefficient <= 0:
-        raise ValueError("friction_coefficient must be positive")
+        raise _clutch_refusal(
+            "friction_coefficient must be positive",
+            subject="friction_coefficient",
+            source=_LINING_SOURCE,
+        )
     if f_spring < 0:
-        raise ValueError("spring_force must be non-negative")
+        raise _clutch_refusal(
+            "spring_force must be non-negative", subject="spring_force", source=_ACTUATION_SOURCE
+        )
     net_force = m * omega**2 * r_cg - f_spring
     if net_force <= 0:
         return Quantity(magnitude=0.0, unit="N*m")
@@ -277,8 +383,15 @@ def centrifugal_clutch_engagement_speed(
     m = shoe_mass.to("kg").magnitude
     r_cg = center_of_gravity_radius.to("m").magnitude
     f_spring = spring_force.to("N").magnitude
-    if m <= 0 or r_cg <= 0:
-        raise ValueError("shoe_mass and center_of_gravity_radius must be positive")
+    for subject, magnitude in (("shoe_mass", m), ("center_of_gravity_radius", r_cg)):
+        if magnitude <= 0:
+            raise _clutch_refusal(
+                "shoe_mass and center_of_gravity_radius must be positive",
+                subject=subject,
+                source=_GEOMETRY_SOURCE,
+            )
     if f_spring <= 0:
-        raise ValueError("spring_force must be positive")
+        raise _clutch_refusal(
+            "spring_force must be positive", subject="spring_force", source=_ACTUATION_SOURCE
+        )
     return Quantity(magnitude=sqrt(f_spring / (m * r_cg)), unit="rad/s")

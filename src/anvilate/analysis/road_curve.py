@@ -26,7 +26,38 @@ from __future__ import annotations
 
 from math import cos, sqrt, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DESIGN_SPEED_SOURCE = "the design speed in the highway's design criteria"
+_CROSS_SLOPE_SOURCE = "the AASHTO Green Book superelevation and side-friction tables"
+_ALIGNMENT_SOURCE = "the horizontal alignment drawing (curve radius and deflection angle)"
+_STOPPING_SOURCE = "the AASHTO Green Book stopping-sight-distance design values"
+_PROFILE_SOURCE = "the vertical profile drawing's grade at the curve"
+
+
+class _RoadCurveInputError(RefusalError, ValueError):
+    """A road-curve geometry input that cannot be used without correction."""
+
+
+def _road_curve_refusal(message: str, *, subject: str, source: str) -> _RoadCurveInputError:
+    return _RoadCurveInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _road_curve_input_source(name: str) -> str:
+    if name in {"design_speed", "speed"}:
+        return _DESIGN_SPEED_SOURCE
+    if name in {"side_friction_factor", "superelevation_rate"}:
+        return _CROSS_SLOPE_SOURCE
+    if name in {"deceleration", "reaction_time"}:
+        return _STOPPING_SOURCE
+    if name == "grade":
+        return _PROFILE_SOURCE
+    return _ALIGNMENT_SOURCE
+
 
 __all__ = [
     "banked_curve_max_speed",
@@ -56,10 +87,12 @@ _DECIMAL_RATE_CEILING = 1.0
 def _check_decimal_rate(value: float, name: str) -> None:
     """Refuse a rate given as a percent where a decimal fraction is required."""
     if abs(value) >= _DECIMAL_RATE_CEILING:
-        raise ValueError(
+        raise _road_curve_refusal(
             f"{name} is {value:g}, which is not a decimal fraction — a value of 1.0 is a 45° "
             f"slope and nothing in road geometry reaches it. AASHTO tabulates these in percent; "
-            f"pass {value / 100.0:g} rather than {value:g}"
+            f"pass {value / 100.0:g} rather than {value:g}",
+            subject=name,
+            source=_road_curve_input_source(name),
         )
 
 
@@ -79,12 +112,18 @@ def minimum_curve_radius(
     _check(design_speed, "[length]/[time]", "design_speed")
     v = design_speed.to("m/s").magnitude
     if v <= 0:
-        raise ValueError("design_speed must be positive")
+        raise _road_curve_refusal(
+            "design_speed must be positive", subject="design_speed", source=_DESIGN_SPEED_SOURCE
+        )
     _check_decimal_rate(superelevation_rate, "superelevation_rate")
     _check_decimal_rate(side_friction_factor, "side_friction_factor")
     combined = superelevation_rate + side_friction_factor
     if combined <= 0:
-        raise ValueError("superelevation_rate + side_friction_factor must be positive")
+        raise _road_curve_refusal(
+            "superelevation_rate + side_friction_factor must be positive",
+            subject="superelevation_rate and side_friction_factor",
+            source=_CROSS_SLOPE_SOURCE,
+        )
     return Quantity(magnitude=v**2 / (_GRAVITY * combined), unit="m")
 
 
@@ -102,9 +141,13 @@ def ideal_superelevation_rate(*, speed: Quantity, radius: Quantity) -> float:
     v = speed.to("m/s").magnitude
     r = radius.to("m").magnitude
     if v <= 0:
-        raise ValueError("speed must be positive")
+        raise _road_curve_refusal(
+            "speed must be positive", subject="speed", source=_DESIGN_SPEED_SOURCE
+        )
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _road_curve_refusal(
+            "radius must be positive", subject="radius", source=_ALIGNMENT_SOURCE
+        )
     return v**2 / (_GRAVITY * r)
 
 
@@ -125,15 +168,29 @@ def banked_curve_max_speed(
     _check(radius, "[length]", "radius")
     r = radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _road_curve_refusal(
+            "radius must be positive", subject="radius", source=_ALIGNMENT_SOURCE
+        )
     if superelevation_rate < 0 or side_friction_factor < 0:
-        raise ValueError("superelevation_rate and side_friction_factor must be non-negative")
+        raise _road_curve_refusal(
+            "superelevation_rate and side_friction_factor must be non-negative",
+            subject="superelevation_rate and side_friction_factor",
+            source=_CROSS_SLOPE_SOURCE,
+        )
     denominator = 1.0 - superelevation_rate * side_friction_factor
     if denominator <= 0:
-        raise ValueError("superelevation_rate·side_friction_factor must be less than 1")
+        raise _road_curve_refusal(
+            "superelevation_rate·side_friction_factor must be less than 1",
+            subject="superelevation_rate and side_friction_factor",
+            source=_CROSS_SLOPE_SOURCE,
+        )
     numerator = superelevation_rate + side_friction_factor
     if numerator <= 0:
-        raise ValueError("superelevation_rate + side_friction_factor must be positive")
+        raise _road_curve_refusal(
+            "superelevation_rate + side_friction_factor must be positive",
+            subject="superelevation_rate and side_friction_factor",
+            source=_CROSS_SLOPE_SOURCE,
+        )
     return Quantity(magnitude=sqrt(_GRAVITY * r * numerator / denominator), unit="m/s")
 
 
@@ -157,9 +214,13 @@ def braking_distance(
     v = speed.to("m/s").magnitude
     a = deceleration.to("m/s**2").magnitude
     if v < 0:
-        raise ValueError("speed must be non-negative")
+        raise _road_curve_refusal(
+            "speed must be non-negative", subject="speed", source=_DESIGN_SPEED_SOURCE
+        )
     if a <= 0:
-        raise ValueError("deceleration must be positive")
+        raise _road_curve_refusal(
+            "deceleration must be positive", subject="deceleration", source=_STOPPING_SOURCE
+        )
     # The existing guard is one-sided: it catches the downgrade that would return a long
     # distance and lets an arbitrarily large UPGRADE through, which is the direction that
     # shortens the answer. A 6% upgrade entered as 6.0 returns a stopping sight distance
@@ -167,7 +228,11 @@ def braking_distance(
     _check_decimal_rate(grade, "grade")
     effective = a + _GRAVITY * grade
     if effective <= 0:
-        raise ValueError("a + g·grade must be positive (the downgrade overwhelms the braking)")
+        raise _road_curve_refusal(
+            "a + g·grade must be positive (the downgrade overwhelms the braking)",
+            subject="deceleration and grade",
+            source=_STOPPING_SOURCE,
+        )
     return Quantity(magnitude=v**2 / (2.0 * effective), unit="m")
 
 
@@ -185,9 +250,13 @@ def perception_reaction_distance(*, speed: Quantity, reaction_time: Quantity) ->
     v = speed.to("m/s").magnitude
     t = reaction_time.to("s").magnitude
     if v < 0:
-        raise ValueError("speed must be non-negative")
+        raise _road_curve_refusal(
+            "speed must be non-negative", subject="speed", source=_DESIGN_SPEED_SOURCE
+        )
     if t < 0:
-        raise ValueError("reaction_time must be non-negative")
+        raise _road_curve_refusal(
+            "reaction_time must be non-negative", subject="reaction_time", source=_STOPPING_SOURCE
+        )
     return Quantity(magnitude=v * t, unit="m")
 
 
@@ -225,7 +294,9 @@ def horizontal_curve_tangent_length(*, radius: Quantity, deflection_angle: float
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _road_curve_refusal(
+            "radius must be positive", subject="radius", source=_ALIGNMENT_SOURCE
+        )
     return Quantity(magnitude=r * tan(deflection_angle / 2.0), unit="m")
 
 
@@ -242,7 +313,9 @@ def horizontal_curve_length(*, radius: Quantity, deflection_angle: float) -> Qua
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _road_curve_refusal(
+            "radius must be positive", subject="radius", source=_ALIGNMENT_SOURCE
+        )
     return Quantity(magnitude=r * deflection_angle, unit="m")
 
 
@@ -259,7 +332,9 @@ def horizontal_curve_external_distance(*, radius: Quantity, deflection_angle: fl
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _road_curve_refusal(
+            "radius must be positive", subject="radius", source=_ALIGNMENT_SOURCE
+        )
     return Quantity(magnitude=r * (1.0 / cos(deflection_angle / 2.0) - 1.0), unit="m")
 
 
@@ -281,21 +356,33 @@ def horizontal_curve_middle_ordinate(*, radius: Quantity, deflection_angle: floa
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("radius must be positive")
+        raise _road_curve_refusal(
+            "radius must be positive", subject="radius", source=_ALIGNMENT_SOURCE
+        )
     return Quantity(magnitude=r * (1.0 - cos(deflection_angle / 2.0)), unit="m")
 
 
 def _check_deflection(deflection_angle: float) -> None:
     if not 0.0 < deflection_angle < 3.141592653589793:
-        raise ValueError(f"deflection_angle must be in (0, π) radians; got {deflection_angle}")
+        raise _road_curve_refusal(
+            f"deflection_angle must be in (0, π) radians; got {deflection_angle}",
+            subject="deflection_angle",
+            source=_ALIGNMENT_SOURCE,
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _road_curve_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_road_curve_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _road_curve_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_road_curve_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

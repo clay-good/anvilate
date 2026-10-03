@@ -23,7 +23,35 @@ from __future__ import annotations
 
 from math import asin, cos, degrees, radians, sin
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SOURCE_SPEC_SOURCE = "the radiation source's wavelength specification"
+_CRYSTAL_SOURCE = "the crystal's lattice spacing from the cited diffraction table"
+_GRATING_SOURCE = "the grating datasheet (groove density and illuminated width)"
+_SETUP_SOURCE = "the spectrometer setup record (order and measured angle)"
+
+
+class _DiffractionInputError(RefusalError, ValueError):
+    """A diffraction input that cannot be used without correction."""
+
+
+def _diffraction_refusal(message: str, *, subject: str, source: str) -> _DiffractionInputError:
+    return _DiffractionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _diffraction_input_source(name: str) -> str:
+    if name == "wavelength":
+        return _SOURCE_SPEC_SOURCE
+    if name == "plane_spacing":
+        return _CRYSTAL_SOURCE
+    if name in {"groove_spacing", "illuminated_lines"}:
+        return _GRATING_SOURCE
+    return _SETUP_SOURCE
+
 
 __all__ = [
     "bragg_angle",
@@ -48,15 +76,23 @@ def bragg_angle(*, wavelength: Quantity, plane_spacing: Quantity, order: int = 1
     lam = wavelength.to("m").magnitude
     d = plane_spacing.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _diffraction_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SPEC_SOURCE
+        )
     if d <= 0:
-        raise ValueError("plane_spacing must be positive")
+        raise _diffraction_refusal(
+            "plane_spacing must be positive", subject="plane_spacing", source=_CRYSTAL_SOURCE
+        )
     if order < 1:
-        raise ValueError("order must be a positive integer")
+        raise _diffraction_refusal(
+            "order must be a positive integer", subject="order", source=_SETUP_SOURCE
+        )
     ratio = order * lam / (2.0 * d)
     if ratio > 1.0:
-        raise ValueError(
-            "no Bragg reflection at this order: n*lambda exceeds 2*d (the wavelength is too long)"
+        raise _diffraction_refusal(
+            "no Bragg reflection at this order: n*lambda exceeds 2*d (the wavelength is too long)",
+            subject="wavelength, plane_spacing, and order",
+            source=_SETUP_SOURCE,
         )
     return degrees(asin(ratio))
 
@@ -72,11 +108,17 @@ def bragg_plane_spacing(*, wavelength: Quantity, angle: float, order: int = 1) -
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _diffraction_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SPEC_SOURCE
+        )
     if order < 1:
-        raise ValueError("order must be a positive integer")
+        raise _diffraction_refusal(
+            "order must be a positive integer", subject="order", source=_SETUP_SOURCE
+        )
     if not 0.0 < angle < 90.0:
-        raise ValueError("angle must be in (0, 90) degrees")
+        raise _diffraction_refusal(
+            "angle must be in (0, 90) degrees", subject="angle", source=_SETUP_SOURCE
+        )
     return Quantity(magnitude=order * lam / (2.0 * sin(radians(angle))), unit="m")
 
 
@@ -95,14 +137,24 @@ def grating_diffraction_angle(
     lam = wavelength.to("m").magnitude
     d = groove_spacing.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _diffraction_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SPEC_SOURCE
+        )
     if d <= 0:
-        raise ValueError("groove_spacing must be positive")
+        raise _diffraction_refusal(
+            "groove_spacing must be positive", subject="groove_spacing", source=_GRATING_SOURCE
+        )
     if order < 1:
-        raise ValueError("order must be a positive integer")
+        raise _diffraction_refusal(
+            "order must be a positive integer", subject="order", source=_SETUP_SOURCE
+        )
     ratio = order * lam / d
     if ratio > 1.0:
-        raise ValueError("no diffraction at this order: m*lambda exceeds the groove spacing D")
+        raise _diffraction_refusal(
+            "no diffraction at this order: m*lambda exceeds the groove spacing D",
+            subject="wavelength, groove_spacing, and order",
+            source=_SETUP_SOURCE,
+        )
     return degrees(asin(ratio))
 
 
@@ -116,9 +168,15 @@ def grating_resolving_power(*, order: int = 1, illuminated_lines: int) -> float:
     ``illuminated_lines`` are positive integers. Returns the dimensionless resolving power.
     """
     if order < 1:
-        raise ValueError("order must be a positive integer")
+        raise _diffraction_refusal(
+            "order must be a positive integer", subject="order", source=_SETUP_SOURCE
+        )
     if illuminated_lines < 1:
-        raise ValueError("illuminated_lines must be a positive integer")
+        raise _diffraction_refusal(
+            "illuminated_lines must be a positive integer",
+            subject="illuminated_lines",
+            source=_GRATING_SOURCE,
+        )
     return float(order * illuminated_lines)
 
 
@@ -136,11 +194,19 @@ def grating_resolved_wavelength_separation(
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _diffraction_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SPEC_SOURCE
+        )
     if order < 1:
-        raise ValueError("order must be a positive integer")
+        raise _diffraction_refusal(
+            "order must be a positive integer", subject="order", source=_SETUP_SOURCE
+        )
     if illuminated_lines < 1:
-        raise ValueError("illuminated_lines must be a positive integer")
+        raise _diffraction_refusal(
+            "illuminated_lines must be a positive integer",
+            subject="illuminated_lines",
+            source=_GRATING_SOURCE,
+        )
     return Quantity(magnitude=lam / (order * illuminated_lines), unit="m")
 
 
@@ -158,20 +224,34 @@ def grating_angular_dispersion(
     _check(groove_spacing, "[length]", "groove_spacing")
     d = groove_spacing.to("m").magnitude
     if d <= 0:
-        raise ValueError("groove_spacing must be positive")
+        raise _diffraction_refusal(
+            "groove_spacing must be positive", subject="groove_spacing", source=_GRATING_SOURCE
+        )
     if order < 1:
-        raise ValueError("order must be a positive integer")
+        raise _diffraction_refusal(
+            "order must be a positive integer", subject="order", source=_SETUP_SOURCE
+        )
     if not 0.0 <= diffraction_angle < 90.0:
-        raise ValueError("diffraction_angle must be in [0, 90) degrees")
+        raise _diffraction_refusal(
+            "diffraction_angle must be in [0, 90) degrees",
+            subject="diffraction_angle",
+            source=_SETUP_SOURCE,
+        )
     return Quantity(magnitude=order / (d * cos(radians(diffraction_angle))), unit="rad/m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _diffraction_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_diffraction_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _diffraction_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_diffraction_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

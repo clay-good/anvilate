@@ -20,7 +20,38 @@ device fall short of its reversible ideal. Inputs and outputs are dimension-chec
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ENERGY_SOURCE = "the energy balance's heat duty or enthalpy change for the process"
+_STATE_SOURCE = "the property tables' state points for the stream (enthalpy and entropy)"
+_TEMPERATURE_SOURCE = "the process design basis's reservoir and stream temperatures"
+_DEAD_STATE_SOURCE = "the site design basis's ambient (dead-state) temperature"
+_ENTROPY_SOURCE = "the entropy balance over the control volume"
+
+
+class _ExergyInputError(RefusalError, ValueError):
+    """An exergy input that cannot be used without correction."""
+
+
+def _exergy_refusal(message: str, *, subject: str, source: str) -> _ExergyInputError:
+    return _ExergyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _exergy_input_source(name: str) -> str:
+    if name in {"heat", "heat_transferred"}:
+        return _ENERGY_SOURCE
+    if name == "dead_state_temperature":
+        return _DEAD_STATE_SOURCE
+    if name in {"enthalpy_difference", "entropy_difference"}:
+        return _STATE_SOURCE
+    if name == "entropy_generation":
+        return _ENTROPY_SOURCE
+    return _TEMPERATURE_SOURCE
+
 
 __all__ = [
     "entropy_generation_heat_transfer",
@@ -49,17 +80,30 @@ def exergy_of_heat(
     _check(dead_state_temperature, "[temperature]", "dead_state_temperature")
     t = source_temperature.to("K").magnitude
     t0 = dead_state_temperature.to("K").magnitude
-    if t <= 0 or t0 <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("source_temperature", t), ("dead_state_temperature", t0)):
+        if magnitude <= 0:
+            raise _exergy_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_exergy_input_source(subject),
+            )
     if t < t0:
-        raise ValueError("source_temperature must be at least the dead_state_temperature")
+        raise _exergy_refusal(
+            "source_temperature must be at least the dead_state_temperature",
+            subject="source_temperature and dead_state_temperature",
+            source=_TEMPERATURE_SOURCE,
+        )
     if heat.has_dimension("[power]"):
         q = heat.to("W").magnitude
         return Quantity(magnitude=q * (1.0 - t0 / t), unit="W")
     if heat.has_dimension("[energy]"):
         q = heat.to("J").magnitude
         return Quantity(magnitude=q * (1.0 - t0 / t), unit="J")
-    raise ValueError(f"heat must be an [energy] or [power] quantity; got {heat.dimensionality}")
+    raise _exergy_refusal(
+        f"heat must be an [energy] or [power] quantity; got {heat.dimensionality}",
+        subject="heat",
+        source=_ENERGY_SOURCE,
+    )
 
 
 def flow_exergy(
@@ -84,7 +128,11 @@ def flow_exergy(
     ds = entropy_difference.to("kJ/(kg*K)").magnitude
     t0 = dead_state_temperature.to("K").magnitude
     if t0 <= 0:
-        raise ValueError("dead_state_temperature must be positive absolute (kelvin)")
+        raise _exergy_refusal(
+            "dead_state_temperature must be positive absolute (kelvin)",
+            subject="dead_state_temperature",
+            source=_DEAD_STATE_SOURCE,
+        )
     return Quantity(magnitude=dh - t0 * ds, unit="kJ/kg")
 
 
@@ -105,20 +153,34 @@ def irreversibility_from_entropy_generation(
     _check(dead_state_temperature, "[temperature]", "dead_state_temperature")
     t0 = dead_state_temperature.to("K").magnitude
     if t0 <= 0:
-        raise ValueError("dead_state_temperature must be positive absolute (kelvin)")
+        raise _exergy_refusal(
+            "dead_state_temperature must be positive absolute (kelvin)",
+            subject="dead_state_temperature",
+            source=_DEAD_STATE_SOURCE,
+        )
     if entropy_generation.has_dimension("[power]/[temperature]"):
         sgen = entropy_generation.to("W/K").magnitude
         if sgen < 0:
-            raise ValueError("entropy_generation must be non-negative (Second Law)")
+            raise _exergy_refusal(
+                "entropy_generation must be non-negative (Second Law)",
+                subject="entropy_generation",
+                source=_ENTROPY_SOURCE,
+            )
         return Quantity(magnitude=t0 * sgen, unit="W")
     if entropy_generation.has_dimension("[energy]/[temperature]"):
         sgen = entropy_generation.to("J/K").magnitude
         if sgen < 0:
-            raise ValueError("entropy_generation must be non-negative (Second Law)")
+            raise _exergy_refusal(
+                "entropy_generation must be non-negative (Second Law)",
+                subject="entropy_generation",
+                source=_ENTROPY_SOURCE,
+            )
         return Quantity(magnitude=t0 * sgen, unit="J")
-    raise ValueError(
+    raise _exergy_refusal(
         "entropy_generation must be an [energy]/[temperature] or [power]/[temperature] quantity; "
-        f"got {entropy_generation.dimensionality}"
+        f"got {entropy_generation.dimensionality}",
+        subject="entropy_generation",
+        source=_ENTROPY_SOURCE,
     )
 
 
@@ -143,33 +205,58 @@ def entropy_generation_heat_transfer(
     _check(cold_temperature, "[temperature]", "cold_temperature")
     t_h = hot_temperature.to("K").magnitude
     t_c = cold_temperature.to("K").magnitude
-    if t_c <= 0 or t_h <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin)")
+    for subject, magnitude in (("cold_temperature", t_c), ("hot_temperature", t_h)):
+        if magnitude <= 0:
+            raise _exergy_refusal(
+                "temperatures must be positive absolute (kelvin)",
+                subject=subject,
+                source=_TEMPERATURE_SOURCE,
+            )
     if t_h <= t_c:
-        raise ValueError("hot_temperature must exceed cold_temperature (heat flows hot to cold)")
+        raise _exergy_refusal(
+            "hot_temperature must exceed cold_temperature (heat flows hot to cold)",
+            subject="hot_temperature and cold_temperature",
+            source=_TEMPERATURE_SOURCE,
+        )
     factor = 1.0 / t_c - 1.0 / t_h
     if heat_transferred.has_dimension("[power]"):
         q = heat_transferred.to("W").magnitude
         if q < 0:
-            raise ValueError("heat_transferred must be non-negative")
+            raise _exergy_refusal(
+                "heat_transferred must be non-negative",
+                subject="heat_transferred",
+                source=_ENERGY_SOURCE,
+            )
         return Quantity(magnitude=q * factor, unit="W/K")
     if heat_transferred.has_dimension("[energy]"):
         q = heat_transferred.to("J").magnitude
         if q < 0:
-            raise ValueError("heat_transferred must be non-negative")
+            raise _exergy_refusal(
+                "heat_transferred must be non-negative",
+                subject="heat_transferred",
+                source=_ENERGY_SOURCE,
+            )
         return Quantity(magnitude=q * factor, unit="J/K")
-    raise ValueError(
+    raise _exergy_refusal(
         "heat_transferred must be an [energy] or [power] quantity; "
-        f"got {heat_transferred.dimensionality}"
+        f"got {heat_transferred.dimensionality}",
+        subject="heat_transferred",
+        source=_ENERGY_SOURCE,
     )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _exergy_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_exergy_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _exergy_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_exergy_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

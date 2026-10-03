@@ -24,7 +24,34 @@ from __future__ import annotations
 
 from math import exp, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SENSOR_SOURCE = "the sensor datasheet (R0, alpha, beta, or Seebeck coefficient)"
+_CALIBRATION_SOURCE = "the sensor's calibration certificate points"
+_MEASUREMENT_SOURCE = "the measurement record (reading and junction temperatures)"
+
+
+class _TemperatureSensorInputError(RefusalError, ValueError):
+    """A temperature-sensor input that cannot be used without correction."""
+
+
+def _temperature_sensor_refusal(
+    message: str, *, subject: str, source: str
+) -> _TemperatureSensorInputError:
+    return _TemperatureSensorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _temperature_sensor_input_source(name: str) -> str:
+    if name in {"measured_temperature", "resistance", "temperature", "thermocouple_voltage"}:
+        return _MEASUREMENT_SOURCE
+    if name in {"first_resistance", "first_temperature", "second_resistance", "second_temperature"}:
+        return _CALIBRATION_SOURCE
+    return _SENSOR_SOURCE
+
 
 __all__ = [
     "rtd_resistance",
@@ -59,12 +86,25 @@ def rtd_resistance(
     t = temperature.to("K").magnitude
     t0 = reference_temperature.to("K").magnitude
     if r0 <= 0:
-        raise ValueError("reference_resistance must be positive")
-    if t <= 0 or t0 <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+        raise _temperature_sensor_refusal(
+            "reference_resistance must be positive",
+            subject="reference_resistance",
+            source=_SENSOR_SOURCE,
+        )
+    for subject, magnitude in (("temperature", t), ("reference_temperature", t0)):
+        if magnitude <= 0:
+            raise _temperature_sensor_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_temperature_sensor_input_source(subject),
+            )
     r = r0 * (1.0 + temperature_coefficient * (t - t0))
     if r <= 0:
-        raise ValueError("computed resistance is non-positive (temperature below the sensor range)")
+        raise _temperature_sensor_refusal(
+            "computed resistance is non-positive (temperature below the sensor range)",
+            subject="temperature_coefficient, temperature, and reference_temperature",
+            source=_SENSOR_SOURCE,
+        )
     return Quantity(magnitude=r, unit="ohm")
 
 
@@ -89,15 +129,35 @@ def rtd_temperature(
     r = resistance.to("ohm").magnitude
     r0 = reference_resistance.to("ohm").magnitude
     t0 = reference_temperature.to("K").magnitude
-    if r <= 0 or r0 <= 0:
-        raise ValueError("resistance and reference_resistance must be positive")
+    for subject, magnitude in (("resistance", r), ("reference_resistance", r0)):
+        if magnitude <= 0:
+            raise _temperature_sensor_refusal(
+                "resistance and reference_resistance must be positive",
+                subject=subject,
+                source=_temperature_sensor_input_source(subject),
+            )
     if t0 <= 0:
-        raise ValueError("reference_temperature must be positive absolute (kelvin)")
+        raise _temperature_sensor_refusal(
+            "reference_temperature must be positive absolute (kelvin)",
+            subject="reference_temperature",
+            source=_SENSOR_SOURCE,
+        )
     if temperature_coefficient == 0:
-        raise ValueError("temperature_coefficient must be non-zero")
+        raise _temperature_sensor_refusal(
+            "temperature_coefficient must be non-zero",
+            subject="temperature_coefficient",
+            source=_SENSOR_SOURCE,
+        )
     t = t0 + (r / r0 - 1.0) / temperature_coefficient
     if t <= 0:
-        raise ValueError("computed temperature is non-positive (check the resistance and inputs)")
+        raise _temperature_sensor_refusal(
+            "computed temperature is non-positive (check the resistance and inputs)",
+            subject=(
+                "resistance, reference_resistance, temperature_coefficient, and "
+                "reference_temperature"
+            ),
+            source=_SENSOR_SOURCE,
+        )
     return Quantity(magnitude=t, unit="K")
 
 
@@ -127,11 +187,22 @@ def thermistor_resistance(
     t = temperature.to("K").magnitude
     t0 = reference_temperature.to("K").magnitude
     if r0 <= 0:
-        raise ValueError("reference_resistance must be positive")
+        raise _temperature_sensor_refusal(
+            "reference_resistance must be positive",
+            subject="reference_resistance",
+            source=_SENSOR_SOURCE,
+        )
     if beta <= 0:
-        raise ValueError("beta_constant must be positive")
-    if t <= 0 or t0 <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+        raise _temperature_sensor_refusal(
+            "beta_constant must be positive", subject="beta_constant", source=_SENSOR_SOURCE
+        )
+    for subject, magnitude in (("temperature", t), ("reference_temperature", t0)):
+        if magnitude <= 0:
+            raise _temperature_sensor_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_temperature_sensor_input_source(subject),
+            )
     return Quantity(magnitude=r0 * exp(beta * (1.0 / t - 1.0 / t0)), unit="ohm")
 
 
@@ -160,12 +231,23 @@ def thermistor_temperature(
     r0 = reference_resistance.to("ohm").magnitude
     beta = beta_constant.to("K").magnitude
     t0 = reference_temperature.to("K").magnitude
-    if r <= 0 or r0 <= 0:
-        raise ValueError("resistance and reference_resistance must be positive")
+    for subject, magnitude in (("resistance", r), ("reference_resistance", r0)):
+        if magnitude <= 0:
+            raise _temperature_sensor_refusal(
+                "resistance and reference_resistance must be positive",
+                subject=subject,
+                source=_temperature_sensor_input_source(subject),
+            )
     if beta <= 0:
-        raise ValueError("beta_constant must be positive")
+        raise _temperature_sensor_refusal(
+            "beta_constant must be positive", subject="beta_constant", source=_SENSOR_SOURCE
+        )
     if t0 <= 0:
-        raise ValueError("reference_temperature must be positive absolute (kelvin)")
+        raise _temperature_sensor_refusal(
+            "reference_temperature must be positive absolute (kelvin)",
+            subject="reference_temperature",
+            source=_SENSOR_SOURCE,
+        )
     return Quantity(magnitude=1.0 / (1.0 / t0 + log(r / r0) / beta), unit="K")
 
 
@@ -193,7 +275,11 @@ def thermocouple_voltage(
     t = measured_temperature.to("K").magnitude
     t_ref = reference_temperature.to("K").magnitude
     if s <= 0:
-        raise ValueError("seebeck_coefficient must be positive")
+        raise _temperature_sensor_refusal(
+            "seebeck_coefficient must be positive",
+            subject="seebeck_coefficient",
+            source=_SENSOR_SOURCE,
+        )
     return Quantity(magnitude=s * (t - t_ref) * 1000.0, unit="mV")
 
 
@@ -219,16 +305,26 @@ def thermocouple_temperature_from_voltage(
     s = seebeck_coefficient.to("V/K").magnitude
     t_ref = reference_temperature.to("K").magnitude
     if s <= 0:
-        raise ValueError("seebeck_coefficient must be positive")
+        raise _temperature_sensor_refusal(
+            "seebeck_coefficient must be positive",
+            subject="seebeck_coefficient",
+            source=_SENSOR_SOURCE,
+        )
     return Quantity(magnitude=t_ref + v / s, unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _temperature_sensor_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_temperature_sensor_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _temperature_sensor_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_temperature_sensor_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -267,10 +363,22 @@ def thermistor_beta_constant(
     r_2 = second_resistance.to("ohm").magnitude
     t_1 = first_temperature.to("K").magnitude
     t_2 = second_temperature.to("K").magnitude
-    if r_1 <= 0 or r_2 <= 0:
-        raise ValueError("resistances must be positive")
-    if t_1 <= 0 or t_2 <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("first_resistance", r_1), ("second_resistance", r_2)):
+        if magnitude <= 0:
+            raise _temperature_sensor_refusal(
+                "resistances must be positive", subject=subject, source=_CALIBRATION_SOURCE
+            )
+    for subject, magnitude in (("first_temperature", t_1), ("second_temperature", t_2)):
+        if magnitude <= 0:
+            raise _temperature_sensor_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_CALIBRATION_SOURCE,
+            )
     if t_1 == t_2:
-        raise ValueError("the two calibration temperatures must differ to fit a beta constant")
+        raise _temperature_sensor_refusal(
+            "the two calibration temperatures must differ to fit a beta constant",
+            subject="first_temperature and second_temperature",
+            source=_CALIBRATION_SOURCE,
+        )
     return Quantity(magnitude=log(r_1 / r_2) / (1.0 / t_1 - 1.0 / t_2), unit="K")

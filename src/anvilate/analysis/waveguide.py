@@ -21,8 +21,36 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_GUIDE_SOURCE = "the waveguide designation's internal dimensions (EIA WR-series table)"
+_FREQUENCY_SOURCE = "the system's operating-frequency band from the RF design specification"
+_CUTOFF_SOURCE = "the guide's TE10 cutoff from its WR-series dimensions"
+_MODE_SOURCE = "the mode of interest from the RF design specification"
+
+
+class _WaveguideInputError(RefusalError, ValueError):
+    """A rectangular-waveguide input that cannot be used without correction."""
+
+
+def _waveguide_refusal(message: str, *, subject: str, source: str) -> _WaveguideInputError:
+    return _WaveguideInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _waveguide_input_source(name: str) -> str:
+    if name in {"broad_dimension", "narrow_dimension"}:
+        return _GUIDE_SOURCE
+    if name == "cutoff_frequency":
+        return _CUTOFF_SOURCE
+    if name in {"mode_m", "mode_n"}:
+        return _MODE_SOURCE
+    return _FREQUENCY_SOURCE
+
 
 _SPEED_OF_LIGHT = 299792458.0  # m/s
 _FREE_SPACE_IMPEDANCE = 376.730313668  # ohm, eta_0
@@ -48,7 +76,9 @@ def rectangular_waveguide_cutoff_frequency(*, broad_dimension: Quantity) -> Quan
     _check(broad_dimension, "[length]", "broad_dimension")
     a = broad_dimension.to("m").magnitude
     if a <= 0:
-        raise ValueError("broad_dimension must be positive")
+        raise _waveguide_refusal(
+            "broad_dimension must be positive", subject="broad_dimension", source=_GUIDE_SOURCE
+        )
     return Quantity(magnitude=_SPEED_OF_LIGHT / (2.0 * a), unit="Hz")
 
 
@@ -68,11 +98,21 @@ def waveguide_guide_wavelength(
     f = count_rate_per_second(operating_frequency, name="operating_frequency")
     f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
-        raise ValueError("operating_frequency must be positive")
+        raise _waveguide_refusal(
+            "operating_frequency must be positive",
+            subject="operating_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     if f_c <= 0:
-        raise ValueError("cutoff_frequency must be positive")
+        raise _waveguide_refusal(
+            "cutoff_frequency must be positive", subject="cutoff_frequency", source=_CUTOFF_SOURCE
+        )
     if f <= f_c:
-        raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
+        raise _waveguide_refusal(
+            "operating_frequency must exceed the cutoff frequency to propagate",
+            subject="operating_frequency and cutoff_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     return Quantity(magnitude=(_SPEED_OF_LIGHT / f) / sqrt(1.0 - (f_c / f) ** 2), unit="m")
 
 
@@ -92,11 +132,21 @@ def waveguide_phase_velocity(
     f = count_rate_per_second(operating_frequency, name="operating_frequency")
     f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
-        raise ValueError("operating_frequency must be positive")
+        raise _waveguide_refusal(
+            "operating_frequency must be positive",
+            subject="operating_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     if f_c <= 0:
-        raise ValueError("cutoff_frequency must be positive")
+        raise _waveguide_refusal(
+            "cutoff_frequency must be positive", subject="cutoff_frequency", source=_CUTOFF_SOURCE
+        )
     if f <= f_c:
-        raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
+        raise _waveguide_refusal(
+            "operating_frequency must exceed the cutoff frequency to propagate",
+            subject="operating_frequency and cutoff_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     return Quantity(magnitude=_SPEED_OF_LIGHT / sqrt(1.0 - (f_c / f) ** 2), unit="m/s")
 
 
@@ -117,11 +167,21 @@ def waveguide_group_velocity(
     f = count_rate_per_second(operating_frequency, name="operating_frequency")
     f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
-        raise ValueError("operating_frequency must be positive")
+        raise _waveguide_refusal(
+            "operating_frequency must be positive",
+            subject="operating_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     if f_c <= 0:
-        raise ValueError("cutoff_frequency must be positive")
+        raise _waveguide_refusal(
+            "cutoff_frequency must be positive", subject="cutoff_frequency", source=_CUTOFF_SOURCE
+        )
     if f <= f_c:
-        raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
+        raise _waveguide_refusal(
+            "operating_frequency must exceed the cutoff frequency to propagate",
+            subject="operating_frequency and cutoff_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     return Quantity(magnitude=_SPEED_OF_LIGHT * sqrt(1.0 - (f_c / f) ** 2), unit="m/s")
 
 
@@ -142,11 +202,21 @@ def waveguide_te_wave_impedance(
     f = count_rate_per_second(operating_frequency, name="operating_frequency")
     f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f <= 0:
-        raise ValueError("operating_frequency must be positive")
+        raise _waveguide_refusal(
+            "operating_frequency must be positive",
+            subject="operating_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     if f_c <= 0:
-        raise ValueError("cutoff_frequency must be positive")
+        raise _waveguide_refusal(
+            "cutoff_frequency must be positive", subject="cutoff_frequency", source=_CUTOFF_SOURCE
+        )
     if f <= f_c:
-        raise ValueError("operating_frequency must exceed the cutoff frequency to propagate")
+        raise _waveguide_refusal(
+            "operating_frequency must exceed the cutoff frequency to propagate",
+            subject="operating_frequency and cutoff_frequency",
+            source=_FREQUENCY_SOURCE,
+        )
     return Quantity(magnitude=_FREE_SPACE_IMPEDANCE / sqrt(1.0 - (f_c / f) ** 2), unit="ohm")
 
 
@@ -176,27 +246,50 @@ def rectangular_waveguide_mode_cutoff_frequency(
     _check(narrow_dimension, "[length]", "narrow_dimension")
     a = broad_dimension.to("m").magnitude
     b = narrow_dimension.to("m").magnitude
-    if a <= 0 or b <= 0:
-        raise ValueError("broad_dimension and narrow_dimension must be positive")
+    for subject, magnitude in (("broad_dimension", a), ("narrow_dimension", b)):
+        if magnitude <= 0:
+            raise _waveguide_refusal(
+                "broad_dimension and narrow_dimension must be positive",
+                subject=subject,
+                source=_GUIDE_SOURCE,
+            )
     require_finite(mode_m, name="mode_m")
     require_finite(mode_n, name="mode_n")
     if int(mode_m) != mode_m or int(mode_n) != mode_n:
-        raise ValueError(f"mode indices must be whole numbers; got m = {mode_m}, n = {mode_n}")
+        raise _waveguide_refusal(
+            f"mode indices must be whole numbers; got m = {mode_m}, n = {mode_n}",
+            subject="mode_m and mode_n",
+            source=_MODE_SOURCE,
+        )
     m, n = int(mode_m), int(mode_n)
     if m < 0 or n < 0:
-        raise ValueError(f"mode indices must be non-negative; got m = {m}, n = {n}")
+        raise _waveguide_refusal(
+            f"mode indices must be non-negative; got m = {m}, n = {n}",
+            subject="mode_m and mode_n",
+            source=_MODE_SOURCE,
+        )
     if m == 0 and n == 0:
-        raise ValueError("there is no TE00 mode: the mode indices must not both be zero")
+        raise _waveguide_refusal(
+            "there is no TE00 mode: the mode indices must not both be zero",
+            subject="mode_m and mode_n",
+            source=_MODE_SOURCE,
+        )
     cutoff = 0.5 * _SPEED_OF_LIGHT * sqrt((m / a) ** 2 + (n / b) ** 2)
     return Quantity(magnitude=cutoff, unit="Hz")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _waveguide_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_waveguide_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _waveguide_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_waveguide_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -231,10 +324,14 @@ def waveguide_tm_wave_impedance(
     f = count_rate_per_second(operating_frequency, name="operating_frequency")
     f_c = count_rate_per_second(cutoff_frequency, name="cutoff_frequency")
     if f_c <= 0:
-        raise ValueError("cutoff_frequency must be positive")
+        raise _waveguide_refusal(
+            "cutoff_frequency must be positive", subject="cutoff_frequency", source=_CUTOFF_SOURCE
+        )
     if f <= f_c:
-        raise ValueError(
+        raise _waveguide_refusal(
             f"operating_frequency {operating_frequency} must exceed cutoff_frequency "
-            f"{cutoff_frequency}; below cutoff the mode is evanescent"
+            f"{cutoff_frequency}; below cutoff the mode is evanescent",
+            subject="operating_frequency and cutoff_frequency",
+            source=_FREQUENCY_SOURCE,
         )
     return Quantity(magnitude=_FREE_SPACE_IMPEDANCE * sqrt(1.0 - (f_c / f) ** 2), unit="ohm")

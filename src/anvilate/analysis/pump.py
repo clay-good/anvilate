@@ -25,8 +25,41 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_DUTY_SOURCE = "the pump's duty point (flow and head) from the system design basis"
+_CURVE_SOURCE = "the pump manufacturer's performance curve at the duty point"
+_FLUID_SOURCE = "the pumped liquid's properties at pumping temperature from its datasheet"
+_SUCTION_SOURCE = "the suction system layout and site atmospheric pressure"
+
+
+class _PumpInputError(RefusalError, ValueError):
+    """A pump-sizing input that cannot be used without correction."""
+
+
+def _pump_refusal(message: str, *, subject: str, source: str) -> _PumpInputError:
+    return _PumpInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _pump_input_source(name: str) -> str:
+    if name in {"density", "specific_heat", "vapor_pressure"}:
+        return _FLUID_SOURCE
+    if name in {"efficiency", "npsh_required", "power", "rotational_speed", "speed_ratio"}:
+        return _CURVE_SOURCE
+    if name in {
+        "atmospheric_pressure",
+        "npsh_available",
+        "static_suction_head",
+        "suction_friction_loss",
+    }:
+        return _SUCTION_SOURCE
+    return _DUTY_SOURCE
+
 
 __all__ = [
     "affinity_head",
@@ -64,8 +97,13 @@ def pump_hydraulic_power(
     q = flow_rate.to("m**3/s").magnitude
     h = head.to("m").magnitude
     rho = density.to("kg/m**3").magnitude
-    if q <= 0 or h <= 0 or rho <= 0:
-        raise ValueError("flow_rate, head, and density must be positive")
+    for subject, magnitude in (("flow_rate", q), ("head", h), ("density", rho)):
+        if magnitude <= 0:
+            raise _pump_refusal(
+                "flow_rate, head, and density must be positive",
+                subject=subject,
+                source=_pump_input_source(subject),
+            )
     return Quantity(magnitude=rho * _GRAVITY * q * h, unit="W")
 
 
@@ -81,9 +119,15 @@ def pump_shaft_power(*, hydraulic_power: Quantity, efficiency: float) -> Quantit
     _check(hydraulic_power, "[power]", "hydraulic_power")
     p = hydraulic_power.to("W").magnitude
     if p <= 0:
-        raise ValueError("hydraulic_power must be positive")
+        raise _pump_refusal(
+            "hydraulic_power must be positive", subject="hydraulic_power", source=_DUTY_SOURCE
+        )
     if not 0.0 < efficiency <= 1.0:
-        raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
+        raise _pump_refusal(
+            f"efficiency must be in (0, 1]; got {efficiency}",
+            subject="efficiency",
+            source=_CURVE_SOURCE,
+        )
     return Quantity(magnitude=p / efficiency, unit="W")
 
 
@@ -111,11 +155,17 @@ def pump_temperature_rise(
     h = head.to("m").magnitude
     cp = specific_heat.to("J/(kg*K)").magnitude
     if h < 0:
-        raise ValueError("head must be non-negative")
+        raise _pump_refusal("head must be non-negative", subject="head", source=_DUTY_SOURCE)
     if cp <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _pump_refusal(
+            "specific_heat must be positive", subject="specific_heat", source=_FLUID_SOURCE
+        )
     if not 0.0 < efficiency <= 1.0:
-        raise ValueError(f"efficiency must be in (0, 1]; got {efficiency}")
+        raise _pump_refusal(
+            f"efficiency must be in (0, 1]; got {efficiency}",
+            subject="efficiency",
+            source=_CURVE_SOURCE,
+        )
     return Quantity(magnitude=_GRAVITY * h * (1.0 - efficiency) / (cp * efficiency), unit="K")
 
 
@@ -140,8 +190,13 @@ def pump_specific_speed(
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     q = flow_rate.to("m**3/s").magnitude
     h = head.to("m").magnitude
-    if omega <= 0 or q <= 0 or h <= 0:
-        raise ValueError("rotational_speed, flow_rate, and head must be positive")
+    for subject, magnitude in (("rotational_speed", omega), ("flow_rate", q), ("head", h)):
+        if magnitude <= 0:
+            raise _pump_refusal(
+                "rotational_speed, flow_rate, and head must be positive",
+                subject=subject,
+                source=_pump_input_source(subject),
+            )
     return omega * sqrt(q) / (_GRAVITY * h) ** 0.75
 
 
@@ -168,8 +223,17 @@ def pump_suction_specific_speed(
     omega = angular_speed_rad_per_s(rotational_speed, name="rotational_speed")
     q = flow_rate.to("m**3/s").magnitude
     npshr = npsh_required.to("m").magnitude
-    if omega <= 0 or q <= 0 or npshr <= 0:
-        raise ValueError("rotational_speed, flow_rate, and npsh_required must be positive")
+    for subject, magnitude in (
+        ("rotational_speed", omega),
+        ("flow_rate", q),
+        ("npsh_required", npshr),
+    ):
+        if magnitude <= 0:
+            raise _pump_refusal(
+                "rotational_speed, flow_rate, and npsh_required must be positive",
+                subject=subject,
+                source=_pump_input_source(subject),
+            )
     return omega * sqrt(q) / (_GRAVITY * npshr) ** 0.75
 
 
@@ -183,9 +247,13 @@ def affinity_flow_rate(*, flow_rate: Quantity, speed_ratio: float) -> Quantity:
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     q = flow_rate.to("m**3/s").magnitude
     if speed_ratio <= 0:
-        raise ValueError(f"speed_ratio must be positive; got {speed_ratio}")
+        raise _pump_refusal(
+            f"speed_ratio must be positive; got {speed_ratio}",
+            subject="speed_ratio",
+            source=_CURVE_SOURCE,
+        )
     if q <= 0:
-        raise ValueError("flow_rate must be positive")
+        raise _pump_refusal("flow_rate must be positive", subject="flow_rate", source=_DUTY_SOURCE)
     return Quantity(magnitude=q * speed_ratio, unit="m**3/s")
 
 
@@ -198,9 +266,13 @@ def affinity_head(*, head: Quantity, speed_ratio: float) -> Quantity:
     _check(head, "[length]", "head")
     h = head.to("m").magnitude
     if speed_ratio <= 0:
-        raise ValueError(f"speed_ratio must be positive; got {speed_ratio}")
+        raise _pump_refusal(
+            f"speed_ratio must be positive; got {speed_ratio}",
+            subject="speed_ratio",
+            source=_CURVE_SOURCE,
+        )
     if h <= 0:
-        raise ValueError("head must be positive")
+        raise _pump_refusal("head must be positive", subject="head", source=_DUTY_SOURCE)
     return Quantity(magnitude=h * speed_ratio**2, unit="m")
 
 
@@ -214,9 +286,13 @@ def affinity_power(*, power: Quantity, speed_ratio: float) -> Quantity:
     _check(power, "[power]", "power")
     p = power.to("W").magnitude
     if speed_ratio <= 0:
-        raise ValueError(f"speed_ratio must be positive; got {speed_ratio}")
+        raise _pump_refusal(
+            f"speed_ratio must be positive; got {speed_ratio}",
+            subject="speed_ratio",
+            source=_CURVE_SOURCE,
+        )
     if p <= 0:
-        raise ValueError("power must be positive")
+        raise _pump_refusal("power must be positive", subject="power", source=_CURVE_SOURCE)
     return Quantity(magnitude=p * speed_ratio**3, unit="W")
 
 
@@ -250,10 +326,20 @@ def npsh_available(
     rho = density.to("kg/m**3").magnitude
     h_s = static_suction_head.to("m").magnitude
     h_f = suction_friction_loss.to("m").magnitude
-    if p_atm <= 0 or rho <= 0:
-        raise ValueError("atmospheric_pressure and density must be positive")
-    if p_v < 0 or h_f < 0:
-        raise ValueError("vapor_pressure and suction_friction_loss must be non-negative")
+    for subject, magnitude in (("atmospheric_pressure", p_atm), ("density", rho)):
+        if magnitude <= 0:
+            raise _pump_refusal(
+                "atmospheric_pressure and density must be positive",
+                subject=subject,
+                source=_pump_input_source(subject),
+            )
+    for subject, magnitude in (("vapor_pressure", p_v), ("suction_friction_loss", h_f)):
+        if magnitude < 0:
+            raise _pump_refusal(
+                "vapor_pressure and suction_friction_loss must be non-negative",
+                subject=subject,
+                source=_pump_input_source(subject),
+            )
     npsh = (p_atm - p_v) / (rho * _GRAVITY) + h_s - h_f
     return Quantity(magnitude=npsh, unit="m")
 
@@ -272,16 +358,24 @@ def npsh_margin(*, npsh_available: Quantity, npsh_required: Quantity) -> Quantit
     a = npsh_available.to("m").magnitude
     r = npsh_required.to("m").magnitude
     if r < 0:
-        raise ValueError("npsh_required must be non-negative")
+        raise _pump_refusal(
+            "npsh_required must be non-negative", subject="npsh_required", source=_CURVE_SOURCE
+        )
     return Quantity(magnitude=a - r, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _pump_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_pump_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _pump_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_pump_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

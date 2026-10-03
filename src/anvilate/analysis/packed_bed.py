@@ -19,7 +19,36 @@ the bulk (poured) density over the solid particle density. Inputs and outputs ar
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_BED_SOURCE = "the bed design drawing (bed length) and packing specification"
+_PARTICLE_SOURCE = "the packing datasheet (particle size, density, and voidage)"
+_FLUID_SOURCE = "the fluid's density and viscosity at operating conditions from its datasheet"
+_OPERATING_SOURCE = "the superficial velocity from the process operating case"
+_SCOPE_SOURCE = "finer particles, or the full Ergun or Wen-Yu correlation"
+
+
+class _PackedBedInputError(RefusalError, ValueError):
+    """A packed-bed input that cannot be used without correction."""
+
+
+def _packed_bed_refusal(message: str, *, subject: str, source: str) -> _PackedBedInputError:
+    return _PackedBedInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _packed_bed_input_source(name: str) -> str:
+    if name == "bed_length":
+        return _BED_SOURCE
+    if name == "superficial_velocity":
+        return _OPERATING_SOURCE
+    if name in {"fluid_density", "fluid_viscosity"}:
+        return _FLUID_SOURCE
+    return _PARTICLE_SOURCE
+
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
 
@@ -57,20 +86,38 @@ def ergun_pressure_drop(
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
     _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
     if not 0.0 < void_fraction < 1.0:
-        raise ValueError(f"void_fraction must be in (0, 1); got {void_fraction}")
+        raise _packed_bed_refusal(
+            f"void_fraction must be in (0, 1); got {void_fraction}",
+            subject="void_fraction",
+            source=_PARTICLE_SOURCE,
+        )
     length = bed_length.to("m").magnitude
     dp = particle_diameter.to("m").magnitude
     u = superficial_velocity.to("m/s").magnitude
     rho = fluid_density.to("kg/m**3").magnitude
     mu = fluid_viscosity.to("Pa*s").magnitude
     if length < 0:
-        raise ValueError("bed_length must be non-negative")
+        raise _packed_bed_refusal(
+            "bed_length must be non-negative", subject="bed_length", source=_BED_SOURCE
+        )
     if dp <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _packed_bed_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_PARTICLE_SOURCE,
+        )
     if u < 0:
-        raise ValueError("superficial_velocity must be non-negative")
+        raise _packed_bed_refusal(
+            "superficial_velocity must be non-negative",
+            subject="superficial_velocity",
+            source=_OPERATING_SOURCE,
+        )
     if rho <= 0 or mu <= 0:
-        raise ValueError("fluid_density and fluid_viscosity must be positive")
+        raise _packed_bed_refusal(
+            "fluid_density and fluid_viscosity must be positive",
+            subject="fluid_density and fluid_viscosity",
+            source=_FLUID_SOURCE,
+        )
     eps = void_fraction
     viscous = 150.0 * (1.0 - eps) ** 2 / eps**3 * mu * u / dp**2
     inertial = 1.75 * (1.0 - eps) / eps**3 * rho * u**2 / dp
@@ -91,11 +138,19 @@ def packed_bed_void_fraction(*, bulk_density: Quantity, particle_density: Quanti
     rho_bulk = bulk_density.to("kg/m**3").magnitude
     rho_p = particle_density.to("kg/m**3").magnitude
     if rho_bulk < 0:
-        raise ValueError("bulk_density must be non-negative")
+        raise _packed_bed_refusal(
+            "bulk_density must be non-negative", subject="bulk_density", source=_PARTICLE_SOURCE
+        )
     if rho_p <= 0:
-        raise ValueError("particle_density must be positive")
+        raise _packed_bed_refusal(
+            "particle_density must be positive", subject="particle_density", source=_PARTICLE_SOURCE
+        )
     if rho_bulk > rho_p:
-        raise ValueError("bulk_density cannot exceed particle_density (ε < 0 is impossible)")
+        raise _packed_bed_refusal(
+            "bulk_density cannot exceed particle_density (ε < 0 is impossible)",
+            subject="bulk_density and particle_density",
+            source=_PARTICLE_SOURCE,
+        )
     return 1.0 - rho_bulk / rho_p
 
 
@@ -127,20 +182,38 @@ def minimum_fluidization_velocity(
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
     if fluid_density.magnitude <= 0:
-        raise ValueError(f"fluid_density must be positive; got {fluid_density}")
+        raise _packed_bed_refusal(
+            f"fluid_density must be positive; got {fluid_density}",
+            subject="fluid_density",
+            source=_FLUID_SOURCE,
+        )
     _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
     if not 0.0 < void_fraction < 1.0:
-        raise ValueError(f"void_fraction must be in (0, 1); got {void_fraction}")
+        raise _packed_bed_refusal(
+            f"void_fraction must be in (0, 1); got {void_fraction}",
+            subject="void_fraction",
+            source=_PARTICLE_SOURCE,
+        )
     dp = particle_diameter.to("m").magnitude
     rho_p = particle_density.to("kg/m**3").magnitude
     rho = fluid_density.to("kg/m**3").magnitude
     mu = fluid_viscosity.to("Pa*s").magnitude
     if dp <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _packed_bed_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_PARTICLE_SOURCE,
+        )
     if mu <= 0:
-        raise ValueError("fluid_viscosity must be positive")
+        raise _packed_bed_refusal(
+            "fluid_viscosity must be positive", subject="fluid_viscosity", source=_FLUID_SOURCE
+        )
     if rho_p <= rho:
-        raise ValueError("particle_density must exceed fluid_density for the bed to fluidize")
+        raise _packed_bed_refusal(
+            "particle_density must exceed fluid_density for the bed to fluidize",
+            subject="particle_density and fluid_density",
+            source=_PARTICLE_SOURCE,
+        )
     eps = void_fraction
     u_mf = dp**2 * (rho_p - rho) * _GRAVITY * eps**3 / (150.0 * mu * (1.0 - eps))
     # This is the LAMINAR limit of the Ergun equation — the docstring says so — and the
@@ -151,12 +224,17 @@ def minimum_fluidization_velocity(
     # fluidized. The inertial (Ergun/Wen-Yu) form is needed there.
     reynolds = rho * u_mf * dp / mu
     if reynolds > _LAMINAR_FLUIDIZATION_REYNOLDS_LIMIT:
-        raise ValueError(
+        raise _packed_bed_refusal(
             f"the result implies a particle Reynolds number of {reynolds:.4g}, past the "
             f"~{_LAMINAR_FLUIDIZATION_REYNOLDS_LIMIT:.0f} where this laminar limit of the "
             f"Ergun equation holds. Above it the viscous-only form overpredicts without "
             f"bound (6.3x for 3 mm sand in air); use the full Ergun or the Wen-Yu "
-            f"correlation for coarse particles."
+            f"correlation for coarse particles.",
+            subject=(
+                "particle_diameter, particle_density, fluid_density, fluid_viscosity, and "
+                "void_fraction"
+            ),
+            source=_SCOPE_SOURCE,
         )
     return Quantity(magnitude=u_mf, unit="m/s")
 
@@ -181,20 +259,32 @@ def specific_surface_area(*, void_fraction: float, particle_diameter: Quantity) 
     _check(particle_diameter, "[length]", "particle_diameter")
     d_p = particle_diameter.to("m").magnitude
     if not 0.0 <= void_fraction < 1.0:
-        raise ValueError(
-            f"void_fraction must be in 0..1 (a fraction, not a percent); got {void_fraction}"
+        raise _packed_bed_refusal(
+            f"void_fraction must be in 0..1 (a fraction, not a percent); got {void_fraction}",
+            subject="void_fraction",
+            source=_PARTICLE_SOURCE,
         )
     if d_p <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _packed_bed_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_PARTICLE_SOURCE,
+        )
     return Quantity(magnitude=6.0 * (1.0 - void_fraction) / d_p, unit="1/m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _packed_bed_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_packed_bed_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _packed_bed_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_packed_bed_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

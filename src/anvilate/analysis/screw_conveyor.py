@@ -21,8 +21,36 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_second
+
+_SCREW_SOURCE = "the screw conveyor drawing (flight and shaft diameters and pitch)"
+_DRIVE_SOURCE = "the drive's rated output speed from the gearmotor datasheet"
+_MATERIAL_SOURCE = "the bulk material's trough loading class and density from CEMA tables"
+_DUTY_SOURCE = "the required conveying rate from the process design basis"
+
+
+class _ScrewConveyorInputError(RefusalError, ValueError):
+    """A screw-conveyor input that cannot be used without correction."""
+
+
+def _screw_conveyor_refusal(message: str, *, subject: str, source: str) -> _ScrewConveyorInputError:
+    return _ScrewConveyorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _screw_conveyor_input_source(name: str) -> str:
+    if name == "rotational_speed":
+        return _DRIVE_SOURCE
+    if name in {"bulk_density", "fill_fraction"}:
+        return _MATERIAL_SOURCE
+    if name == "volumetric_capacity":
+        return _DUTY_SOURCE
+    return _SCREW_SOURCE
+
 
 __all__ = [
     "screw_conveyor_mass_capacity",
@@ -56,17 +84,31 @@ def screw_conveyor_volumetric_capacity(
     p = pitch.to("m").magnitude
     n = revolutions_per_second(rotational_speed, name="rotational_speed")
     if big <= 0:
-        raise ValueError("screw_diameter must be positive")
+        raise _screw_conveyor_refusal(
+            "screw_diameter must be positive", subject="screw_diameter", source=_SCREW_SOURCE
+        )
     if small < 0:
-        raise ValueError("shaft_diameter must be non-negative")
+        raise _screw_conveyor_refusal(
+            "shaft_diameter must be non-negative", subject="shaft_diameter", source=_SCREW_SOURCE
+        )
     if small >= big:
-        raise ValueError("shaft_diameter must be less than screw_diameter")
+        raise _screw_conveyor_refusal(
+            "shaft_diameter must be less than screw_diameter",
+            subject="shaft_diameter",
+            source=_SCREW_SOURCE,
+        )
     if p <= 0:
-        raise ValueError("pitch must be positive")
+        raise _screw_conveyor_refusal(
+            "pitch must be positive", subject="pitch", source=_SCREW_SOURCE
+        )
     if n <= 0:
-        raise ValueError("rotational_speed must be positive")
+        raise _screw_conveyor_refusal(
+            "rotational_speed must be positive", subject="rotational_speed", source=_DRIVE_SOURCE
+        )
     if not 0.0 < fill_fraction <= 1.0:
-        raise ValueError("fill_fraction must be in (0, 1]")
+        raise _screw_conveyor_refusal(
+            "fill_fraction must be in (0, 1]", subject="fill_fraction", source=_MATERIAL_SOURCE
+        )
     q = pi / 4.0 * (big * big - small * small) * p * n * fill_fraction
     return Quantity(magnitude=q, unit="m**3/s").to("m**3/h")
 
@@ -86,9 +128,15 @@ def screw_conveyor_mass_capacity(
     q = volumetric_capacity.to("m**3/s").magnitude
     rho = bulk_density.to("kg/m**3").magnitude
     if q <= 0:
-        raise ValueError("volumetric_capacity must be positive")
+        raise _screw_conveyor_refusal(
+            "volumetric_capacity must be positive",
+            subject="volumetric_capacity",
+            source=_DUTY_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("bulk_density must be positive")
+        raise _screw_conveyor_refusal(
+            "bulk_density must be positive", subject="bulk_density", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=q * rho, unit="kg/s").to("t/hr")
 
 
@@ -117,17 +165,33 @@ def screw_conveyor_speed_for_capacity(
     small = shaft_diameter.to("m").magnitude
     p = pitch.to("m").magnitude
     if q <= 0:
-        raise ValueError("volumetric_capacity must be positive")
+        raise _screw_conveyor_refusal(
+            "volumetric_capacity must be positive",
+            subject="volumetric_capacity",
+            source=_DUTY_SOURCE,
+        )
     if big <= 0:
-        raise ValueError("screw_diameter must be positive")
+        raise _screw_conveyor_refusal(
+            "screw_diameter must be positive", subject="screw_diameter", source=_SCREW_SOURCE
+        )
     if small < 0:
-        raise ValueError("shaft_diameter must be non-negative")
+        raise _screw_conveyor_refusal(
+            "shaft_diameter must be non-negative", subject="shaft_diameter", source=_SCREW_SOURCE
+        )
     if small >= big:
-        raise ValueError("shaft_diameter must be less than screw_diameter")
+        raise _screw_conveyor_refusal(
+            "shaft_diameter must be less than screw_diameter",
+            subject="shaft_diameter",
+            source=_SCREW_SOURCE,
+        )
     if p <= 0:
-        raise ValueError("pitch must be positive")
+        raise _screw_conveyor_refusal(
+            "pitch must be positive", subject="pitch", source=_SCREW_SOURCE
+        )
     if not 0.0 < fill_fraction <= 1.0:
-        raise ValueError("fill_fraction must be in (0, 1]")
+        raise _screw_conveyor_refusal(
+            "fill_fraction must be in (0, 1]", subject="fill_fraction", source=_MATERIAL_SOURCE
+        )
     # n is revolutions per second; report as rpm (60 rpm per rev/s), not via a 1/s -> rpm
     # conversion which would divide by the 2*pi rad-per-revolution factor.
     n = q / (pi / 4.0 * (big * big - small * small) * p * fill_fraction)
@@ -136,10 +200,16 @@ def screw_conveyor_speed_for_capacity(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _screw_conveyor_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_screw_conveyor_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _screw_conveyor_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_screw_conveyor_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

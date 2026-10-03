@@ -53,6 +53,10 @@ def _parts(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
 
 
+class _SpecNotAMapping(RefusalError, ValueError):
+    """A Design Spec document that is not a mapping."""
+
+
 def migrate_to_current(data: dict) -> dict:
     """Return ``data`` at the schema version it actually reaches.
 
@@ -70,10 +74,17 @@ def migrate_to_current(data: dict) -> dict:
     if not isinstance(data, dict):
         # The same refusal `parse_spec` gives, because this is reachable on its own: it is
         # exported, and a caller migrating a document before validating it comes here first.
-        raise ValueError(
+        raise _SpecNotAMapping(
             f"a spec is a mapping; got {type(data).__name__}. A JSON file that reads back "
             f"as a list, a bare string or null is the ordinary way to hand a tool the "
-            f"wrong file, and the answer to it is a sentence"
+            f"wrong file, and the answer to it is a sentence",
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject="data",
+                    source="the Design Spec document, read as a YAML or JSON mapping",
+                ),
+            ),
         )
 
     # A document that declares nothing is read as the current version, and that is a

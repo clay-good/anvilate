@@ -27,7 +27,38 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_COIL_SOURCE = "the coil winding specification (turns and winding length)"
+_DRIVE_SOURCE = "the coil drive's rated current at the operating case"
+_CORE_SOURCE = "the core drawing's path length and pole area"
+_MATERIAL_SOURCE = "the core material datasheet's permeability and flux density"
+_CIRCUIT_SOURCE = "the magnetic-circuit calculation's MMF and reluctance"
+
+
+class _MagneticsInputError(RefusalError, ValueError):
+    """A magnetic-actuator input that cannot be used without correction."""
+
+
+def _magnetics_refusal(message: str, *, subject: str, source: str) -> _MagneticsInputError:
+    return _MagneticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _magnetics_input_source(name: str) -> str:
+    if name in {"turns", "turns_per_length"}:
+        return _COIL_SOURCE
+    if name == "current":
+        return _DRIVE_SOURCE
+    if name in {"magnetic_flux_density", "relative_permeability"}:
+        return _MATERIAL_SOURCE
+    if name in {"magnetomotive_force", "reluctance"}:
+        return _CIRCUIT_SOURCE
+    return _CORE_SOURCE
+
 
 VACUUM_PERMEABILITY = 4.0e-7 * pi  # μ₀, T·m/A
 
@@ -55,9 +86,13 @@ def solenoid_magnetic_field(*, turns_per_length: Quantity, current: Quantity) ->
     n = turns_per_length.to("1/m").magnitude
     i = current.to("A").magnitude
     if n <= 0:
-        raise ValueError("turns_per_length must be positive")
+        raise _magnetics_refusal(
+            "turns_per_length must be positive", subject="turns_per_length", source=_COIL_SOURCE
+        )
     if i <= 0:
-        raise ValueError("current must be positive")
+        raise _magnetics_refusal(
+            "current must be positive", subject="current", source=_DRIVE_SOURCE
+        )
     return Quantity(magnitude=VACUUM_PERMEABILITY * n * i, unit="T")
 
 
@@ -73,7 +108,11 @@ def magnetic_pressure(*, magnetic_flux_density: Quantity) -> Quantity:
     _check(magnetic_flux_density, "[magnetic_field]", "magnetic_flux_density")
     b = magnetic_flux_density.to("T").magnitude
     if b <= 0:
-        raise ValueError("magnetic_flux_density must be positive")
+        raise _magnetics_refusal(
+            "magnetic_flux_density must be positive",
+            subject="magnetic_flux_density",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=b * b / (2.0 * VACUUM_PERMEABILITY) / 1.0e6, unit="MPa")
 
 
@@ -93,9 +132,15 @@ def electromagnet_holding_force(
     b = magnetic_flux_density.to("T").magnitude
     a = pole_area.to("m**2").magnitude
     if b <= 0:
-        raise ValueError("magnetic_flux_density must be positive")
+        raise _magnetics_refusal(
+            "magnetic_flux_density must be positive",
+            subject="magnetic_flux_density",
+            source=_MATERIAL_SOURCE,
+        )
     if a <= 0:
-        raise ValueError("pole_area must be positive")
+        raise _magnetics_refusal(
+            "pole_area must be positive", subject="pole_area", source=_CORE_SOURCE
+        )
     return Quantity(magnitude=b * b * a / (2.0 * VACUUM_PERMEABILITY) / 1000.0, unit="kN")
 
 
@@ -108,10 +153,12 @@ def magnetomotive_force(*, turns: float, current: Quantity) -> Quantity:
     """
     _check(current, "[current]", "current")
     if turns <= 0:
-        raise ValueError("turns must be positive")
+        raise _magnetics_refusal("turns must be positive", subject="turns", source=_COIL_SOURCE)
     i = current.to("A").magnitude
     if i <= 0:
-        raise ValueError("current must be positive")
+        raise _magnetics_refusal(
+            "current must be positive", subject="current", source=_DRIVE_SOURCE
+        )
     return Quantity(magnitude=turns * i, unit="A")
 
 
@@ -131,11 +178,17 @@ def magnetic_reluctance(
     ell = path_length.to("m").magnitude
     a = area.to("m**2").magnitude
     if ell <= 0:
-        raise ValueError("path_length must be positive")
+        raise _magnetics_refusal(
+            "path_length must be positive", subject="path_length", source=_CORE_SOURCE
+        )
     if a <= 0:
-        raise ValueError("area must be positive")
+        raise _magnetics_refusal("area must be positive", subject="area", source=_CORE_SOURCE)
     if relative_permeability <= 0:
-        raise ValueError("relative_permeability must be positive")
+        raise _magnetics_refusal(
+            "relative_permeability must be positive",
+            subject="relative_permeability",
+            source=_MATERIAL_SOURCE,
+        )
     r = ell / (VACUUM_PERMEABILITY * relative_permeability * a)
     return Quantity(magnitude=r, unit="1/H")
 
@@ -153,9 +206,15 @@ def magnetic_flux(*, magnetomotive_force: Quantity, reluctance: Quantity) -> Qua
     mmf = magnetomotive_force.to("A").magnitude
     r = reluctance.to("1/H").magnitude
     if mmf < 0:
-        raise ValueError("magnetomotive_force must be non-negative")
+        raise _magnetics_refusal(
+            "magnetomotive_force must be non-negative",
+            subject="magnetomotive_force",
+            source=_CIRCUIT_SOURCE,
+        )
     if r <= 0:
-        raise ValueError("reluctance must be positive")
+        raise _magnetics_refusal(
+            "reluctance must be positive", subject="reluctance", source=_CIRCUIT_SOURCE
+        )
     return Quantity(magnitude=mmf / r, unit="Wb")
 
 
@@ -172,19 +231,27 @@ def coil_inductance(*, turns: float, reluctance: Quantity) -> Quantity:
     """
     _check(reluctance, "1/[inductance]", "reluctance")
     if turns <= 0:
-        raise ValueError("turns must be positive")
+        raise _magnetics_refusal("turns must be positive", subject="turns", source=_COIL_SOURCE)
     r = reluctance.to("1/H").magnitude
     if r <= 0:
-        raise ValueError("reluctance must be positive")
+        raise _magnetics_refusal(
+            "reluctance must be positive", subject="reluctance", source=_CIRCUIT_SOURCE
+        )
     return Quantity(magnitude=turns**2 / r, unit="H")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _magnetics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_magnetics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _magnetics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_magnetics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

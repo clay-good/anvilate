@@ -28,7 +28,35 @@ from __future__ import annotations
 
 from math import log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_IV_SOURCE = "the cell datasheet's I-V curve at standard test conditions"
+_TEST_SOURCE = "the I-V test record (irradiance and measured cell area)"
+_DIODE_SOURCE = "the cell's fitted diode model parameters from its I-V test record"
+_OPERATING_SOURCE = "the cell's operating temperature from the thermal design basis"
+
+
+class _SolarCellInputError(RefusalError, ValueError):
+    """A solar-cell input that cannot be used without correction."""
+
+
+def _solar_cell_refusal(message: str, *, subject: str, source: str) -> _SolarCellInputError:
+    return _SolarCellInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _solar_cell_input_source(name: str) -> str:
+    if name in {"cell_area", "irradiance"}:
+        return _TEST_SOURCE
+    if name in {"ideality_factor", "photocurrent", "saturation_current"}:
+        return _DIODE_SOURCE
+    if name == "temperature":
+        return _OPERATING_SOURCE
+    return _IV_SOURCE
+
 
 _BOLTZMANN = 1.380649e-23  # J/K
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
@@ -65,13 +93,29 @@ def fill_factor(
     v_oc = open_circuit_voltage.to("V").magnitude
     i_sc = short_circuit_current.to("A").magnitude
     if v_mp <= 0 or i_mp <= 0:
-        raise ValueError("max-power voltage and current must be positive")
+        raise _solar_cell_refusal(
+            "max-power voltage and current must be positive",
+            subject="max_power_voltage and max_power_current",
+            source=_IV_SOURCE,
+        )
     if v_oc <= 0 or i_sc <= 0:
-        raise ValueError("open-circuit voltage and short-circuit current must be positive")
+        raise _solar_cell_refusal(
+            "open-circuit voltage and short-circuit current must be positive",
+            subject="open_circuit_voltage and short_circuit_current",
+            source=_IV_SOURCE,
+        )
     if v_mp > v_oc:
-        raise ValueError("max_power_voltage cannot exceed open_circuit_voltage")
+        raise _solar_cell_refusal(
+            "max_power_voltage cannot exceed open_circuit_voltage",
+            subject="max_power_voltage and open_circuit_voltage",
+            source=_IV_SOURCE,
+        )
     if i_mp > i_sc:
-        raise ValueError("max_power_current cannot exceed short_circuit_current")
+        raise _solar_cell_refusal(
+            "max_power_current cannot exceed short_circuit_current",
+            subject="max_power_current and short_circuit_current",
+            source=_IV_SOURCE,
+        )
     return (v_mp * i_mp) / (v_oc * i_sc)
 
 
@@ -93,9 +137,15 @@ def solar_cell_max_power(
     v_oc = open_circuit_voltage.to("V").magnitude
     i_sc = short_circuit_current.to("A").magnitude
     if v_oc <= 0 or i_sc <= 0:
-        raise ValueError("open-circuit voltage and short-circuit current must be positive")
+        raise _solar_cell_refusal(
+            "open-circuit voltage and short-circuit current must be positive",
+            subject="open_circuit_voltage and short_circuit_current",
+            source=_IV_SOURCE,
+        )
     if not 0.0 < fill_factor <= 1.0:
-        raise ValueError("fill_factor must be in (0, 1]")
+        raise _solar_cell_refusal(
+            "fill_factor must be in (0, 1]", subject="fill_factor", source=_IV_SOURCE
+        )
     return Quantity(magnitude=fill_factor * v_oc * i_sc, unit="W")
 
 
@@ -116,11 +166,17 @@ def solar_cell_efficiency(
     g = irradiance.to("W/m**2").magnitude
     a = cell_area.to("m**2").magnitude
     if p < 0:
-        raise ValueError("max_power must be non-negative")
+        raise _solar_cell_refusal(
+            "max_power must be non-negative", subject="max_power", source=_IV_SOURCE
+        )
     if g <= 0:
-        raise ValueError("irradiance must be positive")
+        raise _solar_cell_refusal(
+            "irradiance must be positive", subject="irradiance", source=_TEST_SOURCE
+        )
     if a <= 0:
-        raise ValueError("cell_area must be positive")
+        raise _solar_cell_refusal(
+            "cell_area must be positive", subject="cell_area", source=_TEST_SOURCE
+        )
     # The incident power is formed right here, so the first-law ceiling costs one
     # comparison. Without it a transcription slip returned 50.0 — 5000% conversion — and
     # the plausible-looking version, 1.2346, is a 123% cell reported as a bare float that
@@ -128,11 +184,13 @@ def solar_cell_efficiency(
     # applies exactly this ceiling.
     incident = g * a
     if p > incident:
-        raise ValueError(
+        raise _solar_cell_refusal(
             f"max_power ({p:.4g} W) exceeds the incident power on the cell "
             f"({incident:.4g} W = {g:.4g} W/m² x {a:.4g} m²), giving an efficiency of "
             f"{p / incident:.4g}. A cell cannot deliver more than it receives; check the "
-            f"cell area and the units of the power figure"
+            f"cell area and the units of the power figure",
+            subject="max_power, irradiance, and cell_area",
+            source=_TEST_SOURCE,
         )
     return p / incident
 
@@ -167,23 +225,41 @@ def solar_cell_open_circuit_voltage(
     i_0 = saturation_current.to("A").magnitude
     t = temperature.to("K").magnitude
     if i_l <= 0:
-        raise ValueError("photocurrent must be positive")
+        raise _solar_cell_refusal(
+            "photocurrent must be positive", subject="photocurrent", source=_DIODE_SOURCE
+        )
     if i_0 <= 0:
-        raise ValueError("saturation_current must be positive")
+        raise _solar_cell_refusal(
+            "saturation_current must be positive",
+            subject="saturation_current",
+            source=_DIODE_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be a positive absolute temperature")
+        raise _solar_cell_refusal(
+            "temperature must be a positive absolute temperature",
+            subject="temperature",
+            source=_OPERATING_SOURCE,
+        )
     if ideality_factor <= 0:
-        raise ValueError("ideality_factor must be positive")
+        raise _solar_cell_refusal(
+            "ideality_factor must be positive", subject="ideality_factor", source=_DIODE_SOURCE
+        )
     thermal_voltage = _BOLTZMANN * t / _ELEMENTARY_CHARGE
     return Quantity(magnitude=ideality_factor * thermal_voltage * log(i_l / i_0 + 1.0), unit="V")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _solar_cell_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_solar_cell_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _solar_cell_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_solar_cell_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

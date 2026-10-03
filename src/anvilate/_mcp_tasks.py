@@ -27,6 +27,7 @@ from typing import Any
 
 from ._models import parse_json
 from .fetch import cache_root
+from .refusal import RefusalError, Remedy
 
 # Private implementation module. MCP is the supported surface; none of the storage and
 # process-management helpers below is a compatibility promise.
@@ -58,6 +59,10 @@ class UnknownTask(KeyError):
     """A task handle this store does not hold or cannot read."""
 
 
+class _TaskStorePathError(RefusalError, ValueError):
+    """A task-store location that cannot be used."""
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
@@ -66,7 +71,16 @@ def task_store_root(explicit: str | Path | None = None) -> Path:
     """Where task handles resolve: explicit path, environment, then local cache."""
     if explicit is not None:
         if str(explicit) == "":
-            raise ValueError("an empty task-store path is not the current directory")
+            raise _TaskStorePathError(
+                "an empty task-store path is not the current directory",
+                remedies=(
+                    Remedy(
+                        action="replace",
+                        subject="explicit",
+                        source="a task-store directory, or None for the default store",
+                    ),
+                ),
+            )
         return Path(explicit)
     named = os.environ.get("ANVILATE_TASK_STORE")
     return Path(named) if named else cache_root() / "tasks"

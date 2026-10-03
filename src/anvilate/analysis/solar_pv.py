@@ -22,7 +22,35 @@ IEC 61215, for the irradiance, cell-temperature and array-yield relations.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_MODULE_SOURCE = "the PV module datasheet (STC ratings, efficiency, NOCT, coefficients)"
+_SITE_SOURCE = "the site solar resource and ambient climate record"
+_SYSTEM_SOURCE = "the system design basis (array size, derate, and load demand)"
+_PRODUCTION_SOURCE = "the array's metered energy record for the period"
+
+
+class _SolarPvInputError(RefusalError, ValueError):
+    """A solar-PV input that cannot be used without correction."""
+
+
+def _solar_pv_refusal(message: str, *, subject: str, source: str) -> _SolarPvInputError:
+    return _SolarPvInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _solar_pv_input_source(name: str) -> str:
+    if name in {"ambient_temperature", "cell_temperature", "irradiance", "peak_sun_hours"}:
+        return _SITE_SOURCE
+    if name in {"area", "daily_energy_demand", "derate_factor", "rated_power"}:
+        return _SYSTEM_SOURCE
+    if name == "energy":
+        return _PRODUCTION_SOURCE
+    return _MODULE_SOURCE
+
 
 __all__ = [
     "pv_array_power",
@@ -54,8 +82,13 @@ def pv_array_power(
     _fraction(module_efficiency, "module_efficiency")
     g = irradiance.to("W/m**2").magnitude
     a = area.to("m**2").magnitude
-    if g <= 0 or a <= 0:
-        raise ValueError("irradiance and area must be positive")
+    for subject, magnitude in (("irradiance", g), ("area", a)):
+        if magnitude <= 0:
+            raise _solar_pv_refusal(
+                "irradiance and area must be positive",
+                subject=subject,
+                source=_solar_pv_input_source(subject),
+            )
     return Quantity(magnitude=g * a * module_efficiency, unit="W")
 
 
@@ -76,9 +109,13 @@ def pv_daily_energy(
     _check(peak_sun_hours, "[time]", "peak_sun_hours")
     _fraction(derate_factor, "derate_factor")
     if rated_power.to("W").magnitude <= 0:
-        raise ValueError("rated_power must be positive")
+        raise _solar_pv_refusal(
+            "rated_power must be positive", subject="rated_power", source=_SYSTEM_SOURCE
+        )
     if peak_sun_hours.to("hour").magnitude <= 0:
-        raise ValueError("peak_sun_hours must be positive")
+        raise _solar_pv_refusal(
+            "peak_sun_hours must be positive", subject="peak_sun_hours", source=_SITE_SOURCE
+        )
     energy = rated_power.pint * peak_sun_hours.pint * derate_factor
     return Quantity(magnitude=float(energy.to("kWh").magnitude), unit="kWh")
 
@@ -99,9 +136,15 @@ def pv_array_size_for_load(
     _check(peak_sun_hours, "[time]", "peak_sun_hours")
     _fraction(derate_factor, "derate_factor")
     if daily_energy_demand.to("kWh").magnitude <= 0:
-        raise ValueError("daily_energy_demand must be positive")
+        raise _solar_pv_refusal(
+            "daily_energy_demand must be positive",
+            subject="daily_energy_demand",
+            source=_SYSTEM_SOURCE,
+        )
     if peak_sun_hours.to("hour").magnitude <= 0:
-        raise ValueError("peak_sun_hours must be positive")
+        raise _solar_pv_refusal(
+            "peak_sun_hours must be positive", subject="peak_sun_hours", source=_SITE_SOURCE
+        )
     power = daily_energy_demand.pint / (peak_sun_hours.pint * derate_factor)
     return Quantity(magnitude=float(power.to("W").magnitude), unit="W")
 
@@ -128,7 +171,9 @@ def pv_cell_temperature(
     g = irradiance.to("W/m**2").magnitude
     noct_c = noct.to("degC").magnitude
     if g < 0:
-        raise ValueError("irradiance must be non-negative")
+        raise _solar_pv_refusal(
+            "irradiance must be non-negative", subject="irradiance", source=_SITE_SOURCE
+        )
     return Quantity(magnitude=t_amb + (noct_c - 20.0) * g / 800.0, unit="degC")
 
 
@@ -153,10 +198,16 @@ def pv_temperature_derated_power(
     p_stc = rated_power.to("W").magnitude
     t_cell = cell_temperature.to("degC").magnitude
     if p_stc <= 0:
-        raise ValueError("rated_power must be positive")
+        raise _solar_pv_refusal(
+            "rated_power must be positive", subject="rated_power", source=_SYSTEM_SOURCE
+        )
     factor = 1.0 + temperature_coefficient * (t_cell - 25.0)
     if factor < 0:
-        raise ValueError("temperature_coefficient and cell_temperature give a non-physical power")
+        raise _solar_pv_refusal(
+            "temperature_coefficient and cell_temperature give a non-physical power",
+            subject="temperature_coefficient and cell_temperature",
+            source=_MODULE_SOURCE,
+        )
     return Quantity(magnitude=p_stc * factor, unit="W")
 
 
@@ -175,9 +226,13 @@ def pv_specific_yield(*, energy: Quantity, rated_power: Quantity) -> Quantity:
     e = energy.to("kWh").magnitude
     p = rated_power.to("kW").magnitude
     if e < 0:
-        raise ValueError("energy must be non-negative")
+        raise _solar_pv_refusal(
+            "energy must be non-negative", subject="energy", source=_PRODUCTION_SOURCE
+        )
     if p <= 0:
-        raise ValueError("rated_power must be positive")
+        raise _solar_pv_refusal(
+            "rated_power must be positive", subject="rated_power", source=_SYSTEM_SOURCE
+        )
     return Quantity(magnitude=e / p, unit="hour")
 
 
@@ -203,11 +258,17 @@ def pv_performance_ratio(
     p = rated_power.to("kW").magnitude
     h = peak_sun_hours.to("hour").magnitude
     if e < 0:
-        raise ValueError("energy must be non-negative")
+        raise _solar_pv_refusal(
+            "energy must be non-negative", subject="energy", source=_PRODUCTION_SOURCE
+        )
     if p <= 0:
-        raise ValueError("rated_power must be positive")
+        raise _solar_pv_refusal(
+            "rated_power must be positive", subject="rated_power", source=_SYSTEM_SOURCE
+        )
     if h <= 0:
-        raise ValueError("peak_sun_hours must be positive")
+        raise _solar_pv_refusal(
+            "peak_sun_hours must be positive", subject="peak_sun_hours", source=_SITE_SOURCE
+        )
     return e / (p * h)
 
 
@@ -234,30 +295,52 @@ def pv_fill_factor(
     v_oc = open_circuit_voltage.to("V").magnitude
     i_sc = short_circuit_current.to("A").magnitude
     if p_max <= 0:
-        raise ValueError("maximum_power must be positive")
+        raise _solar_pv_refusal(
+            "maximum_power must be positive", subject="maximum_power", source=_MODULE_SOURCE
+        )
     if v_oc <= 0:
-        raise ValueError("open_circuit_voltage must be positive")
+        raise _solar_pv_refusal(
+            "open_circuit_voltage must be positive",
+            subject="open_circuit_voltage",
+            source=_MODULE_SOURCE,
+        )
     if i_sc <= 0:
-        raise ValueError("short_circuit_current must be positive")
+        raise _solar_pv_refusal(
+            "short_circuit_current must be positive",
+            subject="short_circuit_current",
+            source=_MODULE_SOURCE,
+        )
     ff = p_max / (v_oc * i_sc)
     if ff > 1.0:
-        raise ValueError(
-            "maximum_power exceeds V_oc·I_sc (fill factor > 1 is impossible); check inputs"
+        raise _solar_pv_refusal(
+            "maximum_power exceeds V_oc·I_sc (fill factor > 1 is impossible); check inputs",
+            subject="maximum_power, open_circuit_voltage, and short_circuit_current",
+            source=_MODULE_SOURCE,
         )
     return ff
 
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be in (0, 1]; got {value}")
+        raise _solar_pv_refusal(
+            f"{name} must be in (0, 1]; got {value}",
+            subject=name,
+            source=_solar_pv_input_source(name),
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _solar_pv_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_solar_pv_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _solar_pv_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_solar_pv_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

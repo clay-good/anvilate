@@ -22,7 +22,38 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FLUID_PROPERTY_SOURCE = "the fluid's property table at the operating temperature and pressure"
+_FLOW_SOURCE = "the operating case (flow velocity, flow rate, and jet geometry)"
+_BODY_SOURCE = "the body's drawing (reference area, diameter, and weight)"
+_COEFFICIENT_SOURCE = "the drag-coefficient table or wind-tunnel record for the body's shape"
+_PARTICLE_SOURCE = "the particle-size analysis and material density record"
+
+
+class _DragInputError(RefusalError, ValueError):
+    """A fluid-drag input that cannot be used without correction."""
+
+
+def _drag_refusal(message: str, *, subject: str, source: str) -> _DragInputError:
+    return _DragInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _drag_input_source(name: str) -> str:
+    if name in {"deflection_angle", "flow_rate", "jet_velocity", "reynolds_number", "velocity"}:
+        return _FLOW_SOURCE
+    if name == "drag_coefficient":
+        return _COEFFICIENT_SOURCE
+    if name in {"characteristic_length", "reference_area", "weight"}:
+        return _BODY_SOURCE
+    if name in {"particle_density", "particle_diameter"}:
+        return _PARTICLE_SOURCE
+    return _FLUID_PROPERTY_SOURCE
+
 
 __all__ = [
     "archimedes_number",
@@ -63,12 +94,23 @@ def drag_force(
     rho = density.to("kg/m**3").magnitude
     v = velocity.to("m/s").magnitude
     a = reference_area.to("m**2").magnitude
-    if rho <= 0 or a <= 0:
-        raise ValueError("density and reference_area must be positive")
+    for subject, magnitude in (("density", rho), ("reference_area", a)):
+        if magnitude <= 0:
+            raise _drag_refusal(
+                "density and reference_area must be positive",
+                subject=subject,
+                source=_drag_input_source(subject),
+            )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _drag_refusal(
+            "velocity must be non-negative", subject="velocity", source=_FLOW_SOURCE
+        )
     if drag_coefficient <= 0:
-        raise ValueError("drag_coefficient must be positive")
+        raise _drag_refusal(
+            "drag_coefficient must be positive",
+            subject="drag_coefficient",
+            source=_COEFFICIENT_SOURCE,
+        )
     return Quantity(magnitude=0.5 * rho * v**2 * drag_coefficient * a, unit="N")
 
 
@@ -94,10 +136,19 @@ def terminal_velocity(
     w = weight.to("N").magnitude
     rho = density.to("kg/m**3").magnitude
     a = reference_area.to("m**2").magnitude
-    if w <= 0 or rho <= 0 or a <= 0:
-        raise ValueError("weight, density, and reference_area must be positive")
+    for subject, magnitude in (("weight", w), ("density", rho), ("reference_area", a)):
+        if magnitude <= 0:
+            raise _drag_refusal(
+                "weight, density, and reference_area must be positive",
+                subject=subject,
+                source=_drag_input_source(subject),
+            )
     if drag_coefficient <= 0:
-        raise ValueError("drag_coefficient must be positive")
+        raise _drag_refusal(
+            "drag_coefficient must be positive",
+            subject="drag_coefficient",
+            source=_COEFFICIENT_SOURCE,
+        )
     return Quantity(magnitude=sqrt(2.0 * w / (rho * drag_coefficient * a)), unit="m/s")
 
 
@@ -127,10 +178,19 @@ def jet_impact_force(
     rho = density.to("kg/m**3").magnitude
     q = flow_rate.to("m**3/s").magnitude
     v = jet_velocity.to("m/s").magnitude
-    if rho <= 0 or q <= 0 or v <= 0:
-        raise ValueError("density, flow_rate, and jet_velocity must be positive")
+    for subject, magnitude in (("density", rho), ("flow_rate", q), ("jet_velocity", v)):
+        if magnitude <= 0:
+            raise _drag_refusal(
+                "density, flow_rate, and jet_velocity must be positive",
+                subject=subject,
+                source=_drag_input_source(subject),
+            )
     if not 0.0 <= deflection_angle <= 180.0:
-        raise ValueError(f"deflection_angle must be in [0, 180] degrees; got {deflection_angle}")
+        raise _drag_refusal(
+            f"deflection_angle must be in [0, 180] degrees; got {deflection_angle}",
+            subject="deflection_angle",
+            source=_FLOW_SOURCE,
+        )
     return Quantity(magnitude=rho * q * v * (1.0 - cos(radians(deflection_angle))), unit="N")
 
 
@@ -160,14 +220,20 @@ def sphere_drag_coefficient(*, reynolds_number: float) -> float:
     coefficient as a plain float.
     """
     if reynolds_number <= 0:
-        raise ValueError(f"reynolds_number must be positive; got {reynolds_number}")
+        raise _drag_refusal(
+            f"reynolds_number must be positive; got {reynolds_number}",
+            subject="reynolds_number",
+            source=_FLOW_SOURCE,
+        )
     if reynolds_number > 800.0:
-        raise ValueError(
+        raise _drag_refusal(
             f"reynolds_number must not exceed 800, where the Schiller-Naumann fit ends; got "
             f"{reynolds_number}. Above it the correlation decays toward zero while the real "
             f"sphere levels off near C_d = 0.44 in the Newton regime -- at Re = 1e5 it returns "
             f"0.098 against a true 0.47, which overstates a terminal velocity 2.2-fold. Use a "
-            f"drag-coefficient table there."
+            f"drag-coefficient table there.",
+            subject="reynolds_number",
+            source=_FLOW_SOURCE,
         )
     return (24.0 / reynolds_number) * (1.0 + 0.15 * reynolds_number**0.687)
 
@@ -194,16 +260,28 @@ def stokes_settling_velocity(
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
     if fluid_density.magnitude <= 0:
-        raise ValueError(f"fluid_density must be positive; got {fluid_density}")
+        raise _drag_refusal(
+            f"fluid_density must be positive; got {fluid_density}",
+            subject="fluid_density",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
     d = particle_diameter.to("m").magnitude
     rho_p = particle_density.to("kg/m**3").magnitude
     rho_f = fluid_density.to("kg/m**3").magnitude
     mu = fluid_viscosity.to("Pa*s").magnitude
     if d <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _drag_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_PARTICLE_SOURCE,
+        )
     if mu <= 0:
-        raise ValueError("fluid_viscosity must be positive")
+        raise _drag_refusal(
+            "fluid_viscosity must be positive",
+            subject="fluid_viscosity",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     v = (rho_p - rho_f) * _GRAVITY * d**2 / (18.0 * mu)
     # The docstring's "below ~1" is computable from the arguments already passed, and past
     # it the answer is unconservative by a lot: 1 mm quartz in water returns 0.900 m/s at
@@ -212,12 +290,14 @@ def stokes_settling_velocity(
     # own fit's end, and its message names this hole. This closes it.
     reynolds = rho_f * abs(v) * d / mu
     if reynolds > _STOKES_REYNOLDS_LIMIT:
-        raise ValueError(
+        raise _drag_refusal(
             f"Stokes' law is the creeping-flow limit and the result implies a particle "
             f"Reynolds number of {reynolds:.4g}, past the ~{_STOKES_REYNOLDS_LIMIT:.0f} "
             f"where it holds: the flow separates and this velocity is an overprediction "
             f"(5.8x for 1 mm quartz in water). Use terminal_velocity with a drag "
-            f"coefficient, or iterate on sphere_drag_coefficient."
+            f"coefficient, or iterate on sphere_drag_coefficient.",
+            subject="particle_diameter, particle_density, fluid_density, and fluid_viscosity",
+            source=_PARTICLE_SOURCE,
         )
     return Quantity(magnitude=v, unit="m/s")
 
@@ -243,10 +323,17 @@ def stokes_drag_force(
     mu = fluid_viscosity.to("Pa*s").magnitude
     d = particle_diameter.to("m").magnitude
     v = velocity.to("m/s").magnitude
-    if mu <= 0 or d <= 0:
-        raise ValueError("fluid_viscosity and particle_diameter must be positive")
+    for subject, magnitude in (("fluid_viscosity", mu), ("particle_diameter", d)):
+        if magnitude <= 0:
+            raise _drag_refusal(
+                "fluid_viscosity and particle_diameter must be positive",
+                subject=subject,
+                source=_drag_input_source(subject),
+            )
     if v < 0:
-        raise ValueError("velocity must be non-negative")
+        raise _drag_refusal(
+            "velocity must be non-negative", subject="velocity", source=_FLOW_SOURCE
+        )
     return Quantity(magnitude=3.0 * pi * mu * d * v, unit="N")
 
 
@@ -273,7 +360,11 @@ def archimedes_number(
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     if particle_density.magnitude <= 0:
-        raise ValueError(f"particle_density must be positive; got {particle_density}")
+        raise _drag_refusal(
+            f"particle_density must be positive; got {particle_density}",
+            subject="particle_density",
+            source=_PARTICLE_SOURCE,
+        )
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
     _check(fluid_viscosity, "[pressure]*[time]", "fluid_viscosity")
     d = particle_diameter.to("m").magnitude
@@ -281,11 +372,21 @@ def archimedes_number(
     rho_f = fluid_density.to("kg/m**3").magnitude
     mu = fluid_viscosity.to("Pa*s").magnitude
     if d <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _drag_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_PARTICLE_SOURCE,
+        )
     if rho_f <= 0:
-        raise ValueError("fluid_density must be positive")
+        raise _drag_refusal(
+            "fluid_density must be positive", subject="fluid_density", source=_FLUID_PROPERTY_SOURCE
+        )
     if mu <= 0:
-        raise ValueError("fluid_viscosity must be positive")
+        raise _drag_refusal(
+            "fluid_viscosity must be positive",
+            subject="fluid_viscosity",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     return _GRAVITY * d**3 * rho_f * (rho_p - rho_f) / mu**2
 
 
@@ -309,18 +410,32 @@ def galilei_number(
     length = characteristic_length.to("m").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if length <= 0:
-        raise ValueError("characteristic_length must be positive")
+        raise _drag_refusal(
+            "characteristic_length must be positive",
+            subject="characteristic_length",
+            source=_BODY_SOURCE,
+        )
     if nu <= 0:
-        raise ValueError("kinematic_viscosity must be positive")
+        raise _drag_refusal(
+            "kinematic_viscosity must be positive",
+            subject="kinematic_viscosity",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     return _GRAVITY * length**3 / nu**2
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _drag_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_drag_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _drag_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_drag_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -26,7 +26,40 @@ from __future__ import annotations
 
 from math import exp, log, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_COMPOSITION_SOURCE = "the column's design specification (feed, distillate, and bottoms purities)"
+_VAPOR_PRESSURE_SOURCE = "the Antoine-equation vapor pressure at the operating temperature"
+_HENRY_SOURCE = "the tabulated Henry's-law constant for the solute-solvent pair"
+_VOLATILITY_SOURCE = "the relative volatility from vapor pressures at the column's temperature"
+_REFLUX_SOURCE = "the column's design reflux ratio and the Fenske/Underwood results"
+
+
+class _VaporLiquidEquilibriumInputError(RefusalError, ValueError):
+    """A vapor-liquid equilibrium input that cannot be used without correction."""
+
+
+def _vapor_liquid_equilibrium_refusal(
+    message: str, *, subject: str, source: str
+) -> _VaporLiquidEquilibriumInputError:
+    return _VaporLiquidEquilibriumInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _vapor_liquid_equilibrium_input_source(name: str) -> str:
+    if name in {"heavy_vapor_pressure", "light_vapor_pressure", "pure_vapor_pressure"}:
+        return _VAPOR_PRESSURE_SOURCE
+    if name == "henry_constant":
+        return _HENRY_SOURCE
+    if name == "relative_volatility":
+        return _VOLATILITY_SOURCE
+    if name in {"minimum_reflux_ratio", "minimum_stages", "reflux_ratio"}:
+        return _REFLUX_SOURCE
+    return _COMPOSITION_SOURCE
+
 
 __all__ = [
     "equilibrium_vapor_mole_fraction",
@@ -53,10 +86,18 @@ def raoult_partial_pressure(
     """
     _check(pure_vapor_pressure, "[pressure]", "pure_vapor_pressure")
     if not 0.0 <= liquid_mole_fraction <= 1.0:
-        raise ValueError(f"liquid_mole_fraction must be in [0, 1]; got {liquid_mole_fraction}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"liquid_mole_fraction must be in [0, 1]; got {liquid_mole_fraction}",
+            subject="liquid_mole_fraction",
+            source=_COMPOSITION_SOURCE,
+        )
     p_pure = pure_vapor_pressure.to("kPa").magnitude
     if p_pure < 0:
-        raise ValueError("pure_vapor_pressure must be non-negative")
+        raise _vapor_liquid_equilibrium_refusal(
+            "pure_vapor_pressure must be non-negative",
+            subject="pure_vapor_pressure",
+            source=_VAPOR_PRESSURE_SOURCE,
+        )
     return Quantity(magnitude=liquid_mole_fraction * p_pure, unit="kPa")
 
 
@@ -74,10 +115,16 @@ def henry_law_partial_pressure(
     """
     _check(henry_constant, "[pressure]", "henry_constant")
     if not 0.0 <= solute_mole_fraction <= 1.0:
-        raise ValueError(f"solute_mole_fraction must be in [0, 1]; got {solute_mole_fraction}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"solute_mole_fraction must be in [0, 1]; got {solute_mole_fraction}",
+            subject="solute_mole_fraction",
+            source=_COMPOSITION_SOURCE,
+        )
     k_h = henry_constant.to("kPa").magnitude
     if k_h < 0:
-        raise ValueError("henry_constant must be non-negative")
+        raise _vapor_liquid_equilibrium_refusal(
+            "henry_constant must be non-negative", subject="henry_constant", source=_HENRY_SOURCE
+        )
     return Quantity(magnitude=solute_mole_fraction * k_h, unit="kPa")
 
 
@@ -97,7 +144,11 @@ def relative_volatility(*, light_vapor_pressure: Quantity, heavy_vapor_pressure:
     p_light = light_vapor_pressure.to("kPa").magnitude
     p_heavy = heavy_vapor_pressure.to("kPa").magnitude
     if p_light <= 0 or p_heavy <= 0:
-        raise ValueError("vapor pressures must be positive")
+        raise _vapor_liquid_equilibrium_refusal(
+            "vapor pressures must be positive",
+            subject="light_vapor_pressure and heavy_vapor_pressure",
+            source=_VAPOR_PRESSURE_SOURCE,
+        )
     return p_light / p_heavy
 
 
@@ -115,9 +166,17 @@ def equilibrium_vapor_mole_fraction(
     Returns the vapor mole fraction (0 to 1) as a plain float.
     """
     if not 0.0 <= liquid_mole_fraction <= 1.0:
-        raise ValueError(f"liquid_mole_fraction must be in [0, 1]; got {liquid_mole_fraction}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"liquid_mole_fraction must be in [0, 1]; got {liquid_mole_fraction}",
+            subject="liquid_mole_fraction",
+            source=_COMPOSITION_SOURCE,
+        )
     if relative_volatility <= 0:
-        raise ValueError(f"relative_volatility must be positive; got {relative_volatility}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"relative_volatility must be positive; got {relative_volatility}",
+            subject="relative_volatility",
+            source=_VOLATILITY_SOURCE,
+        )
     x = liquid_mole_fraction
     alpha = relative_volatility
     return alpha * x / (1.0 + (alpha - 1.0) * x)
@@ -142,22 +201,32 @@ def fenske_minimum_stages(
     Returns the minimum number of theoretical stages as a plain float.
     """
     if not 0.0 < distillate_light_fraction < 1.0:
-        raise ValueError(
-            f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}"
+        raise _vapor_liquid_equilibrium_refusal(
+            f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}",
+            subject="distillate_light_fraction",
+            source=_COMPOSITION_SOURCE,
         )
     if not 0.0 < bottoms_light_fraction < 1.0:
-        raise ValueError(f"bottoms_light_fraction must be in (0, 1); got {bottoms_light_fraction}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"bottoms_light_fraction must be in (0, 1); got {bottoms_light_fraction}",
+            subject="bottoms_light_fraction",
+            source=_COMPOSITION_SOURCE,
+        )
     if relative_volatility <= 1.0:
-        raise ValueError(
+        raise _vapor_liquid_equilibrium_refusal(
             "relative_volatility must exceed 1 (no separation is possible at α ≤ 1); got "
-            f"{relative_volatility}"
+            f"{relative_volatility}",
+            subject="relative_volatility",
+            source=_VOLATILITY_SOURCE,
         )
     x_d = distillate_light_fraction
     x_b = bottoms_light_fraction
     if x_d <= x_b:
-        raise ValueError(
+        raise _vapor_liquid_equilibrium_refusal(
             "distillate_light_fraction must exceed bottoms_light_fraction "
-            "(the distillate is the light-enriched product)"
+            "(the distillate is the light-enriched product)",
+            subject="distillate_light_fraction and bottoms_light_fraction",
+            source=_COMPOSITION_SOURCE,
         )
     separation = (x_d / (1.0 - x_d)) * ((1.0 - x_b) / x_b)
     return log(separation) / log(relative_volatility)
@@ -179,15 +248,23 @@ def underwood_minimum_reflux(
     to R_min, the taller the column. Returns the minimum reflux ratio L/D as a plain float.
     """
     if not 0.0 < distillate_light_fraction < 1.0:
-        raise ValueError(
-            f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}"
+        raise _vapor_liquid_equilibrium_refusal(
+            f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}",
+            subject="distillate_light_fraction",
+            source=_COMPOSITION_SOURCE,
         )
     if not 0.0 < feed_light_fraction < 1.0:
-        raise ValueError(f"feed_light_fraction must be in (0, 1); got {feed_light_fraction}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"feed_light_fraction must be in (0, 1); got {feed_light_fraction}",
+            subject="feed_light_fraction",
+            source=_COMPOSITION_SOURCE,
+        )
     if relative_volatility <= 1.0:
-        raise ValueError(
+        raise _vapor_liquid_equilibrium_refusal(
             "relative_volatility must exceed 1 (no separation is possible at α ≤ 1); got "
-            f"{relative_volatility}"
+            f"{relative_volatility}",
+            subject="relative_volatility",
+            source=_VOLATILITY_SOURCE,
         )
     x_d = distillate_light_fraction
     x_f = feed_light_fraction
@@ -195,9 +272,11 @@ def underwood_minimum_reflux(
         relative_volatility - 1.0
     )
     if r_min <= 0.0:
-        raise ValueError(
+        raise _vapor_liquid_equilibrium_refusal(
             "the specified split needs no rectification at this feed (R_min ≤ 0); check that the "
-            "distillate is enriched in the light component relative to the feed"
+            "distillate is enriched in the light component relative to the feed",
+            subject="distillate_light_fraction, feed_light_fraction, and relative_volatility",
+            source=_COMPOSITION_SOURCE,
         )
     return r_min
 
@@ -221,32 +300,50 @@ def gilliland_actual_stages(
     Returns the number of theoretical stages as a plain float.
     """
     if minimum_stages <= 0.0:
-        raise ValueError(f"minimum_stages must be positive; got {minimum_stages}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"minimum_stages must be positive; got {minimum_stages}",
+            subject="minimum_stages",
+            source=_REFLUX_SOURCE,
+        )
     if minimum_reflux_ratio <= 0.0:
-        raise ValueError(f"minimum_reflux_ratio must be positive; got {minimum_reflux_ratio}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"minimum_reflux_ratio must be positive; got {minimum_reflux_ratio}",
+            subject="minimum_reflux_ratio",
+            source=_REFLUX_SOURCE,
+        )
     if reflux_ratio <= minimum_reflux_ratio:
-        raise ValueError(
+        raise _vapor_liquid_equilibrium_refusal(
             "reflux_ratio must exceed minimum_reflux_ratio (below R_min the split is unreachable); "
-            f"got reflux_ratio={reflux_ratio}, minimum_reflux_ratio={minimum_reflux_ratio}"
+            f"got reflux_ratio={reflux_ratio}, minimum_reflux_ratio={minimum_reflux_ratio}",
+            subject="reflux_ratio and minimum_reflux_ratio",
+            source=_REFLUX_SOURCE,
         )
     x = (reflux_ratio - minimum_reflux_ratio) / (reflux_ratio + 1.0)
     y = 1.0 - exp((1.0 + 54.4 * x) / (11.0 + 117.2 * x) * (x - 1.0) / sqrt(x))
     if y >= 1.0:
-        raise ValueError(
+        raise _vapor_liquid_equilibrium_refusal(
             "reflux_ratio is too close to minimum_reflux_ratio for a finite stage count; got "
             f"reflux_ratio={reflux_ratio}, minimum_reflux_ratio={minimum_reflux_ratio} "
             f"(R − R_min = {reflux_ratio - minimum_reflux_ratio:g}). The column is at the reflux "
-            "pinch, where the Gilliland correlation diverges; raise the reflux ratio"
+            "pinch, where the Gilliland correlation diverges; raise the reflux ratio",
+            subject="reflux_ratio and minimum_reflux_ratio",
+            source=_REFLUX_SOURCE,
         )
     return (minimum_stages + y) / (1.0 - y)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _vapor_liquid_equilibrium_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_vapor_liquid_equilibrium_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _vapor_liquid_equilibrium_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_vapor_liquid_equilibrium_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

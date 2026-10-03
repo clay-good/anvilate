@@ -22,7 +22,32 @@ equation-of-state relations.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_STATE_SOURCE = "the process operating case's pressure, temperature, and molar volume"
+_CRITICAL_SOURCE = "the gas's critical constants from a cited property table"
+_EOS_SOURCE = "the cited equation-of-state constants (van der Waals a and b, or Z)"
+
+
+class _RealGasInputError(RefusalError, ValueError):
+    """A real-gas input that cannot be used without correction."""
+
+
+def _real_gas_refusal(message: str, *, subject: str, source: str) -> _RealGasInputError:
+    return _RealGasInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _real_gas_input_source(name: str) -> str:
+    if name in {"cohesion_a", "compressibility_factor", "covolume_b"}:
+        return _EOS_SOURCE
+    if name in {"critical_pressure", "critical_temperature"}:
+        return _CRITICAL_SOURCE
+    return _STATE_SOURCE
+
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K), universal
 
@@ -57,8 +82,13 @@ def compressibility_factor(
     p = pressure.to("Pa").magnitude
     v = molar_volume.to("m**3/mol").magnitude
     t = temperature.to("K").magnitude
-    if p <= 0 or v <= 0 or t <= 0:
-        raise ValueError("pressure, molar_volume, and temperature must be positive")
+    for subject, magnitude in (("pressure", p), ("molar_volume", v), ("temperature", t)):
+        if magnitude <= 0:
+            raise _real_gas_refusal(
+                "pressure, molar_volume, and temperature must be positive",
+                subject=subject,
+                source=_STATE_SOURCE,
+            )
     return p * v / (_GAS_CONSTANT * t)
 
 
@@ -80,10 +110,17 @@ def real_gas_molar_volume(
     _check(temperature, "[temperature]", "temperature")
     p = pressure.to("Pa").magnitude
     t = temperature.to("K").magnitude
-    if p <= 0 or t <= 0:
-        raise ValueError("pressure and temperature must be positive")
+    for subject, magnitude in (("pressure", p), ("temperature", t)):
+        if magnitude <= 0:
+            raise _real_gas_refusal(
+                "pressure and temperature must be positive", subject=subject, source=_STATE_SOURCE
+            )
     if compressibility_factor <= 0:
-        raise ValueError("compressibility_factor must be positive")
+        raise _real_gas_refusal(
+            "compressibility_factor must be positive",
+            subject="compressibility_factor",
+            source=_EOS_SOURCE,
+        )
     return Quantity(magnitude=compressibility_factor * _GAS_CONSTANT * t / p, unit="m**3/mol")
 
 
@@ -112,11 +149,23 @@ def van_der_waals_pressure(
     a = cohesion_a.to("Pa*m**6/mol**2").magnitude
     b = covolume_b.to("m**3/mol").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive absolute (kelvin)")
+        raise _real_gas_refusal(
+            "temperature must be positive absolute (kelvin)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if v <= 0 or a < 0 or b < 0:
-        raise ValueError("molar_volume must be positive; cohesion_a and covolume_b non-negative")
+        raise _real_gas_refusal(
+            "molar_volume must be positive; cohesion_a and covolume_b non-negative",
+            subject="molar_volume, cohesion_a, and covolume_b",
+            source=_EOS_SOURCE,
+        )
     if v <= b:
-        raise ValueError("molar_volume must exceed the covolume b (v̄ > b)")
+        raise _real_gas_refusal(
+            "molar_volume must exceed the covolume b (v̄ > b)",
+            subject="molar_volume and covolume_b",
+            source=_EOS_SOURCE,
+        )
     return Quantity(magnitude=_GAS_CONSTANT * t / (v - b) - a / (v * v), unit="Pa")
 
 
@@ -139,9 +188,17 @@ def van_der_waals_cohesion_a(
     t_c = critical_temperature.to("K").magnitude
     p_c = critical_pressure.to("Pa").magnitude
     if t_c <= 0:
-        raise ValueError("critical_temperature must be positive absolute (kelvin)")
+        raise _real_gas_refusal(
+            "critical_temperature must be positive absolute (kelvin)",
+            subject="critical_temperature",
+            source=_CRITICAL_SOURCE,
+        )
     if p_c <= 0:
-        raise ValueError("critical_pressure must be positive")
+        raise _real_gas_refusal(
+            "critical_pressure must be positive",
+            subject="critical_pressure",
+            source=_CRITICAL_SOURCE,
+        )
     a = 27.0 * _GAS_CONSTANT**2 * t_c**2 / (64.0 * p_c)
     return Quantity(magnitude=a, unit="Pa*m**6/mol**2")
 
@@ -164,9 +221,17 @@ def van_der_waals_covolume_b(
     t_c = critical_temperature.to("K").magnitude
     p_c = critical_pressure.to("Pa").magnitude
     if t_c <= 0:
-        raise ValueError("critical_temperature must be positive absolute (kelvin)")
+        raise _real_gas_refusal(
+            "critical_temperature must be positive absolute (kelvin)",
+            subject="critical_temperature",
+            source=_CRITICAL_SOURCE,
+        )
     if p_c <= 0:
-        raise ValueError("critical_pressure must be positive")
+        raise _real_gas_refusal(
+            "critical_pressure must be positive",
+            subject="critical_pressure",
+            source=_CRITICAL_SOURCE,
+        )
     return Quantity(magnitude=_GAS_CONSTANT * t_c / (8.0 * p_c), unit="m**3/mol")
 
 
@@ -186,9 +251,15 @@ def reduced_temperature(*, temperature: Quantity, critical_temperature: Quantity
     t = temperature.to("K").magnitude
     t_c = critical_temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive")
+        raise _real_gas_refusal(
+            "temperature must be positive", subject="temperature", source=_STATE_SOURCE
+        )
     if t_c <= 0:
-        raise ValueError("critical_temperature must be positive")
+        raise _real_gas_refusal(
+            "critical_temperature must be positive",
+            subject="critical_temperature",
+            source=_CRITICAL_SOURCE,
+        )
     return t / t_c
 
 
@@ -207,18 +278,30 @@ def reduced_pressure(*, pressure: Quantity, critical_pressure: Quantity) -> floa
     p = pressure.to("Pa").magnitude
     p_c = critical_pressure.to("Pa").magnitude
     if p <= 0:
-        raise ValueError("pressure must be positive")
+        raise _real_gas_refusal(
+            "pressure must be positive", subject="pressure", source=_STATE_SOURCE
+        )
     if p_c <= 0:
-        raise ValueError("critical_pressure must be positive")
+        raise _real_gas_refusal(
+            "critical_pressure must be positive",
+            subject="critical_pressure",
+            source=_CRITICAL_SOURCE,
+        )
     return p / p_c
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _real_gas_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_real_gas_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _real_gas_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_real_gas_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

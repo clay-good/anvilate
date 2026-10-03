@@ -18,7 +18,32 @@ dimensionless.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DUTY_SOURCE = "the evaporating and condensing temperatures from the design basis"
+_RATING_SOURCE = "the unit's rated capacity and power input from its AHRI rating"
+_STATE_SOURCE = "the refrigerant's enthalpies from its property tables at the cycle states"
+
+
+class _RefrigerationInputError(RefusalError, ValueError):
+    """A refrigeration-cycle input that cannot be used without correction."""
+
+
+def _refrigeration_refusal(message: str, *, subject: str, source: str) -> _RefrigerationInputError:
+    return _RefrigerationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _refrigeration_input_source(name: str) -> str:
+    if name in {"carnot_cop", "cold_temperature", "hot_temperature"}:
+        return _DUTY_SOURCE
+    if name in {"actual_cop", "capacity", "cooling_capacity", "cooling_cop", "power_input"}:
+        return _RATING_SOURCE
+    return _STATE_SOURCE
+
 
 __all__ = [
     "carnot_cop_cooling",
@@ -46,9 +71,17 @@ def carnot_cop_cooling(*, cold_temperature: Quantity, hot_temperature: Quantity)
     t_c = cold_temperature.to("K").magnitude
     t_h = hot_temperature.to("K").magnitude
     if t_c <= 0 or t_h <= 0:
-        raise ValueError("temperatures must be positive (absolute)")
+        raise _refrigeration_refusal(
+            "temperatures must be positive (absolute)",
+            subject="cold_temperature and hot_temperature",
+            source=_DUTY_SOURCE,
+        )
     if t_h <= t_c:
-        raise ValueError("hot_temperature must exceed cold_temperature")
+        raise _refrigeration_refusal(
+            "hot_temperature must exceed cold_temperature",
+            subject="hot_temperature and cold_temperature",
+            source=_DUTY_SOURCE,
+        )
     return t_c / (t_h - t_c)
 
 
@@ -66,9 +99,17 @@ def carnot_cop_heating(*, cold_temperature: Quantity, hot_temperature: Quantity)
     t_c = cold_temperature.to("K").magnitude
     t_h = hot_temperature.to("K").magnitude
     if t_c <= 0 or t_h <= 0:
-        raise ValueError("temperatures must be positive (absolute)")
+        raise _refrigeration_refusal(
+            "temperatures must be positive (absolute)",
+            subject="cold_temperature and hot_temperature",
+            source=_DUTY_SOURCE,
+        )
     if t_h <= t_c:
-        raise ValueError("hot_temperature must exceed cold_temperature")
+        raise _refrigeration_refusal(
+            "hot_temperature must exceed cold_temperature",
+            subject="hot_temperature and cold_temperature",
+            source=_DUTY_SOURCE,
+        )
     return t_h / (t_h - t_c)
 
 
@@ -84,8 +125,11 @@ def coefficient_of_performance(*, capacity: Quantity, power_input: Quantity) -> 
     _check(power_input, "[power]", "power_input")
     q = capacity.to("W").magnitude
     w = power_input.to("W").magnitude
-    if q <= 0 or w <= 0:
-        raise ValueError("capacity and power_input must be positive")
+    for subject, magnitude in (("capacity", q), ("power_input", w)):
+        if magnitude <= 0:
+            raise _refrigeration_refusal(
+                "capacity and power_input must be positive", subject=subject, source=_RATING_SOURCE
+            )
     return q / w
 
 
@@ -101,12 +145,18 @@ def second_law_efficiency(*, actual_cop: float, carnot_cop: float) -> float:
     dimensionless efficiency.
     """
     if actual_cop <= 0:
-        raise ValueError("actual_cop must be positive")
+        raise _refrigeration_refusal(
+            "actual_cop must be positive", subject="actual_cop", source=_RATING_SOURCE
+        )
     if carnot_cop <= 0:
-        raise ValueError("carnot_cop must be positive")
+        raise _refrigeration_refusal(
+            "carnot_cop must be positive", subject="carnot_cop", source=_DUTY_SOURCE
+        )
     if actual_cop > carnot_cop:
-        raise ValueError(
-            "actual_cop cannot exceed the Carnot COP (that would beat the ideal cycle)"
+        raise _refrigeration_refusal(
+            "actual_cop cannot exceed the Carnot COP (that would beat the ideal cycle)",
+            subject="actual_cop and carnot_cop",
+            source=_RATING_SOURCE,
         )
     return actual_cop / carnot_cop
 
@@ -130,7 +180,11 @@ def refrigeration_effect(
     h_in = evaporator_inlet_enthalpy.to("kJ/kg").magnitude
     h_out = evaporator_outlet_enthalpy.to("kJ/kg").magnitude
     if h_out <= h_in:
-        raise ValueError("evaporator_outlet_enthalpy must exceed the inlet (heat is absorbed)")
+        raise _refrigeration_refusal(
+            "evaporator_outlet_enthalpy must exceed the inlet (heat is absorbed)",
+            subject="evaporator_inlet_enthalpy and evaporator_outlet_enthalpy",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=h_out - h_in, unit="kJ/kg")
 
 
@@ -153,7 +207,11 @@ def compressor_work_of_compression(
     h_in = compressor_inlet_enthalpy.to("kJ/kg").magnitude
     h_out = compressor_outlet_enthalpy.to("kJ/kg").magnitude
     if h_out <= h_in:
-        raise ValueError("compressor_outlet_enthalpy must exceed the inlet (work is added)")
+        raise _refrigeration_refusal(
+            "compressor_outlet_enthalpy must exceed the inlet (work is added)",
+            subject="compressor_inlet_enthalpy and compressor_outlet_enthalpy",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=h_out - h_in, unit="kJ/kg")
 
 
@@ -177,9 +235,17 @@ def condenser_heat_rejection(
     q_l = refrigeration_effect.to("kJ/kg").magnitude
     w_c = work_of_compression.to("kJ/kg").magnitude
     if q_l <= 0:
-        raise ValueError("refrigeration_effect must be positive")
+        raise _refrigeration_refusal(
+            "refrigeration_effect must be positive",
+            subject="refrigeration_effect",
+            source=_STATE_SOURCE,
+        )
     if w_c <= 0:
-        raise ValueError("work_of_compression must be positive")
+        raise _refrigeration_refusal(
+            "work_of_compression must be positive",
+            subject="work_of_compression",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=q_l + w_c, unit="kJ/kg")
 
 
@@ -194,7 +260,9 @@ def heat_rejection_ratio(*, cooling_cop: float) -> float:
     heat-rejection ratio (> 1).
     """
     if cooling_cop <= 0:
-        raise ValueError("cooling_cop must be positive")
+        raise _refrigeration_refusal(
+            "cooling_cop must be positive", subject="cooling_cop", source=_RATING_SOURCE
+        )
     return (cooling_cop + 1.0) / cooling_cop
 
 
@@ -216,18 +284,30 @@ def refrigerant_mass_flow_rate(
     q = cooling_capacity.to("kW").magnitude
     qe = refrigeration_effect.to("kJ/kg").magnitude
     if q <= 0:
-        raise ValueError("cooling_capacity must be positive")
+        raise _refrigeration_refusal(
+            "cooling_capacity must be positive", subject="cooling_capacity", source=_RATING_SOURCE
+        )
     if qe <= 0:
-        raise ValueError("refrigeration_effect must be positive")
+        raise _refrigeration_refusal(
+            "refrigeration_effect must be positive",
+            subject="refrigeration_effect",
+            source=_STATE_SOURCE,
+        )
     return Quantity(magnitude=q / qe, unit="kg/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _refrigeration_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_refrigeration_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _refrigeration_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_refrigeration_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

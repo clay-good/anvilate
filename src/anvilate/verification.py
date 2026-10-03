@@ -38,6 +38,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 from ._models import Named, Provenance, RevalidatedModel, each_one
+from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity
 
@@ -118,6 +119,10 @@ class VerificationArchetype(RevalidatedModel):
     practice_default: bool = False
 
 
+class _OutcomeInputError(RefusalError, ValueError):
+    """A verification outcome that cannot be recorded without correction."""
+
+
 class VerificationOutcome(RevalidatedModel):
     """A recorded result: what was measured, when, by whom, and on what instrument.
 
@@ -142,7 +147,16 @@ class VerificationOutcome(RevalidatedModel):
             (self.instrument, "instrument"),
         ):
             if not value.strip():
-                raise ValueError(f"a recorded outcome needs a {name}")
+                raise _OutcomeInputError(
+                    f"a recorded outcome needs a {name}",
+                    remedies=(
+                        Remedy(
+                            action="replace",
+                            subject=name,
+                            source="the inspection or test record for the outcome",
+                        ),
+                    ),
+                )
         return self
 
 

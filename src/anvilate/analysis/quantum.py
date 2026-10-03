@@ -28,8 +28,38 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_RADIATION_SOURCE = "the light source's spectral specification (photon frequency)"
+_MATERIAL_SOURCE = "the cited work-function table for the emitter surface"
+_PARTICLE_SOURCE = "the particle's rest mass and speed from the experiment record"
+_SYSTEM_SOURCE = "the problem statement's confinement, levels, and uncertainties"
+_THRESHOLD_SOURCE = "the photon frequency against the emitter's tabulated work function"
+_REGIME_SOURCE = "the particle's measured speed, or the relativistic de Broglie form"
+
+
+class _QuantumInputError(RefusalError, ValueError):
+    """A quantum-physics input that cannot be used without correction."""
+
+
+def _quantum_refusal(message: str, *, subject: str, source: str) -> _QuantumInputError:
+    return _QuantumInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _quantum_input_source(name: str) -> str:
+    if name == "frequency":
+        return _RADIATION_SOURCE
+    if name == "work_function":
+        return _MATERIAL_SOURCE
+    if name in {"mass", "particle_mass", "velocity"}:
+        return _PARTICLE_SOURCE
+    return _SYSTEM_SOURCE
+
 
 _PLANCK_CONSTANT = 6.62607015e-34  # J*s
 _HBAR = 1.054571817e-34  # J*s, reduced Planck constant
@@ -60,14 +90,20 @@ def photoelectric_max_kinetic_energy(*, frequency: Quantity, work_function: Quan
     f = count_rate_per_second(frequency, name="frequency")
     phi = work_function.to("J").magnitude
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _quantum_refusal(
+            "frequency must be positive", subject="frequency", source=_RADIATION_SOURCE
+        )
     if phi <= 0:
-        raise ValueError("work_function must be positive")
+        raise _quantum_refusal(
+            "work_function must be positive", subject="work_function", source=_MATERIAL_SOURCE
+        )
     ke = _PLANCK_CONSTANT * f - phi
     if ke <= 0:
-        raise ValueError(
+        raise _quantum_refusal(
             "photon energy does not exceed the work function; no photoemission "
-            "(frequency is below the threshold)"
+            "(frequency is below the threshold)",
+            subject="frequency and work_function",
+            source=_THRESHOLD_SOURCE,
         )
     return Quantity(magnitude=ke, unit="J")
 
@@ -83,7 +119,9 @@ def photoelectric_threshold_frequency(*, work_function: Quantity) -> Quantity:
     _check(work_function, "[energy]", "work_function")
     phi = work_function.to("J").magnitude
     if phi <= 0:
-        raise ValueError("work_function must be positive")
+        raise _quantum_refusal(
+            "work_function must be positive", subject="work_function", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=phi / _PLANCK_CONSTANT, unit="Hz")
 
 
@@ -105,27 +143,33 @@ def de_broglie_wavelength(*, mass: Quantity, velocity: Quantity) -> Quantity:
     m = mass.to("kg").magnitude
     v = velocity.to("m/s").magnitude
     if m <= 0:
-        raise ValueError("mass must be positive")
+        raise _quantum_refusal("mass must be positive", subject="mass", source=_PARTICLE_SOURCE)
     if v <= 0:
-        raise ValueError("velocity must be positive")
+        raise _quantum_refusal(
+            "velocity must be positive", subject="velocity", source=_PARTICLE_SOURCE
+        )
     # h/(mv) is the non-relativistic form and the docstring says so. It has no ceiling: at
     # v = c and beyond it kept returning a finite picometre wavelength. Even inside the
     # range it drifts fast — at the docstring's own motivating case, a 200 kV TEM electron
     # at beta = 0.695, it is 1.39x coarse against h/(gamma*m*v). _SPEED_OF_LIGHT is already
     # defined in this module and was never consulted; `relativity.py` makes this same check.
     if v >= _SPEED_OF_LIGHT:
-        raise ValueError(
+        raise _quantum_refusal(
             f"velocity is {v:.6g} m/s, at or above the speed of light. The de Broglie form "
             f"here is h/(m*v), which is non-relativistic and has no ceiling; use the "
-            f"relativistic h/(gamma*m*v)"
+            f"relativistic h/(gamma*m*v)",
+            subject="velocity",
+            source=_REGIME_SOURCE,
         )
     if v > _NONRELATIVISTIC_SPEED_FRACTION * _SPEED_OF_LIGHT:
         beta = v / _SPEED_OF_LIGHT
         gamma = 1.0 / sqrt(1.0 - beta**2)
-        raise ValueError(
+        raise _quantum_refusal(
             f"velocity is {beta:.4g}c, past the non-relativistic range this form holds in. "
             f"h/(m*v) runs {gamma:.4g}x long here against the relativistic h/(gamma*m*v); "
-            f"a 200 kV electron microscope already sits at 0.695c"
+            f"a 200 kV electron microscope already sits at 0.695c",
+            subject="velocity",
+            source=_REGIME_SOURCE,
         )
     return Quantity(magnitude=_PLANCK_CONSTANT / (m * v), unit="m")
 
@@ -141,7 +185,11 @@ def minimum_momentum_uncertainty(*, position_uncertainty: Quantity) -> Quantity:
     _check(position_uncertainty, "[length]", "position_uncertainty")
     dx = position_uncertainty.to("m").magnitude
     if dx <= 0:
-        raise ValueError("position_uncertainty must be positive")
+        raise _quantum_refusal(
+            "position_uncertainty must be positive",
+            subject="position_uncertainty",
+            source=_SYSTEM_SOURCE,
+        )
     return Quantity(magnitude=_HBAR / (2.0 * dx), unit="kg*m/s")
 
 
@@ -156,7 +204,11 @@ def minimum_position_uncertainty(*, momentum_uncertainty: Quantity) -> Quantity:
     _check(momentum_uncertainty, "[momentum]", "momentum_uncertainty")
     dp = momentum_uncertainty.to("kg*m/s").magnitude
     if dp <= 0:
-        raise ValueError("momentum_uncertainty must be positive")
+        raise _quantum_refusal(
+            "momentum_uncertainty must be positive",
+            subject="momentum_uncertainty",
+            source=_SYSTEM_SOURCE,
+        )
     return Quantity(magnitude=_HBAR / (2.0 * dp), unit="m")
 
 
@@ -171,7 +223,9 @@ def minimum_energy_uncertainty(*, lifetime: Quantity) -> Quantity:
     _check(lifetime, "[time]", "lifetime")
     dt = lifetime.to("s").magnitude
     if dt <= 0:
-        raise ValueError("lifetime must be positive")
+        raise _quantum_refusal(
+            "lifetime must be positive", subject="lifetime", source=_SYSTEM_SOURCE
+        )
     return Quantity(magnitude=_HBAR / (2.0 * dt), unit="J")
 
 
@@ -191,13 +245,21 @@ def particle_in_box_energy(
     _check(particle_mass, "[mass]", "particle_mass")
     _check(box_length, "[length]", "box_length")
     if quantum_number < 1:
-        raise ValueError("quantum_number must be a positive integer")
+        raise _quantum_refusal(
+            "quantum_number must be a positive integer",
+            subject="quantum_number",
+            source=_SYSTEM_SOURCE,
+        )
     m = particle_mass.to("kg").magnitude
     length = box_length.to("m").magnitude
     if m <= 0:
-        raise ValueError("particle_mass must be positive")
+        raise _quantum_refusal(
+            "particle_mass must be positive", subject="particle_mass", source=_PARTICLE_SOURCE
+        )
     if length <= 0:
-        raise ValueError("box_length must be positive")
+        raise _quantum_refusal(
+            "box_length must be positive", subject="box_length", source=_SYSTEM_SOURCE
+        )
     energy = quantum_number**2 * _PLANCK_CONSTANT**2 / (8.0 * m * length**2)
     return Quantity(magnitude=energy, unit="J")
 
@@ -221,16 +283,27 @@ def particle_in_box_transition_wavelength(
     """
     _check(particle_mass, "[mass]", "particle_mass")
     _check(box_length, "[length]", "box_length")
-    if lower_level < 1 or upper_level < 1:
-        raise ValueError("lower_level and upper_level must be positive integers")
+    for subject, magnitude in (("lower_level", lower_level), ("upper_level", upper_level)):
+        if magnitude < 1:
+            raise _quantum_refusal(
+                "lower_level and upper_level must be positive integers",
+                subject=subject,
+                source=_SYSTEM_SOURCE,
+            )
     if upper_level <= lower_level:
-        raise ValueError("upper_level must exceed lower_level")
+        raise _quantum_refusal(
+            "upper_level must exceed lower_level", subject="upper_level", source=_SYSTEM_SOURCE
+        )
     m = particle_mass.to("kg").magnitude
     length = box_length.to("m").magnitude
     if m <= 0:
-        raise ValueError("particle_mass must be positive")
+        raise _quantum_refusal(
+            "particle_mass must be positive", subject="particle_mass", source=_PARTICLE_SOURCE
+        )
     if length <= 0:
-        raise ValueError("box_length must be positive")
+        raise _quantum_refusal(
+            "box_length must be positive", subject="box_length", source=_SYSTEM_SOURCE
+        )
     prefactor = _PLANCK_CONSTANT**2 / (8.0 * m * length**2)
     delta_e = (upper_level**2 - lower_level**2) * prefactor
     wavelength = _PLANCK_CONSTANT * _SPEED_OF_LIGHT / delta_e
@@ -239,10 +312,16 @@ def particle_in_box_transition_wavelength(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _quantum_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_quantum_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _quantum_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_quantum_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

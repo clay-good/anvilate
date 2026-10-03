@@ -29,7 +29,34 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CYLINDER_SOURCE = "the cylinder manufacturer's catalog bore and rod sizes"
+_PRESSURE_SOURCE = "the circuit's relief-valve or supply pressure setting"
+_FLOW_SOURCE = "the pump or valve rated flow at the cylinder port"
+
+
+class _HydraulicCylinderInputError(RefusalError, ValueError):
+    """A hydraulic-cylinder input that cannot be used without correction."""
+
+
+def _hydraulic_cylinder_refusal(
+    message: str, *, subject: str, source: str
+) -> _HydraulicCylinderInputError:
+    return _HydraulicCylinderInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _hydraulic_cylinder_input_source(name: str) -> str:
+    if name in {"pressure", "supply_pressure"}:
+        return _PRESSURE_SOURCE
+    if name == "flow_rate":
+        return _FLOW_SOURCE
+    return _CYLINDER_SOURCE
+
 
 __all__ = [
     "cylinder_extend_force",
@@ -44,10 +71,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _hydraulic_cylinder_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_hydraulic_cylinder_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _hydraulic_cylinder_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_hydraulic_cylinder_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -60,7 +93,11 @@ def _bore(bore_diameter: Quantity) -> float:
     _require(bore_diameter, "[length]", "bore_diameter")
     d = bore_diameter.to("mm").magnitude
     if d <= 0:
-        raise ValueError(f"bore_diameter must be positive; got {bore_diameter}")
+        raise _hydraulic_cylinder_refusal(
+            f"bore_diameter must be positive; got {bore_diameter}",
+            subject="bore_diameter",
+            source=_CYLINDER_SOURCE,
+        )
     return d
 
 
@@ -68,10 +105,16 @@ def _rod(rod_diameter: Quantity, bore_mm: float) -> float:
     _require(rod_diameter, "[length]", "rod_diameter")
     d = rod_diameter.to("mm").magnitude
     if d <= 0:
-        raise ValueError(f"rod_diameter must be positive; got {rod_diameter}")
+        raise _hydraulic_cylinder_refusal(
+            f"rod_diameter must be positive; got {rod_diameter}",
+            subject="rod_diameter",
+            source=_CYLINDER_SOURCE,
+        )
     if d >= bore_mm:
-        raise ValueError(
-            f"rod_diameter ({rod_diameter}) must be smaller than the bore ({bore_mm} mm)"
+        raise _hydraulic_cylinder_refusal(
+            f"rod_diameter ({rod_diameter}) must be smaller than the bore ({bore_mm} mm)",
+            subject="rod_diameter and bore_diameter",
+            source=_CYLINDER_SOURCE,
         )
     return d
 
@@ -87,7 +130,11 @@ def cylinder_extend_force(*, pressure: Quantity, bore_diameter: Quantity) -> Qua
     p = pressure.to("MPa").magnitude
     d = _bore(bore_diameter)
     if p <= 0:
-        raise ValueError(f"pressure must be positive; got {pressure}")
+        raise _hydraulic_cylinder_refusal(
+            f"pressure must be positive; got {pressure}",
+            subject="pressure",
+            source=_PRESSURE_SOURCE,
+        )
     force_n = p * pi / 4.0 * d**2  # MPa*mm^2 = N
     return Quantity(magnitude=force_n / 1000.0, unit="kN")
 
@@ -107,7 +154,11 @@ def cylinder_retract_force(
     bore = _bore(bore_diameter)
     rod = _rod(rod_diameter, bore)
     if p <= 0:
-        raise ValueError(f"pressure must be positive; got {pressure}")
+        raise _hydraulic_cylinder_refusal(
+            f"pressure must be positive; got {pressure}",
+            subject="pressure",
+            source=_PRESSURE_SOURCE,
+        )
     force_n = p * pi / 4.0 * (bore**2 - rod**2)
     return Quantity(magnitude=force_n / 1000.0, unit="kN")
 
@@ -119,15 +170,23 @@ def cylinder_extend_speed(*, flow_rate: Quantity, bore_diameter: Quantity) -> Qu
     (π/4)·``bore_diameter``². Both must be positive. Returns the speed in mm/s.
     """
     if not isinstance(flow_rate, Quantity):
-        raise ValueError(f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}")
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}",
+            subject="flow_rate",
+            source=_FLOW_SOURCE,
+        )
     if not flow_rate.has_dimension("[length]**3 / [time]"):
-        raise ValueError(
-            f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}"
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}",
+            subject="flow_rate",
+            source=_FLOW_SOURCE,
         )
     q = flow_rate.to("mm**3/s").magnitude
     d = _bore(bore_diameter)
     if q <= 0:
-        raise ValueError(f"flow_rate must be positive; got {flow_rate}")
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be positive; got {flow_rate}", subject="flow_rate", source=_FLOW_SOURCE
+        )
     return Quantity(magnitude=q / (pi / 4.0 * d**2), unit="mm/s")
 
 
@@ -141,16 +200,24 @@ def cylinder_retract_speed(
     and ``rod_diameter`` d (smaller than the bore). Returns the speed in mm/s.
     """
     if not isinstance(flow_rate, Quantity):
-        raise ValueError(f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}")
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}",
+            subject="flow_rate",
+            source=_FLOW_SOURCE,
+        )
     if not flow_rate.has_dimension("[length]**3 / [time]"):
-        raise ValueError(
-            f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}"
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}",
+            subject="flow_rate",
+            source=_FLOW_SOURCE,
         )
     q = flow_rate.to("mm**3/s").magnitude
     bore = _bore(bore_diameter)
     rod = _rod(rod_diameter, bore)
     if q <= 0:
-        raise ValueError(f"flow_rate must be positive; got {flow_rate}")
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be positive; got {flow_rate}", subject="flow_rate", source=_FLOW_SOURCE
+        )
     return Quantity(magnitude=q / (pi / 4.0 * (bore**2 - rod**2)), unit="mm/s")
 
 
@@ -173,7 +240,11 @@ def cylinder_regen_extend_force(
     bore = _bore(bore_diameter)
     rod = _rod(rod_diameter, bore)
     if p <= 0:
-        raise ValueError(f"pressure must be positive; got {pressure}")
+        raise _hydraulic_cylinder_refusal(
+            f"pressure must be positive; got {pressure}",
+            subject="pressure",
+            source=_PRESSURE_SOURCE,
+        )
     force_n = p * pi / 4.0 * rod**2  # MPa*mm^2 = N; net force acts over the rod area
     return Quantity(magnitude=force_n / 1000.0, unit="kN")
 
@@ -191,16 +262,24 @@ def cylinder_regen_extend_speed(
     only to check the rod fits (d < D). Returns the speed in mm/s.
     """
     if not isinstance(flow_rate, Quantity):
-        raise ValueError(f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}")
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be a [length]**3 / [time] quantity; got {flow_rate!r}",
+            subject="flow_rate",
+            source=_FLOW_SOURCE,
+        )
     if not flow_rate.has_dimension("[length]**3 / [time]"):
-        raise ValueError(
-            f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}"
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be a volume/time quantity; got {flow_rate.dimensionality}",
+            subject="flow_rate",
+            source=_FLOW_SOURCE,
         )
     q = flow_rate.to("mm**3/s").magnitude
     bore = _bore(bore_diameter)
     rod = _rod(rod_diameter, bore)
     if q <= 0:
-        raise ValueError(f"flow_rate must be positive; got {flow_rate}")
+        raise _hydraulic_cylinder_refusal(
+            f"flow_rate must be positive; got {flow_rate}", subject="flow_rate", source=_FLOW_SOURCE
+        )
     return Quantity(magnitude=q / (pi / 4.0 * rod**2), unit="mm/s")
 
 
@@ -220,15 +299,25 @@ def cylinder_rodside_intensified_pressure(
     pressure units.
     """
     if not isinstance(supply_pressure, Quantity):
-        raise ValueError(f"supply_pressure must be a [pressure] quantity; got {supply_pressure!r}")
+        raise _hydraulic_cylinder_refusal(
+            f"supply_pressure must be a [pressure] quantity; got {supply_pressure!r}",
+            subject="supply_pressure",
+            source=_PRESSURE_SOURCE,
+        )
     if not supply_pressure.has_dimension("[pressure]"):
-        raise ValueError(
-            f"supply_pressure must be a [pressure] quantity; got {supply_pressure.dimensionality}"
+        raise _hydraulic_cylinder_refusal(
+            f"supply_pressure must be a [pressure] quantity; got {supply_pressure.dimensionality}",
+            subject="supply_pressure",
+            source=_PRESSURE_SOURCE,
         )
     p = supply_pressure.to("MPa").magnitude
     bore = _bore(bore_diameter)
     rod = _rod(rod_diameter, bore)
     if p <= 0:
-        raise ValueError(f"supply_pressure must be positive; got {supply_pressure}")
+        raise _hydraulic_cylinder_refusal(
+            f"supply_pressure must be positive; got {supply_pressure}",
+            subject="supply_pressure",
+            source=_PRESSURE_SOURCE,
+        )
     intensified = p * bore**2 / (bore**2 - rod**2)
     return Quantity(magnitude=intensified, unit="MPa")

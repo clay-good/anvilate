@@ -50,7 +50,32 @@ from math import log, pi, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_GEOMETRY_SOURCE = "the part drawing's section dimensions and radii of curvature"
+_LOAD_SOURCE = "the bending moment or ring load from the load case"
+_MATERIAL_SOURCE = "the material certificate's elastic modulus"
+
+
+class _CurvedBeamInputError(RefusalError, ValueError):
+    """A curved-beam input that cannot be used without correction."""
+
+
+def _curved_beam_refusal(message: str, *, subject: str, source: str) -> _CurvedBeamInputError:
+    return _CurvedBeamInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _curved_beam_input_source(name: str) -> str:
+    if name in {"load", "moment"}:
+        return _LOAD_SOURCE
+    if name == "elastic_modulus":
+        return _MATERIAL_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 __all__ = [
     "CurvedBeamStress",
@@ -66,10 +91,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _curved_beam_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_curved_beam_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _curved_beam_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_curved_beam_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -124,11 +155,21 @@ def rectangular_curved_beam_stress(
     ro = outer_radius.to("mm").magnitude
     b = width.to("mm").magnitude
     if ri <= 0:
-        raise ValueError(f"inner_radius must be positive; got {inner_radius}")
+        raise _curved_beam_refusal(
+            f"inner_radius must be positive; got {inner_radius}",
+            subject="inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if ro <= ri:
-        raise ValueError(f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})")
+        raise _curved_beam_refusal(
+            f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})",
+            subject="inner_radius and outer_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if b <= 0:
-        raise ValueError(f"width must be positive; got {width}")
+        raise _curved_beam_refusal(
+            f"width must be positive; got {width}", subject="width", source=_GEOMETRY_SOURCE
+        )
     m = moment.to("N*mm").magnitude
     h = ro - ri
     rc = (ri + ro) / 2.0
@@ -142,9 +183,17 @@ def _check_radii(inner_radius: Quantity, outer_radius: Quantity) -> tuple[float,
     ri = inner_radius.to("mm").magnitude
     ro = outer_radius.to("mm").magnitude
     if ri <= 0:
-        raise ValueError(f"inner_radius must be positive; got {inner_radius}")
+        raise _curved_beam_refusal(
+            f"inner_radius must be positive; got {inner_radius}",
+            subject="inner_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     if ro <= ri:
-        raise ValueError(f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})")
+        raise _curved_beam_refusal(
+            f"outer_radius ({outer_radius}) must exceed inner_radius ({inner_radius})",
+            subject="inner_radius and outer_radius",
+            source=_GEOMETRY_SOURCE,
+        )
     return ri, ro
 
 
@@ -193,9 +242,11 @@ def trapezoidal_curved_beam_stress(
     bi = inner_width.to("mm").magnitude
     bo = outer_width.to("mm").magnitude
     if bi < 0 or bo < 0 or bi + bo == 0:
-        raise ValueError(
+        raise _curved_beam_refusal(
             f"inner_width and outer_width must be non-negative with a positive sum "
-            f"(at most one may be zero); got {inner_width} and {outer_width}"
+            f"(at most one may be zero); got {inner_width} and {outer_width}",
+            subject="inner_width and outer_width",
+            source=_GEOMETRY_SOURCE,
         )
     m = moment.to("N*mm").magnitude
     h = ro - ri
@@ -260,7 +311,11 @@ def composite_curved_beam_stress(
     """
     _require(moment, "[force] * [length]", "moment")
     if len(strips) == 0:
-        raise ValueError("strips must contain at least one (width, r_i, r_o) triple")
+        raise _curved_beam_refusal(
+            "strips must contain at least one (width, r_i, r_o) triple",
+            subject="strips",
+            source=_GEOMETRY_SOURCE,
+        )
     area = 0.0
     integral = 0.0
     first_moment = 0.0  # Σ A_k·r_c,k, for the centroid
@@ -269,21 +324,29 @@ def composite_curved_beam_stress(
     ro_overall = 0.0
     for index, strip in enumerate(strips):
         if not isinstance(strip, Sequence) or len(strip) != 3:
-            raise ValueError(
+            raise _curved_beam_refusal(
                 f"strips[{index}] must be a (width, inner radius, outer radius) triple; "
-                f"got {strip!r}"
+                f"got {strip!r}",
+                subject="strips",
+                source=_GEOMETRY_SOURCE,
             )
         width, inner_radius, outer_radius = strip
         _require(width, "[length]", f"strips[{index}] width")
         ri, ro = _check_radii(inner_radius, outer_radius)
         b = width.to("mm").magnitude
         if b <= 0:
-            raise ValueError(f"strips[{index}] width must be positive; got {width}")
+            raise _curved_beam_refusal(
+                f"strips[{index}] width must be positive; got {width}",
+                subject="strips",
+                source=_GEOMETRY_SOURCE,
+            )
         if prev_ro is not None and abs(ri - prev_ro) > 1e-9:
-            raise ValueError(
+            raise _curved_beam_refusal(
                 f"strips must be radially contiguous: strips[{index}] inner radius "
                 f"{inner_radius} does not meet the previous strip's outer radius "
-                f"({prev_ro:g} mm)"
+                f"({prev_ro:g} mm)",
+                subject="strips",
+                source=_GEOMETRY_SOURCE,
             )
         if prev_ro is None:
             ri_overall = ri
@@ -326,9 +389,15 @@ def thin_ring_diametral_deflection(
     e = elastic_modulus.to("MPa").magnitude  # N/mm^2
     i = second_moment.to("mm**4").magnitude
     if r <= 0:
-        raise ValueError(f"radius must be positive; got {radius}")
+        raise _curved_beam_refusal(
+            f"radius must be positive; got {radius}", subject="radius", source=_GEOMETRY_SOURCE
+        )
     if e <= 0 or i <= 0:
-        raise ValueError("elastic_modulus and second_moment must be positive")
+        raise _curved_beam_refusal(
+            "elastic_modulus and second_moment must be positive",
+            subject="elastic_modulus and second_moment",
+            source=_MATERIAL_SOURCE,
+        )
     coefficient = pi / 4.0 - 2.0 / pi
     return Quantity(magnitude=coefficient * p * r**3 / (e * i), unit="mm")
 
@@ -350,7 +419,9 @@ def thin_ring_max_moment(*, load: Quantity, radius: Quantity) -> Quantity:
     p = load.to("N").magnitude
     r = radius.to("mm").magnitude
     if r <= 0:
-        raise ValueError(f"radius must be positive; got {radius}")
+        raise _curved_beam_refusal(
+            f"radius must be positive; got {radius}", subject="radius", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=p * r / pi, unit="N*mm")
 
 
@@ -383,7 +454,13 @@ def thin_ring_buckling_pressure(
     i = second_moment.to("mm**4").magnitude
     r = radius.to("mm").magnitude
     if e <= 0 or i <= 0:
-        raise ValueError("elastic_modulus and second_moment must be positive")
+        raise _curved_beam_refusal(
+            "elastic_modulus and second_moment must be positive",
+            subject="elastic_modulus and second_moment",
+            source=_MATERIAL_SOURCE,
+        )
     if r <= 0:
-        raise ValueError(f"radius must be positive; got {radius}")
+        raise _curved_beam_refusal(
+            f"radius must be positive; got {radius}", subject="radius", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=3.0 * e * i / r**3, unit="N/mm")

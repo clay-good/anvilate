@@ -24,7 +24,38 @@ from __future__ import annotations
 
 from math import pi, radians, sqrt, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_HOPPER_SOURCE = "the hopper outlet drawing's orifice diameter"
+_MATERIAL_SOURCE = "the bulk material's test record (particle size, bulk density, repose angle)"
+_CORRELATION_SOURCE = "the Beverloo correlation's fitted coefficients for this material"
+_DUTY_SOURCE = "the process design basis's required discharge rate"
+_YARD_SOURCE = "the stockyard layout drawing's pile footprint"
+
+
+class _BulkSolidsInputError(RefusalError, ValueError):
+    """A bulk-solids handling input that cannot be used without correction."""
+
+
+def _bulk_solids_refusal(message: str, *, subject: str, source: str) -> _BulkSolidsInputError:
+    return _BulkSolidsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _bulk_solids_input_source(name: str) -> str:
+    if name == "orifice_diameter":
+        return _HOPPER_SOURCE
+    if name in {"discharge_coefficient", "shape_factor"}:
+        return _CORRELATION_SOURCE
+    if name == "mass_flow":
+        return _DUTY_SOURCE
+    if name == "base_radius":
+        return _YARD_SOURCE
+    return _MATERIAL_SOURCE
+
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -59,19 +90,36 @@ def beverloo_discharge_rate(
     d_p = particle_diameter.to("m").magnitude
     rho = bulk_density.to("kg/m**3").magnitude
     if d_o <= 0:
-        raise ValueError("orifice_diameter must be positive")
+        raise _bulk_solids_refusal(
+            "orifice_diameter must be positive", subject="orifice_diameter", source=_HOPPER_SOURCE
+        )
     if d_p <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _bulk_solids_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_MATERIAL_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("bulk_density must be positive")
+        raise _bulk_solids_refusal(
+            "bulk_density must be positive", subject="bulk_density", source=_MATERIAL_SOURCE
+        )
     if discharge_coefficient <= 0:
-        raise ValueError("discharge_coefficient must be positive")
+        raise _bulk_solids_refusal(
+            "discharge_coefficient must be positive",
+            subject="discharge_coefficient",
+            source=_CORRELATION_SOURCE,
+        )
     if shape_factor <= 0:
-        raise ValueError("shape_factor must be positive")
+        raise _bulk_solids_refusal(
+            "shape_factor must be positive", subject="shape_factor", source=_CORRELATION_SOURCE
+        )
     effective = d_o - shape_factor * d_p
     if effective <= 0:
-        raise ValueError(
-            "orifice_diameter must exceed shape_factor*particle_diameter (else it arches and stops)"
+        raise _bulk_solids_refusal(
+            "orifice_diameter must exceed shape_factor*particle_diameter (else it arches and "
+            "stops)",
+            subject="orifice_diameter, particle_diameter, and shape_factor",
+            source=_HOPPER_SOURCE,
         )
     w = discharge_coefficient * rho * sqrt(STANDARD_GRAVITY_M_PER_S2) * effective**2.5
     return Quantity(magnitude=w, unit="kg/s")
@@ -100,15 +148,29 @@ def beverloo_orifice_for_rate(
     d_p = particle_diameter.to("m").magnitude
     rho = bulk_density.to("kg/m**3").magnitude
     if w <= 0:
-        raise ValueError("mass_flow must be positive")
+        raise _bulk_solids_refusal(
+            "mass_flow must be positive", subject="mass_flow", source=_DUTY_SOURCE
+        )
     if d_p <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _bulk_solids_refusal(
+            "particle_diameter must be positive",
+            subject="particle_diameter",
+            source=_MATERIAL_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("bulk_density must be positive")
+        raise _bulk_solids_refusal(
+            "bulk_density must be positive", subject="bulk_density", source=_MATERIAL_SOURCE
+        )
     if discharge_coefficient <= 0:
-        raise ValueError("discharge_coefficient must be positive")
+        raise _bulk_solids_refusal(
+            "discharge_coefficient must be positive",
+            subject="discharge_coefficient",
+            source=_CORRELATION_SOURCE,
+        )
     if shape_factor <= 0:
-        raise ValueError("shape_factor must be positive")
+        raise _bulk_solids_refusal(
+            "shape_factor must be positive", subject="shape_factor", source=_CORRELATION_SOURCE
+        )
     effective = (w / (discharge_coefficient * rho * sqrt(STANDARD_GRAVITY_M_PER_S2))) ** (1.0 / 2.5)
     d_o = shape_factor * d_p + effective
     return Quantity(magnitude=d_o * 1000.0, unit="mm")
@@ -125,18 +187,30 @@ def conical_stockpile_volume(*, base_radius: Quantity, angle_of_repose: float) -
     _check(base_radius, "[length]", "base_radius")
     r = base_radius.to("m").magnitude
     if r <= 0:
-        raise ValueError("base_radius must be positive")
+        raise _bulk_solids_refusal(
+            "base_radius must be positive", subject="base_radius", source=_YARD_SOURCE
+        )
     if not 0.0 < angle_of_repose < 90.0:
-        raise ValueError("angle_of_repose must be in (0, 90) degrees")
+        raise _bulk_solids_refusal(
+            "angle_of_repose must be in (0, 90) degrees",
+            subject="angle_of_repose",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=pi / 3.0 * r**3 * tan(radians(angle_of_repose)), unit="m**3")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _bulk_solids_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_bulk_solids_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _bulk_solids_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_bulk_solids_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

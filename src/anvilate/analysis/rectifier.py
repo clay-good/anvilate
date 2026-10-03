@@ -27,8 +27,36 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_LOAD_SOURCE = "the load specification's DC current and resistance"
+_SUPPLY_SOURCE = "the transformer datasheet's secondary peak voltage and mains frequency"
+_CAPACITOR_SOURCE = "the filter capacitor's datasheet capacitance"
+_RIPPLE_SOURCE = "the power-supply specification's allowed ripple voltage"
+
+
+class _RectifierInputError(RefusalError, ValueError):
+    """A rectifier-filter input that cannot be used without correction."""
+
+
+def _rectifier_refusal(message: str, *, subject: str, source: str) -> _RectifierInputError:
+    return _RectifierInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _rectifier_input_source(name: str) -> str:
+    if name in {"frequency", "peak_voltage"}:
+        return _SUPPLY_SOURCE
+    if name == "capacitance":
+        return _CAPACITOR_SOURCE
+    if name == "ripple_voltage":
+        return _RIPPLE_SOURCE
+    return _LOAD_SOURCE
+
 
 __all__ = [
     "capacitor_filter_dc_voltage",
@@ -61,11 +89,17 @@ def capacitor_filter_ripple_voltage(
     f = count_rate_per_second(frequency, name="frequency")
     c = capacitance.to("F").magnitude
     if i <= 0:
-        raise ValueError("load_current must be positive")
+        raise _rectifier_refusal(
+            "load_current must be positive", subject="load_current", source=_LOAD_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _rectifier_refusal(
+            "frequency must be positive", subject="frequency", source=_SUPPLY_SOURCE
+        )
     if c <= 0:
-        raise ValueError("capacitance must be positive")
+        raise _rectifier_refusal(
+            "capacitance must be positive", subject="capacitance", source=_CAPACITOR_SOURCE
+        )
     return Quantity(magnitude=i / (2.0 * f * c), unit="V")
 
 
@@ -89,11 +123,17 @@ def filter_capacitance_for_ripple(
     f = count_rate_per_second(frequency, name="frequency")
     v_r = ripple_voltage.to("V").magnitude
     if i <= 0:
-        raise ValueError("load_current must be positive")
+        raise _rectifier_refusal(
+            "load_current must be positive", subject="load_current", source=_LOAD_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _rectifier_refusal(
+            "frequency must be positive", subject="frequency", source=_SUPPLY_SOURCE
+        )
     if v_r <= 0:
-        raise ValueError("ripple_voltage must be positive")
+        raise _rectifier_refusal(
+            "ripple_voltage must be positive", subject="ripple_voltage", source=_RIPPLE_SOURCE
+        )
     return Quantity(magnitude=i / (2.0 * f * v_r), unit="F")
 
 
@@ -123,18 +163,28 @@ def capacitor_filter_dc_voltage(
     f = count_rate_per_second(frequency, name="frequency")
     c = capacitance.to("F").magnitude
     if v_pk <= 0:
-        raise ValueError("peak_voltage must be positive")
+        raise _rectifier_refusal(
+            "peak_voltage must be positive", subject="peak_voltage", source=_SUPPLY_SOURCE
+        )
     if i <= 0:
-        raise ValueError("load_current must be positive")
+        raise _rectifier_refusal(
+            "load_current must be positive", subject="load_current", source=_LOAD_SOURCE
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _rectifier_refusal(
+            "frequency must be positive", subject="frequency", source=_SUPPLY_SOURCE
+        )
     if c <= 0:
-        raise ValueError("capacitance must be positive")
+        raise _rectifier_refusal(
+            "capacitance must be positive", subject="capacitance", source=_CAPACITOR_SOURCE
+        )
     droop = i / (4.0 * f * c)
     if droop >= v_pk:
-        raise ValueError(
+        raise _rectifier_refusal(
             "estimated ripple droop exceeds the peak voltage; the small-ripple "
-            "capacitor-filter approximation does not apply (increase capacitance)"
+            "capacitor-filter approximation does not apply (increase capacitance)",
+            subject="peak_voltage, load_current, frequency, and capacitance",
+            source=_CAPACITOR_SOURCE,
         )
     return Quantity(magnitude=v_pk - droop, unit="V")
 
@@ -161,20 +211,32 @@ def capacitor_filter_ripple_factor(
     r = load_resistance.to("ohm").magnitude
     c = capacitance.to("F").magnitude
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _rectifier_refusal(
+            "frequency must be positive", subject="frequency", source=_SUPPLY_SOURCE
+        )
     if r <= 0:
-        raise ValueError("load_resistance must be positive")
+        raise _rectifier_refusal(
+            "load_resistance must be positive", subject="load_resistance", source=_LOAD_SOURCE
+        )
     if c <= 0:
-        raise ValueError("capacitance must be positive")
+        raise _rectifier_refusal(
+            "capacitance must be positive", subject="capacitance", source=_CAPACITOR_SOURCE
+        )
     return 1.0 / (4.0 * _SQRT3 * f * r * c)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _rectifier_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_rectifier_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _rectifier_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_rectifier_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

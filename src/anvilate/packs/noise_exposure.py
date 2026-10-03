@@ -22,6 +22,7 @@ from ..analysis import (
     sound_level_sum,
 )
 from ..derivation import Derivation, SymbolValue
+from ..refusal import RefusalError, Remedy
 from ..scorecard import (
     CheckStatus,
     Direction,
@@ -66,6 +67,10 @@ _NEEDS_AN_EXPOSURE_DURATION = Need(
 )
 
 
+class _NoiseExposureInputError(RefusalError, ValueError):
+    """A noise-exposure input that cannot be used without correction."""
+
+
 def screen_noise_exposure(
     exposure: WorkerNoiseExposure,
     *,
@@ -85,7 +90,16 @@ def screen_noise_exposure(
     :class:`~anvilate.scorecard.Scorecard` with one cited PASS/FAIL entry for the noise dose.
     """
     if not exposure.machine_levels:
-        raise ValueError("machine_levels must contain at least one sound level")
+        raise _NoiseExposureInputError(
+            "machine_levels must contain at least one sound level",
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject="machine_levels",
+                    source="the noise survey's measured machine sound levels",
+                ),
+            ),
+        )
     combined = sound_level_sum(levels=list(exposure.machine_levels))
     permissible = permissible_exposure_time(
         sound_level=combined,

@@ -23,8 +23,33 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_STAGE_SOURCE = "each stage's datasheet noise figure and gain at the operating frequency"
+_TEMPERATURE_SOURCE = "the receiver design basis's reference and system noise temperatures"
+_LINK_SOURCE = "the link budget's channel bandwidth and required signal-to-noise ratio"
+
+
+class _NoiseFigureInputError(RefusalError, ValueError):
+    """A noise-figure input that cannot be used without correction."""
+
+
+def _noise_figure_refusal(message: str, *, subject: str, source: str) -> _NoiseFigureInputError:
+    return _NoiseFigureInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _noise_figure_input_source(name: str) -> str:
+    if name in {"noise_temperature", "reference_temperature"}:
+        return _TEMPERATURE_SOURCE
+    if name in {"bandwidth", "required_snr"}:
+        return _LINK_SOURCE
+    return _STAGE_SOURCE
+
 
 _REFERENCE_TEMPERATURE = 290.0  # K (IEEE standard reference)
 
@@ -48,7 +73,9 @@ def noise_factor_from_figure(*, noise_figure_db: float) -> float:
     """
     require_finite(noise_figure_db, name="noise_figure_db")
     if noise_figure_db < 0:
-        raise ValueError("noise_figure_db must be non-negative")
+        raise _noise_figure_refusal(
+            "noise_figure_db must be non-negative", subject="noise_figure_db", source=_STAGE_SOURCE
+        )
     return 10.0 ** (noise_figure_db / 10.0)
 
 
@@ -64,22 +91,42 @@ def cascade_noise_factor(
     float. Requires one gain per noise factor and at least one stage.
     """
     if not isinstance(stage_noise_factors, Sequence):
-        raise ValueError(
+        raise _noise_figure_refusal(
             f"stage_noise_factors must be a sequence, not a single value; "
-            f"got {stage_noise_factors!r}"
+            f"got {stage_noise_factors!r}",
+            subject="stage_noise_factors",
+            source=_STAGE_SOURCE,
         )
     if not isinstance(stage_gains, Sequence):
-        raise ValueError(f"stage_gains must be a sequence, not a single value; got {stage_gains!r}")
+        raise _noise_figure_refusal(
+            f"stage_gains must be a sequence, not a single value; got {stage_gains!r}",
+            subject="stage_gains",
+            source=_STAGE_SOURCE,
+        )
     if len(stage_noise_factors) == 0:
-        raise ValueError("stage_noise_factors must not be empty")
+        raise _noise_figure_refusal(
+            "stage_noise_factors must not be empty",
+            subject="stage_noise_factors",
+            source=_STAGE_SOURCE,
+        )
     if len(stage_gains) != len(stage_noise_factors):
-        raise ValueError("stage_gains must have one gain per stage (same length as noise factors)")
+        raise _noise_figure_refusal(
+            "stage_gains must have one gain per stage (same length as noise factors)",
+            subject="stage_noise_factors and stage_gains",
+            source=_STAGE_SOURCE,
+        )
     for f in stage_noise_factors:
         if f < 1.0:
-            raise ValueError("each stage noise factor must be at least 1")
+            raise _noise_figure_refusal(
+                "each stage noise factor must be at least 1",
+                subject="stage_noise_factors",
+                source=_STAGE_SOURCE,
+            )
     for g in stage_gains:
         if g <= 0.0:
-            raise ValueError("each stage gain must be positive")
+            raise _noise_figure_refusal(
+                "each stage gain must be positive", subject="stage_gains", source=_STAGE_SOURCE
+            )
     total = stage_noise_factors[0]
     gain_product = 1.0
     for i in range(1, len(stage_noise_factors)):
@@ -99,23 +146,35 @@ def equivalent_noise_temperature(
     (a 1 dB figure is about 75 K). Returns the equivalent noise temperature in K.
     """
     if noise_factor < 1.0:
-        raise ValueError("noise_factor must be at least 1")
+        raise _noise_figure_refusal(
+            "noise_factor must be at least 1", subject="noise_factor", source=_STAGE_SOURCE
+        )
     if reference_temperature is None:
         t0 = _REFERENCE_TEMPERATURE
     else:
         _check(reference_temperature, "[temperature]", "reference_temperature")
         t0 = reference_temperature.to("K").magnitude
         if t0 <= 0:
-            raise ValueError("reference_temperature must be positive (absolute temperature)")
+            raise _noise_figure_refusal(
+                "reference_temperature must be positive (absolute temperature)",
+                subject="reference_temperature",
+                source=_TEMPERATURE_SOURCE,
+            )
     return Quantity(magnitude=(noise_factor - 1.0) * t0, unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _noise_figure_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_noise_figure_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _noise_figure_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_noise_figure_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -160,13 +219,25 @@ def receiver_minimum_detectable_signal(
         t0 = noise_temperature.to("K").magnitude
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if noise_factor < 1.0:
-        raise ValueError(
-            f"noise_factor is a LINEAR factor and cannot be below 1 (0 dB); got {noise_factor}"
+        raise _noise_figure_refusal(
+            f"noise_factor is a LINEAR factor and cannot be below 1 (0 dB); got {noise_factor}",
+            subject="noise_factor",
+            source=_STAGE_SOURCE,
         )
     if b <= 0:
-        raise ValueError(f"bandwidth must be positive; got {bandwidth}")
+        raise _noise_figure_refusal(
+            f"bandwidth must be positive; got {bandwidth}", subject="bandwidth", source=_LINK_SOURCE
+        )
     if required_snr <= 0:
-        raise ValueError(f"required_snr must be positive; got {required_snr}")
+        raise _noise_figure_refusal(
+            f"required_snr must be positive; got {required_snr}",
+            subject="required_snr",
+            source=_LINK_SOURCE,
+        )
     if t0 <= 0:
-        raise ValueError("noise_temperature must be above absolute zero")
+        raise _noise_figure_refusal(
+            "noise_temperature must be above absolute zero",
+            subject="noise_temperature",
+            source=_TEMPERATURE_SOURCE,
+        )
     return Quantity(magnitude=BOLTZMANN_J_PER_K * t0 * b * noise_factor * required_snr, unit="W")

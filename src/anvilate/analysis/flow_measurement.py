@@ -22,7 +22,40 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_METER_SOURCE = "the meter's calibration certificate (discharge coefficient and bore)"
+_PIPE_SOURCE = "the piping isometric's internal pipe diameter"
+_FLUID_SOURCE = "the fluid datasheet's density at the flowing conditions"
+_READING_SOURCE = "the differential-pressure transmitter's reading at the operating case"
+_DUTY_SOURCE = "the process design basis's flow rate or velocity at the operating case"
+
+
+class _FlowMeasurementInputError(RefusalError, ValueError):
+    """A flow-measurement input that cannot be used without correction."""
+
+
+def _flow_measurement_refusal(
+    message: str, *, subject: str, source: str
+) -> _FlowMeasurementInputError:
+    return _FlowMeasurementInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _flow_measurement_input_source(name: str) -> str:
+    if name == "pipe_diameter":
+        return _PIPE_SOURCE
+    if name in {"dynamic_pressure", "pressure_drop"}:
+        return _READING_SOURCE
+    if name == "density":
+        return _FLUID_SOURCE
+    if name in {"flow_rate", "velocity"}:
+        return _DUTY_SOURCE
+    return _METER_SOURCE
+
 
 __all__ = [
     "differential_pressure_for_flow",
@@ -59,13 +92,28 @@ def obstruction_meter_flow_rate(
     dp = pressure_drop.to("Pa").magnitude
     rho = density.to("kg/m**3").magnitude
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
-    if d <= 0 or big_d <= 0 or rho <= 0:
-        raise ValueError("throat_diameter, pipe_diameter, and density must be positive")
+        raise _flow_measurement_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_METER_SOURCE,
+        )
+    for subject, magnitude in (("throat_diameter", d), ("pipe_diameter", big_d), ("density", rho)):
+        if magnitude <= 0:
+            raise _flow_measurement_refusal(
+                "throat_diameter, pipe_diameter, and density must be positive",
+                subject=subject,
+                source=_flow_measurement_input_source(subject),
+            )
     if dp < 0:
-        raise ValueError("pressure_drop must be non-negative")
+        raise _flow_measurement_refusal(
+            "pressure_drop must be non-negative", subject="pressure_drop", source=_READING_SOURCE
+        )
     if d >= big_d:
-        raise ValueError("throat_diameter must be smaller than pipe_diameter")
+        raise _flow_measurement_refusal(
+            "throat_diameter must be smaller than pipe_diameter",
+            subject="throat_diameter and pipe_diameter",
+            source=_METER_SOURCE,
+        )
     beta = d / big_d
     area = pi / 4.0 * d**2
     q = discharge_coefficient * area / sqrt(1.0 - beta**4) * sqrt(2.0 * dp / rho)
@@ -102,13 +150,28 @@ def orifice_permanent_pressure_loss(
     d = throat_diameter.to("m").magnitude
     big_d = pipe_diameter.to("m").magnitude
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
+        raise _flow_measurement_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_METER_SOURCE,
+        )
     if dp < 0:
-        raise ValueError("pressure_drop must be non-negative")
-    if d <= 0 or big_d <= 0:
-        raise ValueError("throat_diameter and pipe_diameter must be positive")
+        raise _flow_measurement_refusal(
+            "pressure_drop must be non-negative", subject="pressure_drop", source=_READING_SOURCE
+        )
+    for subject, magnitude in (("throat_diameter", d), ("pipe_diameter", big_d)):
+        if magnitude <= 0:
+            raise _flow_measurement_refusal(
+                "throat_diameter and pipe_diameter must be positive",
+                subject=subject,
+                source=_flow_measurement_input_source(subject),
+            )
     if d >= big_d:
-        raise ValueError("throat_diameter must be smaller than pipe_diameter")
+        raise _flow_measurement_refusal(
+            "throat_diameter must be smaller than pipe_diameter",
+            subject="throat_diameter and pipe_diameter",
+            source=_METER_SOURCE,
+        )
     beta = d / big_d
     root = sqrt(1.0 - beta**4 * (1.0 - discharge_coefficient**2))
     recovered = discharge_coefficient * beta**2
@@ -139,11 +202,29 @@ def differential_pressure_for_flow(
     big_d = pipe_diameter.to("m").magnitude
     rho = density.to("kg/m**3").magnitude
     if not 0.0 < discharge_coefficient <= 1.0:
-        raise ValueError(f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}")
-    if q <= 0 or d <= 0 or big_d <= 0 or rho <= 0:
-        raise ValueError("flow_rate, throat_diameter, pipe_diameter, and density must be positive")
+        raise _flow_measurement_refusal(
+            f"discharge_coefficient must be in (0, 1]; got {discharge_coefficient}",
+            subject="discharge_coefficient",
+            source=_METER_SOURCE,
+        )
+    for subject, magnitude in (
+        ("flow_rate", q),
+        ("throat_diameter", d),
+        ("pipe_diameter", big_d),
+        ("density", rho),
+    ):
+        if magnitude <= 0:
+            raise _flow_measurement_refusal(
+                "flow_rate, throat_diameter, pipe_diameter, and density must be positive",
+                subject=subject,
+                source=_flow_measurement_input_source(subject),
+            )
     if d >= big_d:
-        raise ValueError("throat_diameter must be smaller than pipe_diameter")
+        raise _flow_measurement_refusal(
+            "throat_diameter must be smaller than pipe_diameter",
+            subject="throat_diameter and pipe_diameter",
+            source=_METER_SOURCE,
+        )
     beta = d / big_d
     area = pi / 4.0 * d**2
     velocity_term = q * sqrt(1.0 - beta**4) / (discharge_coefficient * area)
@@ -166,7 +247,9 @@ def dynamic_pressure(*, velocity: Quantity, density: Quantity) -> Quantity:
     v = velocity.to("m/s").magnitude
     rho = density.to("kg/m**3").magnitude
     if rho <= 0:
-        raise ValueError("density must be positive")
+        raise _flow_measurement_refusal(
+            "density must be positive", subject="density", source=_FLUID_SOURCE
+        )
     return Quantity(magnitude=0.5 * rho * v**2, unit="Pa")
 
 
@@ -183,16 +266,26 @@ def pitot_velocity(*, dynamic_pressure: Quantity, density: Quantity) -> Quantity
     dp = dynamic_pressure.to("Pa").magnitude
     rho = density.to("kg/m**3").magnitude
     if dp < 0 or rho <= 0:
-        raise ValueError("dynamic_pressure must be non-negative and density positive")
+        raise _flow_measurement_refusal(
+            "dynamic_pressure must be non-negative and density positive",
+            subject="dynamic_pressure and density",
+            source=_READING_SOURCE,
+        )
     return Quantity(magnitude=sqrt(2.0 * dp / rho), unit="m/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _flow_measurement_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_flow_measurement_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _flow_measurement_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_flow_measurement_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

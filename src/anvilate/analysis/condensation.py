@@ -18,8 +18,36 @@ rate a condenser must drain away.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.temperature import temperature_difference_kelvin
+
+_FLUID_PROPERTY_SOURCE = "the saturated-property table at the film temperature (e.g. NIST, IAPWS)"
+_SURFACE_SOURCE = "the condenser drawing (plate height, tube diameter, area, and tube rows)"
+_OPERATING_SOURCE = "the operating case (saturation temperature and wall temperature)"
+_COEFFICIENT_SOURCE = "the condensing heat-transfer coefficient from the Nusselt correlation"
+
+
+class _CondensationInputError(RefusalError, ValueError):
+    """A film-condensation input that cannot be used without correction."""
+
+
+def _condensation_refusal(message: str, *, subject: str, source: str) -> _CondensationInputError:
+    return _CondensationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _condensation_input_source(name: str) -> str:
+    if name == "temperature_difference":
+        return _OPERATING_SOURCE
+    if name in {"area", "plate_height", "tube_diameter", "tube_rows"}:
+        return _SURFACE_SOURCE
+    if name in {"heat_transfer_coefficient", "single_tube_coefficient"}:
+        return _COEFFICIENT_SOURCE
+    return _FLUID_PROPERTY_SOURCE
+
 
 STANDARD_GRAVITY_M_PER_S2 = 9.80665
 
@@ -55,21 +83,51 @@ def _nusselt_coefficient(
     dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     length = characteristic_length.to("m").magnitude
     if rho_l <= 0:
-        raise ValueError("liquid_density must be positive")
+        raise _condensation_refusal(
+            "liquid_density must be positive",
+            subject="liquid_density",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     if rho_v < 0:
-        raise ValueError("vapor_density must be non-negative")
+        raise _condensation_refusal(
+            "vapor_density must be non-negative",
+            subject="vapor_density",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     if rho_v >= rho_l:
-        raise ValueError("vapor_density must be less than liquid_density")
+        raise _condensation_refusal(
+            "vapor_density must be less than liquid_density",
+            subject="liquid_density and vapor_density",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     if k <= 0:
-        raise ValueError("liquid_thermal_conductivity must be positive")
+        raise _condensation_refusal(
+            "liquid_thermal_conductivity must be positive",
+            subject="liquid_thermal_conductivity",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     if mu <= 0:
-        raise ValueError("liquid_viscosity must be positive")
+        raise _condensation_refusal(
+            "liquid_viscosity must be positive",
+            subject="liquid_viscosity",
+            source=_FLUID_PROPERTY_SOURCE,
+        )
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _condensation_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_PROPERTY_SOURCE
+        )
     if dt <= 0:
-        raise ValueError("temperature_difference must be positive")
+        raise _condensation_refusal(
+            "temperature_difference must be positive",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
+        )
     if length <= 0:
-        raise ValueError(f"{length_name} must be positive")
+        raise _condensation_refusal(
+            f"{length_name} must be positive",
+            subject=length_name,
+            source=_condensation_input_source(length_name),
+        )
     numerator = rho_l * (rho_l - rho_v) * STANDARD_GRAVITY_M_PER_S2 * h_fg * k**3
     h = constant * (numerator / (mu * dt * length)) ** 0.25
     return Quantity(magnitude=h, unit="W/(m**2*K)")
@@ -162,13 +220,23 @@ def condensation_rate(
     dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     h_fg = latent_heat.to("J/kg").magnitude
     if h <= 0:
-        raise ValueError("heat_transfer_coefficient must be positive")
+        raise _condensation_refusal(
+            "heat_transfer_coefficient must be positive",
+            subject="heat_transfer_coefficient",
+            source=_COEFFICIENT_SOURCE,
+        )
     if a <= 0:
-        raise ValueError("area must be positive")
+        raise _condensation_refusal("area must be positive", subject="area", source=_SURFACE_SOURCE)
     if dt <= 0:
-        raise ValueError("temperature_difference must be positive")
+        raise _condensation_refusal(
+            "temperature_difference must be positive",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
+        )
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _condensation_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_PROPERTY_SOURCE
+        )
     return Quantity(magnitude=h * a * dt / h_fg, unit="kg/s")
 
 
@@ -192,11 +260,19 @@ def jakob_number(
     dt = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     h_fg = latent_heat.to("J/kg").magnitude
     if cp <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _condensation_refusal(
+            "specific_heat must be positive", subject="specific_heat", source=_FLUID_PROPERTY_SOURCE
+        )
     if dt <= 0:
-        raise ValueError("temperature_difference must be positive")
+        raise _condensation_refusal(
+            "temperature_difference must be positive",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
+        )
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _condensation_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_PROPERTY_SOURCE
+        )
     return cp * dt / h_fg
 
 
@@ -212,10 +288,16 @@ __all__ = [
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _condensation_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_condensation_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _condensation_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_condensation_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -252,11 +334,19 @@ def condensation_modified_latent_heat(
     c_p = specific_heat.to("J/(kg*K)").magnitude
     delta_t = temperature_difference_kelvin(temperature_difference, name="temperature_difference")
     if h_fg <= 0:
-        raise ValueError("latent_heat must be positive")
+        raise _condensation_refusal(
+            "latent_heat must be positive", subject="latent_heat", source=_FLUID_PROPERTY_SOURCE
+        )
     if c_p <= 0:
-        raise ValueError("specific_heat must be positive")
+        raise _condensation_refusal(
+            "specific_heat must be positive", subject="specific_heat", source=_FLUID_PROPERTY_SOURCE
+        )
     if delta_t < 0:
-        raise ValueError("temperature_difference must be non-negative")
+        raise _condensation_refusal(
+            "temperature_difference must be non-negative",
+            subject="temperature_difference",
+            source=_OPERATING_SOURCE,
+        )
     jakob = c_p * delta_t / h_fg
     return Quantity(magnitude=h_fg * (1.0 + 0.68 * jakob), unit="J/kg").to(latent_heat.unit)
 
@@ -288,8 +378,14 @@ def condensation_tube_bank_coefficient(
     )
     h_1 = single_tube_coefficient.to("W/(m**2*K)").magnitude
     if h_1 <= 0:
-        raise ValueError("single_tube_coefficient must be positive")
+        raise _condensation_refusal(
+            "single_tube_coefficient must be positive",
+            subject="single_tube_coefficient",
+            source=_COEFFICIENT_SOURCE,
+        )
     if tube_rows < 1:
-        raise ValueError("tube_rows must be at least 1")
+        raise _condensation_refusal(
+            "tube_rows must be at least 1", subject="tube_rows", source=_SURFACE_SOURCE
+        )
     h_n = h_1 * tube_rows**-0.25
     return Quantity(magnitude=h_n, unit="W/(m**2*K)").to(single_tube_coefficient.unit)

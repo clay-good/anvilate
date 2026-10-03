@@ -22,7 +22,37 @@ from __future__ import annotations
 
 from math import asin, degrees
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SOURCE_SOURCE = "the light source's datasheet wavelength"
+_APERTURE_SOURCE = "the slit manufacturer's specification (slit width and separation)"
+_BENCH_SOURCE = "the optical bench setup record (screen distance and order)"
+_MEASUREMENT_SOURCE = "the measured fringe spacing on the screen"
+
+
+class _OpticalInterferenceInputError(RefusalError, ValueError):
+    """An optical-interference input that cannot be used without correction."""
+
+
+def _optical_interference_refusal(
+    message: str, *, subject: str, source: str
+) -> _OpticalInterferenceInputError:
+    return _OpticalInterferenceInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _optical_interference_input_source(name: str) -> str:
+    if name == "wavelength":
+        return _SOURCE_SOURCE
+    if name in {"order", "screen_distance"}:
+        return _BENCH_SOURCE
+    if name == "fringe_spacing":
+        return _MEASUREMENT_SOURCE
+    return _APERTURE_SOURCE
+
 
 __all__ = [
     "double_slit_fringe_spacing",
@@ -50,11 +80,17 @@ def double_slit_fringe_spacing(
     d = slit_separation.to("m").magnitude
     ell = screen_distance.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _optical_interference_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SOURCE
+        )
     if d <= 0:
-        raise ValueError("slit_separation must be positive")
+        raise _optical_interference_refusal(
+            "slit_separation must be positive", subject="slit_separation", source=_APERTURE_SOURCE
+        )
     if ell <= 0:
-        raise ValueError("screen_distance must be positive")
+        raise _optical_interference_refusal(
+            "screen_distance must be positive", subject="screen_distance", source=_BENCH_SOURCE
+        )
     return Quantity(magnitude=lam * ell / d, unit="m")
 
 
@@ -76,14 +112,24 @@ def double_slit_fringe_angle(
     lam = wavelength.to("m").magnitude
     d = slit_separation.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _optical_interference_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SOURCE
+        )
     if d <= 0:
-        raise ValueError("slit_separation must be positive")
+        raise _optical_interference_refusal(
+            "slit_separation must be positive", subject="slit_separation", source=_APERTURE_SOURCE
+        )
     if order < 0:
-        raise ValueError("order must be a non-negative integer")
+        raise _optical_interference_refusal(
+            "order must be a non-negative integer", subject="order", source=_BENCH_SOURCE
+        )
     ratio = order * lam / d
     if ratio > 1.0:
-        raise ValueError("no fringe at this order: m*lambda exceeds the slit separation d")
+        raise _optical_interference_refusal(
+            "no fringe at this order: m*lambda exceeds the slit separation d",
+            subject="wavelength, slit_separation, and order",
+            source=_BENCH_SOURCE,
+        )
     return degrees(asin(ratio))
 
 
@@ -104,14 +150,26 @@ def single_slit_minimum_angle(
     lam = wavelength.to("m").magnitude
     a = slit_width.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _optical_interference_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SOURCE_SOURCE
+        )
     if a <= 0:
-        raise ValueError("slit_width must be positive")
+        raise _optical_interference_refusal(
+            "slit_width must be positive", subject="slit_width", source=_APERTURE_SOURCE
+        )
     if order < 1:
-        raise ValueError("order must be a positive integer (there is no m = 0 minimum)")
+        raise _optical_interference_refusal(
+            "order must be a positive integer (there is no m = 0 minimum)",
+            subject="order",
+            source=_BENCH_SOURCE,
+        )
     ratio = order * lam / a
     if ratio > 1.0:
-        raise ValueError("no minimum at this order: m*lambda exceeds the slit width a")
+        raise _optical_interference_refusal(
+            "no minimum at this order: m*lambda exceeds the slit width a",
+            subject="wavelength, slit_width, and order",
+            source=_BENCH_SOURCE,
+        )
     return degrees(asin(ratio))
 
 
@@ -132,20 +190,32 @@ def wavelength_from_fringe_spacing(
     d = slit_separation.to("m").magnitude
     ell = screen_distance.to("m").magnitude
     if dy <= 0:
-        raise ValueError("fringe_spacing must be positive")
+        raise _optical_interference_refusal(
+            "fringe_spacing must be positive", subject="fringe_spacing", source=_MEASUREMENT_SOURCE
+        )
     if d <= 0:
-        raise ValueError("slit_separation must be positive")
+        raise _optical_interference_refusal(
+            "slit_separation must be positive", subject="slit_separation", source=_APERTURE_SOURCE
+        )
     if ell <= 0:
-        raise ValueError("screen_distance must be positive")
+        raise _optical_interference_refusal(
+            "screen_distance must be positive", subject="screen_distance", source=_BENCH_SOURCE
+        )
     return Quantity(magnitude=dy * d / ell, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _optical_interference_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_optical_interference_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _optical_interference_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_optical_interference_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
