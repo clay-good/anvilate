@@ -149,6 +149,10 @@ def block_coefficient(
                 source=_HULL_SOURCE,
             )
     c_b = vol / (length * b * t)
+    # A hull stated in feet whose volume is exactly L·B·T converts a few parts in 1e16
+    # past 1 and was refused where the same hull in metres returned 1.0.
+    if 1.0 < c_b <= 1.0 + 1e-9:
+        c_b = 1.0
     if c_b > 1.0:
         raise _naval_architecture_refusal(
             "block coefficient exceeds 1: the displacement volume is larger than L*B*T "

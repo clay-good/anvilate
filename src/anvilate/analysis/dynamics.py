@@ -1316,10 +1316,12 @@ def half_sine_shock_scorecard(
             else Derivation(
                 symbolic="n = a_allow/(A·a₀)",
                 inputs=(
+                    # In the working unit, as a₀ is: substituting the caller's quantity
+                    # printed `3.28 ft/s²/(1.73205·1.000 m/s²)` under an SI report.
                     SymbolValue(
                         symbol="a_allow",
                         description="allowable shock acceleration for the mounted equipment",
-                        value=allowable_acceleration,
+                        value=Quantity(magnitude=allowable, unit="m/s**2"),
                         unit="m/s**2",
                     ),
                     SymbolValue(

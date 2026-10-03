@@ -109,6 +109,23 @@ def _lengths_mm(
     return out
 
 
+# Lengths arrive in whatever unit the caller wrote and are compared after conversion to
+# millimetres, which is exact only for metric inputs. Four links stated in feet whose
+# s + l equals p + q came back a few parts in 1e16 apart, so the same change-point
+# linkage was Grashof in metres and a triple-rocker in feet. Within this relative
+# distance the two sums are equal.
+_EQUAL_SUMS = 1e-9
+
+
+def _grashof_excess(lengths: list[float]) -> float:
+    """(s + l) - (p + q), with a difference at conversion-rounding scale read as zero."""
+    s = min(lengths)
+    ll = max(lengths)
+    others = sum(lengths) - s - ll
+    excess = (s + ll) - others
+    return 0.0 if abs(excess) <= _EQUAL_SUMS * (s + ll) else excess
+
+
 def is_grashof(
     *,
     ground: Quantity,
@@ -127,10 +144,7 @@ def is_grashof(
     linkage, False for a triple-rocker.
     """
     lengths = list(_lengths_mm(ground, input_link, coupler, output_link).values())
-    s = min(lengths)
-    ll = max(lengths)
-    others = sum(lengths) - s - ll
-    return s + ll <= others
+    return _grashof_excess(lengths) <= 0
 
 
 def fourbar_type(
@@ -152,14 +166,10 @@ def fourbar_type(
     the four link lengths in loop order.
     """
     lengths = _lengths_mm(ground, input_link, coupler, output_link)
-    values = list(lengths.values())
-    s = min(values)
-    ll = max(values)
-    others = sum(values) - s - ll
-    total = s + ll
-    if total > others:
+    excess = _grashof_excess(list(lengths.values()))
+    if excess > 0:
         return "triple-rocker"
-    if total == others:
+    if excess == 0:
         return "change-point"
     # Grashof: classify by which link is the (unique) shortest.
     shortest_name = min(lengths, key=lambda name: lengths[name])

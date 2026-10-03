@@ -244,6 +244,10 @@ def capacity_factor(
             source=_PRODUCTION_SOURCE,
         )
     cf = e / (p * t)
+    # Exactly the rated output, converted from other energy units, lands a few parts in
+    # 1e16 past 1; within rounding it is a capacity factor of one, not an impossibility.
+    if 1.0 < cf <= 1.0 + 1e-9:
+        cf = 1.0
     if cf > 1.0:
         raise _wind_power_refusal(
             "energy_produced exceeds the rated output for the period (CF > 1)",
