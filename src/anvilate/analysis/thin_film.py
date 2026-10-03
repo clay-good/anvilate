@@ -62,6 +62,7 @@ def quarter_wave_thickness(*, wavelength: Quantity, coating_index: float) -> Qua
     wavelength within the film, t = lambda/(4*n). About 100 nm for green light on a typical fluoride
     coating. Returns the coating thickness in m.
     """
+    require_finite(coating_index, name="coating_index")
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
@@ -83,6 +84,8 @@ def optimal_ar_coating_index(*, substrate_index: float, medium_index: float = 1.
     ``substrate_index`` it coats, n = sqrt(n_medium * n_substrate). A real material is picked close
     to this ideal (MgF2 at 1.38 for glass at ~1.5). Returns the index as a plain float.
     """
+    require_finite(substrate_index, name="substrate_index")
+    require_finite(medium_index, name="medium_index")
     if substrate_index <= 0:
         raise _thin_film_refusal(
             "substrate_index must be positive", subject="substrate_index", source=_INDEX_SOURCE
@@ -102,6 +105,7 @@ def thin_film_tuned_wavelength(*, thickness: Quantity, coating_index: float) -> 
     A coating optimized for one color reflects more at other wavelengths, which is the residual
     purple tint of many AR-coated lenses. Returns the tuned wavelength in m.
     """
+    require_finite(coating_index, name="coating_index")
     _check(thickness, "[length]", "thickness")
     t = thickness.to("m").magnitude
     if t <= 0:
@@ -160,6 +164,9 @@ def single_layer_ar_reflectance(
     design wavelength; away from either, the reflectance rises. Returns the reflectance as a plain
     float in [0, 1).
     """
+    require_finite(coating_index, name="coating_index")
+    require_finite(substrate_index, name="substrate_index")
+    require_finite(medium_index, name="medium_index")
     for subject, magnitude in (
         ("coating_index", coating_index),
         ("substrate_index", substrate_index),

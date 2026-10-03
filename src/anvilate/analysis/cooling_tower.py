@@ -161,6 +161,7 @@ def cooling_tower_blowdown_rate(
     concentrate less than the makeup). Returns the blowdown rate in the evaporation rate's flow
     units.
     """
+    require_finite(cycles_of_concentration, name="cycles_of_concentration")
     _check(evaporation_rate, "[volume]/[time]", "evaporation_rate")
     e = evaporation_rate.to("m**3/s").magnitude
     if e < 0:

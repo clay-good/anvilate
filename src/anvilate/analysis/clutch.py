@@ -149,6 +149,7 @@ def disc_clutch_torque(
     :data:`UNIFORM_PRESSURE`. r_o must exceed r_i, μ be non-negative, and N a
     positive integer. Returns the torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(actuating_force, "[force]", "actuating_force")
     if friction_coefficient < 0:
         raise _clutch_refusal(
@@ -184,6 +185,7 @@ def disc_clutch_force_for_torque(
     surface count, and ``theory``. ``torque`` must be a torque and
     ``friction_coefficient`` positive. Returns the force in newtons.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(torque, "[force] * [length]", "torque")
     if friction_coefficient <= 0:
         raise _clutch_refusal(
@@ -225,6 +227,8 @@ def cone_clutch_torque(
     pressure distribution as in :func:`disc_clutch_torque`. r_o must exceed r_i, μ
     be non-negative, and α in (0, 90). Returns the torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(cone_half_angle, name="cone_half_angle")
     _require(actuating_force, "[force]", "actuating_force")
     if friction_coefficient < 0:
         raise _clutch_refusal(
@@ -317,6 +321,7 @@ def centrifugal_clutch_torque(
     engagement speed the springs win and the torque is zero (reported as 0, not negative) — the
     self-engaging behaviour of a chainsaw, moped, or go-kart drive. Returns the torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(shoe_mass, "[mass]", "shoe_mass")
     _require(center_of_gravity_radius, "[length]", "center_of_gravity_radius")
     _require(angular_speed, "1/[time]", "angular_speed")

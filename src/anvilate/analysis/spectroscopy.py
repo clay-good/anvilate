@@ -117,6 +117,7 @@ def concentration_from_absorbance(
     l, c = A / (epsilon * l). It is how a spectrophotometer reads a concentration from a light
     measurement, in the dilute (linear Beer-Lambert) regime. Returns the concentration in mol/L.
     """
+    require_finite(absorbance, name="absorbance")
     _check(molar_absorptivity, "[length]**2/[substance]", "molar_absorptivity")
     _check(path_length, "[length]", "path_length")
     eps = molar_absorptivity.to("L/(mol*cm)").magnitude

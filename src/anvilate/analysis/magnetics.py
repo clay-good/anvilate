@@ -151,6 +151,7 @@ def magnetomotive_force(*, turns: float, current: Quantity) -> Quantity:
     magnetic circuit: MMF = N·I, in ampere-turns. It is what drives flux around the core against its
     reluctance (:func:`magnetic_reluctance`). Returns the magnetomotive force in A (ampere-turns).
     """
+    require_finite(turns, name="turns")
     _check(current, "[current]", "current")
     if turns <= 0:
         raise _magnetics_refusal("turns must be positive", subject="turns", source=_COIL_SOURCE)
@@ -173,6 +174,7 @@ def magnetic_reluctance(
     reluctance, so it carries much more flux for the same drive. Returns the reluctance in 1/H
     (ampere-turns per weber).
     """
+    require_finite(relative_permeability, name="relative_permeability")
     _check(path_length, "[length]", "path_length")
     _check(area, "[area]", "area")
     ell = path_length.to("m").magnitude
@@ -229,6 +231,7 @@ def coil_inductance(*, turns: float, reluctance: Quantity) -> Quantity:
     ``reactive_circuit.inductor_stored_energy`` for the ½·L·I² the field holds. ``turns`` N is
     positive and ``reluctance`` R a positive magnetic reluctance (1/H). Returns the inductance in H.
     """
+    require_finite(turns, name="turns")
     _check(reluctance, "1/[inductance]", "reluctance")
     if turns <= 0:
         raise _magnetics_refusal("turns must be positive", subject="turns", source=_COIL_SOURCE)

@@ -74,6 +74,7 @@ def photodiode_responsivity(*, quantum_efficiency: float, wavelength: Quantity) 
     amps per watt at longer wavelengths (a 1550 nm InGaAs diode at η = 0.8 sits near 1 A/W). η must
     lie in (0, 1] and the wavelength be positive. Returns the responsivity in A/W.
     """
+    require_finite(quantum_efficiency, name="quantum_efficiency")
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if not 0.0 < quantum_efficiency <= 1.0:

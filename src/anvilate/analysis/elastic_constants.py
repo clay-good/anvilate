@@ -55,6 +55,7 @@ def bulk_modulus_from_youngs_poisson(
     modulus) and ``poisson_ratio`` nu: K = E/(3*(1 - 2*nu)). It rises steeply as nu approaches 0.5,
     where the material becomes incompressible (rubber, a confined fluid). Returns K in Pa.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     _check(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("Pa").magnitude
     if e <= 0:
@@ -80,6 +81,7 @@ def lame_first_parameter(*, elastic_modulus: Quantity, poisson_ratio: float) -> 
     nu: lambda = E*nu/((1 + nu)*(1 - 2*nu)). It is zero at nu = 0 and diverges as nu nears 0.5.
     Returns the Lame parameter in Pa.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     _check(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("Pa").magnitude
     if e <= 0:
@@ -115,6 +117,7 @@ def shear_modulus_from_youngs_poisson(
 
     Source: Timoshenko & Goodier, *Theory of Elasticity*, isotropic elastic constants.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     _check(elastic_modulus, "[pressure]", "elastic_modulus")
     e = elastic_modulus.to("Pa").magnitude
     if e <= 0:

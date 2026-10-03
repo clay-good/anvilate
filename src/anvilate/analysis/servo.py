@@ -132,6 +132,7 @@ def reflected_load_inertia(*, load_inertia: Quantity, gear_ratio: float) -> Quan
     the squared ratio is why even modest gearing tames a heavy load. Returns the
     reflected inertia in kg·m².
     """
+    require_finite(gear_ratio, name="gear_ratio")
     j_load = _inertia_kgm2(load_inertia, "load_inertia")
     i = _check_ratio(gear_ratio)
     return Quantity(magnitude=j_load / i**2, unit="kg*m**2")
@@ -151,6 +152,7 @@ def reflected_inertia_ratio(
     the inertia-matched ratio (:func:`inertia_matching_gear_ratio`) it is exactly 1.
     Returns the dimensionless ratio.
     """
+    require_finite(gear_ratio, name="gear_ratio")
     j_motor = _inertia_kgm2(motor_inertia, "motor_inertia")
     reflected = reflected_load_inertia(load_inertia=load_inertia, gear_ratio=gear_ratio)
     return reflected.to("kg*m**2").magnitude / j_motor
@@ -172,6 +174,7 @@ def motor_acceleration_torque(
     trade the matching ratio optimizes. Friction and any static load torque add on
     top. Returns the motor torque in N·m.
     """
+    require_finite(gear_ratio, name="gear_ratio")
     j_motor = _inertia_kgm2(motor_inertia, "motor_inertia")
     j_load = _inertia_kgm2(load_inertia, "load_inertia")
     i = _check_ratio(gear_ratio)
@@ -301,6 +304,7 @@ def trapezoidal_move_peak_velocity(
     profile is triangular and v = 2d/t, the fastest peak a given move demands.
     Returns the peak velocity in m/s.
     """
+    require_finite(accel_fraction, name="accel_fraction")
     _require(travel, "[length]", "travel")
     _require(move_time, "[time]", "move_time")
     d = travel.to("m").magnitude
@@ -329,6 +333,7 @@ def trapezoidal_move_acceleration(
     *square*; sharpening the ramps (smaller f) costs it linearly. Returns the
     acceleration in m/s².
     """
+    require_finite(accel_fraction, name="accel_fraction")
     peak = trapezoidal_move_peak_velocity(
         travel=travel, move_time=move_time, accel_fraction=accel_fraction
     )

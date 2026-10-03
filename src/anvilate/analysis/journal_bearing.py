@@ -284,6 +284,7 @@ def journal_bearing_minimum_film_thickness(
     roughness) or the surfaces touch and the bearing wears. ``eccentricity_ratio`` ε
     must lie in [0, 1) and c be a positive length. Returns h₀ in micrometres.
     """
+    require_finite(eccentricity_ratio, name="eccentricity_ratio")
     _require(radial_clearance, "[length]", "radial_clearance")
     if not 0 <= eccentricity_ratio < 1:
         raise _journal_bearing_refusal(

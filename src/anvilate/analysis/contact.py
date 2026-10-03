@@ -170,6 +170,8 @@ def hertz_effective_modulus(
     patch. Each body carries its own elastic ``modulus`` and ``poisson`` ratio.
     Returns E* as a pressure; both moduli are dimension-checked.
     """
+    require_finite(poisson1, name="poisson1")
+    require_finite(poisson2, name="poisson2")
     _require(modulus1, "[pressure]", "modulus1")
     _require(modulus2, "[pressure]", "modulus2")
     e1 = modulus1.to("MPa").magnitude
@@ -212,6 +214,8 @@ def hertz_sphere_contact(
     positive. Returns a :class:`HertzContact`. Every length/force/pressure argument
     is dimension-checked and diameters must be positive.
     """
+    require_finite(poisson1, name="poisson1")
+    require_finite(poisson2, name="poisson2")
     _require(force, "[force]", "force")
     _require(diameter1, "[length]", "diameter1")
 
@@ -275,6 +279,8 @@ def hertz_sphere_approach(
     approach grows only as F^(2/3), so a contact stiffens as it is pressed. Returns the
     approach in micrometres.
     """
+    require_finite(poisson1, name="poisson1")
+    require_finite(poisson2, name="poisson2")
     _require(force, "[force]", "force")
     _require(diameter1, "[length]", "diameter1")
     d1 = diameter1.to("mm").magnitude
@@ -391,6 +397,8 @@ def hertz_cylinder_contact(
     radius). Returns a :class:`HertzLineContact`. Every length/force/pressure
     argument is dimension-checked; diameters and length must be positive.
     """
+    require_finite(poisson1, name="poisson1")
+    require_finite(poisson2, name="poisson2")
     _require(force, "[force]", "force")
     _require(length, "[length]", "length")
     _require(diameter1, "[length]", "diameter1")

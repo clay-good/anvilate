@@ -421,6 +421,7 @@ def thermal_shock_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
+    require_finite(poisson, name="poisson")
     if not isinstance(elastic_modulus, Quantity):
         raise _thermal_refusal(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
@@ -494,6 +495,7 @@ def thermal_shock_temperature_limit(
 
     Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
+    require_finite(poisson, name="poisson")
     _require(fracture_strength, "[pressure]", "fracture_strength")
     if not isinstance(elastic_modulus, Quantity):
         raise _thermal_refusal(
@@ -569,6 +571,7 @@ def triaxial_constrained_thermal_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
+    require_finite(poisson, name="poisson")
     if not isinstance(elastic_modulus, Quantity):
         raise _thermal_refusal(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
@@ -647,6 +650,7 @@ def through_wall_gradient_thermal_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the thermal-stress formulas.
     """
+    require_finite(poisson, name="poisson")
     if not isinstance(elastic_modulus, Quantity):
         raise _thermal_refusal(
             f"elastic_modulus must be a [pressure] quantity; got {elastic_modulus!r}",
@@ -997,6 +1001,8 @@ def thermal_buckling_temperature_rise(
     ``thermal_expansion_coefficient`` α the material's linear α. λ, K, and α must be
     positive. Returns the critical temperature rise as a temperature difference (K).
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
+    require_finite(end_condition_factor, name="end_condition_factor")
     if slenderness_ratio <= 0:
         raise _thermal_refusal(
             f"slenderness_ratio must be positive; got {slenderness_ratio}",
@@ -1324,6 +1330,7 @@ def degree_day_heating_energy(
     (furnace/boiler efficiency, or a COP for a heat pump). Returns the delivered fuel or electric
     energy in kWh.
     """
+    require_finite(system_efficiency, name="system_efficiency")
     _require(heat_loss_coefficient, "[power] / [temperature]", "heat_loss_coefficient")
     _require(heating_degree_days, "[temperature] * [time]", "heating_degree_days")
     if heat_loss_coefficient.to("W/K").magnitude <= 0:
@@ -1363,6 +1370,7 @@ def degree_day_cooling_energy(
     Because a chiller moves several units of heat per unit of electricity, the electric energy is a
     fraction of the thermal load. Returns the electrical energy in kWh.
     """
+    require_finite(coefficient_of_performance, name="coefficient_of_performance")
     _require(heat_loss_coefficient, "[power] / [temperature]", "heat_loss_coefficient")
     _require(cooling_degree_days, "[temperature] * [time]", "cooling_degree_days")
     if heat_loss_coefficient.to("W/K").magnitude <= 0:
@@ -1575,6 +1583,7 @@ def fin_effectiveness(
     it: a fin is only justified when ε_fin ≳ 2, and high-conductivity, thin, closely spaced fins
     push it well above that. Returns the dimensionless effectiveness.
     """
+    require_finite(fin_efficiency, name="fin_efficiency")
     _require(fin_surface_area, "[area]", "fin_surface_area")
     _require(base_cross_section_area, "[area]", "base_cross_section_area")
     a_f = fin_surface_area.to("m**2").magnitude
@@ -1609,6 +1618,7 @@ def fin_thermal_resistance(
     :func:`parallel_thermal_resistance`) — a fin sits in parallel with the exposed base between the
     surface and the fluid. A more efficient or larger fin lowers it. Returns the resistance in K/W.
     """
+    require_finite(fin_efficiency, name="fin_efficiency")
     _require(
         heat_transfer_coefficient,
         "[power] / [length]**2 / [temperature]",
@@ -1668,6 +1678,7 @@ def junction_temperature_scorecard(
     ``required`` margin. ``allowable_temperature_rise`` must be a positive
     ``[temperature]`` quantity.
     """
+    require_finite(required, name="required")
     _require(allowable_temperature_rise, "[temperature]", "allowable_temperature_rise")
     allowable = temperature_difference_kelvin(
         allowable_temperature_rise, name="allowable_temperature_rise"
@@ -1785,6 +1796,7 @@ def dittus_boelter_convection_coefficient(
     so it reports "not evaluated" for laminar or transitional flow rather than extrapolating.
     Otherwise returns h in W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     require_flag(
         heating,
         name="heating",
@@ -1839,6 +1851,7 @@ def flat_plate_forced_convection_coefficient(
     rather than a wrong number — feed a turbulent correlation instead. Otherwise
     returns h in W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     _require(fluid_velocity, "[velocity]", "fluid_velocity")
     _require(plate_length, "[length]", "plate_length")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
@@ -1885,6 +1898,7 @@ def flat_plate_turbulent_convection_coefficient(
     (5×10⁵ ≤ Re_L ≤ 10⁷): below it the flow is laminar (use the laminar function),
     above it the correlation extrapolates. Otherwise returns h in W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     _require(fluid_velocity, "[velocity]", "fluid_velocity")
     _require(plate_length, "[length]", "plate_length")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
@@ -1935,6 +1949,7 @@ def cylinder_crossflow_convection_coefficient(
     ``prandtl_number`` Pr its Prandtl number. Returns ``None`` when Re·Pr < 0.2 (below the
     correlation's validity) rather than extrapolating; otherwise h in W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     _require(fluid_velocity, "[velocity]", "fluid_velocity")
     _require(diameter, "[length]", "diameter")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
@@ -1983,6 +1998,7 @@ def sphere_crossflow_convection_coefficient(
     ``kinematic_viscosity`` ν, and ``prandtl_number`` Pr describe the case. Returns ``None`` when Re
     exceeds ~76000 (above Whitaker's validity); otherwise h in W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     _require(fluid_velocity, "[velocity]", "fluid_velocity")
     _require(diameter, "[length]", "diameter")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
@@ -2060,6 +2076,8 @@ def rayleigh_number(*, grashof_number: float, prandtl_number: float) -> float:
     Ra ≈ 10⁹ and goes turbulent above it, which decides which correlation applies. Returns the
     dimensionless Rayleigh number.
     """
+    require_finite(grashof_number, name="grashof_number")
+    require_finite(prandtl_number, name="prandtl_number")
     if grashof_number < 0:
         raise _thermal_refusal(
             "grashof_number must be non-negative", subject="grashof_number", source=_FLUID_SOURCE
@@ -2193,6 +2211,7 @@ def vertical_plate_natural_convection_coefficient(
     Buoyancy is the whole mechanism, so a passively-cooled enclosure lives or dies on
     this number. Returns h in W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     _require(surface_temperature_difference, "[temperature]", "surface_temperature_difference")
     _require(plate_height, "[length]", "plate_height")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
@@ -2260,6 +2279,7 @@ def horizontal_cylinder_natural_convection_coefficient(
     coefficient, matching the forced-convection functions in this module. Returns h in
     W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     _require(surface_temperature_difference, "[temperature]", "surface_temperature_difference")
     _require(diameter, "[length]", "diameter")
     _require(thermal_conductivity, "[power] / [length] / [temperature]", "thermal_conductivity")
@@ -2330,6 +2350,7 @@ def horizontal_plate_natural_convection_coefficient(
     :func:`vertical_plate_natural_convection_coefficient`, and
     ``hot_surface_facing_up`` selects the case. Returns h in W/(m²·K).
     """
+    require_finite(prandtl_number, name="prandtl_number")
     require_flag(
         hot_surface_facing_up,
         name="hot_surface_facing_up",
@@ -2430,6 +2451,7 @@ def fin_array_thermal_resistance(
     fin-array total surface efficiency — the same construction
     :func:`fin_array_count_for_resistance` inverts.
     """
+    require_finite(fin_efficiency, name="fin_efficiency")
     _require(
         heat_transfer_coefficient,
         "[power] / [length]**2 / [temperature]",
@@ -2490,6 +2512,7 @@ def fin_array_count_for_resistance(
     fin count — round *up* for the physical number; returns 0.0 when the bare base
     already meets the target. ``fin_efficiency`` must be in (0, 1].
     """
+    require_finite(fin_efficiency, name="fin_efficiency")
     _require(target_resistance, "[temperature] / [power]", "target_resistance")
     _require(
         heat_transfer_coefficient,
@@ -2982,6 +3005,8 @@ def counterflow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
     (0 to 1). The actual duty is then ε·C_min·(T_hot,in − T_cold,in). ``ntu`` must be
     non-negative and ``capacity_ratio`` in [0, 1]. Returns ε in [0, 1].
     """
+    require_finite(ntu, name="ntu")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if ntu < 0:
         raise _thermal_refusal(
             f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
@@ -3009,6 +3034,8 @@ def parallel_flow_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
     outlets converge to a common temperature before the maximum transfer is reached.
     ``ntu`` non-negative, ``capacity_ratio`` in [0, 1]. Returns ε in [0, 1].
     """
+    require_finite(ntu, name="ntu")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if ntu < 0:
         raise _thermal_refusal(
             f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
@@ -3037,6 +3064,8 @@ def crossflow_both_unmixed_effectiveness(*, ntu: float, capacity_ratio: float) -
     it reduces to 1 − exp(−NTU), as every arrangement does. ``ntu`` non-negative.
     Returns ε in [0, 1].
     """
+    require_finite(ntu, name="ntu")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if ntu < 0:
         raise _thermal_refusal(
             f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
@@ -3066,6 +3095,8 @@ def counterflow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio: f
     (0, 1) and ``capacity_ratio`` in [0, 1]. Size the area from NTU = U·A/C_min.
     Returns the required (dimensionless) NTU.
     """
+    require_finite(effectiveness, name="effectiveness")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if not 0 < effectiveness < 1:
         raise _thermal_refusal(
             f"effectiveness must be in (0, 1); got {effectiveness}",
@@ -3096,6 +3127,8 @@ def parallel_flow_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio:
     at any size and is rejected — a signal to switch to counterflow.
     ``capacity_ratio`` C_r in [0, 1]. Returns the required (dimensionless) NTU.
     """
+    require_finite(effectiveness, name="effectiveness")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if not 0 <= capacity_ratio <= 1:
         raise _thermal_refusal(
             f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
@@ -3127,6 +3160,8 @@ def shell_and_tube_effectiveness(*, ntu: float, capacity_ratio: float) -> float:
     for the same size, and at C_r = 0 (a boiler or condenser) reduces to 1 − exp(−NTU) like every
     arrangement. ``ntu`` non-negative. Returns ε in [0, 1].
     """
+    require_finite(ntu, name="ntu")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if ntu < 0:
         raise _thermal_refusal(
             f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
@@ -3157,6 +3192,8 @@ def shell_and_tube_ntu_for_effectiveness(*, effectiveness: float, capacity_ratio
     unreachable at any size and is rejected (add shell passes, or switch to counterflow).
     ``capacity_ratio`` C_r in [0, 1]. Returns the required (dimensionless) NTU.
     """
+    require_finite(effectiveness, name="effectiveness")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if not 0 <= capacity_ratio <= 1:
         raise _thermal_refusal(
             f"capacity_ratio must lie in [0, 1]; got {capacity_ratio}",
@@ -3190,6 +3227,8 @@ def crossflow_cmax_mixed_effectiveness(*, ntu: float, capacity_ratio: float) -> 
     the C_max stream costs a little effectiveness versus both-unmixed. ``ntu`` non-negative. Returns
     ε in [0, 1].
     """
+    require_finite(ntu, name="ntu")
+    require_finite(capacity_ratio, name="capacity_ratio")
     if ntu < 0:
         raise _thermal_refusal(
             f"ntu must be non-negative; got {ntu}", subject="ntu", source=_EXCHANGER_SOURCE
@@ -3671,6 +3710,7 @@ def radiation_heat_transfer(
     kelvin — a fourth power needs a true zero). A positive result is heat leaving the
     surface. Returns the net radiant power in W.
     """
+    require_finite(emissivity, name="emissivity")
     if not 0 <= emissivity <= 1:
         raise _thermal_refusal(
             f"emissivity must lie in [0, 1]; got {emissivity}",
@@ -3723,6 +3763,9 @@ def radiation_two_surface_exchange(
     (A₁ = A₂, F₁₂ = 1) this collapses to the familiar σ(T₁⁴ − T₂⁴)/(1/ε₁ + 1/ε₂ − 1). A positive
     result is heat leaving surface 1. Returns the net radiant power in W.
     """
+    require_finite(emissivity_1, name="emissivity_1")
+    require_finite(emissivity_2, name="emissivity_2")
+    require_finite(view_factor, name="view_factor")
     if not 0 < emissivity_1 <= 1:
         raise _thermal_refusal(
             f"emissivity_1 must lie in (0, 1]; got {emissivity_1}",
@@ -3782,6 +3825,7 @@ def radiation_heat_transfer_coefficient(
     radiation matters little near ambient but dominates in a furnace. Returns h_r in
     W/(m²·K).
     """
+    require_finite(emissivity, name="emissivity")
     if not 0 <= emissivity <= 1:
         raise _thermal_refusal(
             f"emissivity must lie in [0, 1]; got {emissivity}",
@@ -3857,6 +3901,8 @@ def planetary_equilibrium_temperature(
     to its real surface is the greenhouse effect this bare balance omits. ``albedo`` a and
     ``emissivity`` ε are in [0, 1]. Returns the equilibrium temperature in kelvin.
     """
+    require_finite(albedo, name="albedo")
+    require_finite(emissivity, name="emissivity")
     _require(solar_flux, "[power]/[area]", "solar_flux")
     s = solar_flux.to("W/m**2").magnitude
     if s <= 0:
@@ -3939,6 +3985,7 @@ def view_factor_reciprocity(
     fraction of it while the large one sees only a little back. Returns the view factor F₂₁
     (dimensionless).
     """
+    require_finite(view_factor_1_to_2, name="view_factor_1_to_2")
     _require(area_1, "[area]", "area_1")
     _require(area_2, "[area]", "area_2")
     a1 = area_1.to("m**2").magnitude

@@ -309,6 +309,7 @@ def shaft_diameter_for_torque(
     minimum diameter in mm; the torque and stress are dimension-checked and
     ``required_safety_factor`` / ``allowable_shear`` must be positive.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(torque, "[force] * [length]", "torque")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     if required_safety_factor <= 0:
@@ -319,6 +320,14 @@ def shaft_diameter_for_torque(
         )
     t = torque.to("N*mm").magnitude
     tau = allowable_shear.to("MPa").magnitude
+    # The cube root of a negative torque is complex; the shaft is sized for the torque's
+    # magnitude, as `power_from_torque`'s positive-torque rule already states.
+    if t < 0:
+        raise _torsion_refusal(
+            f"torque must be non-negative (state the design torque's magnitude); got {torque}",
+            subject="torque",
+            source=_SHAFT_LOAD_SOURCE,
+        )
     if tau <= 0:
         raise _torsion_refusal(
             f"allowable_shear must be positive; got {allowable_shear}",
@@ -354,6 +363,7 @@ def shaft_diameter_for_bending_torsion(
     torsion (M=0) does not reduce to :func:`shaft_diameter_for_torque`, which sizes
     on shear yield τ_allow rather than the von Mises tensile yield used here.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(bending_moment, "[force] * [length]", "bending_moment")
     _require(torque, "[force] * [length]", "torque")
     _require(yield_strength, "[pressure]", "yield_strength")
@@ -409,6 +419,9 @@ def shaft_diameter_de_goodman(
     (from a keyway, fillet, or shoulder), and ``required_safety_factor`` n the design factor.
     Returns the minimum diameter in mm.
     """
+    require_finite(bending_fatigue_factor, name="bending_fatigue_factor")
+    require_finite(torsion_fatigue_factor, name="torsion_fatigue_factor")
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(alternating_bending_moment, "[force] * [length]", "alternating_bending_moment")
     _require(mean_torque, "[force] * [length]", "mean_torque")
     _require(endurance_limit, "[pressure]", "endurance_limit")
@@ -485,6 +498,9 @@ def shaft_diameter_de_gerber(
     ``required_safety_factor`` n. Prefer Goodman for a conservative first size, Gerber for
     the realistic one on a ductile steel. Returns the minimum diameter in mm.
     """
+    require_finite(bending_fatigue_factor, name="bending_fatigue_factor")
+    require_finite(torsion_fatigue_factor, name="torsion_fatigue_factor")
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(alternating_bending_moment, "[force] * [length]", "alternating_bending_moment")
     _require(mean_torque, "[force] * [length]", "mean_torque")
     _require(endurance_limit, "[pressure]", "endurance_limit")
@@ -556,6 +572,8 @@ def hollow_shaft_diameter_for_bending_torsion(
 
     Source: Shigley's *Mechanical Engineering Design*, combined bending and torsion of shafts.
     """
+    require_finite(bore_ratio, name="bore_ratio")
+    require_finite(required_safety_factor, name="required_safety_factor")
     if not 0.0 <= bore_ratio < 1.0:
         raise _torsion_refusal(
             f"bore_ratio must be in [0, 1); got {bore_ratio}",

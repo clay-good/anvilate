@@ -371,6 +371,7 @@ def condensation_tube_bank_coefficient(
     condensate splashes and ripples the film, so it is the conservative bound. N = 1 returns h_1
     unchanged. Returns the row-averaged coefficient in the units of ``single_tube_coefficient``.
     """
+    require_finite(tube_rows, name="tube_rows")
     _check(
         single_tube_coefficient,
         "[power]/([area]*[temperature])",

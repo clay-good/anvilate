@@ -136,6 +136,7 @@ def rule_of_mixtures_modulus(
     ``matrix_modulus`` E_m. This is the *upper* (Voigt) bound on the composite modulus and
     the value for on-axis loading. Returns E₁ in MPa.
     """
+    require_finite(fiber_fraction, name="fiber_fraction")
     _require(fiber_modulus, "[pressure]", "fiber_modulus")
     _require(matrix_modulus, "[pressure]", "matrix_modulus")
     vf = _fraction(fiber_fraction)
@@ -167,6 +168,7 @@ def transverse_modulus_inverse_rule(
     V_f, ``fiber_modulus`` E_f, and ``matrix_modulus`` E_m as in
     :func:`rule_of_mixtures_modulus`. Returns E₂ in MPa.
     """
+    require_finite(fiber_fraction, name="fiber_fraction")
     _require(fiber_modulus, "[pressure]", "fiber_modulus")
     _require(matrix_modulus, "[pressure]", "matrix_modulus")
     vf = _fraction(fiber_fraction)
@@ -198,6 +200,7 @@ def rule_of_mixtures_strength(
     ``matrix_stress_at_fiber_failure`` σ_m*. Above a minimum fiber fraction the fibers
     carry nearly all the load, so σ₁ tracks V_f·σ_fu. Returns σ₁ in MPa.
     """
+    require_finite(fiber_fraction, name="fiber_fraction")
     _require(fiber_strength, "[pressure]", "fiber_strength")
     _require(matrix_stress_at_fiber_failure, "[pressure]", "matrix_stress_at_fiber_failure")
     vf = _fraction(fiber_fraction)
@@ -230,6 +233,9 @@ def composite_major_poisson_ratio(
     Source: Daniel & Ishai, *Engineering Mechanics of Composite Materials*, the rule of
     mixtures.
     """
+    require_finite(fiber_fraction, name="fiber_fraction")
+    require_finite(fiber_poisson, name="fiber_poisson")
+    require_finite(matrix_poisson, name="matrix_poisson")
     vf = _fraction(fiber_fraction)
     for value, name in ((fiber_poisson, "fiber_poisson"), (matrix_poisson, "matrix_poisson")):
         if not 0.0 <= value < 0.5:
@@ -256,6 +262,7 @@ def composite_shear_modulus_inverse_rule(
     ``fiber_fraction`` V_f, ``fiber_shear_modulus`` G_f, and ``matrix_shear_modulus`` G_m.
     Returns G₁₂ in MPa.
     """
+    require_finite(fiber_fraction, name="fiber_fraction")
     _require(fiber_shear_modulus, "[pressure]", "fiber_shear_modulus")
     _require(matrix_shear_modulus, "[pressure]", "matrix_shear_modulus")
     vf = _fraction(fiber_fraction)
@@ -291,6 +298,7 @@ def composite_longitudinal_cte(
     (each a 1/temperature quantity). The transverse α₂ is much larger (matrix-dominated) and
     needs the Schapery form, not this. Returns α₁ in 1/K.
     """
+    require_finite(fiber_fraction, name="fiber_fraction")
     _require(fiber_modulus, "[pressure]", "fiber_modulus")
     _require(matrix_modulus, "[pressure]", "matrix_modulus")
     if not isinstance(fiber_cte, Quantity):
@@ -441,6 +449,8 @@ def off_axis_modulus(
     ``major_poisson`` ν₁₂ (the four ply constants, e.g. from the rule-of-mixtures functions).
     Returns E_x in MPa.
     """
+    require_finite(angle, name="angle")
+    require_finite(major_poisson, name="major_poisson")
     _require(longitudinal_modulus, "[pressure]", "longitudinal_modulus")
     _require(transverse_modulus, "[pressure]", "transverse_modulus")
     _require(shear_modulus, "[pressure]", "shear_modulus")
@@ -500,6 +510,7 @@ def fiber_volume_fraction_from_weight_fraction(
     W_f = V_f·ρ_f/ρ_c inverts it exactly. When the two densities are equal, volume and weight
     fractions coincide. Returns the fiber volume fraction as a plain float.
     """
+    require_finite(fiber_weight_fraction, name="fiber_weight_fraction")
     _require(fiber_density, "[mass]/[volume]", "fiber_density")
     _require(matrix_density, "[mass]/[volume]", "matrix_density")
     if not 0.0 <= fiber_weight_fraction <= 1.0:

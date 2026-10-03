@@ -143,6 +143,7 @@ def open_die_forging_load(
     stress. A flatter forging (larger r/h) fights more friction and needs a disproportionately
     bigger press, which is why forgings are struck in stages. Returns the forging load in kN.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _check(flow_stress, "[pressure]", "flow_stress")
     _check(radius, "[length]", "radius")
     _check(height, "[length]", "height")

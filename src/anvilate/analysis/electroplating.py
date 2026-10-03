@@ -71,6 +71,8 @@ def electroplating_mass_deposited(
     actually deposits metal rather than evolving hydrogen) and divided by the Faraday constant F, so
     m = EW·I·t·η/F. Returns the deposited mass in g.
     """
+    require_finite(equivalent_weight, name="equivalent_weight")
+    require_finite(current_efficiency, name="current_efficiency")
     _check(current, "[current]", "current")
     _check(plating_time, "[time]", "plating_time")
     if equivalent_weight <= 0:
@@ -114,6 +116,8 @@ def electroplating_deposition_thickness(
     chrome, tens for hard or corrosion coatings — and it grows linearly with both current and time.
     Returns the coating thickness in micrometres.
     """
+    require_finite(equivalent_weight, name="equivalent_weight")
+    require_finite(current_efficiency, name="current_efficiency")
     _check(current, "[current]", "current")
     _check(plating_time, "[time]", "plating_time")
     _check(plated_area, "[area]", "plated_area")
@@ -171,6 +175,8 @@ def electroplating_time_for_thickness(
     ``current_efficiency`` η. It sets the cycle time of the plating line — halving it means doubling
     the current (up to what the bath and finish allow). Returns the plating time in min.
     """
+    require_finite(equivalent_weight, name="equivalent_weight")
+    require_finite(current_efficiency, name="current_efficiency")
     _check(target_thickness, "[length]", "target_thickness")
     _check(current, "[current]", "current")
     _check(plated_area, "[area]", "plated_area")

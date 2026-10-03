@@ -53,6 +53,7 @@ def friction_force(*, normal_force: Quantity, friction_coefficient: float) -> Qu
     motion, the kinetic µ for the drag once sliding. It is independent of the apparent contact area.
     Returns the friction force in N.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _check(normal_force, "[force]", "normal_force")
     n = normal_force.to("N").magnitude
     if n < 0:
@@ -78,6 +79,7 @@ def angle_of_repose(*, friction_coefficient: float) -> Quantity:
     slides. It is the same as the friction angle and the natural slope of a stockpile. Returns the
     angle in degrees.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     if friction_coefficient < 0:
         raise _friction_refusal(
             "friction_coefficient must be non-negative",
@@ -97,6 +99,8 @@ def force_to_slide_up_incline(
     µ: F = W·(sin θ + µ·cos θ). The gravity term sin θ dominates on a steep ramp, the friction term
     µ·cos θ on a shallow one. Returns the required force in N.
     """
+    require_finite(incline_angle, name="incline_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
     _check(weight, "[force]", "weight")
     w = weight.to("N").magnitude
     if w < 0:

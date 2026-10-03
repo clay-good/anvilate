@@ -123,6 +123,7 @@ def slider_crank_displacement(
     set the linkage; the result runs from 0 at TDC (θ = 0) to the full stroke 2r at
     bottom dead centre (θ = 180°). Returns the displacement in mm.
     """
+    require_finite(crank_angle, name="crank_angle")
     r, length = _geometry(crank_radius, rod_length)
     theta = radians(crank_angle)
     x = r * (1.0 - cos(theta)) + length - sqrt(length**2 - (r * sin(theta)) ** 2)
@@ -145,6 +146,7 @@ def slider_crank_velocity(
     half-strokes asymmetric. Returns the velocity in m/s (signed: positive as the
     slider moves away from top dead centre).
     """
+    require_finite(crank_angle, name="crank_angle")
     r, length = _geometry(crank_radius, rod_length)
     if not isinstance(crank_speed, Quantity):
         raise _slider_crank_refusal(
@@ -184,6 +186,7 @@ def slider_crank_acceleration(
     finite-rod asymmetry that a piston engine feels as a second-order shake.
     Returns the acceleration in m/s².
     """
+    require_finite(crank_angle, name="crank_angle")
     r, length = _geometry(crank_radius, rod_length)
     if not isinstance(crank_speed, Quantity):
         raise _slider_crank_refusal(
@@ -227,6 +230,7 @@ def slider_crank_piston_side_thrust(
     longer rod (larger L/r) reduces it. Returns the magnitude of the side thrust in
     newtons.
     """
+    require_finite(crank_angle, name="crank_angle")
     _require(axial_force, "[force]", "axial_force")
     r, length = _geometry(crank_radius, rod_length)
     theta = radians(crank_angle)
@@ -258,6 +262,7 @@ def slider_crank_torque(
     of increasing θ; reverse the sign of F on the return stroke. Returns the torque in
     newton-metres.
     """
+    require_finite(crank_angle, name="crank_angle")
     _require(piston_force, "[force]", "piston_force")
     r, length = _geometry(crank_radius, rod_length)
     theta = radians(crank_angle)

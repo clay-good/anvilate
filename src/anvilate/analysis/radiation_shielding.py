@@ -112,6 +112,7 @@ def shield_thickness_for_transmission(
     linear ``attenuation_coefficient`` mu, x = -ln(T) / mu. It is a narrow-beam screening thickness;
     add margin for build-up in a real broad-beam geometry. Returns the thickness as a length.
     """
+    require_finite(transmission_fraction, name="transmission_fraction")
     _check(attenuation_coefficient, "1/[length]", "attenuation_coefficient")
     mu = attenuation_coefficient.to("1/m").magnitude
     if mu <= 0:

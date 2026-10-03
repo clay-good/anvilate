@@ -216,6 +216,8 @@ def heat_engine_second_law_efficiency(
     combined-cycle plant sits around 0.7–0.8 of its Carnot limit. It cannot exceed 1 (that would
     beat Carnot). Returns the dimensionless efficiency.
     """
+    require_finite(thermal_efficiency, name="thermal_efficiency")
+    require_finite(carnot_efficiency, name="carnot_efficiency")
     if not 0.0 < thermal_efficiency < 1.0:
         raise _power_cycles_refusal(
             f"thermal_efficiency must be in (0, 1); got {thermal_efficiency}",

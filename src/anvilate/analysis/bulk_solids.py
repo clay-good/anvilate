@@ -83,6 +83,8 @@ def beverloo_discharge_rate(
     empties at a near-constant rate, unlike a draining tank — and the 2.5 power makes it swing hard
     with the opening. Returns the mass flow in kg/s.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
+    require_finite(shape_factor, name="shape_factor")
     _check(orifice_diameter, "[length]", "orifice_diameter")
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(bulk_density, "[mass]/[length]**3", "bulk_density")
@@ -141,6 +143,8 @@ def beverloo_orifice_for_rate(
     and ``shape_factor`` k. It is how a feeder or hopper outlet is sized to a required plant rate.
     Returns the orifice diameter in mm.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
+    require_finite(shape_factor, name="shape_factor")
     _check(mass_flow, "[mass]/[time]", "mass_flow")
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(bulk_density, "[mass]/[length]**3", "bulk_density")
@@ -184,6 +188,7 @@ def conical_stockpile_volume(*, base_radius: Quantity, angle_of_repose: float) -
     material stands at) give a cone of height R·tan φ and volume V = (π/3)·R³·tan φ. It sizes
     stockpile capacity and, with the bulk density, the tonnage on the ground. Returns V in m**3.
     """
+    require_finite(angle_of_repose, name="angle_of_repose")
     _check(base_radius, "[length]", "base_radius")
     r = base_radius.to("m").magnitude
     if r <= 0:

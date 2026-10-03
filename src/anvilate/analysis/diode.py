@@ -99,6 +99,7 @@ def diode_current(
     Forward voltage swings this by orders of magnitude; reverse voltage floors it at -I_s. Returns
     the current in A.
     """
+    require_finite(ideality_factor, name="ideality_factor")
     _check(saturation_current, "[current]", "saturation_current")
     _check(voltage, "[electric_potential]", "voltage")
     _check(temperature, "[temperature]", "temperature")
@@ -139,6 +140,7 @@ def diode_voltage(
     ``ideality_factor`` n. It is how the operating point (and the ~0.6-0.7 V drop of a silicon
     diode, or the higher drop of an LED) is found. Returns the voltage in V.
     """
+    require_finite(ideality_factor, name="ideality_factor")
     _check(current, "[current]", "current")
     _check(saturation_current, "[current]", "saturation_current")
     _check(temperature, "[temperature]", "temperature")

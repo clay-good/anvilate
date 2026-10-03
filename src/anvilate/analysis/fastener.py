@@ -194,6 +194,7 @@ def bolt_preload_from_torque(
     force. ``torque`` must be a torque (force·length) and ``nominal_diameter`` a
     length; ``nut_factor`` must be positive.
     """
+    require_finite(nut_factor, name="nut_factor")
     _require(torque, "[force] * [length]", "torque")
     _require(nominal_diameter, "[length]", "nominal_diameter")
     if nominal_diameter.magnitude <= 0:
@@ -220,6 +221,7 @@ def torque_for_preload(
     and ``nominal_diameter`` a length; ``nut_factor`` must be positive. Returns the
     torque in newton-metres.
     """
+    require_finite(nut_factor, name="nut_factor")
     _require(preload, "[force]", "preload")
     _require(nominal_diameter, "[length]", "nominal_diameter")
     if nominal_diameter.magnitude <= 0:
@@ -315,6 +317,9 @@ def slip_critical_resistance(
     ``slip_planes`` n_s the number of slip planes. μ and T_b are the user's inputs.
     Returns the slip resistance per bolt in kN.
     """
+    require_finite(slip_coefficient, name="slip_coefficient")
+    require_finite(filler_factor, name="filler_factor")
+    require_finite(mean_pretension_ratio, name="mean_pretension_ratio")
     _require(bolt_pretension, "[force]", "bolt_pretension")
     if slip_coefficient <= 0:
         raise _fastener_refusal(
@@ -372,6 +377,7 @@ def block_shear_strength(
     far row of a two-row coped-beam connection). Block shear often governs bolted
     tension connections that the net-section check alone passes. Returns R_n in kN.
     """
+    require_finite(tension_uniformity_factor, name="tension_uniformity_factor")
     _require(gross_shear_area, "[area]", "gross_shear_area")
     _require(net_shear_area, "[area]", "net_shear_area")
     _require(net_tension_area, "[area]", "net_tension_area")
@@ -738,6 +744,7 @@ def bolt_diameter_for_shear(
     stress are dimension-checked, ``shear_planes`` must be a positive integer, and
     ``SF`` / ``allowable_shear`` must be positive.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(shear_load, "[force]", "shear_load")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     if shear_planes < 1:
@@ -932,6 +939,7 @@ def thread_engagement_for_load(
     (default 1.0). Returns the minimum engagement in mm; ``load`` is a force,
     ``allowable_shear`` a stress, and both SF and τ_allow must be positive.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(load, "[force]", "load")
     _require(allowable_shear, "[pressure]", "allowable_shear")
     if required_safety_factor <= 0:
@@ -1184,6 +1192,7 @@ def bolt_load_in_joint(
     fatigue — small because C is small. The forces must be forces and C must lie in
     (0, 1). Returns the bolt load in newtons.
     """
+    require_finite(stiffness_factor, name="stiffness_factor")
     _require(preload, "[force]", "preload")
     _require(external_load, "[force]", "external_load")
     _check_factor(stiffness_factor)
@@ -1211,6 +1220,7 @@ def member_clamp_load_in_joint(
     ``preload`` F_i and ``external_load`` P must be forces and ``stiffness_factor`` C
     in (0, 1). Returns the clamp load in newtons (signed).
     """
+    require_finite(stiffness_factor, name="stiffness_factor")
     _require(preload, "[force]", "preload")
     _require(external_load, "[force]", "external_load")
     _check_factor(stiffness_factor)
@@ -1227,6 +1237,7 @@ def joint_separation_load(*, preload: Quantity, stiffness_factor: float) -> Quan
     (0, 1); a stiffer bolt (larger C) separates a joint at a lower load. Returns the
     separation load in newtons.
     """
+    require_finite(stiffness_factor, name="stiffness_factor")
     _require(preload, "[force]", "preload")
     _check_factor(stiffness_factor)
     p0 = preload.to("N").magnitude / (1.0 - stiffness_factor)
@@ -1291,6 +1302,7 @@ def preloaded_bolt_cyclic_stress(
     :func:`~anvilate.analysis.goodman_safety_factor` and its siblings. The loads
     must be forces, ``tensile_stress_area`` an area, and C in (0, 1).
     """
+    require_finite(stiffness_factor, name="stiffness_factor")
     _require(preload, "[force]", "preload")
     _require(min_external_load, "[force]", "min_external_load")
     _require(max_external_load, "[force]", "max_external_load")

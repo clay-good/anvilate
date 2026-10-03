@@ -149,6 +149,7 @@ def beam_waist_for_divergence(*, divergence_half_angle: float, wavelength: Quant
     or a smaller far-field spot demands a bigger beam. θ must be positive. Returns the required
     waist radius in metres.
     """
+    require_finite(divergence_half_angle, name="divergence_half_angle")
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if divergence_half_angle <= 0:

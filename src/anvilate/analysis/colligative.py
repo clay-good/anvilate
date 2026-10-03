@@ -72,6 +72,7 @@ def osmotic_pressure(
     minimum pressure a reverse-osmosis process must exceed to push water the other way. Returns the
     osmotic pressure in Pa.
     """
+    require_finite(vant_hoff_factor, name="vant_hoff_factor")
     _check(concentration, "[substance]/[length]**3", "concentration")
     _check(temperature, "[temperature]", "temperature")
     c = concentration.to("mol/m**3").magnitude
@@ -105,6 +106,7 @@ def freezing_point_depression(
     1.86 K*kg/mol, so a 1 molal ideal solute drops the freezing point 1.86 K — the physics of road
     salt and antifreeze. Returns the depression as a temperature interval in K.
     """
+    require_finite(vant_hoff_factor, name="vant_hoff_factor")
     _check(molality, "[substance]/[mass]", "molality")
     _check(cryoscopic_constant, "[temperature]*[mass]/[substance]", "cryoscopic_constant")
     b = molality.to("mol/kg").magnitude
@@ -138,6 +140,7 @@ def boiling_point_elevation(
     0.512 K*kg/mol, so a 1 molal ideal solute raises the boiling point only 0.512 K — much weaker
     than the freezing depression. Returns the elevation as a temperature interval in K.
     """
+    require_finite(vant_hoff_factor, name="vant_hoff_factor")
     _check(molality, "[substance]/[mass]", "molality")
     _check(ebullioscopic_constant, "[temperature]*[mass]/[substance]", "ebullioscopic_constant")
     b = molality.to("mol/kg").magnitude

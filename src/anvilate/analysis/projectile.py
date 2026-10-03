@@ -64,6 +64,7 @@ def projectile_range(*, launch_speed: Quantity, launch_angle: float) -> Quantity
     sin(2θ) = 1, and equal for any pair of angles that sum to 90° (a flat, fast shot and a high,
     lobbed one reach the same distance). Returns the range in m.
     """
+    require_finite(launch_angle, name="launch_angle")
     _check(launch_speed, "[length]/[time]", "launch_speed")
     v = launch_speed.to("m/s").magnitude
     if v <= 0:
@@ -86,6 +87,7 @@ def projectile_max_height(*, launch_speed: Quantity, launch_angle: float) -> Qua
     depends only on the vertical launch component, so it keeps rising toward a vertical launch,
     unlike the range which peaks at 45°. Returns the maximum height in m.
     """
+    require_finite(launch_angle, name="launch_angle")
     _check(launch_speed, "[length]/[time]", "launch_speed")
     v = launch_speed.to("m/s").magnitude
     if v <= 0:
@@ -108,6 +110,7 @@ def projectile_time_of_flight(*, launch_speed: Quantity, launch_angle: float) ->
     grows with the vertical launch component, reaching its maximum for a vertical launch. Returns
     time of flight in s.
     """
+    require_finite(launch_angle, name="launch_angle")
     _check(launch_speed, "[length]/[time]", "launch_speed")
     v = launch_speed.to("m/s").magnitude
     if v <= 0:
@@ -172,6 +175,7 @@ def projectile_range_from_height(
     θ (degrees). At h = 0 it reduces to the level-ground v²·sin(2θ)/g, and the optimal angle for the
     maximum range drops below 45° as the height grows. Returns the range in metres.
     """
+    require_finite(launch_angle, name="launch_angle")
     _check(launch_speed, "[length]/[time]", "launch_speed")
     _check(launch_height, "[length]", "launch_height")
     v = launch_speed.to("m/s").magnitude

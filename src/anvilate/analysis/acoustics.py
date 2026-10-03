@@ -162,6 +162,7 @@ def inverse_square_attenuation(
     r₂ is where you want the level. Valid in a free field (no reflecting surfaces or reverberation).
     Returns the sound level at r₂ in dB.
     """
+    require_finite(reference_level, name="reference_level")
     _check(reference_distance, "[length]", "reference_distance")
     _check(distance, "[length]", "distance")
     r1 = reference_distance.to("m").magnitude
@@ -272,6 +273,7 @@ def coincidence_critical_frequency(
 
     ``sound_speed`` in air defaults to 343 m/s. Returns the critical frequency in Hz.
     """
+    require_finite(poissons_ratio, name="poissons_ratio")
     _check(thickness, "[length]", "thickness")
     _check(density, "[mass]/[length]**3", "density")
     _check(youngs_modulus, "[pressure]", "youngs_modulus")
@@ -409,6 +411,7 @@ def room_constant(
     level a source builds up and, with the source directivity, the critical distance (see
     :func:`critical_distance`). ᾱ must lie in (0, 1). Returns the room constant in m² (sabins).
     """
+    require_finite(average_absorption_coefficient, name="average_absorption_coefficient")
     _check(total_surface_area, "[length]**2", "total_surface_area")
     s = total_surface_area.to("m**2").magnitude
     if s <= 0:
@@ -437,6 +440,7 @@ def critical_distance(*, room_constant: Quantity, directivity_factor: float = 1.
     noise stops getting quieter with distance past d_c. Q is 1 for an omnidirectional source, 2 near
     a wall, 4 in a corner. Returns the critical distance in metres.
     """
+    require_finite(directivity_factor, name="directivity_factor")
     _check(room_constant, "[length]**2", "room_constant")
     r = room_constant.to("m**2").magnitude
     if r <= 0:
@@ -470,6 +474,8 @@ def room_sound_pressure_level(
     It is the core prediction of industrial-noise and room-acoustics design. ``sound_power_level``
     is a dB level; Q is 1 (free), 2 (wall), 4 (corner). Returns the sound-pressure level in dB.
     """
+    require_finite(sound_power_level, name="sound_power_level")
+    require_finite(directivity_factor, name="directivity_factor")
     _check(room_constant, "[length]**2", "room_constant")
     _check(distance, "[length]", "distance")
     r_const = room_constant.to("m**2").magnitude
@@ -574,6 +580,7 @@ def sound_power_level_from_intensity(
     background noise, so this works on a noisy plant floor without an anechoic room. Over a 1 m²
     surface L_w equals L_I. Returns the sound power level in dB.
     """
+    require_finite(intensity_level, name="intensity_level")
     _check(measurement_area, "[length]**2", "measurement_area")
     s = measurement_area.to("m**2").magnitude
     if s <= 0:
@@ -601,6 +608,8 @@ def sound_pressure_from_power_level(
     at 1 m the pressure level is about L_w − 11 dB. Feed the result to the noise-exposure screen.
     Returns the sound pressure level in dB.
     """
+    require_finite(sound_power_level, name="sound_power_level")
+    require_finite(directivity_factor, name="directivity_factor")
     _check(distance, "[length]", "distance")
     r = distance.to("m").magnitude
     if r <= 0:
@@ -833,6 +842,7 @@ def mach_cone_angle(*, mach_number: float) -> float:
     the Mach cone that trails a bullet or an airplane and arrives as the crack of a sonic boom.
     Returns the cone half-angle in degrees.
     """
+    require_finite(mach_number, name="mach_number")
     if mach_number <= 1.0:
         raise _acoustics_refusal(
             f"mach_number must exceed 1 (a Mach cone needs M > 1); got {mach_number}",
@@ -954,6 +964,7 @@ def eyring_reverberation_time(
     they are not. ᾱ is the area-weighted mean over all surfaces, in (0, 1). Returns the
     reverberation time in s.
     """
+    require_finite(average_absorption_coefficient, name="average_absorption_coefficient")
     _check(volume, "[volume]", "volume")
     _check(total_surface_area, "[area]", "total_surface_area")
     if not 0.0 < average_absorption_coefficient < 1.0:

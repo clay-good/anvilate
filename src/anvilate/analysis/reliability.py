@@ -190,6 +190,7 @@ def weibull_mean_life(*, characteristic_life: Quantity, shape: float) -> Quantit
     exponential model) and sits a little below η for typical wear-out shapes (β > 1). Returns the
     mean life in s.
     """
+    require_finite(shape, name="shape")
     _check(characteristic_life, "[time]", "characteristic_life")
     eta = characteristic_life.to("s").magnitude
     if eta <= 0:

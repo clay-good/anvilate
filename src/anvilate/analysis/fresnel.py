@@ -29,6 +29,7 @@ from __future__ import annotations
 from math import asin, atan, cos, degrees, radians, sin, sqrt
 
 from ..refusal import RefusalError, Remedy
+from ..units import require_finite
 
 _REFRACTIVE_INDEX_SOURCE = "the glass certificate or cited refractive-index record"
 _INCIDENCE_GEOMETRY_SOURCE = "the optical layout or calibrated incidence-angle setup"
@@ -91,6 +92,8 @@ def fresnel_normal_reflectance(*, incident_index: float, transmitted_index: floa
     It is about 0.04 (4%) for air to glass and depends only on the index contrast, not on which side
     the light comes from. Returns the reflectance as a plain float in [0, 1).
     """
+    require_finite(incident_index, name="incident_index")
+    require_finite(transmitted_index, name="transmitted_index")
     if incident_index <= 0:
         raise _fresnel_refusal(
             "incident_index must be positive",
@@ -114,6 +117,16 @@ def slab_transmittance(*, incident_index: float, slab_index: float) -> float:
     ``incident_index`` and the ``slab_index``. A plain glass plate passes about 92%, which is why
     multi-element uncoated lenses lose so much light. Returns the transmittance as a float (0, 1].
     """
+    require_finite(incident_index, name="incident_index")
+    require_finite(slab_index, name="slab_index")
+    # Refused here rather than by the reflectance call below, which would name the index
+    # it was passed as (`transmitted_index`), a parameter this function does not have.
+    if slab_index <= 0:
+        raise _fresnel_refusal(
+            f"slab_index must be positive; got {slab_index}",
+            subject="slab_index",
+            source=_REFRACTIVE_INDEX_SOURCE,
+        )
     r = fresnel_normal_reflectance(incident_index=incident_index, transmitted_index=slab_index)
     return (1.0 - r) ** 2
 
@@ -126,6 +139,8 @@ def brewster_angle(*, incident_index: float, transmitted_index: float) -> float:
     ``transmitted_index`` n2 (about 56 degrees for air to glass). It is the basis of polarizing
     sunglasses and the Brewster windows of gas lasers. Returns the Brewster angle in degrees.
     """
+    require_finite(incident_index, name="incident_index")
+    require_finite(transmitted_index, name="transmitted_index")
     if incident_index <= 0:
         raise _fresnel_refusal(
             "incident_index must be positive",
@@ -158,6 +173,9 @@ def fresnel_s_reflectance(
     Raises beyond the critical angle when n₁ > n₂, where the reflectance is simply 1 and these
     expressions no longer apply. Returns the reflectance as a plain float in [0, 1].
     """
+    require_finite(incident_index, name="incident_index")
+    require_finite(transmitted_index, name="transmitted_index")
+    require_finite(incidence_angle, name="incidence_angle")
     cos_i, cos_t = _transmitted_cosine(incident_index, transmitted_index, incidence_angle)
     numerator = incident_index * cos_i - transmitted_index * cos_t
     denominator = incident_index * cos_i + transmitted_index * cos_t
@@ -182,6 +200,9 @@ def fresnel_p_reflectance(
     :func:`fresnel_normal_reflectance` at θ_i = 0, where the plane of incidence is undefined and
     the distinction disappears. Returns the reflectance as a plain float in [0, 1].
     """
+    require_finite(incident_index, name="incident_index")
+    require_finite(transmitted_index, name="transmitted_index")
+    require_finite(incidence_angle, name="incidence_angle")
     cos_i, cos_t = _transmitted_cosine(incident_index, transmitted_index, incidence_angle)
     numerator = incident_index * cos_t - transmitted_index * cos_i
     denominator = incident_index * cos_t + transmitted_index * cos_i

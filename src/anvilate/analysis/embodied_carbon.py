@@ -45,7 +45,7 @@ from .._models import StatableModel, cited, each_one, parse_json
 from ..derivation import Derivation, SymbolValue
 from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _BOM_SOURCE = "the part's bill of materials and drawing mass"
 _PROCESS_SOURCE = "the manufacturing route's material yield record"
@@ -259,6 +259,7 @@ def material_loss_mass(*, finished_mass: Quantity, yield_fraction: float) -> Qua
     earns is a boundary decision (module D) this screen does not make. Counting the loss
     at full factor is the conservative reading, and it is the one to state.
     """
+    require_finite(yield_fraction, name="yield_fraction")
     if not isinstance(finished_mass, Quantity):
         raise _embodied_carbon_refusal(
             f"finished_mass must be a [mass] quantity; got {finished_mass!r}",

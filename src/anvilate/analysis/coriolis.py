@@ -106,6 +106,7 @@ def coriolis_parameter(*, angular_velocity: Quantity, latitude: float) -> Quanti
     largest at the poles, and it sets the inertial-oscillation period and the strength of
     geostrophic balance in weather and ocean flow. Returns the Coriolis parameter in 1/s.
     """
+    require_finite(latitude, name="latitude")
     if not isinstance(angular_velocity, Quantity):
         raise _coriolis_refusal(
             f"angular_velocity must be a 1/[time] quantity; got {angular_velocity!r}",
@@ -142,6 +143,7 @@ def foucault_precession_period(*, latitude: float) -> Quantity:
     lengthens without bound (a pendulum there does not precess at all). ``latitude`` must be nonzero
     and within ±90°. Returns the precession period in hours.
     """
+    require_finite(latitude, name="latitude")
     if not -90.0 <= latitude <= 90.0:
         raise _coriolis_refusal(
             "latitude must be in [-90, 90] degrees", subject="latitude", source=_FRAME_SOURCE

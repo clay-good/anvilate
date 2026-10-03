@@ -65,6 +65,7 @@ def shear_spinning_wall_thickness(*, blank_thickness: Quantity, half_cone_angle:
     the steeper the cone. A near-flat cone (α → 90°) barely thins; a steep one thins severely.
     Returns the wall thickness in mm.
     """
+    require_finite(half_cone_angle, name="half_cone_angle")
     _check(blank_thickness, "[length]", "blank_thickness")
     t0 = blank_thickness.to("mm").magnitude
     if t0 <= 0:
@@ -91,6 +92,7 @@ def shear_spinning_reduction(*, half_cone_angle: float) -> float:
     takes 50%, a 15° cone nearly 74% — and past what the metal can take in one pass it tears, so
     severe cones are spun in stages. Returns the thickness reduction as a fraction (0 to 1).
     """
+    require_finite(half_cone_angle, name="half_cone_angle")
     if not 0.0 < half_cone_angle < 90.0:
         raise _shear_spinning_refusal(
             "half_cone_angle must be in (0, 90) degrees",

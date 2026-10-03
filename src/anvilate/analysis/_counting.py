@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from math import ceil, floor, isclose
 
+from ..units import require_finite
+
 __all__: list[str] = []
 
 # Wide enough to absorb the accumulated representation error of a unit conversion and a
@@ -36,9 +38,11 @@ def _snapped(value: float) -> float | int:
 
 def whole_count_ceil(value: float) -> int:
     """``⌈value⌉``, with a ratio one representation error above an integer taken as it."""
+    require_finite(value, name="value")
     return ceil(_snapped(value))
 
 
 def whole_count_floor(value: float) -> int:
     """``⌊value⌋``, with a ratio one representation error below an integer taken as it."""
+    require_finite(value, name="value")
     return floor(_snapped(value))

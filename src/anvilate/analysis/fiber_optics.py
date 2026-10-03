@@ -158,6 +158,7 @@ def fiber_v_number(
     Shrinking the core or moving to a longer wavelength lowers V — the two knobs that turn a
     multimode fiber single-mode. Returns the dimensionless V-number.
     """
+    require_finite(numerical_aperture, name="numerical_aperture")
     _check(core_radius, "[length]", "core_radius")
     _check(wavelength, "[length]", "wavelength")
     a = core_radius.to("m").magnitude
@@ -190,6 +191,7 @@ def fiber_mode_count(*, v_number: float) -> float:
     (V approaching 2.405, where M should be 1) it overpredicts. Returns the approximate mode count
     as a plain float.
     """
+    require_finite(v_number, name="v_number")
     if v_number <= 0:
         raise _fiber_optics_refusal(
             "v_number must be positive", subject="v_number", source=_FIBER_SOURCE
@@ -223,6 +225,7 @@ def fiber_single_mode_cutoff_wavelength(
     a link must operate above its fiber's cutoff to stay single-mode. Returns the cutoff wavelength
     in metres.
     """
+    require_finite(numerical_aperture, name="numerical_aperture")
     _check(core_radius, "[length]", "core_radius")
     a = core_radius.to("m").magnitude
     if a <= 0:
@@ -282,6 +285,8 @@ def modal_dispersion_broadening(
     exists; single-mode fiber removes the mechanism altogether by guiding one mode, at which point
     chromatic dispersion is the right tool. Returns the pulse broadening in s.
     """
+    require_finite(core_index, name="core_index")
+    require_finite(cladding_index, name="cladding_index")
     _check(length, "[length]", "length")
     if core_index <= 0 or cladding_index <= 0:
         raise _fiber_optics_refusal(

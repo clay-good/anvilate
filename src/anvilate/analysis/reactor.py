@@ -97,6 +97,7 @@ def pfr_conversion_first_order(*, damkohler_number: float) -> float:
     with Da. At the same Da a PFR always out-converts a CSTR (:func:`cstr_conversion_first_order`).
     Returns the conversion (0 to 1) as a plain float.
     """
+    require_finite(damkohler_number, name="damkohler_number")
     if damkohler_number < 0:
         raise _reactor_refusal(
             "damkohler_number must be non-negative",
@@ -116,6 +117,7 @@ def cstr_conversion_first_order(*, damkohler_number: float) -> float:
     (:func:`pfr_conversion_first_order`) at the same Da — the reason a CSTR must be larger to reach
     the same conversion. Returns the conversion (0 to 1) as a plain float.
     """
+    require_finite(damkohler_number, name="damkohler_number")
     if damkohler_number < 0:
         raise _reactor_refusal(
             "damkohler_number must be non-negative",

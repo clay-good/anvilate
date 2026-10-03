@@ -222,6 +222,7 @@ def moist_air_enthalpy(*, temperature: Quantity, humidity_ratio: float) -> Quant
     difference across a coil times the air flow is the total cooling or heating load — see
     :func:`cooling_coil_load`. Returns the enthalpy in kJ/kg of dry air.
     """
+    require_finite(humidity_ratio, name="humidity_ratio")
     _check(temperature, "[temperature]", "temperature")
     if humidity_ratio < 0:
         raise _psychrometrics_refusal(
@@ -250,6 +251,7 @@ def moist_air_specific_volume(
     note that v rises with temperature, which is why a fan rated in CFM moves less mass on a hot
     day. Returns the specific volume in m³ per kg of dry air.
     """
+    require_finite(humidity_ratio, name="humidity_ratio")
     _check(temperature, "[temperature]", "temperature")
     _check(pressure, "[pressure]", "pressure")
     t = temperature.to("K").magnitude
@@ -319,6 +321,8 @@ def adiabatic_mixing_humidity_ratio(
     they fix the mixed air condition an air-handler's coil then has to treat. Returns the
     dimensionless mixed humidity ratio (kg/kg).
     """
+    require_finite(humidity_ratio_1, name="humidity_ratio_1")
+    require_finite(humidity_ratio_2, name="humidity_ratio_2")
     _check(mass_flow_1, "[mass]/[time]", "mass_flow_1")
     _check(mass_flow_2, "[mass]/[time]", "mass_flow_2")
     m1 = mass_flow_1.to("kg/s").magnitude
@@ -454,6 +458,7 @@ def sensible_heat_load(
     sensible-only coil handles, and the numerator of the sensible heat ratio. Returns the sensible
     load in kW.
     """
+    require_finite(humidity_ratio, name="humidity_ratio")
     _check(dry_air_mass_flow, "[mass]/[time]", "dry_air_mass_flow")
     _check(temperature_change, "[temperature]", "temperature_change")
     m = dry_air_mass_flow.to("kg/s").magnitude
@@ -486,6 +491,7 @@ def latent_heat_load(
     holds temperature can still be working hard to pull water out of the air. Returns the latent
     load in kW.
     """
+    require_finite(humidity_ratio_change, name="humidity_ratio_change")
     _check(dry_air_mass_flow, "[mass]/[time]", "dry_air_mass_flow")
     m = dry_air_mass_flow.to("kg/s").magnitude
     if m <= 0:
@@ -588,6 +594,7 @@ def wet_bulb_temperature(*, dry_bulb_temperature: Quantity, relative_humidity: f
     ``dry_bulb_temperature`` is an absolute Quantity and ``relative_humidity`` a plain fraction in
     (0, 1]. Returns the wet-bulb temperature in K.
     """
+    require_finite(relative_humidity, name="relative_humidity")
     _check(dry_bulb_temperature, "[temperature]", "dry_bulb_temperature")
     if not 0.0 < relative_humidity <= 1.0:
         raise _psychrometrics_refusal(

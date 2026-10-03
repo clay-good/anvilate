@@ -90,6 +90,7 @@ def vortex_shedding_frequency(
     ``characteristic_length`` D across the flow. Compare it to the structure's natural frequency —
     if they coincide, the shedding force resonates. Returns the shedding frequency in hertz.
     """
+    require_finite(strouhal_number, name="strouhal_number")
     _check(velocity, "[length]/[time]", "velocity")
     _check(characteristic_length, "[length]", "characteristic_length")
     if strouhal_number <= 0:
@@ -121,6 +122,7 @@ def lock_in_velocity(
     ``strouhal_number`` St and the ``characteristic_length`` D. It is the critical wind or current
     speed a chimney, cable, or tube must be detuned away from. Returns the lock-in velocity in m/s.
     """
+    require_finite(strouhal_number, name="strouhal_number")
     _check(natural_frequency, "1/[time]", "natural_frequency")
     _check(characteristic_length, "[length]", "characteristic_length")
     if strouhal_number <= 0:
@@ -198,6 +200,7 @@ def scruton_number(
     only as their product, so a tuned damper and added ballast buy the same thing. Returns the
     dimensionless Scruton number as a plain float.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     _check(mass_per_unit_length, "[mass]/[length]", "mass_per_unit_length")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
     _check(characteristic_length, "[length]", "characteristic_length")

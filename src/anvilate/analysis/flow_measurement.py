@@ -83,6 +83,7 @@ def obstruction_meter_flow_rate(
     ``pipe_diameter`` D set the throat area A = π·d²/4 and the β = d/D velocity-of-approach factor,
     and ``density`` ρ is the fluid density. Returns the volumetric flow rate in m³/s.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(throat_diameter, "[length]", "throat_diameter")
     _check(pipe_diameter, "[length]", "pipe_diameter")
     _check(pressure_drop, "[pressure]", "pressure_drop")
@@ -143,6 +144,7 @@ def orifice_permanent_pressure_loss(
     measurement resolution is bought back in permanent pump work. A venturi's gradual diffuser
     recovers far more, which is the whole reason to pay for one. Returns the permanent loss in Pa.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(pressure_drop, "[pressure]", "pressure_drop")
     _check(throat_diameter, "[length]", "throat_diameter")
     _check(pipe_diameter, "[length]", "pipe_diameter")
@@ -193,6 +195,7 @@ def differential_pressure_for_flow(
     range. ``discharge_coefficient`` C_d, ``throat_diameter`` d and ``pipe_diameter`` D (giving the
     throat area and β), and ``density`` ρ are as in the forward relation. Returns Δp in kPa.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     _check(throat_diameter, "[length]", "throat_diameter")
     _check(pipe_diameter, "[length]", "pipe_diameter")

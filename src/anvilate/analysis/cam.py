@@ -148,6 +148,8 @@ def cam_follower_motion(
     Returns a :class:`CamMotion` (displacement in mm, velocity in m/s, acceleration
     in m/s²).
     """
+    require_finite(cam_angle, name="cam_angle")
+    require_finite(rise_angle, name="rise_angle")
     if profile not in _PROFILES:
         raise _cam_refusal(
             f"profile must be one of {list(_PROFILES)}; got {profile!r}",
@@ -289,6 +291,7 @@ def cam_base_circle_for_pressure_angle(
     positive base circle at that displacement, which is itself the signal to slow the
     motion. Returns the base-circle radius in mm.
     """
+    require_finite(max_pressure_angle, name="max_pressure_angle")
     _require(lift_gradient, "[length]", "lift_gradient")
     _require(follower_displacement, "[length]", "follower_displacement")
     if not 0 < max_pressure_angle < 90:

@@ -59,6 +59,7 @@ def henderson_hasselbalch_ph(
     pH = pKa (maximum buffering); more base raises the pH, more acid lowers it. Only the ratio of
     the two concentrations matters, so any consistent unit works. Returns the pH as a plain float.
     """
+    require_finite(pka, name="pka")
     _check(conjugate_base_concentration, "[substance]/[length]**3", "conjugate_base_concentration")
     _check(weak_acid_concentration, "[substance]/[length]**3", "weak_acid_concentration")
     base = conjugate_base_concentration.to("mol/L").magnitude

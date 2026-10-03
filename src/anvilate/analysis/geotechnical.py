@@ -187,6 +187,7 @@ def rankine_earth_pressure_coefficient(*, friction_angle: float, passive: bool =
     pushing back into the soil. ``friction_angle`` φ is in degrees; set ``passive`` True for K_p.
     Returns the dimensionless coefficient.
     """
+    require_finite(friction_angle, name="friction_angle")
     require_flag(
         passive,
         name="passive",
@@ -230,6 +231,10 @@ def coulomb_active_earth_pressure_coefficient(
     coefficient internally, so it cannot consume this one: apply the correction yourself as
     P = ½·K_a·γ·H² (plus K_a·q·H for a surcharge). Returns the dimensionless coefficient.
     """
+    require_finite(friction_angle, name="friction_angle")
+    require_finite(wall_friction_angle, name="wall_friction_angle")
+    require_finite(wall_batter_angle, name="wall_batter_angle")
+    require_finite(backfill_slope_angle, name="backfill_slope_angle")
     _check_friction_angle(friction_angle)
     phi = radians(friction_angle)
     delta = radians(wall_friction_angle)
@@ -280,6 +285,7 @@ def at_rest_earth_pressure_coefficient(*, friction_angle: float) -> float:
     a wall designed for active pressure but built rigid is under-designed. Returns the dimensionless
     coefficient.
     """
+    require_finite(friction_angle, name="friction_angle")
     _check_friction_angle(friction_angle)
     return 1.0 - sin(radians(friction_angle))
 
@@ -323,6 +329,8 @@ def rankine_sloped_backfill_coefficient(*, friction_angle: float, backfill_slope
     reduces to the level-ground tan²(45 − φ/2) of :func:`rankine_earth_pressure_coefficient`.
     Returns the dimensionless coefficient.
     """
+    require_finite(friction_angle, name="friction_angle")
+    require_finite(backfill_slope, name="backfill_slope")
     _check_friction_angle(friction_angle)
     if not 0.0 <= backfill_slope < friction_angle:
         raise _geotechnical_refusal(
@@ -354,6 +362,7 @@ def rankine_active_pressure_cohesive(
     Returns σ_a in kPa (a negative value marks the cracked, tension zone, taken as zero pressure in
     design).
     """
+    require_finite(friction_angle, name="friction_angle")
     _require(depth, "[length]", "depth")
     _require(unit_weight, "[force]/[length]**3", "unit_weight")
     _require(cohesion, "[pressure]", "cohesion")
@@ -389,6 +398,7 @@ def rankine_passive_pressure_cohesive(
     can anchor a wall, though it is frequently discounted because it needs large movement to
     mobilize. Returns σ_p in kPa; multiply by area for the resisting force.
     """
+    require_finite(friction_angle, name="friction_angle")
     _require(depth, "[length]", "depth")
     _require(unit_weight, "[force]/[length]**3", "unit_weight")
     _require(cohesion, "[pressure]", "cohesion")
@@ -421,6 +431,7 @@ def tension_crack_depth(
     also how deep a temporary vertical cut in clay can stand unsupported (briefly), and the crack
     fills with water in rain — a worst case for wall design. Returns z_c in meters.
     """
+    require_finite(friction_angle, name="friction_angle")
     _require(cohesion, "[pressure]", "cohesion")
     _require(unit_weight, "[force]/[length]**3", "unit_weight")
     _check_friction_angle(friction_angle)
@@ -453,6 +464,7 @@ def rankine_lateral_thrust(
     thrust per unit wall length in kN/m — multiply by the wall length for the total force, and
     note the soil triangle's resultant acts at H/3 above the base.
     """
+    require_finite(friction_angle, name="friction_angle")
     require_flag(
         passive,
         name="passive",
@@ -491,6 +503,7 @@ def bearing_capacity_factors(*, friction_angle: float) -> dict[str, float]:
     N_γ = 2·(N_q + 1)·tanφ (Vesić). ``friction_angle`` φ is in degrees. Returns a dict with keys
     ``"N_c"``, ``"N_q"``, ``"N_gamma"`` — feed them to :func:`terzaghi_bearing_capacity`.
     """
+    require_finite(friction_angle, name="friction_angle")
     _check_friction_angle(friction_angle)
     phi = radians(friction_angle)
     n_q = exp(pi * tan(phi)) * tan(radians(45.0 + friction_angle / 2.0)) ** 2
@@ -521,6 +534,9 @@ def bearing_shape_factors(
     :func:`bearing_capacity_factors`. Multiply each term of the bearing capacity by its factor.
     Returns a dict with keys ``"s_c"``, ``"s_q"``, ``"s_gamma"``.
     """
+    require_finite(friction_angle, name="friction_angle")
+    require_finite(bearing_factor_nq, name="bearing_factor_nq")
+    require_finite(bearing_factor_nc, name="bearing_factor_nc")
     _require(footing_width, "[length]", "footing_width")
     _require(footing_length, "[length]", "footing_length")
     _check_friction_angle(friction_angle)
@@ -575,6 +591,7 @@ def bearing_depth_factors(
     and ``friction_angle`` φ (degrees). Multiply each bearing-capacity term by its factor. Returns a
     dict with keys ``"d_c"``, ``"d_q"``, ``"d_gamma"``.
     """
+    require_finite(friction_angle, name="friction_angle")
     _require(footing_width, "[length]", "footing_width")
     _require(embedment_depth, "[length]", "embedment_depth")
     _check_friction_angle(friction_angle)
@@ -636,6 +653,7 @@ def bearing_inclination_factors(
     ``friction_angle`` φ (degrees). Multiply each bearing-capacity term by its factor, alongside the
     shape and depth factors. Returns a dict with keys ``"i_c"``, ``"i_q"``, ``"i_gamma"``.
     """
+    require_finite(friction_angle, name="friction_angle")
     _require(vertical_load, "[force]", "vertical_load")
     _require(horizontal_load, "[force]", "horizontal_load")
     _check_friction_angle(friction_angle)
@@ -682,6 +700,9 @@ def terzaghi_bearing_capacity(
     :func:`bearing_capacity_factors` (or a table). Returns q_ult in kPa; divide by a factor of
     safety (typically 3) for the allowable bearing pressure.
     """
+    require_finite(bearing_factor_c, name="bearing_factor_c")
+    require_finite(bearing_factor_q, name="bearing_factor_q")
+    require_finite(bearing_factor_gamma, name="bearing_factor_gamma")
     _require(cohesion, "[pressure]", "cohesion")
     _require(surcharge, "[pressure]", "surcharge")
     _require(unit_weight, "[force]/[length]**3", "unit_weight")
@@ -735,6 +756,7 @@ def allowable_bearing_from_ultimate(
     settlement small. Returns the allowable (gross) bearing pressure in kPa; pass it to
     :func:`required_spread_footing_area` to size the footing.
     """
+    require_finite(factor_of_safety, name="factor_of_safety")
     _require(ultimate_bearing_capacity, "[pressure]", "ultimate_bearing_capacity")
     q_ult = ultimate_bearing_capacity.to("kPa").magnitude
     if q_ult <= 0:
@@ -825,6 +847,10 @@ def consolidation_settlement(
     ``preconsolidation_stress`` and ``recompression_index`` together for the overconsolidated
     cases. Returns the settlement in mm.
     """
+    require_finite(compression_index, name="compression_index")
+    require_finite(initial_void_ratio, name="initial_void_ratio")
+    if recompression_index is not None:
+        require_finite(recompression_index, name="recompression_index")
     _require(layer_thickness, "[length]", "layer_thickness")
     _require(initial_effective_stress, "[pressure]", "initial_effective_stress")
     _require(stress_increment, "[pressure]", "stress_increment")
@@ -889,6 +915,7 @@ def consolidation_time_factor(*, degree_of_consolidation: float) -> float:
     settlement reached (0–100, exclusive of 100). Feed the result to :func:`consolidation_time` to
     get the elapsed time. Returns the dimensionless T_v.
     """
+    require_finite(degree_of_consolidation, name="degree_of_consolidation")
     u = degree_of_consolidation
     if not 0.0 <= u < 100.0:
         raise _geotechnical_refusal(
@@ -915,6 +942,7 @@ def consolidation_time(
     single-sided drainage, half of it for double-sided), and ``coefficient_of_consolidation`` c_v
     is the soil's consolidation rate (units of area over time). Returns the time in years.
     """
+    require_finite(time_factor, name="time_factor")
     _require(drainage_path_length, "[length]", "drainage_path_length")
     _require(coefficient_of_consolidation, "[length]**2/[time]", "coefficient_of_consolidation")
     h_dr = drainage_path_length.to("m").magnitude
@@ -995,6 +1023,7 @@ def retaining_wall_sliding_factor(
     neglected (the soil in front can be excavated), so it defaults to none. Returns FS — 1.5 is a
     common minimum.
     """
+    require_finite(base_friction_coefficient, name="base_friction_coefficient")
     _require(lateral_thrust, "[force]/[length]", "lateral_thrust")
     _require(vertical_load, "[force]/[length]", "vertical_load")
     p = lateral_thrust.to("kN/m").magnitude
@@ -1097,6 +1126,8 @@ def infinite_slope_factor_of_safety(
     to the failure plane, and ``slope_angle`` β (degrees). For a dry cohesionless slope this
     reduces to the familiar tanφ/tanβ. Returns FS — below 1 the slope fails.
     """
+    require_finite(friction_angle, name="friction_angle")
+    require_finite(slope_angle, name="slope_angle")
     _require(cohesion, "[pressure]", "cohesion")
     _require(unit_weight, "[force]/[length]**3", "unit_weight")
     _require(depth, "[length]", "depth")
@@ -1239,6 +1270,7 @@ def darcy_seepage_flow(
     head drop per unit flow length (Δh/L), and ``area`` A the gross cross-section the flow crosses.
     This is the discharge for a dewatering or under-dam seepage estimate. Returns the flow in m³/s.
     """
+    require_finite(hydraulic_gradient, name="hydraulic_gradient")
     _require(permeability, "[length]/[time]", "permeability")
     _require(area, "[area]", "area")
     k = permeability.to("m/s").magnitude
@@ -1273,6 +1305,8 @@ def seepage_velocity(
     This is the velocity that governs how fast a contaminant or a tracer travels. Returns the
     seepage velocity in m/s.
     """
+    require_finite(hydraulic_gradient, name="hydraulic_gradient")
+    require_finite(porosity, name="porosity")
     _require(permeability, "[length]/[time]", "permeability")
     k = permeability.to("m/s").magnitude
     if k <= 0:
@@ -1302,6 +1336,8 @@ def critical_hydraulic_gradient(*, specific_gravity: float, void_ratio: float) -
     gradient against it with :func:`piping_factor_of_safety`. Returns the dimensionless critical
     gradient.
     """
+    require_finite(specific_gravity, name="specific_gravity")
+    require_finite(void_ratio, name="void_ratio")
     if specific_gravity <= 1.0:
         raise _geotechnical_refusal(
             f"specific_gravity must exceed 1; got {specific_gravity}",
@@ -1326,6 +1362,8 @@ def piping_factor_of_safety(*, critical_gradient: float, exit_gradient: float) -
     ratio, FS = i_cr/i_exit — typically kept at 2.5–3 because the consequences (loss of a
     cofferdam, a dam foundation) are severe. Returns the dimensionless factor of safety.
     """
+    require_finite(critical_gradient, name="critical_gradient")
+    require_finite(exit_gradient, name="exit_gradient")
     if critical_gradient <= 0:
         raise _geotechnical_refusal(
             f"critical_gradient must be positive; got {critical_gradient}",
@@ -1361,6 +1399,8 @@ def janssen_silo_pressure(
     designed as if they held a fluid. The wall (horizontal) pressure is σ_h = k·σ_v. Returns σ_v in
     kPa.
     """
+    require_finite(wall_friction_coefficient, name="wall_friction_coefficient")
+    require_finite(lateral_pressure_ratio, name="lateral_pressure_ratio")
     _require(unit_weight, "[force]/[length]**3", "unit_weight")
     _require(hydraulic_radius, "[length]", "hydraulic_radius")
     _require(depth, "[length]", "depth")
@@ -1409,6 +1449,7 @@ def pile_skin_friction_capacity(
     slender pile this term usually dominates the end bearing — see
     :func:`pile_end_bearing_capacity`. Returns the shaft capacity in kN.
     """
+    require_finite(adhesion_factor, name="adhesion_factor")
     _require(undrained_shear_strength, "[pressure]", "undrained_shear_strength")
     _require(diameter, "[length]", "diameter")
     _require(length, "[length]", "length")
@@ -1446,6 +1487,7 @@ def pile_end_bearing_capacity(
     smaller part of a slender pile's capacity next to :func:`pile_skin_friction_capacity`. Returns
     the tip capacity in kN.
     """
+    require_finite(bearing_factor, name="bearing_factor")
     _require(undrained_shear_strength, "[pressure]", "undrained_shear_strength")
     _require(diameter, "[length]", "diameter")
     cu = undrained_shear_strength.to("kPa").magnitude
@@ -1480,6 +1522,7 @@ def pile_allowable_capacity(
     for piles, reflecting the uncertainty in soil parameters and installation). Returns the
     allowable capacity in kN.
     """
+    require_finite(factor_of_safety, name="factor_of_safety")
     _require(skin_friction, "[force]", "skin_friction")
     _require(end_bearing, "[force]", "end_bearing")
     q_s = skin_friction.to("kN").magnitude

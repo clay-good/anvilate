@@ -104,6 +104,7 @@ def faraday_induced_emf(
     ``flux_change`` ΔΦ over ``time_interval`` Δt: EMF = N·ΔΦ/Δt (magnitude; Lenz's law makes it
     oppose the change). This is how transformers and generators induce voltage. Returns EMF in V.
     """
+    require_finite(turns, name="turns")
     _check(flux_change, "[magnetic_flux]", "flux_change")
     _check(time_interval, "[time]", "time_interval")
     dphi = flux_change.to("Wb").magnitude

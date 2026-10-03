@@ -106,6 +106,7 @@ def masonry_allowable_axial_stress(
     :func:`masonry_column_axial_capacity` when there is longitudinal reinforcement. Returns
     F_a in MPa.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
     _require(masonry_strength, "[pressure]", "masonry_strength")
     fm = masonry_strength.to("MPa").magnitude
     if fm <= 0:
@@ -142,6 +143,7 @@ def masonry_column_axial_capacity(
     steel arguments for a plain masonry column (the 0.65·A_st·F_s term drops out). Returns P_a
     in kN.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
     _require(masonry_strength, "[pressure]", "masonry_strength")
     _require(net_area, "[area]", "net_area")
     fm = masonry_strength.to("MPa").magnitude

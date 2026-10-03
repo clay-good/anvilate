@@ -124,6 +124,7 @@ def riser_modulus_for_feeding(
     shrinkage porosity. A riser sized below this target starves the casting and leaves a shrinkage
     cavity. Returns the required riser modulus as a length.
     """
+    require_finite(feeding_factor, name="feeding_factor")
     _check(casting_modulus, "[length]", "casting_modulus")
     if feeding_factor <= 1.0:
         raise _casting_refusal(

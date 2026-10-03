@@ -308,6 +308,7 @@ def simply_supported_plate_center_patch_load(
     quantity argument is dimension-checked; the patch must fit inside the
     plate and ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     _require(pressure, "[pressure]", "pressure")
     _require(patch_length, "[length]", "patch_length")
     _require(patch_width, "[length]", "patch_width")
@@ -562,6 +563,7 @@ def simply_supported_circular_plate_uniform_load(
     limits apply (trustworthy while w ≲ t/2). Every quantity argument is
     dimension-checked; ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     q, radius, t, rigidity = _circular_plate_inputs(
         pressure, diameter, thickness, elastic_modulus, poisson_ratio
     )
@@ -602,6 +604,7 @@ def clamped_circular_plate_uniform_load(
     limits apply (trustworthy while w ≲ t/2). Every quantity argument is
     dimension-checked; ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     q, radius, t, rigidity = _circular_plate_inputs(
         pressure, diameter, thickness, elastic_modulus, poisson_ratio
     )
@@ -678,6 +681,7 @@ def simply_supported_circular_plate_center_load_deflection(
     (trustworthy while w ≲ t/2). Every quantity is dimension-checked; ν ∈ (0, 0.5).
     Returns the centre deflection in millimetres.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     p, radius, rigidity = _circular_plate_point_inputs(
         force, diameter, thickness, elastic_modulus, poisson_ratio
     )
@@ -710,6 +714,7 @@ def clamped_circular_plate_center_load_deflection(
     apply. Every quantity is dimension-checked; ν ∈ (0, 0.5). Returns the centre
     deflection in millimetres.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     p, radius, rigidity = _circular_plate_point_inputs(
         force, diameter, thickness, elastic_modulus, poisson_ratio
     )
@@ -739,6 +744,7 @@ def clamped_circular_plate_thickness_for_pressure(
     ``required_safety_factor`` /
     ``allowable_stress`` must be positive.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(pressure, "[pressure]", "pressure")
     _require(diameter, "[length]", "diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -756,6 +762,15 @@ def clamped_circular_plate_thickness_for_pressure(
             f"diameter must be positive; got {diameter}",
             subject="diameter",
             source=_GEOMETRY_SOURCE,
+        )
+    # A thickness sized for a negative pressure is the square root of a negative number;
+    # the plate resists the pressure's magnitude, so the design input is stated as one.
+    if q < 0:
+        raise _plate_refusal(
+            f"pressure must be non-negative (state the design pressure's magnitude); "
+            f"got {pressure}",
+            subject="pressure",
+            source=_LOAD_SOURCE,
         )
     if sigma <= 0:
         raise _plate_refusal(
@@ -788,6 +803,7 @@ def base_plate_thickness_for_bearing(
     complement to the plate-bending stress the structural pack screens. Returns the
     minimum thickness in mm.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(bearing_pressure, "[pressure]", "bearing_pressure")
     _require(cantilever_length, "[length]", "cantilever_length")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -927,6 +943,7 @@ def simply_supported_annular_plate_uniform_load(
     limits apply (trustworthy while w ≲ t/2). Every quantity argument is
     dimension-checked; ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     return _annular_plate_uniform_load(
         pressure=pressure,
         diameter=diameter,
@@ -960,6 +977,7 @@ def clamped_annular_plate_uniform_load(
     (trustworthy while w ≲ t/2). Every quantity argument is
     dimension-checked; ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     return _annular_plate_uniform_load(
         pressure=pressure,
         diameter=diameter,
@@ -996,6 +1014,7 @@ def simply_supported_plate_uniform_load(
     action stiffens the real plate and this check is conservative). Every
     quantity argument is dimension-checked; ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     _require(pressure, "[pressure]", "pressure")
     _require(length, "[length]", "length")
     _require(width, "[length]", "width")
@@ -1074,6 +1093,8 @@ def plate_buckling_stress(
     covers need stiffeners. k, E, t, b must be positive and ν in (0, 0.5). Returns
     the critical stress in MPa.
     """
+    require_finite(buckling_coefficient, name="buckling_coefficient")
+    require_finite(poisson_ratio, name="poisson_ratio")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(thickness, "[length]", "thickness")
     _require(width, "[length]", "width")
@@ -1119,6 +1140,7 @@ def plate_shear_buckling_coefficient(*, aspect_ratio: float) -> float:
     must be at least 1 (orient the panel so the loaded pair is the longer). Returns
     the dimensionless k_s.
     """
+    require_finite(aspect_ratio, name="aspect_ratio")
     if aspect_ratio < 1:
         raise _plate_refusal(
             f"aspect_ratio (long side / short side) must be at least 1; got {aspect_ratio}",

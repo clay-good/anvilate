@@ -15244,7 +15244,7 @@ def test_every_power_transmission_refusal_site_is_structured():
             if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
                 unstructured.append((relative, node.exc))
 
-    assert len(structured) == 130
+    assert len(structured) == 131
     assert unstructured == []
     for path, call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, (
@@ -37484,13 +37484,13 @@ def test_wave_optics_refusals_carry_structured_remedies(function_name, kwargs, s
 
 
 @pytest.mark.parametrize(
-    ("module_name", "helper_name"),
+    ("module_name", "helper_name", "sites"),
     (
-        ("polarization", "_polarization_refusal"),
-        ("fresnel", "_fresnel_refusal"),
+        ("polarization", "_polarization_refusal", 7),
+        ("fresnel", "_fresnel_refusal", 8),
     ),
 )
-def test_every_wave_optics_refusal_site_is_structured(module_name, helper_name):
+def test_every_wave_optics_refusal_site_is_structured(module_name, helper_name, sites):
     import ast
     import pathlib
 
@@ -37507,7 +37507,7 @@ def test_every_wave_optics_refusal_site_is_structured(module_name, helper_name):
         if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
             unstructured.append(node.exc)
 
-    assert len(structured) == 7
+    assert len(structured) == sites
     assert unstructured == []
     for call in structured:
         assert "subject" in {keyword.arg for keyword in call.keywords}, call.lineno
@@ -45296,7 +45296,7 @@ def test_every_torsion_refusal_site_is_structured():
         if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
             unstructured.append(node.exc)
 
-    assert len(structured) == 39
+    assert len(structured) == 40
     assert unstructured == []
     for call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
@@ -47267,7 +47267,7 @@ def test_the_bending_slenderness_cap_is_the_standards_and_is_enforced_both_ways(
         ("slenderness", {"breadth": Quantity.parse("5 kg")}, "breadth"),
         ("slenderness", {"depth": Quantity.parse("nan in")}, "depth"),
         ("buckling", {"min_modulus": Quantity.parse("5 mm")}, "min_modulus"),
-        ("buckling", {"slenderness_ratio": float("nan")}, "positive, finite"),
+        ("buckling", {"slenderness_ratio": float("nan")}, "slenderness_ratio must be a finite"),
         ("buckling", {"slenderness_ratio": 0.0}, "positive, finite"),
         ("stability", {"buckling_stress": Quantity.parse("5 mm")}, "buckling_stress"),
         ("stability", {"reference_bending_value": Quantity.parse("0 psi")}, "positive"),

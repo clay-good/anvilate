@@ -77,6 +77,7 @@ def present_value(*, future_value: float, rate: float, periods: float) -> float:
     the per-period ``rate`` i (a decimal, 0.08 for 8%): PV = F/(1+i)^n. It shrinks the further off
     and the higher the rate. Returns the present value as a plain float.
     """
+    require_finite(future_value, name="future_value")
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
@@ -96,6 +97,7 @@ def future_value(*, present_value: float, rate: float, periods: float) -> float:
     The value ``periods`` n in the future of a ``present_value`` P invested at the per-period
     ``rate`` i (a decimal): FV = P·(1+i)^n — compound growth. Returns the future value as a float.
     """
+    require_finite(present_value, name="present_value")
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
@@ -117,6 +119,7 @@ def annuity_present_value(*, payment: float, rate: float, periods: float) -> flo
     when i = 0). This is what values a loan, a lease, or a stream of savings. Returns the present
     value as a plain float.
     """
+    require_finite(payment, name="payment")
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
@@ -140,6 +143,7 @@ def annuity_future_value(*, payment: float, rate: float, periods: float) -> floa
     when i = 0). This is the sinking-fund result — how a regular saving grows into a target sum.
     Returns the future value as a plain float.
     """
+    require_finite(payment, name="payment")
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
@@ -163,6 +167,7 @@ def loan_payment(*, principal: float, rate: float, periods: float) -> float:
     equipment-loan installment, the inverse of the annuity present value. Returns the payment as a
     plain float.
     """
+    require_finite(principal, name="principal")
     require_finite(rate, name="rate")
     require_finite(periods, name="periods")
     if rate <= -1.0:
@@ -187,6 +192,8 @@ def simple_payback_period(*, initial_cost: float, annual_cash_flow: float) -> fl
     payback is more attractive, though it says nothing about cash flows past the payback point.
     Returns the payback period in the same time unit as the cash-flow period, as a plain float.
     """
+    require_finite(initial_cost, name="initial_cost")
+    require_finite(annual_cash_flow, name="annual_cash_flow")
     if initial_cost < 0:
         raise _engineering_economics_refusal(
             "initial_cost must be non-negative", subject="initial_cost", source=_COST_SOURCE
@@ -208,6 +215,7 @@ def net_present_value(*, cash_flows: Sequence[float], rate: float) -> float:
     decimal): NPV = Σ CFₜ/(1+i)^t over t = 0…n. A positive NPV means the project earns more than the
     discount rate — the standard accept/reject test. Returns the NPV as a plain float.
     """
+    require_finite(rate, name="rate")
     if not isinstance(cash_flows, Sequence):
         raise _engineering_economics_refusal(
             f"cash_flows must be a sequence, not a single value; got {cash_flows!r}",
@@ -235,6 +243,8 @@ def benefit_cost_ratio(*, present_value_benefits: float, present_value_costs: fl
     the discounted benefits outweigh the costs — the go/no-go test used in public-works appraisal.
     Returns the ratio as a plain float.
     """
+    require_finite(present_value_benefits, name="present_value_benefits")
+    require_finite(present_value_costs, name="present_value_costs")
     if present_value_costs <= 0:
         raise _engineering_economics_refusal(
             "present_value_costs must be positive",
@@ -260,6 +270,7 @@ def straight_line_depreciation(
     D = (C − S)/n. It writes the depreciable base off evenly over the life. Returns the per-period
     depreciation as a plain float.
     """
+    require_finite(useful_life, name="useful_life")
     if useful_life <= 0:
         raise _engineering_economics_refusal(
             "useful_life must be positive", subject="useful_life", source=_ASSET_SOURCE
@@ -303,6 +314,9 @@ def discounted_payback_period(
     floats in consistent units, the rate as a decimal per period. Returns the number of periods as
     a plain float.
     """
+    require_finite(initial_cost, name="initial_cost")
+    require_finite(annual_cash_flow, name="annual_cash_flow")
+    require_finite(rate, name="rate")
     if initial_cost <= 0:
         raise _engineering_economics_refusal(
             "initial_cost must be positive", subject="initial_cost", source=_COST_SOURCE

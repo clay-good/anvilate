@@ -24,6 +24,7 @@ strain a measured bridge voltage infers.
 from __future__ import annotations
 
 from ..refusal import RefusalError, Remedy
+from ..units import require_finite
 
 _GAUGE_CALIBRATION_SOURCE = "the strain-gauge datasheet or calibration certificate"
 _BRIDGE_CONFIGURATION_SOURCE = "the bridge wiring diagram or data-acquisition configuration"
@@ -57,6 +58,8 @@ def gauge_strain_from_resistance(*, resistance_change_ratio: float, gauge_factor
     (about 2.0 for a standard constantan foil gauge). Returns the strain as a plain float (m/m); a
     reading of 0.002 at GF 2.0 is 0.001 = 1000 microstrain.
     """
+    require_finite(resistance_change_ratio, name="resistance_change_ratio")
+    require_finite(gauge_factor, name="gauge_factor")
     if gauge_factor <= 0:
         raise _strain_gauge_refusal(
             "gauge_factor must be positive",
@@ -74,6 +77,8 @@ def wheatstone_bridge_output(*, gauge_factor: float, strain: float, active_arms:
     active arm assumed to see the full strain magnitude). Returns the output ratio V_o/V_ex as a
     plain float (volts out per volt of excitation); multiply by the excitation voltage for a signal.
     """
+    require_finite(gauge_factor, name="gauge_factor")
+    require_finite(strain, name="strain")
     if gauge_factor <= 0:
         raise _strain_gauge_refusal(
             "gauge_factor must be positive",
@@ -99,6 +104,8 @@ def strain_from_bridge_output(
     data logger's millivolt reading becomes the strain (and, via E, the stress) in the part. Returns
     the strain as a plain float (m/m).
     """
+    require_finite(output_ratio, name="output_ratio")
+    require_finite(gauge_factor, name="gauge_factor")
     if gauge_factor <= 0:
         raise _strain_gauge_refusal(
             "gauge_factor must be positive",

@@ -91,6 +91,7 @@ def weld_heat_input(
     fast (harder zone, hydrogen-cracking risk) — so a procedure qualifies a band of it. Returns the
     heat input in kJ/mm.
     """
+    require_finite(thermal_efficiency, name="thermal_efficiency")
     _check(travel_speed, "[length]/[time]", "travel_speed")
     _fraction(thermal_efficiency, "thermal_efficiency")
     power = weld_arc_power(arc_voltage=arc_voltage, welding_current=welding_current)
@@ -120,6 +121,7 @@ def weld_travel_speed_for_heat_input(
     a run inside its qualified heat-input window: faster to drop the heat input, slower to raise it.
     Returns the required travel speed in mm/s.
     """
+    require_finite(thermal_efficiency, name="thermal_efficiency")
     _check(heat_input, "[energy]/[length]", "heat_input")
     _fraction(thermal_efficiency, "thermal_efficiency")
     power = weld_arc_power(arc_voltage=arc_voltage, welding_current=welding_current)
@@ -155,6 +157,13 @@ def carbon_equivalent_iiw(
     fast quench is — and the number a welding procedure is qualified against. Returns the carbon
     equivalent in weight percent.
     """
+    require_finite(carbon, name="carbon")
+    require_finite(manganese, name="manganese")
+    require_finite(chromium, name="chromium")
+    require_finite(molybdenum, name="molybdenum")
+    require_finite(vanadium, name="vanadium")
+    require_finite(nickel, name="nickel")
+    require_finite(copper, name="copper")
     for name, value in (
         ("carbon", carbon),
         ("manganese", manganese),

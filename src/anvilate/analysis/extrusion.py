@@ -103,6 +103,8 @@ def extrusion_pressure(
     the redundant shearing work that make real extrusion cost more. Feeds :func:`extrusion_force`.
     Returns the ram pressure in MPa.
     """
+    require_finite(extrusion_ratio, name="extrusion_ratio")
+    require_finite(deformation_efficiency, name="deformation_efficiency")
     _check(flow_stress, "[pressure]", "flow_stress")
     y = flow_stress.to("MPa").magnitude
     if y <= 0:

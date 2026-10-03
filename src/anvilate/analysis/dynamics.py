@@ -493,6 +493,7 @@ def damped_natural_frequency(*, natural_frequency: Quantity, damping_ratio: floa
     (ζ ≲ 0.1) barely shifts the frequency; near critical the oscillation slows toward
     zero. Returns the damped frequency in hertz.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     _require(natural_frequency, "[frequency]", "natural_frequency")
     zeta = _check_damping_ratio(damping_ratio)
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
@@ -513,6 +514,7 @@ def step_response_percent_overshoot(*, damping_ratio: float) -> float:
     about 16% at ζ = 0.5, under 5% by ζ = 0.7 — so ζ is chosen to trade responsiveness against
     overshoot. Returns the percent overshoot as a plain float.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     zeta = _check_damping_ratio(damping_ratio)
     if zeta == 0.0:
         raise _dynamics_refusal(
@@ -531,6 +533,7 @@ def step_response_settling_time(*, natural_frequency: Quantity, damping_ratio: f
     t_s ≈ 4/(ζ·ω_n). More damping or a higher natural frequency settles it faster. Returns the
     settling time in s.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     _require(natural_frequency, "[frequency]", "natural_frequency")
     zeta = _check_damping_ratio(damping_ratio)
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
@@ -557,6 +560,7 @@ def step_response_peak_time(*, natural_frequency: Quantity, damping_ratio: float
     undamped ``natural_frequency`` f_n (ω_n = 2π·f_n) and the ``damping_ratio`` ζ:
     t_p = π/(ω_n·√(1 − ζ²)) = π/ω_d, one half-period of the damped oscillation. Returns t_p in s.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     _require(natural_frequency, "[frequency]", "natural_frequency")
     zeta = _check_damping_ratio(damping_ratio)
     fn = count_rate_per_second(natural_frequency, name="natural_frequency")
@@ -579,6 +583,7 @@ def logarithmic_decrement(*, damping_ratio: float) -> float:
     damping δ ≈ 2π·ζ, so a decay record gives ζ ≈ δ/(2π). Returns the dimensionless
     decrement.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     zeta = _check_damping_ratio(damping_ratio)
     return 2.0 * pi * zeta / sqrt(1.0 - zeta**2)
 
@@ -594,6 +599,7 @@ def damping_ratio_from_log_decrement(*, log_decrement: float) -> float:
     reduces to the familiar ζ ≈ δ/(2π), but this exact form stays valid up to heavy damping.
     ``log_decrement`` must be non-negative. Returns the dimensionless damping ratio in [0, 1).
     """
+    require_finite(log_decrement, name="log_decrement")
     if log_decrement < 0:
         raise _dynamics_refusal(
             f"log_decrement must be non-negative; got {log_decrement}",
@@ -614,6 +620,7 @@ def quality_factor(*, damping_ratio: float) -> float:
     fraction of critical damping and must be positive (an undamped system has
     infinite Q). Returns the dimensionless quality factor.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     zeta = _check_damping_ratio(damping_ratio)
     if zeta <= 0:
         raise _dynamics_refusal(
@@ -762,6 +769,8 @@ def transmissibility(*, frequency_ratio: float, damping_ratio: float) -> float:
     the resonant peak at r ≈ 1 but *worsens* the isolation at high r. r must be
     non-negative. Returns the dimensionless transmissibility.
     """
+    require_finite(frequency_ratio, name="frequency_ratio")
+    require_finite(damping_ratio, name="damping_ratio")
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
         raise _dynamics_refusal(
@@ -792,6 +801,9 @@ def isolation_scorecard(
     mount tuned into resonance instead of out of it. ``required_transmissibility``
     must be in (0, 1).
     """
+    require_finite(frequency_ratio, name="frequency_ratio")
+    require_finite(damping_ratio, name="damping_ratio")
+    require_finite(required_transmissibility, name="required_transmissibility")
     if not 0 < required_transmissibility < 1:
         raise _dynamics_refusal(
             f"required_transmissibility must be in (0, 1); got {required_transmissibility}",
@@ -916,6 +928,7 @@ def isolator_natural_frequency_for_transmissibility(
     A smaller TR (better isolation) demands a lower f_n (a softer mount). TR must be in
     (0, 1); f_n always comes out below f/√2, the onset of isolation. Returns f_n in hertz.
     """
+    require_finite(transmissibility, name="transmissibility")
     if not isinstance(forcing_frequency, Quantity):
         raise _dynamics_refusal(
             f"forcing_frequency must be a [frequency] quantity; got {forcing_frequency!r}",
@@ -961,6 +974,7 @@ def isolator_static_deflection_for_transmissibility(
     gives δ = g/(2π·f_n)². Softer mounts (larger δ) isolate better; a stiff mount cannot.
     ``gravity`` defaults to standard g. Returns the static deflection in mm.
     """
+    require_finite(transmissibility, name="transmissibility")
     natural_frequency = isolator_natural_frequency_for_transmissibility(
         forcing_frequency=forcing_frequency, transmissibility=transmissibility
     )
@@ -1032,6 +1046,7 @@ def isolator_selection_scorecard(
     ``selected_static_deflection`` of ``None`` — no isolator picked yet — is
     ``NOT_EVALUATED``, never a silent pass.
     """
+    require_finite(target_transmissibility, name="target_transmissibility")
     if selected_static_deflection is None:
         return ScorecardEntry(
             name=name,
@@ -1341,6 +1356,8 @@ def dynamic_magnification_factor(*, frequency_ratio: float, damping_ratio: float
     mount passes on) this is the response *of* the driven mass itself. r must be
     non-negative. Returns the dimensionless magnification factor.
     """
+    require_finite(frequency_ratio, name="frequency_ratio")
+    require_finite(damping_ratio, name="damping_ratio")
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
         raise _dynamics_refusal(
@@ -1366,6 +1383,8 @@ def resonance_phase_angle(*, frequency_ratio: float, damping_ratio: float) -> fl
     atan2 keeps φ climbing smoothly through 90° past r = 1 (rather than wrapping). r
     must be non-negative. Returns the phase lag in degrees (0 to 180).
     """
+    require_finite(frequency_ratio, name="frequency_ratio")
+    require_finite(damping_ratio, name="damping_ratio")
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
         raise _dynamics_refusal(
@@ -1396,6 +1415,8 @@ def base_excitation_relative_transmissibility(
     1/(2ζ). Distinct from :func:`transmissibility`, which is the *absolute* motion the
     mass takes on. r must be non-negative. Returns the dimensionless ratio.
     """
+    require_finite(frequency_ratio, name="frequency_ratio")
+    require_finite(damping_ratio, name="damping_ratio")
     zeta = _check_damping_ratio(damping_ratio)
     if frequency_ratio < 0:
         raise _dynamics_refusal(
@@ -1426,6 +1447,7 @@ def floor_vibration_peak_acceleration_ratio(
     P₀ the DG11 walking-force constant for the occupancy. A stiff, heavy, well-damped floor keeps
     the ratio low; a light, springy one fails even when it is plenty strong. Returns the a_p/g.
     """
+    require_finite(damping_ratio, name="damping_ratio")
     _require(fundamental_frequency, "1/[time]", "fundamental_frequency")
     _require(effective_panel_weight, "[force]", "effective_panel_weight")
     _require(constant_force, "[force]", "constant_force")
@@ -1520,6 +1542,7 @@ def conical_pendulum_period(
     up, and as θ → 90° the period collapses toward zero. ``half_angle`` is in [0, 90). Returns the
     period in seconds.
     """
+    require_finite(half_angle, name="half_angle")
     _require(string_length, "[length]", "string_length")
     _require(gravity, "[acceleration]", "gravity")
     ell = string_length.to("m").magnitude
@@ -1548,6 +1571,7 @@ def conical_pendulum_speed(
     how a centrifugal governor converts speed into fly-ball angle. ``half_angle`` is in [0, 90).
     Returns the orbital speed in m/s.
     """
+    require_finite(half_angle, name="half_angle")
     _require(string_length, "[length]", "string_length")
     _require(gravity, "[acceleration]", "gravity")
     ell = string_length.to("m").magnitude
@@ -1586,6 +1610,7 @@ def tuned_mass_damper_optimal_frequency_ratio(*, mass_ratio: float) -> float:
     suppresses more. ``mass_ratio`` must be positive. Returns the dimensionless
     optimal frequency ratio.
     """
+    require_finite(mass_ratio, name="mass_ratio")
     mu = _check_mass_ratio(mass_ratio)
     return 1.0 / (1.0 + mu)
 
@@ -1601,6 +1626,7 @@ def tuned_mass_damper_optimal_damping(*, mass_ratio: float) -> float:
     at the minimum. A 5% mass ratio wants about 13% damping. ``mass_ratio`` must be
     positive. Returns the dimensionless optimal damping ratio.
     """
+    require_finite(mass_ratio, name="mass_ratio")
     mu = _check_mass_ratio(mass_ratio)
     return sqrt(3.0 * mu / (8.0 * (1.0 + mu) ** 3))
 
@@ -1907,6 +1933,7 @@ def simply_supported_plate_fundamental_frequency(
     by exactly 1/√(1 − ν²) through D. Returns hertz; every quantity argument
     is dimension-checked and ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     mu, rigidity = _plate_mass_and_rigidity(
         mass_per_area, thickness, elastic_modulus, poisson_ratio
     )
@@ -1933,6 +1960,7 @@ def clamped_plate_fundamental_frequency(
     supported). Returns hertz; every quantity argument is dimension-checked
     and ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     mu, rigidity = _plate_mass_and_rigidity(
         mass_per_area, thickness, elastic_modulus, poisson_ratio
     )
@@ -1958,6 +1986,7 @@ def simply_supported_circular_plate_fundamental_frequency(
     bound rules out). Returns hertz; every quantity argument is
     dimension-checked and ν must lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     mu, rigidity = _plate_mass_and_rigidity(
         mass_per_area, thickness, elastic_modulus, poisson_ratio
     )
@@ -1984,6 +2013,7 @@ def clamped_circular_plate_fundamental_frequency(
     Returns hertz; every quantity argument is dimension-checked and ν must
     lie in (0, 0.5).
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     mu, rigidity = _plate_mass_and_rigidity(
         mass_per_area, thickness, elastic_modulus, poisson_ratio
     )
@@ -2224,6 +2254,7 @@ def plate_fundamental_frequency_derivation(
     and the gloss says which. Folding the number into the coefficient would hide the only
     part of these results that is not arithmetic.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     rigidity = _plate_mass_and_rigidity(mass_per_area, thickness, elastic_modulus, poisson_ratio)[1]
     shared = {
         "mass_per_area": mass_per_area,
@@ -2615,6 +2646,7 @@ def balance_quality_permissible_eccentricity(
     G-number in mm/s) must be positive and ω a positive rotational frequency. Returns e_per
     in micrometres.
     """
+    require_finite(balance_grade, name="balance_grade")
     if balance_grade <= 0:
         raise _dynamics_refusal(
             f"balance_grade must be positive; got {balance_grade}",

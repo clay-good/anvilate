@@ -138,6 +138,7 @@ def faraday_corrosion_rate(
     The constant embeds Faraday's number and the unit conversions. Returns the penetration rate in
     mm/yr.
     """
+    require_finite(equivalent_weight, name="equivalent_weight")
     _check(corrosion_current_density, "[current]/[length]**2", "corrosion_current_density")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
@@ -301,6 +302,9 @@ def pitting_resistance_equivalent(
     guaranteed threshold. Percentages are mass fractions in percent and must be non-negative.
     Returns the dimensionless PREN.
     """
+    require_finite(chromium_percent, name="chromium_percent")
+    require_finite(molybdenum_percent, name="molybdenum_percent")
+    require_finite(nitrogen_percent, name="nitrogen_percent")
     if chromium_percent < 0 or molybdenum_percent < 0 or nitrogen_percent < 0:
         raise _corrosion_refusal(
             "element percentages must be non-negative",
@@ -332,6 +336,7 @@ def sacrificial_anode_life(
     t = m·Q·u/I. It sizes the anode mass a design life demands, the core of a cathodic-protection
     calculation. ``utilization_factor`` is in (0, 1]. Returns the anode life in years.
     """
+    require_finite(utilization_factor, name="utilization_factor")
     _check(anode_mass, "[mass]", "anode_mass")
     _check(anode_capacity, "[current]*[time]/[mass]", "anode_capacity")
     _check(protection_current, "[current]", "protection_current")

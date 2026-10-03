@@ -156,6 +156,7 @@ def wind_turbine_power(
     cannot exceed the Betz limit :data:`BETZ_LIMIT` (16/27) — the aerodynamic ceiling; real rotors
     reach ~0.35–0.45. Returns the power in watts.
     """
+    require_finite(power_coefficient, name="power_coefficient")
     _check(air_density, "[mass]/[length]**3", "air_density")
     _check(rotor_diameter, "[length]", "rotor_diameter")
     _check(wind_speed, "[length]/[time]", "wind_speed")
@@ -265,6 +266,7 @@ def actuator_disc_power_coefficient(*, axial_induction_factor: float) -> float:
     momentum theory predicts reversed flow in the wake and stops being valid. Returns the power
     coefficient as a plain float.
     """
+    require_finite(axial_induction_factor, name="axial_induction_factor")
     a = axial_induction_factor
     if not 0.0 <= a <= 0.5:
         raise _wind_power_refusal(
@@ -285,6 +287,7 @@ def actuator_disc_thrust_coefficient(*, axial_induction_factor: float) -> float:
     thrust coefficient is 8/9 ≈ 0.889, which is why a rotor tuned for peak energy capture still
     pushes on its tower with nearly the full stagnation load. Returns a plain float.
     """
+    require_finite(axial_induction_factor, name="axial_induction_factor")
     a = axial_induction_factor
     if not 0.0 <= a <= 0.5:
         raise _wind_power_refusal(
@@ -316,6 +319,7 @@ def wind_turbine_rotor_thrust(
     energy do not scale together: the survival case is a parked rotor in a storm, where there is
     no power at all. Returns the thrust in kN.
     """
+    require_finite(thrust_coefficient, name="thrust_coefficient")
     _check(air_density, "[mass]/[length]**3", "air_density")
     _check(rotor_diameter, "[length]", "rotor_diameter")
     _check(wind_speed, "[length]/[time]", "wind_speed")

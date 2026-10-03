@@ -129,6 +129,7 @@ def fillet_weld_leg_for_load(
     minimum leg in mm; the load/length/stress are dimension-checked and ``SF`` /
     ``allowable_shear`` must be positive.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(force, "[force]", "force")
     _require(length, "[length]", "length")
     _require(allowable_shear, "[pressure]", "allowable_shear")
@@ -186,6 +187,7 @@ def fillet_weld_design_strength(
     to :func:`fillet_weld_throat_stress`; a real check also verifies the base-metal
     strength at the weld. Returns the nominal strength in kN.
     """
+    require_finite(weld_metal_shear_fraction, name="weld_metal_shear_fraction")
     _require(leg_size, "[length]", "leg_size")
     _require(length, "[length]", "length")
     _require(electrode_strength, "[pressure]", "electrode_strength")
@@ -234,6 +236,8 @@ def fillet_weld_directional_strength(
     strength for a weld group unless every segment shares one load angle. Returns the
     nominal strength in kN.
     """
+    require_finite(load_angle, name="load_angle")
+    require_finite(weld_metal_shear_fraction, name="weld_metal_shear_fraction")
     _require(leg_size, "[length]", "leg_size")
     _require(length, "[length]", "length")
     _require(electrode_strength, "[pressure]", "electrode_strength")
@@ -288,6 +292,7 @@ def weld_base_metal_shear_strength(
     heavy weld on a thin plate is base-metal-limited, a light weld on thick plate
     weld-metal-limited. Returns R_n in kN.
     """
+    require_finite(shear_fraction, name="shear_fraction")
     _require(base_thickness, "[length]", "base_thickness")
     _require(length, "[length]", "length")
     _require(base_ultimate_strength, "[pressure]", "base_ultimate_strength")

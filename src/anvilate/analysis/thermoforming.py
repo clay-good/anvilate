@@ -94,6 +94,7 @@ def thermoforming_average_wall_thickness(
     and the deepest draw run thinner still — so the real minimum wall is below this, and a large S
     drives a part toward walls too thin to stand. Returns the average wall thickness in mm.
     """
+    require_finite(areal_draw_ratio, name="areal_draw_ratio")
     _check(sheet_thickness, "[length]", "sheet_thickness")
     t = sheet_thickness.to("mm").magnitude
     if t <= 0:
@@ -122,6 +123,7 @@ def thermoforming_sheet_gauge_for_wall(
     part is specified — a bigger draw ratio simply demands a proportionally thicker starting sheet.
     Returns the required sheet gauge in mm.
     """
+    require_finite(areal_draw_ratio, name="areal_draw_ratio")
     _check(minimum_wall_thickness, "[length]", "minimum_wall_thickness")
     t_min = minimum_wall_thickness.to("mm").magnitude
     if t_min <= 0:

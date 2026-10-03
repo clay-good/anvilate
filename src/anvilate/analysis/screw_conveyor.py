@@ -75,6 +75,7 @@ def screw_conveyor_volumetric_capacity(
     fraction runs about 0.15 for sluggish or abrasive material up to about 0.45 for free-flowing,
     because a fuller flight floods and stalls. Returns the volumetric capacity in m**3/h.
     """
+    require_finite(fill_fraction, name="fill_fraction")
     _check(screw_diameter, "[length]", "screw_diameter")
     _check(shaft_diameter, "[length]", "shaft_diameter")
     _check(pitch, "[length]", "pitch")
@@ -156,6 +157,7 @@ def screw_conveyor_speed_for_capacity(
     speed and, with the material, guards against over-speeding (which throws the load) or flooding.
     Returns the rotational speed in rpm.
     """
+    require_finite(fill_fraction, name="fill_fraction")
     _check(volumetric_capacity, "[volume]/[time]", "volumetric_capacity")
     _check(screw_diameter, "[length]", "screw_diameter")
     _check(shaft_diameter, "[length]", "shaft_diameter")

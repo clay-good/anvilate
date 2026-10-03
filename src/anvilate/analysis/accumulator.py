@@ -97,6 +97,7 @@ def accumulator_usable_volume(
     pressures are *absolute*, and the precharge must not exceed the minimum pressure. Returns the
     usable fluid volume in litres.
     """
+    require_finite(polytropic_exponent, name="polytropic_exponent")
     _check(total_volume, "[length]**3", "total_volume")
     _check(precharge_pressure, "[pressure]", "precharge_pressure")
     _check(minimum_pressure, "[pressure]", "minimum_pressure")

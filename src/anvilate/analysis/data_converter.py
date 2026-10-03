@@ -75,6 +75,7 @@ def quantization_snr(*, bits: float) -> float:
     from the resolution ``bits`` N: SNR = 6.02·N + 1.76 dB. Every extra bit buys about 6 dB. Returns
     the SNR in dB as a plain float.
     """
+    require_finite(bits, name="bits")
     if bits <= 0:
         raise _data_converter_refusal(
             "bits must be positive", subject="bits", source=_CONVERTER_SOURCE
@@ -138,6 +139,7 @@ def oversampling_snr_gain(*, oversampling_ratio: float) -> float:
     OSR (= f_s/2·BW ≥ 1). This is the principle behind sigma-delta converters. Returns the SNR gain
     in dB as a plain float.
     """
+    require_finite(oversampling_ratio, name="oversampling_ratio")
     if oversampling_ratio < 1:
         raise _data_converter_refusal(
             f"oversampling_ratio must be at least 1; got {oversampling_ratio}",
@@ -205,6 +207,7 @@ def effective_number_of_bits(*, snr_db: float) -> float:
     bit count in this module (all three enforce bits > 0) would reject later under an unrelated
     message.
     """
+    require_finite(snr_db, name="snr_db")
     if snr_db <= 1.76:
         raise _data_converter_refusal(
             f"snr_db must exceed 1.76 dB (one bit of resolution); got {snr_db} dB, which "

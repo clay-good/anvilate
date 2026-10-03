@@ -20,7 +20,7 @@ sample size is a plain integer. Inputs and outputs are dimension-checked
 from __future__ import annotations
 
 from ..refusal import RefusalError, Remedy
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _REPEATABILITY_SOURCE = "the repeated-observation record (sample standard deviation and count)"
 _BUDGET_SOURCE = "the uncertainty budget's standard-uncertainty components"
@@ -128,6 +128,7 @@ def expanded_uncertainty(
     reported as its value ± U. The coverage factor must be positive. Returns the expanded
     uncertainty in the units of ``combined_standard_uncertainty``.
     """
+    require_finite(coverage_factor, name="coverage_factor")
     if not isinstance(combined_standard_uncertainty, Quantity):
         raise _measurement_uncertainty_refusal(
             f"combined_standard_uncertainty must be a quantity; "

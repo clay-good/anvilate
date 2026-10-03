@@ -121,6 +121,7 @@ def gain_bandwidth_limited_bandwidth(
     bandwidth, which is why a high-gain stage is often split into cascaded lower-gain stages.
     Returns the bandwidth in Hz.
     """
+    require_finite(closed_loop_gain, name="closed_loop_gain")
     _check(gain_bandwidth_product, "1/[time]", "gain_bandwidth_product")
     gbw = count_rate_per_second(gain_bandwidth_product, name="gain_bandwidth_product")
     if gbw <= 0:

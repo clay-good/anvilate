@@ -170,6 +170,7 @@ def flywheel_energy_fluctuation(
     and ``mean_speed`` a positive rotational frequency; C_s must be positive.
     Returns the energy in joules.
     """
+    require_finite(coefficient_of_fluctuation, name="coefficient_of_fluctuation")
     _require(inertia, "[mass] * [length]**2", "inertia")
     _require(mean_speed, "[frequency]", "mean_speed")
     if coefficient_of_fluctuation <= 0:
@@ -205,6 +206,7 @@ def flywheel_inertia_for_fluctuation(
     and ``mean_speed`` a positive rotational frequency; C_s must be positive.
     Returns the inertia in kg·m².
     """
+    require_finite(coefficient_of_fluctuation, name="coefficient_of_fluctuation")
     _require(energy_fluctuation, "[energy]", "energy_fluctuation")
     _require(mean_speed, "[frequency]", "mean_speed")
     if coefficient_of_fluctuation <= 0:
@@ -326,6 +328,12 @@ def rotating_rim_burst_speed(
             subject="allowable_stress",
             source=_ALLOWABLE_SOURCE,
         )
+    if rho <= 0:
+        raise _flywheel_refusal(
+            f"density must be positive; got {density}",
+            subject="density",
+            source=_MATERIAL_SOURCE,
+        )
     omega = sqrt(sigma / rho) / r  # rad/s
     return Quantity(magnitude=omega, unit="rad/s").to("rpm")
 
@@ -402,6 +410,7 @@ def rotating_solid_disc_max_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
+    require_finite(poisson, name="poisson")
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
         raise _flywheel_refusal(
@@ -500,6 +509,7 @@ def rotating_solid_disc_radial_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
+    require_finite(poisson, name="poisson")
     rho, big_r, r, omega = _rotating_disc_inputs(
         density, outer_radius, radius, rotational_speed, poisson
     )
@@ -528,6 +538,7 @@ def rotating_solid_disc_tangential_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
+    require_finite(poisson, name="poisson")
     rho, big_r, r, omega = _rotating_disc_inputs(
         density, outer_radius, radius, rotational_speed, poisson
     )
@@ -558,6 +569,7 @@ def rotating_annular_disc_bore_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
+    require_finite(poisson, name="poisson")
     _require(density, "[mass] / [length]**3", "density")
     if density.magnitude <= 0:
         raise _flywheel_refusal(
@@ -675,6 +687,7 @@ def rotating_annular_disc_radial_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
+    require_finite(poisson, name="poisson")
     rho, ro, ri, r, omega = _annular_disc_inputs(
         density, outer_radius, inner_radius, radius, rotational_speed, poisson
     )
@@ -702,6 +715,7 @@ def rotating_annular_disc_tangential_stress(
 
     Source: Roark's *Formulas for Stress and Strain*, the rotating-disc formulas.
     """
+    require_finite(poisson, name="poisson")
     rho, ro, ri, r, omega = _annular_disc_inputs(
         density, outer_radius, inner_radius, radius, rotational_speed, poisson
     )

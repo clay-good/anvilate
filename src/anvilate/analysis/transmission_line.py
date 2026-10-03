@@ -90,6 +90,7 @@ def coaxial_characteristic_impedance(
     :func:`reflection_coefficient` or :func:`quarter_wave_transformer_impedance`. Returns the
     characteristic impedance in ohm.
     """
+    require_finite(relative_permittivity, name="relative_permittivity")
     _check(inner_radius, "[length]", "inner_radius")
     _check(outer_radius, "[length]", "outer_radius")
     a = inner_radius.to("m").magnitude
@@ -147,6 +148,7 @@ def voltage_standing_wave_ratio(*, reflection_coefficient: float) -> float:
     bound toward a total reflection; a VSWR under about 1.5 is usually considered a good match.
     Returns the VSWR as a plain float (>= 1).
     """
+    require_finite(reflection_coefficient, name="reflection_coefficient")
     g = abs(reflection_coefficient)
     if g >= 1.0:
         raise _transmission_line_refusal(
@@ -165,6 +167,7 @@ def return_loss(*, reflection_coefficient: float) -> float:
     match (less power reflected) — 20 dB reflects 1%, 10 dB reflects 10%. Returns the return loss in
     dB as a plain float.
     """
+    require_finite(reflection_coefficient, name="reflection_coefficient")
     g = abs(reflection_coefficient)
     if g <= 0.0:
         raise _transmission_line_refusal(
@@ -191,6 +194,7 @@ def mismatch_loss(*, reflection_coefficient: float) -> float:
     loses only 0.18 dB), which is why modest reflections are often tolerated. Returns the mismatch
     loss in dB as a plain float (>= 0).
     """
+    require_finite(reflection_coefficient, name="reflection_coefficient")
     g = abs(reflection_coefficient)
     if g >= 1.0:
         raise _transmission_line_refusal(
@@ -211,6 +215,7 @@ def reflection_coefficient_from_vswr(*, voltage_standing_wave_ratio: float) -> f
     ``voltage_standing_wave_ratio`` must be at least 1. Returns the reflection coefficient magnitude
     (0 to 1) as a plain float.
     """
+    require_finite(voltage_standing_wave_ratio, name="voltage_standing_wave_ratio")
     if voltage_standing_wave_ratio < 1.0:
         raise _transmission_line_refusal(
             "voltage_standing_wave_ratio must be at least 1",

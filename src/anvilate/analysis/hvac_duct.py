@@ -118,6 +118,7 @@ def fan_power(
     needs rises with the square of the flow, oversizing the airflow is costly in fan power. Returns
     the shaft power in watts.
     """
+    require_finite(fan_efficiency, name="fan_efficiency")
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     _check(total_pressure, "[pressure]", "total_pressure")
     if flow_rate.to("m**3/s").magnitude <= 0:

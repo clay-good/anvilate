@@ -134,6 +134,7 @@ def required_axial_area(
 
     Source: Hibbeler, *Mechanics of Materials*, the direct-stress relations.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(axial_load, "[force]", "axial_load")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     if required_safety_factor <= 0:

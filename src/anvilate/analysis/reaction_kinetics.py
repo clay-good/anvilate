@@ -123,6 +123,7 @@ def first_order_time_for_conversion(*, rate_constant: Quantity, conversion: floa
     (going from 90 % to 99 % takes as long as 0 % to 90 %), so chasing complete conversion is
     expensive. ``conversion`` X must be in [0, 1). Returns the required time.
     """
+    require_finite(conversion, name="conversion")
     _check(rate_constant, "1/[time]", "rate_constant")
     k = rate_constant.to("1/s").magnitude
     if k <= 0:

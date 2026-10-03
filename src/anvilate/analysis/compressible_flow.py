@@ -78,6 +78,7 @@ def speed_of_sound(
     air). It rises with the square root of temperature and does not depend on pressure. Returns the
     speed of sound in m/s.
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(temperature, "[temperature]", "temperature")
     _check(specific_gas_constant, "[length]**2/[time]**2/[temperature]", "specific_gas_constant")
     t = temperature.to("K").magnitude
@@ -174,6 +175,8 @@ def stagnation_temperature_ratio(*, mach_number: float, heat_capacity_ratio: flo
     high-speed gas machinery run so much hotter than the free stream. Returns the dimensionless
     ratio T₀/T (≥ 1).
     """
+    require_finite(mach_number, name="mach_number")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if mach_number < 0:
         raise _flow_refusal(
             f"mach_number must be non-negative; got {mach_number}",
@@ -233,6 +236,8 @@ def isentropic_area_ratio(*, mach_number: float, heat_capacity_ratio: float) -> 
     which is why a rocket nozzle must be matched to its altitude. Returns the dimensionless area
     ratio A/A* (≥ 1).
     """
+    require_finite(mach_number, name="mach_number")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if mach_number <= 0:
         raise _flow_refusal(
             f"mach_number must be positive; got {mach_number}",
@@ -290,6 +295,7 @@ def choked_mass_flow_rate(
     area, ``discharge_coefficient`` C_d (~0.85 for a nozzle), and ``heat_capacity_ratio`` γ /
     ``specific_gas_constant`` R the gas properties. Returns the choked mass flow in kg/s.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(stagnation_pressure, "[pressure]", "stagnation_pressure")
     _check(stagnation_temperature, "[temperature]", "stagnation_temperature")
@@ -343,6 +349,8 @@ def normal_shock_downstream_mach(*, upstream_mach: float, heat_capacity_ratio: f
     normal shock is subsonic — and it falls as the incoming Mach rises. Returns the downstream Mach
     number (dimensionless).
     """
+    require_finite(upstream_mach, name="upstream_mach")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise _flow_refusal(
             f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
@@ -365,6 +373,8 @@ def normal_shock_pressure_ratio(*, upstream_mach: float, heat_capacity_ratio: fl
     a Mach-2 shock in air multiplies the static pressure by 4.5 — which is why supersonic inlets and
     blast waves develop such steep pressure fronts. Returns the pressure ratio (dimensionless, > 1).
     """
+    require_finite(upstream_mach, name="upstream_mach")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise _flow_refusal(
             f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
@@ -388,6 +398,8 @@ def normal_shock_temperature_ratio(*, upstream_mach: float, heat_capacity_ratio:
     static temperature by ~69 %, the aero-heating that punishes supersonic leading edges. Returns
     the temperature ratio (dimensionless, > 1).
     """
+    require_finite(upstream_mach, name="upstream_mach")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise _flow_refusal(
             f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
@@ -409,6 +421,8 @@ def normal_shock_density_ratio(*, upstream_mach: float, heat_capacity_ratio: flo
     air however strong the shock, because a gas can only be squeezed so far. By continuity this is
     the velocity drop u₁/u₂ across the shock. Returns the density ratio (dimensionless, > 1).
     """
+    require_finite(upstream_mach, name="upstream_mach")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise _flow_refusal(
             f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",
@@ -458,6 +472,8 @@ def prandtl_meyer_angle(*, mach_number: float, heat_capacity_ratio: float) -> Qu
     around a convex corner by an angle Δθ raises its Mach number so that ν grows by Δθ. Returns the
     Prandtl-Meyer angle in degrees.
     """
+    require_finite(mach_number, name="mach_number")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if mach_number < 1.0:
         raise _flow_refusal(
             f"mach_number must be at least 1 (supersonic); got {mach_number}",
@@ -484,6 +500,7 @@ def mach_angle(*, mach_number: float) -> Quantity:
     the ``mach_number`` M through a compressible medium: µ = asin(1/M). At M = 1 the cone opens to
     90°; as M rises the cone tightens around the flight path. Returns the Mach angle in degrees.
     """
+    require_finite(mach_number, name="mach_number")
     if mach_number < 1.0:
         raise _flow_refusal(
             f"mach_number must be at least 1 (supersonic); got {mach_number}",
@@ -501,6 +518,7 @@ def maximum_turning_angle(*, heat_capacity_ratio: float) -> Quantity:
     for air (γ = 1.4). A convex turn steeper than this cannot be negotiated by an attached
     expansion; the flow separates into a vacuum. Returns the maximum turning angle in degrees.
     """
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     if heat_capacity_ratio <= 1.0:
         raise _flow_refusal(
             f"heat_capacity_ratio must exceed 1; got {heat_capacity_ratio}",

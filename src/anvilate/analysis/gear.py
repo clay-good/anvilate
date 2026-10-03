@@ -163,11 +163,11 @@ def gear_tangential_load(*, torque: Quantity, pitch_diameter: Quantity) -> Quant
     return Quantity(magnitude=float(force.to("N").magnitude), unit="N")
 
 
-def _check_pressure_angle(pressure_angle: float) -> float:
+def _check_pressure_angle(pressure_angle: float, name: str = "pressure_angle") -> float:
     if not 0 < pressure_angle < 90:
         raise _drive_refusal(
-            f"pressure_angle (degrees) must lie in (0, 90); got {pressure_angle}",
-            subject="pressure_angle",
+            f"{name} (degrees) must lie in (0, 90); got {pressure_angle}",
+            subject=name,
             source=_GEAR_GEOMETRY_SOURCE,
         )
     return radians(pressure_angle)
@@ -185,6 +185,7 @@ def gear_radial_load(*, tangential_load: Quantity, pressure_angle: float) -> Qua
     (0, 90). Returns the radial load in newtons — add it to the other shaft loads
     when sizing the bearings.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     _require(tangential_load, "[force]", "tangential_load")
     phi = _check_pressure_angle(pressure_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi), unit="N")
@@ -198,6 +199,7 @@ def gear_normal_load(*, tangential_load: Quantity, pressure_angle: float) -> Qua
     ``pressure_angle`` φ (degrees, in (0, 90)) are as in :func:`gear_radial_load`.
     Returns the normal load in newtons; it always exceeds W_t.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     _require(tangential_load, "[force]", "tangential_load")
     phi = _check_pressure_angle(pressure_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude / cos(phi), unit="N")
@@ -244,6 +246,8 @@ def bevel_gear_radial_load(
     and W_r → W_t·tan(φ). The pinion's radial load is the gear's thrust and vice
     versa. Returns the radial load in newtons.
     """
+    require_finite(pressure_angle, name="pressure_angle")
+    require_finite(pitch_cone_angle, name="pitch_cone_angle")
     _require(tangential_load, "[force]", "tangential_load")
     phi = _check_pressure_angle(pressure_angle)
     gamma = _check_cone_angle(pitch_cone_angle)
@@ -262,6 +266,8 @@ def bevel_gear_axial_load(
     vanishes; W_r and W_a together always resolve to the same W_t·tan(φ)
     separating force (W_r² + W_a² = (W_t·tan φ)²). Returns the thrust in newtons.
     """
+    require_finite(pressure_angle, name="pressure_angle")
+    require_finite(pitch_cone_angle, name="pitch_cone_angle")
     _require(tangential_load, "[force]", "tangential_load")
     phi = _check_pressure_angle(pressure_angle)
     gamma = _check_cone_angle(pitch_cone_angle)
@@ -290,6 +296,7 @@ def helical_gear_axial_thrust(*, tangential_load: Quantity, helix_angle: float) 
     to thrust-cancelling double-helical (herringbone) pairs. Returns the axial
     thrust in newtons.
     """
+    require_finite(helix_angle, name="helix_angle")
     _require(tangential_load, "[force]", "tangential_load")
     psi = _check_helix_angle(helix_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude * tan(psi), unit="N")
@@ -308,8 +315,10 @@ def helical_gear_radial_load(
     mesh. At ψ = 0 this reduces to the spur-gear radial load W_t·tan(φ_n). Returns
     the radial load in newtons.
     """
+    require_finite(normal_pressure_angle, name="normal_pressure_angle")
+    require_finite(helix_angle, name="helix_angle")
     _require(tangential_load, "[force]", "tangential_load")
-    phi_n = _check_pressure_angle(normal_pressure_angle)
+    phi_n = _check_pressure_angle(normal_pressure_angle, "normal_pressure_angle")
     psi = _check_helix_angle(helix_angle)
     return Quantity(magnitude=tangential_load.to("N").magnitude * tan(phi_n) / cos(psi), unit="N")
 
@@ -327,6 +336,7 @@ def helical_virtual_teeth(*, actual_teeth: int, helix_angle: float) -> float:
     [0, 90)); at ψ = 0 the virtual count equals the actual. Returns the virtual
     tooth number as a float (interpolate the form-factor table at it).
     """
+    require_finite(helix_angle, name="helix_angle")
     n = _check_tooth_count(actual_teeth, "actual_teeth")
     psi = _check_helix_angle(helix_angle)
     return n / cos(psi) ** 3
@@ -432,6 +442,7 @@ def lewis_bending_stress(
     stress. The load is a force, the module and face width positive lengths, and Y a
     positive dimensionless number. Returns the bending stress in MPa.
     """
+    require_finite(form_factor, name="form_factor")
     _require(tangential_load, "[force]", "tangential_load")
     _require(module, "[length]", "module")
     _require(face_width, "[length]", "face_width")
@@ -472,6 +483,7 @@ def lewis_module_for_bending_stress(
     module (coarser, stronger teeth) is conservative; a smaller one over-stresses the
     root. All must be positive. Returns the required module in mm.
     """
+    require_finite(form_factor, name="form_factor")
     _require(tangential_load, "[force]", "tangential_load")
     _require(face_width, "[length]", "face_width")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -524,6 +536,12 @@ def agma_bending_stress(
     allowable. Screen the result against the material's allowable bending stress. Returns
     the bending stress in MPa.
     """
+    require_finite(geometry_factor, name="geometry_factor")
+    require_finite(overload_factor, name="overload_factor")
+    require_finite(dynamic_factor, name="dynamic_factor")
+    require_finite(size_factor, name="size_factor")
+    require_finite(load_distribution_factor, name="load_distribution_factor")
+    require_finite(rim_thickness_factor, name="rim_thickness_factor")
     _require(tangential_load, "[force]", "tangential_load")
     _require(module, "[length]", "module")
     _require(face_width, "[length]", "face_width")
@@ -595,6 +613,12 @@ def agma_module_for_bending_stress(
     ``rim_thickness_factor`` K_B as in the forward stress. A larger module (coarser,
     stronger teeth) is conservative. Returns the required module in mm.
     """
+    require_finite(geometry_factor, name="geometry_factor")
+    require_finite(overload_factor, name="overload_factor")
+    require_finite(dynamic_factor, name="dynamic_factor")
+    require_finite(size_factor, name="size_factor")
+    require_finite(load_distribution_factor, name="load_distribution_factor")
+    require_finite(rim_thickness_factor, name="rim_thickness_factor")
     _require(tangential_load, "[force]", "tangential_load")
     _require(face_width, "[length]", "face_width")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -668,6 +692,9 @@ def gear_contact_stress(
     against the material's allowable contact (surface-fatigue) stress. Returns the
     peak contact stress in MPa.
     """
+    require_finite(pressure_angle, name="pressure_angle")
+    require_finite(poisson_pinion, name="poisson_pinion")
+    require_finite(poisson_gear, name="poisson_gear")
     _require(tangential_load, "[force]", "tangential_load")
     _require(pinion_pitch_diameter, "[length]", "pinion_pitch_diameter")
     _require(gear_pitch_diameter, "[length]", "gear_pitch_diameter")
@@ -724,6 +751,14 @@ def agma_contact_stress(
     each default to 1.0. Unlike bending, the factors enter under the square root. Screen
     against the material's allowable contact stress. Returns the contact stress in MPa.
     """
+    require_finite(geometry_factor, name="geometry_factor")
+    require_finite(poisson_pinion, name="poisson_pinion")
+    require_finite(poisson_gear, name="poisson_gear")
+    require_finite(overload_factor, name="overload_factor")
+    require_finite(dynamic_factor, name="dynamic_factor")
+    require_finite(size_factor, name="size_factor")
+    require_finite(load_distribution_factor, name="load_distribution_factor")
+    require_finite(surface_condition_factor, name="surface_condition_factor")
     _require(tangential_load, "[force]", "tangential_load")
     _require(pinion_pitch_diameter, "[length]", "pinion_pitch_diameter")
     _require(face_width, "[length]", "face_width")
@@ -745,6 +780,14 @@ def agma_contact_stress(
             "pinion_pitch_diameter, face_width, and both moduli must be positive",
             subject="pinion_pitch_diameter, face_width, modulus_pinion, and modulus_gear",
             source=_GEAR_RATING_SOURCE,
+        )
+    # σ_c grows with √W_t, so a negative tangential load is the square root of a negative
+    # number; the contact stress is rated on the load's magnitude.
+    if wt < 0:
+        raise _drive_refusal(
+            f"tangential_load must be non-negative (state its magnitude); got {tangential_load}",
+            subject="tangential_load",
+            source=_GEAR_LOAD_SOURCE,
         )
     for nu, name in ((poisson_pinion, "poisson_pinion"), (poisson_gear, "poisson_gear")):
         if not 0 <= nu < 0.5:
@@ -824,6 +867,7 @@ def spur_gear_contact_ratio(
     ``module`` and ``addendum`` are positive lengths; the tooth counts are positive
     whole numbers; φ lies in (0, 90). Returns the dimensionless contact ratio.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     _require(module, "[length]", "module")
     n1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
     n2 = _check_tooth_count(gear_teeth, "gear_teeth")
@@ -870,6 +914,7 @@ def minimum_teeth_to_avoid_undercut(
     describe the tooth form. The exact 2·k/sin²φ is rounded *up* to the next whole
     tooth. Returns the minimum whole tooth count.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     phi = _check_pressure_angle(pressure_angle)
     require_finite(addendum_coefficient, name="addendum_coefficient")
     if addendum_coefficient <= 0:
@@ -892,6 +937,7 @@ def involute_function(*, pressure_angle: float) -> float:
     tan and the subtraction is taken in radians; for the common 20° pressure angle
     inv(φ) ≈ 0.014904. Returns the dimensionless involute-function value.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     phi = _check_pressure_angle(pressure_angle)
     return tan(phi) - phi
 
@@ -974,6 +1020,7 @@ def base_tangent_length(
     and below z. The module must be a positive length and the tooth counts positive
     whole numbers. Returns the span W_k in millimetres.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     _require(module, "[length]", "module")
     z = _check_tooth_count(teeth, "teeth")
     k = _check_tooth_count(teeth_spanned, "teeth_spanned")
@@ -1019,6 +1066,7 @@ def gear_tooth_thickness_at_radius(
     must be a length at least the base radius (there is no tooth flank inside the base
     circle). Returns the arc tooth thickness in millimetres.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     _require(module, "[length]", "module")
     _require(radius, "[length]", "radius")
     z = _check_tooth_count(teeth, "teeth")
@@ -1089,6 +1137,7 @@ def gear_outside_diameter(
     ``addendum_coefficient`` k (1.0 for full-depth teeth, ~0.8 for stub teeth). Returns the
     outside diameter in mm.
     """
+    require_finite(addendum_coefficient, name="addendum_coefficient")
     if addendum_coefficient <= 0:
         raise _drive_refusal(
             f"addendum_coefficient must be positive; got {addendum_coefficient}",
@@ -1110,6 +1159,7 @@ def gear_root_diameter(
     b (1.25 for standard full-depth teeth, giving the 0.25·m clearance below the mating
     addendum). Returns the root diameter in mm.
     """
+    require_finite(dedendum_coefficient, name="dedendum_coefficient")
     if dedendum_coefficient <= 0:
         raise _drive_refusal(
             f"dedendum_coefficient must be positive; got {dedendum_coefficient}",
@@ -1230,6 +1280,7 @@ def operating_pressure_angle(
     base circles overlap and the teeth cannot mesh. Returns the operating pressure
     angle φ_w in degrees.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     return degrees(
         _operating_pressure_angle_rad(
             module, pinion_teeth, gear_teeth, pressure_angle, operating_center_distance
@@ -1259,6 +1310,7 @@ def profile_shift_sum_for_center_distance(
     a separate design choice. A standard-centre pair (a_w = a) returns 0. Returns the
     dimensionless total profile-shift coefficient x₁ + x₂.
     """
+    require_finite(pressure_angle, name="pressure_angle")
     z1 = _check_tooth_count(pinion_teeth, "pinion_teeth")
     z2 = _check_tooth_count(gear_teeth, "gear_teeth")
     phi = _check_pressure_angle(pressure_angle)
@@ -1660,6 +1712,7 @@ def helical_face_contact_ratio(
     the spur case. Add it to the transverse contact ratio for the total. Returns the face contact
     ratio as a plain float.
     """
+    require_finite(helix_angle, name="helix_angle")
     _require(face_width, "[length]", "face_width")
     _require(normal_module, "[length]", "normal_module")
     psi = _check_helix_angle(helix_angle)

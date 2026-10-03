@@ -116,6 +116,7 @@ def maximum_cornering_speed(
     gravity ``gravity`` g (defaulting to 9.80665 m/s²): v_max = √(µ·g·r). A tighter curve or a
     slicker road lowers it. Returns the maximum speed in m/s.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _check(radius, "[length]", "radius")
     r = radius.to("m").magnitude
     if friction_coefficient <= 0:

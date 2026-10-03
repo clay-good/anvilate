@@ -156,6 +156,7 @@ def rayleigh_wave_speed(
     speed misplaces a flaw by 8% of the standoff. ``shear_modulus`` G and ``density`` ρ set the
     shear speed √(G/ρ); ``poissons_ratio`` ν is a plain float in [0, 0.5). Returns the speed in m/s.
     """
+    require_finite(poissons_ratio, name="poissons_ratio")
     _check(shear_modulus, "[pressure]", "shear_modulus")
     _check(density, "[mass]/[length]**3", "density")
     g = shear_modulus.to("Pa").magnitude

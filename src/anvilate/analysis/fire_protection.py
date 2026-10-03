@@ -147,6 +147,7 @@ def hydrant_flow_test(
     the flow a hydrant was delivering, the raw data of a water-supply capacity test. Returns the
     flow in gallons per minute.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(outlet_diameter, "[length]", "outlet_diameter")
     _check(pitot_pressure, "[pressure]", "pitot_pressure")
     if not 0.0 < discharge_coefficient <= 1.0:

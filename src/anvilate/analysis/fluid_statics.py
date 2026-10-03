@@ -247,6 +247,7 @@ def righting_moment(
     is the roll angle in degrees. A larger GM gives a stiffer, snappier righting response — good for
     stability but harsh in a seaway. Returns the righting moment in kN·m.
     """
+    require_finite(heel_angle, name="heel_angle")
     from math import radians, sin
 
     _check(weight, "[force]", "weight")
@@ -289,6 +290,7 @@ def capillary_rise(
     narrows, which is why it dominates in heat-pipe wicks, soil pores, and paper — and is negligible
     in anything you'd call a pipe. Returns the rise in mm (negative for a non-wetting liquid).
     """
+    require_finite(contact_angle, name="contact_angle")
     _check(surface_tension, "[force]/[length]", "surface_tension")
     _check(density, "[mass]/[length]**3", "density")
     _check(tube_radius, "[length]", "tube_radius")

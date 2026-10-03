@@ -80,6 +80,7 @@ def cyclone_cut_diameter(
     denser particles all shrink the cut diameter and sharpen the separation. Feed it to
     :func:`cyclone_collection_efficiency`. Returns the cut diameter (in µm).
     """
+    require_finite(effective_turns, name="effective_turns")
     _check(gas_viscosity, "[pressure]*[time]", "gas_viscosity")
     _check(inlet_width, "[length]", "inlet_width")
     _check(inlet_velocity, "[length]/[time]", "inlet_velocity")
@@ -159,6 +160,7 @@ def cyclone_pressure_drop(
     so finer cuts are paid for in pressure drop, the central design trade of a cyclone. Returns the
     pressure drop in pascals.
     """
+    require_finite(velocity_head_count, name="velocity_head_count")
     _check(inlet_velocity, "[velocity]", "inlet_velocity")
     _check(gas_density, "[mass]/[volume]", "gas_density")
     v = inlet_velocity.to("m/s").magnitude

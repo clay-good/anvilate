@@ -144,6 +144,8 @@ def second_law_efficiency(*, actual_cop: float, carnot_cop: float) -> float:
     sits near 0.5, a poor one well below. It cannot exceed 1 (that would beat Carnot). Returns the
     dimensionless efficiency.
     """
+    require_finite(actual_cop, name="actual_cop")
+    require_finite(carnot_cop, name="carnot_cop")
     if actual_cop <= 0:
         raise _refrigeration_refusal(
             "actual_cop must be positive", subject="actual_cop", source=_RATING_SOURCE
@@ -259,6 +261,7 @@ def heat_rejection_ratio(*, cooling_cop: float) -> float:
     against this, not the cooling load. ``cooling_cop`` must be positive. Returns the dimensionless
     heat-rejection ratio (> 1).
     """
+    require_finite(cooling_cop, name="cooling_cop")
     if cooling_cop <= 0:
         raise _refrigeration_refusal(
             "cooling_cop must be positive", subject="cooling_cop", source=_RATING_SOURCE

@@ -107,6 +107,7 @@ def scotch_yoke_displacement(*, crank_radius: Quantity, crank_angle: float) -> Q
     crank position; the result runs from 0 at TDC (θ = 0) to the full stroke 2r at
     BDC (θ = 180°). Returns the displacement in mm.
     """
+    require_finite(crank_angle, name="crank_angle")
     r = _crank_radius_mm(crank_radius)
     return Quantity(magnitude=r * (1.0 - cos(radians(crank_angle))), unit="mm")
 
@@ -121,6 +122,7 @@ def scotch_yoke_velocity(
     centres, ω·r at mid-stroke — with none of the slider-crank's half-stroke
     asymmetry. Returns the velocity in m/s.
     """
+    require_finite(crank_angle, name="crank_angle")
     r = _crank_radius_mm(crank_radius)
     omega = _speed_rad_s(crank_speed)
     return Quantity(magnitude=r / 1000.0 * omega * sin(radians(crank_angle)), unit="m/s")
@@ -137,6 +139,7 @@ def scotch_yoke_acceleration(
     frees a scotch yoke of the slider-crank's second-order shake. Returns the
     acceleration in m/s².
     """
+    require_finite(crank_angle, name="crank_angle")
     r = _crank_radius_mm(crank_radius)
     omega = _speed_rad_s(crank_speed)
     return Quantity(magnitude=r / 1000.0 * omega**2 * cos(radians(crank_angle)), unit="m/s**2")

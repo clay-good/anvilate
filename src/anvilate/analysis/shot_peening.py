@@ -118,6 +118,7 @@ def peening_time_for_coverage(*, coverage_rate: Quantity, target_coverage: float
     approaches 1, 100% coverage would take infinite time — so specs call 98% "full coverage" and
     quote heavier peening as a multiple of the time to reach it. Returns the exposure time in s.
     """
+    require_finite(target_coverage, name="target_coverage")
     _check(coverage_rate, "1/[time]", "coverage_rate")
     lam = coverage_rate.to("1/s").magnitude
     if lam <= 0:

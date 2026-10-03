@@ -102,6 +102,7 @@ def rollover_threshold_speed(*, static_stability_factor: float, curve_radius: Qu
     corners; above it a tall vehicle tips before it slides. A wider curve or a more stable vehicle
     raises the speed. ``static_stability_factor`` must be positive. Returns the speed in m/s.
     """
+    require_finite(static_stability_factor, name="static_stability_factor")
     if static_stability_factor <= 0:
         raise _vehicle_stability_refusal(
             "static_stability_factor must be positive",
@@ -237,6 +238,7 @@ def vehicle_characteristic_speed(*, understeer_gradient: float, wheelbase: Quant
 
     Returns the characteristic speed in m/s.
     """
+    require_finite(understeer_gradient, name="understeer_gradient")
     _check(wheelbase, "[length]", "wheelbase")
     length = wheelbase.to("m").magnitude
     if length <= 0:

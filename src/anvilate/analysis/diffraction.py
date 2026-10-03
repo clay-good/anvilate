@@ -105,6 +105,7 @@ def bragg_plane_spacing(*, wavelength: Quantity, angle: float, order: int = 1) -
     diffraction ``order`` n, d = n*lambda/(2*sin(theta)). It is how X-ray diffraction turns a peak
     position into the lattice spacing that fingerprints a crystalline phase. Returns d as a length.
     """
+    require_finite(angle, name="angle")
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
@@ -221,6 +222,7 @@ def grating_angular_dispersion(
     ``diffraction_angle`` theta (degrees, in [0, 90)) from :func:`grating_diffraction_angle`.
     Dispersion grows toward grazing angles and in higher orders. Returns the dispersion in rad/m.
     """
+    require_finite(diffraction_angle, name="diffraction_angle")
     _check(groove_spacing, "[length]", "groove_spacing")
     d = groove_spacing.to("m").magnitude
     if d <= 0:

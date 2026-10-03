@@ -24,6 +24,7 @@ from __future__ import annotations
 from math import cos, radians, sin
 
 from ..refusal import RefusalError, Remedy
+from ..units import require_finite
 
 _DRIVELINE_GEOMETRY_SOURCE = "the driveline drawing or measured operating geometry"
 
@@ -60,6 +61,8 @@ def universal_joint_speed_ratio(*, shaft_angle: float, input_angle: float) -> fl
     plain floats in degrees: ω₂/ω₁ = cosβ/(1 − sin²β·cos²θ). It rises above 1 and falls below it
     twice per revolution. Returns the speed ratio as a plain float.
     """
+    require_finite(shaft_angle, name="shaft_angle")
+    require_finite(input_angle, name="input_angle")
     if not 0.0 <= shaft_angle < 90.0:
         raise _universal_joint_refusal(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
     beta = radians(shaft_angle)
@@ -75,6 +78,7 @@ def universal_joint_max_speed_ratio(*, shaft_angle: float) -> float:
     the plane of the two shafts. The minimum a quarter-turn later is cosβ. Returns the ratio as a
     float (≥ 1).
     """
+    require_finite(shaft_angle, name="shaft_angle")
     if not 0.0 <= shaft_angle < 90.0:
         raise _universal_joint_refusal(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
     return 1.0 / cos(radians(shaft_angle))
@@ -88,6 +92,7 @@ def universal_joint_speed_fluctuation(*, shaft_angle: float) -> float:
     grows steeply with the joint angle, which is why single joints are kept small or paired to
     cancel the ripple. Returns the fluctuation as a plain float.
     """
+    require_finite(shaft_angle, name="shaft_angle")
     if not 0.0 <= shaft_angle < 90.0:
         raise _universal_joint_refusal(f"shaft_angle must be in [0, 90) degrees; got {shaft_angle}")
     c = cos(radians(shaft_angle))

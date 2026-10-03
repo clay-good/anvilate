@@ -76,6 +76,7 @@ def shannon_capacity(*, bandwidth: Quantity, signal_to_noise_ratio: float) -> fl
     coding can exceed it. Doubling the bandwidth doubles it, but raising SNR only adds capacity
     logarithmically. Returns the capacity as a plain float in bit/s.
     """
+    require_finite(signal_to_noise_ratio, name="signal_to_noise_ratio")
     _check(bandwidth, "1/[time]", "bandwidth")
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if b < 0:
@@ -99,6 +100,8 @@ def shannon_required_bandwidth(*, capacity: float, signal_to_noise_ratio: float)
     budget checks whether the allotted spectrum can support a data rate, or how much SNR would trade
     bandwidth. Returns the required bandwidth in Hz.
     """
+    require_finite(capacity, name="capacity")
+    require_finite(signal_to_noise_ratio, name="signal_to_noise_ratio")
     if capacity < 0:
         raise _channel_capacity_refusal(
             "capacity must be non-negative", subject="capacity", source=_REQUIREMENT_SOURCE
@@ -143,6 +146,7 @@ def spectral_efficiency(*, signal_to_noise_ratio: float) -> float:
     more bits into a band costs exponentially more power. ``signal_to_noise_ratio`` is the linear
     power ratio (not dB) and must be non-negative. Returns the spectral efficiency in bit/s/Hz.
     """
+    require_finite(signal_to_noise_ratio, name="signal_to_noise_ratio")
     if signal_to_noise_ratio < 0:
         raise _channel_capacity_refusal(
             "signal_to_noise_ratio must be non-negative",

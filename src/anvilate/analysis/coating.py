@@ -56,6 +56,7 @@ def coating_dry_film_thickness(
     thickness that actually protects the substrate and the number an inspector gauges. The volume
     solids is a fraction in (0, 1]. Returns the dry film thickness in the wet film's length units.
     """
+    require_finite(volume_solids_fraction, name="volume_solids_fraction")
     _check(wet_film_thickness, "[length]", "wet_film_thickness")
     _fraction(volume_solids_fraction, "volume_solids_fraction")
     wft = wet_film_thickness.to("um").magnitude
@@ -80,6 +81,7 @@ def coating_wet_film_thickness(
     low-solids paint. ``volume_solids_fraction`` is a fraction in (0, 1]. Returns the wet film
     thickness in the dry film's length units.
     """
+    require_finite(volume_solids_fraction, name="volume_solids_fraction")
     _check(dry_film_thickness, "[length]", "dry_film_thickness")
     _fraction(volume_solids_fraction, "volume_solids_fraction")
     dft = dry_film_thickness.to("um").magnitude
@@ -105,6 +107,7 @@ def coating_theoretical_coverage(
     is a fraction in (0, 1]. Returns the coverage rate as an area-per-volume quantity (convert with
     e.g. ``.to("m**2/L")``).
     """
+    require_finite(volume_solids_fraction, name="volume_solids_fraction")
     _fraction(volume_solids_fraction, "volume_solids_fraction")
     _check(dry_film_thickness, "[length]", "dry_film_thickness")
     dft = dry_film_thickness.to("m").magnitude

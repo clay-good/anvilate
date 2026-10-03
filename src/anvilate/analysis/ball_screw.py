@@ -69,6 +69,7 @@ def ball_screw_drive_torque(
     it needs far less motor than an acme screw for the same push. Efficiency must be in (0, 1].
     Returns the drive torque in N·m.
     """
+    require_finite(efficiency, name="efficiency")
     _check(axial_load, "[force]", "axial_load")
     _check(lead, "[length]", "lead")
     f = axial_load.to("N").magnitude
@@ -103,6 +104,7 @@ def ball_screw_back_drive_torque(
     lift needs a brake and an acme-screw one often does not. η_b must be in (0, 1]. Returns the
     back-driving torque in N·m.
     """
+    require_finite(back_drive_efficiency, name="back_drive_efficiency")
     _check(axial_load, "[force]", "axial_load")
     _check(lead, "[length]", "lead")
     f = axial_load.to("N").magnitude

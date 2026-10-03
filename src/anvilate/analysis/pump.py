@@ -116,6 +116,7 @@ def pump_shaft_power(*, hydraulic_power: Quantity, efficiency: float) -> Quantit
     typically 0.6–0.85 for a centrifugal pump at its best point). Returns the shaft power in watts
     — size the motor above this.
     """
+    require_finite(efficiency, name="efficiency")
     _check(hydraulic_power, "[power]", "hydraulic_power")
     p = hydraulic_power.to("W").magnitude
     if p <= 0:
@@ -150,6 +151,7 @@ def pump_temperature_rise(
     (50 m, 75% efficient, water) the rise is a negligible 0.04 K; at 200 m and 40% it is 0.7 K, and
     at shut-off it runs away. Returns the temperature rise in K.
     """
+    require_finite(efficiency, name="efficiency")
     _check(head, "[length]", "head")
     _check(specific_heat, "[energy]/([mass]*[temperature])", "specific_heat")
     h = head.to("m").magnitude
@@ -244,6 +246,7 @@ def affinity_flow_rate(*, flow_rate: Quantity, speed_ratio: float) -> Quantity:
     becomes Q₁·``speed_ratio`` at the new one, where ``speed_ratio`` = N₂/N₁. Returns the scaled
     flow rate in m³/s.
     """
+    require_finite(speed_ratio, name="speed_ratio")
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     q = flow_rate.to("m**3/s").magnitude
     if speed_ratio <= 0:
@@ -263,6 +266,7 @@ def affinity_head(*, head: Quantity, speed_ratio: float) -> Quantity:
     Head scales with the *square* of the speed ratio: ``head`` H₁ becomes H₁·``speed_ratio``²,
     where ``speed_ratio`` = N₂/N₁. Returns the scaled head in meters.
     """
+    require_finite(speed_ratio, name="speed_ratio")
     _check(head, "[length]", "head")
     h = head.to("m").magnitude
     if speed_ratio <= 0:
@@ -283,6 +287,7 @@ def affinity_power(*, power: Quantity, speed_ratio: float) -> Quantity:
     where ``speed_ratio`` = N₂/N₁. This cube is the whole case for variable-speed drives — a
     modest speed cut is a large power saving. Returns the scaled power in watts.
     """
+    require_finite(speed_ratio, name="speed_ratio")
     _check(power, "[power]", "power")
     p = power.to("W").magnitude
     if speed_ratio <= 0:

@@ -225,6 +225,9 @@ def stanton_number(
     actually transferred against the heat the flow could carry, and is the group the Reynolds and
     Chilton-Colburn analogies work in. Returns the dimensionless Stanton number as a plain float.
     """
+    require_finite(nusselt_number, name="nusselt_number")
+    require_finite(reynolds_number, name="reynolds_number")
+    require_finite(prandtl_number, name="prandtl_number")
     if reynolds_number <= 0:
         raise _mass_transfer_refusal(
             "reynolds_number must be positive", subject="reynolds_number", source=_FLOW_SOURCE
@@ -251,6 +254,8 @@ def colburn_j_factor(*, stanton_number: float, prandtl_number: float) -> float:
     mass-transfer j-factor built with Sc in place of Pr) to the mass transfer. Returns the
     dimensionless j-factor as a plain float.
     """
+    require_finite(stanton_number, name="stanton_number")
+    require_finite(prandtl_number, name="prandtl_number")
     if stanton_number < 0:
         raise _mass_transfer_refusal(
             "stanton_number must be non-negative",
@@ -279,6 +284,7 @@ def chilton_colburn_mass_transfer_coefficient(
     from a heat-transfer correlation (or measurement) without a separate mass-transfer
     experiment; when Le ≈ 1 the two coefficients differ only through ρ·c_p. Returns k_c in m/s.
     """
+    require_finite(lewis_number, name="lewis_number")
     _check(
         heat_transfer_coefficient,
         "[power] / [length]**2 / [temperature]",
@@ -337,6 +343,7 @@ def overall_mass_transfer_coefficient(
     of the liquid helps; a soluble solute (small m) is gas-film controlled and only gas velocity
     helps. Returns the overall coefficient in m/s.
     """
+    require_finite(equilibrium_slope, name="equilibrium_slope")
     _check(gas_film_coefficient, "[length]/[time]", "gas_film_coefficient")
     _check(liquid_film_coefficient, "[length]/[time]", "liquid_film_coefficient")
     k_g = gas_film_coefficient.to("m/s").magnitude

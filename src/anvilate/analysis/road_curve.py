@@ -109,6 +109,8 @@ def minimum_curve_radius(
     policy allows: R_min = v²/(g·(e + f)). The two cornering contributions add, so a steeper bank or
     a higher friction allowance permits a sharper curve. Returns the minimum radius in metres.
     """
+    require_finite(superelevation_rate, name="superelevation_rate")
+    require_finite(side_friction_factor, name="side_friction_factor")
     _check(design_speed, "[length]/[time]", "design_speed")
     v = design_speed.to("m/s").magnitude
     if v <= 0:
@@ -165,6 +167,8 @@ def banked_curve_max_speed(
     bank and friction; for the gentle slopes of real roads it is close to 1. Returns the maximum
     speed in m/s.
     """
+    require_finite(superelevation_rate, name="superelevation_rate")
+    require_finite(side_friction_factor, name="side_friction_factor")
     _check(radius, "[length]", "radius")
     r = radius.to("m").magnitude
     if r <= 0:
@@ -209,6 +213,7 @@ def braking_distance(
     Feeds :func:`stopping_sight_distance`. Raises if a downgrade overwhelms the braking
     (a + g·G ≤ 0, no net deceleration). Returns the braking distance in metres.
     """
+    require_finite(grade, name="grade")
     _check(speed, "[length]/[time]", "speed")
     _check(deceleration, "[length]/[time]**2", "deceleration")
     v = speed.to("m/s").magnitude
@@ -276,6 +281,7 @@ def stopping_sight_distance(
     This is the distance a horizontal or crest vertical curve must keep clear of obstructions — the
     check that complements :func:`minimum_curve_radius`. Returns the sight distance in metres.
     """
+    require_finite(grade, name="grade")
     reaction = perception_reaction_distance(speed=speed, reaction_time=reaction_time)
     braking = braking_distance(speed=speed, deceleration=deceleration, grade=grade)
     return Quantity(magnitude=reaction.to("m").magnitude + braking.to("m").magnitude, unit="m")
@@ -290,6 +296,7 @@ def horizontal_curve_tangent_length(*, radius: Quantity, deflection_angle: float
     measures from the intersection to stake the curve's ends, and it grows without bound as the
     tangents approach a straight reversal (Δ → π). Returns the tangent length in metres.
     """
+    require_finite(deflection_angle, name="deflection_angle")
     _check(radius, "[length]", "radius")
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude
@@ -309,6 +316,7 @@ def horizontal_curve_length(*, radius: Quantity, deflection_angle: float) -> Qua
     consumes. A flatter (larger-radius) curve of the same deflection is proportionally longer.
     Returns the curve length in metres.
     """
+    require_finite(deflection_angle, name="deflection_angle")
     _check(radius, "[length]", "radius")
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude
@@ -328,6 +336,7 @@ def horizontal_curve_external_distance(*, radius: Quantity, deflection_angle: fl
     stands off from the corner — the number that decides whether a curve fits past an obstruction or
     a right-of-way limit. Returns the external distance in metres.
     """
+    require_finite(deflection_angle, name="deflection_angle")
     _check(radius, "[length]", "radius")
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude
@@ -352,6 +361,7 @@ def horizontal_curve_middle_ordinate(*, radius: Quantity, deflection_angle: floa
     barrier, cut slope, or building must be cleared for a driver to see around the bend. It is
     also what field crews stake the curve's midpoint from. Returns the middle ordinate in metres.
     """
+    require_finite(deflection_angle, name="deflection_angle")
     _check(radius, "[length]", "radius")
     _check_deflection(deflection_angle)
     r = radius.to("m").magnitude

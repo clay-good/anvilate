@@ -198,6 +198,7 @@ def resonator_bandwidth(*, resonant_frequency: Quantity, quality_factor: float) 
     the number that says whether a tuned circuit can separate two nearby channels. Returns the
     bandwidth in hertz.
     """
+    require_finite(quality_factor, name="quality_factor")
     _check(resonant_frequency, "1/[time]", "resonant_frequency")
     f0 = count_rate_per_second(resonant_frequency, name="resonant_frequency")
     if f0 <= 0:
@@ -472,6 +473,7 @@ def parallel_plate_capacitance(
     plates, a thinner gap, or a higher-permittivity dielectric all raise it. Returns the capacitance
     in F.
     """
+    require_finite(relative_permittivity, name="relative_permittivity")
     _check(plate_area, "[area]", "plate_area")
     _check(separation, "[length]", "separation")
     a = plate_area.to("m**2").magnitude

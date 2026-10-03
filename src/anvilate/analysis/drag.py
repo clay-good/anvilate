@@ -88,6 +88,7 @@ def drag_force(
     force on a submerged member — and because of the square, a 40% faster wind is nearly double the
     load. Returns the drag force in N.
     """
+    require_finite(drag_coefficient, name="drag_coefficient")
     _check(density, "[mass]/[length]**3", "density")
     _check(velocity, "[length]/[time]", "velocity")
     _check(reference_area, "[area]", "reference_area")
@@ -130,6 +131,7 @@ def terminal_velocity(
     This is the settling velocity in a clarifier or the free-fall speed of a dropped object. Returns
     the terminal velocity in m/s.
     """
+    require_finite(drag_coefficient, name="drag_coefficient")
     _check(weight, "[force]", "weight")
     _check(density, "[mass]/[length]**3", "density")
     _check(reference_area, "[area]", "reference_area")
@@ -170,6 +172,7 @@ def jet_impact_force(
     nozzle,
     the thrust on a turbine bucket, or the kick of a cutting jet. Returns the force in N.
     """
+    require_finite(deflection_angle, name="deflection_angle")
     from math import cos, radians
 
     _check(density, "[mass]/[length]**3", "density")
@@ -219,6 +222,7 @@ def sphere_drag_coefficient(*, reynolds_number: float) -> float:
     ``reynolds_number`` is the particle Reynolds number ρ·v·d/μ, a plain float. Returns the drag
     coefficient as a plain float.
     """
+    require_finite(reynolds_number, name="reynolds_number")
     if reynolds_number <= 0:
         raise _drag_refusal(
             f"reynolds_number must be positive; got {reynolds_number}",

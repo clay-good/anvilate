@@ -29,7 +29,7 @@ from __future__ import annotations
 from math import radians
 
 from ..refusal import RefusalError, Remedy
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _HINGE_GEOMETRY_SOURCE = "the molded-part drawing or verified hinge geometry record"
 _HINGE_MATERIAL_SOURCE = "the polymer datasheet or qualified living-hinge material record"
@@ -97,6 +97,7 @@ def living_hinge_fold_strain(
     ε = θ·t/(2·L) (θ in radians). Compare it against the material's permissible flexural
     strain. Returns the dimensionless strain.
     """
+    require_finite(fold_angle, name="fold_angle")
     t = _positive_mm(web_thickness, "web_thickness")
     ell = _positive_mm(web_length, "web_length")
     theta = radians(_check_fold_angle(fold_angle))
@@ -113,6 +114,8 @@ def living_hinge_web_length_for_strain(
     ``fold_angle`` θ (degrees, default 180°). A longer web is fine (lower strain); a
     shorter one over-strains. ε must be positive. Returns the web length in mm.
     """
+    require_finite(permissible_strain, name="permissible_strain")
+    require_finite(fold_angle, name="fold_angle")
     t = _positive_mm(web_thickness, "web_thickness")
     if permissible_strain <= 0:
         raise _living_hinge_refusal(

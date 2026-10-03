@@ -75,6 +75,7 @@ def hydraulic_pump_flow_rate(
     volume from reaching the outlet. Unlike a centrifugal pump, the flow barely depends on the
     pressure it works against — a PD pump is a flow source. Returns the delivered flow in m³/s.
     """
+    require_finite(volumetric_efficiency, name="volumetric_efficiency")
     _check(displacement, "[volume]", "displacement")
     _check(rotational_speed, "1/[time]", "rotational_speed")
     _fraction(volumetric_efficiency, "volumetric_efficiency")
@@ -108,6 +109,7 @@ def hydraulic_motor_torque(
     scales with the pressure the load demands, independent of speed — the defining trait of a
     hydraulic drive. Returns the torque in N·m.
     """
+    require_finite(mechanical_efficiency, name="mechanical_efficiency")
     _check(displacement, "[volume]", "displacement")
     _check(pressure_drop, "[pressure]", "pressure_drop")
     _fraction(mechanical_efficiency, "mechanical_efficiency")
@@ -138,6 +140,7 @@ def hydraulic_motor_speed(
     below the ideal Q/D — the inverse relation of :func:`hydraulic_pump_flow_rate`. Returns the
     shaft speed in rpm.
     """
+    require_finite(volumetric_efficiency, name="volumetric_efficiency")
     _check(flow_rate, "[volume]/[time]", "flow_rate")
     _check(displacement, "[volume]", "displacement")
     _fraction(volumetric_efficiency, "volumetric_efficiency")

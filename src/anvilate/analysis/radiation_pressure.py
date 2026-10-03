@@ -88,6 +88,7 @@ def radiation_pressure_from_intensity(
     since it must also reverse the momentum of the reflected light. In full sunlight (~1361 W/m²) it
     is only a few micropascals. Returns the radiation pressure in Pa.
     """
+    require_finite(reflectivity, name="reflectivity")
     _check(intensity, "[power]/[area]", "intensity")
     i = intensity.to("W/m**2").magnitude
     if i < 0:
@@ -111,6 +112,7 @@ def radiation_force(*, intensity: Quantity, area: Quantity, reflectivity: float 
     propellant-free thrust of a solar sail, which is why sails are made large and reflective.
     Returns the force in N.
     """
+    require_finite(reflectivity, name="reflectivity")
     _check(intensity, "[power]/[area]", "intensity")
     _check(area, "[area]", "area")
     i = intensity.to("W/m**2").magnitude

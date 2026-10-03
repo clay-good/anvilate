@@ -351,6 +351,7 @@ def nds_bending_scorecard(
     the entry is ``NOT_EVALUATED`` rather than a silent pass: the species/grade value
     is the caller's to provide, and a timber check without one has not been made.
     """
+    require_finite(required, name="required")
     if adjusted_bending_value is None:
         return ScorecardEntry(
             name=name,
@@ -464,6 +465,7 @@ def nds_shear_scorecard(
     ``None`` — no reference F_v was supplied — the entry is ``NOT_EVALUATED`` rather than a silent
     pass, mirroring :func:`nds_bending_scorecard`.
     """
+    require_finite(required, name="required")
     if adjusted_shear_value is None:
         return ScorecardEntry(
             name=name,
@@ -651,6 +653,7 @@ def nds_bearing_scorecard(
     ``None`` — no reference F_c⊥ was supplied — the entry is ``NOT_EVALUATED`` rather than a silent
     pass, mirroring :func:`nds_bending_scorecard`.
     """
+    require_finite(required, name="required")
     if adjusted_bearing_value is None:
         return ScorecardEntry(
             name=name,
@@ -720,6 +723,7 @@ def nds_euler_buckling_stress(
     formula would give: a column that slender is outside the standard, and the number is
     not a design value.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
     require_flag(
         during_construction,
         name="during_construction",
@@ -844,6 +848,7 @@ def nds_bending_buckling_stress(*, min_modulus: Quantity, slenderness_ratio: flo
     chain, which the caller supplies — and ``slenderness_ratio`` is R_B from
     :func:`nds_beam_slenderness_ratio`. Returns F_bE as a stress.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
     if not isinstance(min_modulus, Quantity):
         raise _timber_refusal(
             f"min_modulus must be a [pressure] quantity; got {min_modulus!r}",
@@ -955,6 +960,7 @@ def nds_compression_scorecard(
     ``adjusted_compression_value`` is ``None`` — no reference F_c was supplied — the entry
     is ``NOT_EVALUATED`` rather than a silent pass, mirroring :func:`nds_bending_scorecard`.
     """
+    require_finite(required, name="required")
     if adjusted_compression_value is None:
         return ScorecardEntry(
             name=name,
@@ -1024,6 +1030,7 @@ def nds_column_stability_factor(
     penalty); a slender one drives it toward zero. Multiply F*_c by C_P for the
     adjusted compression value F'_c. ``c`` must lie in (0, 1]. Returns C_P in (0, 1].
     """
+    require_finite(c, name="c")
     if not isinstance(euler_buckling_stress, Quantity):
         raise _timber_refusal(
             f"euler_buckling_stress must be a [pressure] quantity; got {euler_buckling_stress!r}",

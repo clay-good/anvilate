@@ -169,6 +169,7 @@ def minimum_sprocket_teeth_for_chordal_variation(*, max_variation: float) -> int
     drives avoid small sprockets. ``max_variation`` must be in (0, 1). Returns the minimum
     tooth count as an int.
     """
+    require_finite(max_variation, name="max_variation")
     if not 0 < max_variation < 1:
         raise _drive_refusal(
             f"max_variation must be in (0, 1); got {max_variation}",

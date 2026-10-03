@@ -224,6 +224,7 @@ def compressor_actual_discharge_temperature(
     the temperature that sizes intercooling and aftercooling. Returns the actual discharge
     temperature in kelvin.
     """
+    require_finite(isentropic_efficiency, name="isentropic_efficiency")
     _check(inlet_temperature, "[temperature]", "inlet_temperature")
     _check(isentropic_outlet_temperature, "[temperature]", "isentropic_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
@@ -314,6 +315,7 @@ def turbine_actual_discharge_temperature(
     Source: Cengel & Boles, *Thermodynamics: An Engineering Approach*, turbine isentropic
     efficiency.
     """
+    require_finite(isentropic_efficiency, name="isentropic_efficiency")
     _check(inlet_temperature, "[temperature]", "inlet_temperature")
     _check(isentropic_outlet_temperature, "[temperature]", "isentropic_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
@@ -356,6 +358,8 @@ def compressor_polytropic_efficiency(
     ratio the way the whole-machine value does, which is why it is the fairer basis for comparing
     stages. All temperatures must be absolute. Returns the dimensionless polytropic efficiency.
     """
+    require_finite(pressure_ratio, name="pressure_ratio")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(inlet_temperature, "[temperature]", "inlet_temperature")
     _check(actual_outlet_temperature, "[temperature]", "actual_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude
@@ -405,6 +409,8 @@ def turbine_polytropic_efficiency(
     Source: Cengel & Boles, *Thermodynamics: An Engineering Approach*, polytropic (small-stage)
     efficiency.
     """
+    require_finite(expansion_ratio, name="expansion_ratio")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(inlet_temperature, "[temperature]", "inlet_temperature")
     _check(actual_outlet_temperature, "[temperature]", "actual_outlet_temperature")
     t1 = inlet_temperature.to("K").magnitude

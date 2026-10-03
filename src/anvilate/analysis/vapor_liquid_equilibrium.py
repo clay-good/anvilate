@@ -84,6 +84,7 @@ def raoult_partial_pressure(
     — a dilute solute contributes little, a nearly pure component almost all of its pure pressure.
     Returns the partial pressure in the same pressure unit family (kPa).
     """
+    require_finite(liquid_mole_fraction, name="liquid_mole_fraction")
     _check(pure_vapor_pressure, "[pressure]", "pure_vapor_pressure")
     if not 0.0 <= liquid_mole_fraction <= 1.0:
         raise _vapor_liquid_equilibrium_refusal(
@@ -113,6 +114,7 @@ def henry_law_partial_pressure(
     fizzes when opened, and how gas solubility is screened — double the overlying pressure and twice
     as much gas dissolves. Returns the solute partial pressure in kPa.
     """
+    require_finite(solute_mole_fraction, name="solute_mole_fraction")
     _check(henry_constant, "[pressure]", "henry_constant")
     if not 0.0 <= solute_mole_fraction <= 1.0:
         raise _vapor_liquid_equilibrium_refusal(
@@ -165,6 +167,8 @@ def equilibrium_vapor_mole_fraction(
     column needs. At α = 1 the vapor matches the liquid (y = x) and no separation occurs.
     Returns the vapor mole fraction (0 to 1) as a plain float.
     """
+    require_finite(liquid_mole_fraction, name="liquid_mole_fraction")
+    require_finite(relative_volatility, name="relative_volatility")
     if not 0.0 <= liquid_mole_fraction <= 1.0:
         raise _vapor_liquid_equilibrium_refusal(
             f"liquid_mole_fraction must be in [0, 1]; got {liquid_mole_fraction}",
@@ -200,6 +204,9 @@ def fenske_minimum_stages(
     larger α or a looser split lowers it; α → 1 sends it to infinity (no separation is possible).
     Returns the minimum number of theoretical stages as a plain float.
     """
+    require_finite(distillate_light_fraction, name="distillate_light_fraction")
+    require_finite(bottoms_light_fraction, name="bottoms_light_fraction")
+    require_finite(relative_volatility, name="relative_volatility")
     if not 0.0 < distillate_light_fraction < 1.0:
         raise _vapor_liquid_equilibrium_refusal(
             f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}",
@@ -247,6 +254,9 @@ def underwood_minimum_reflux(
     R_min = [x_D/x_F − α·(1 − x_D)/(1 − x_F)]/(α − 1). Real columns run at 1.1–1.5× this; the closer
     to R_min, the taller the column. Returns the minimum reflux ratio L/D as a plain float.
     """
+    require_finite(distillate_light_fraction, name="distillate_light_fraction")
+    require_finite(feed_light_fraction, name="feed_light_fraction")
+    require_finite(relative_volatility, name="relative_volatility")
     if not 0.0 < distillate_light_fraction < 1.0:
         raise _vapor_liquid_equilibrium_refusal(
             f"distillate_light_fraction must be in (0, 1); got {distillate_light_fraction}",
@@ -299,6 +309,9 @@ def gilliland_actual_stages(
     physics there is a reflux pinch — an infinitely tall column — not an arithmetic accident.
     Returns the number of theoretical stages as a plain float.
     """
+    require_finite(minimum_stages, name="minimum_stages")
+    require_finite(minimum_reflux_ratio, name="minimum_reflux_ratio")
+    require_finite(reflux_ratio, name="reflux_ratio")
     if minimum_stages <= 0.0:
         raise _vapor_liquid_equilibrium_refusal(
             f"minimum_stages must be positive; got {minimum_stages}",

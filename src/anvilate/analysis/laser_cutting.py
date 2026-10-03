@@ -120,6 +120,7 @@ def laser_cutting_speed(
     v = η·P/(ρ·t·w·e_m). Go faster than this and the beam cannot melt the full depth, and the cut
     stops severing. Returns the cutting speed in m/min.
     """
+    require_finite(coupling_efficiency, name="coupling_efficiency")
     _check(beam_power, "[power]", "beam_power")
     _check(thickness, "[length]", "thickness")
     _check(kerf_width, "[length]", "kerf_width")
@@ -175,6 +176,7 @@ def laser_max_cut_thickness(
     cannot be severed at that speed no matter the gas pressure, and the cut must be slowed or moved
     to a bigger laser. Returns the maximum thickness in mm.
     """
+    require_finite(coupling_efficiency, name="coupling_efficiency")
     _check(beam_power, "[power]", "beam_power")
     _check(cutting_speed, "[length]/[time]", "cutting_speed")
     _check(kerf_width, "[length]", "kerf_width")

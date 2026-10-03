@@ -132,6 +132,8 @@ def band_brake_torque(
     drum radius — this is the most torque the brake holds before the drum slips
     under the band. Returns the torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     force = belt_max_transmissible_force(
         tight_tension=tight_tension,
         friction_coefficient=friction_coefficient,
@@ -156,6 +158,8 @@ def band_brake_tight_tension_for_torque(
     must be positive and ``wrap_angle`` (radians) positive. Returns the tension
     in newtons.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     _require(torque, "[force] * [length]", "torque")
     if friction_coefficient <= 0:
         raise _brake_refusal(
@@ -284,6 +288,7 @@ def short_shoe_normal_force(
     b + μ·a and friction fights the application — the same shoe brakes harder in
     one rotation direction than the other. Returns the normal force in newtons.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     require_flag(
         self_energizing,
         name="self_energizing",
@@ -332,6 +337,7 @@ def short_shoe_brake_torque(
     :func:`short_shoe_normal_force`) acting at the drum radius. ``μ`` must be
     non-negative. Returns the torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(normal_force, "[force]", "normal_force")
     n = normal_force.to("N").magnitude
     if n < 0:
@@ -373,6 +379,8 @@ def differential_band_brake_actuation_force(
     must be lengths (a, L positive; b non-negative). Returns the force in
     newtons, signed.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     slack = belt_slack_tension(
         tight_tension=tight_tension,
         friction_coefficient=friction_coefficient,
@@ -409,6 +417,8 @@ def differential_band_brake_is_self_locking(
     lining's *highest* plausible μ) and a backstop deliberately adopts. Arms are
     as in :func:`differential_band_brake_actuation_force`.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     ratio = capstan_tension_ratio(friction_coefficient=friction_coefficient, wrap_angle=wrap_angle)
     a = _positive_length_m(slack_arm, "slack_arm")
     _require(tight_arm, "[length]", "tight_arm")

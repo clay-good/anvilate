@@ -164,6 +164,7 @@ def dean_number(
     above it the Dean vortices dominate — the reason helical-coil heat exchangers and curved
     reactor tubes outperform straight ones. Returns the dimensionless Dean number.
     """
+    require_finite(reynolds, name="reynolds")
     _check(tube_diameter, "[length]", "tube_diameter")
     _check(coil_diameter, "[length]", "coil_diameter")
     if reynolds <= 0:
@@ -197,6 +198,7 @@ def wall_shear_stress(*, friction_factor: float, density: Quantity, velocity: Qu
     module's :func:`darcy_friction_factor` returns Darcy, which is what this function expects.
     Returns the wall shear stress in Pa.
     """
+    require_finite(friction_factor, name="friction_factor")
     _check(density, "[mass]/[length]**3", "density")
     _check(velocity, "[length]/[time]", "velocity")
     rho = density.to("kg/m**3").magnitude
@@ -262,6 +264,7 @@ def laminar_hydrodynamic_entry_length(*, reynolds: float, diameter: Quantity) ->
     laminar pipe, so a short line may never fully develop. Valid for laminar flow (Re ≤ 2300); for
     turbulent flow use :func:`turbulent_entry_length`. Returns the entry length in metres.
     """
+    require_finite(reynolds, name="reynolds")
     _check(diameter, "[length]", "diameter")
     d = diameter.to("m").magnitude
     if reynolds <= 0:
@@ -294,6 +297,8 @@ def laminar_thermal_entry_length(
     coefficient. For Pr < 1 (liquid metals) the thermal profile develops first instead. Valid for
     laminar flow (Re ≤ 2300). Returns the thermal entry length in metres.
     """
+    require_finite(reynolds, name="reynolds")
+    require_finite(prandtl, name="prandtl")
     _check(diameter, "[length]", "diameter")
     d = diameter.to("m").magnitude
     if reynolds <= 0:
@@ -337,6 +342,8 @@ def graetz_number(
     developing/developed threshold. It is the argument of the Hausen and Sieder-Tate entry-region
     Nusselt correlations. Returns the dimensionless Graetz number.
     """
+    require_finite(reynolds, name="reynolds")
+    require_finite(prandtl, name="prandtl")
     _check(diameter, "[length]", "diameter")
     _check(length, "[length]", "length")
     if reynolds <= 0:
@@ -425,6 +432,7 @@ def darcy_weisbach_head_loss(
     :func:`darcy_friction_factor`. Add any :func:`minor_loss_head` from fittings, then convert the
     total to a pressure with :func:`pipe_pressure_drop`. Returns the head loss in meters of fluid.
     """
+    require_finite(friction_factor, name="friction_factor")
     _check(length, "[length]", "length")
     _check(diameter, "[length]", "diameter")
     _check(velocity, "[length]/[time]", "velocity")
@@ -454,6 +462,7 @@ def minor_loss_head(*, loss_coefficient: float, velocity: Quantity) -> Quantity:
     ``velocity`` V the mean pipe velocity. Sum these with the :func:`darcy_weisbach_head_loss`
     friction head for the total. Returns the head loss in meters of fluid.
     """
+    require_finite(loss_coefficient, name="loss_coefficient")
     _check(velocity, "[length]/[time]", "velocity")
     v = velocity.to("m/s").magnitude
     if loss_coefficient < 0:
@@ -505,6 +514,7 @@ def hazen_williams_head_loss(
     temperature; for other fluids or regimes use :func:`darcy_weisbach_head_loss`. Returns the head
     loss in meters.
     """
+    require_finite(roughness_coefficient, name="roughness_coefficient")
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     _check(pipe_diameter, "[length]", "pipe_diameter")
     _check(length, "[length]", "length")
@@ -546,6 +556,7 @@ def hazen_williams_flow_capacity(
     its ``length`` L. ``pipe_diameter`` D and ``roughness_coefficient`` C are as in the forward
     relation. Returns the flow rate in m³/s.
     """
+    require_finite(roughness_coefficient, name="roughness_coefficient")
     _check(head_loss, "[length]", "head_loss")
     _check(pipe_diameter, "[length]", "pipe_diameter")
     _check(length, "[length]", "length")

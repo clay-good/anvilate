@@ -24,6 +24,7 @@ from math import exp, log
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
+_LARGEST_EXPONENT = 709.0
 _CELL_STATE_SOURCE = "the cell's measured absolute temperature"
 _REACTION_SOURCE = "the balanced half-reaction"
 _POTENTIAL_SOURCE = "the cited standard potential or calibrated electrode reading"
@@ -76,6 +77,7 @@ def nernst_potential(
     ``electrons_transferred`` n. Q < 1 (excess reactant) raises the potential; Q > 1 lowers it. This
     is the open-circuit voltage of a cell at a given state of charge. Returns the potential in V.
     """
+    require_finite(reaction_quotient, name="reaction_quotient")
     _check(standard_potential, "[electric_potential]", "standard_potential")
     _check(temperature, "[temperature]", "temperature")
     e0 = standard_potential.to("V").magnitude
@@ -162,7 +164,18 @@ def nernst_reaction_quotient(
             subject="electrons_transferred",
             source=_REACTION_SOURCE,
         )
-    return exp(electrons_transferred * _FARADAY * (e0 - e) / (_GAS_CONSTANT * t))
+    exponent = electrons_transferred * _FARADAY * (e0 - e) / (_GAS_CONSTANT * t)
+    # Past about e^709 the quotient is not a float at all. A cell's measured potential and
+    # temperature never give one, so this is a mis-stated input rather than a large answer.
+    if exponent > _LARGEST_EXPONENT:
+        raise _nernst_refusal(
+            f"standard_potential, potential and temperature give a reaction quotient of "
+            f"e^{exponent:.4g}, beyond any representable value; check the potential's sign "
+            f"and units and that the temperature is absolute",
+            subject="standard_potential, potential, and temperature",
+            source=_POTENTIAL_SOURCE,
+        )
+    return exp(exponent)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:

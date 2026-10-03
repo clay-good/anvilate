@@ -173,6 +173,7 @@ def nucleate_boiling_heat_flux(
     the liquid and finish. The cube in ΔT_e makes the flux climb steeply — until the critical heat
     flux (:func:`critical_heat_flux`) caps it. Returns the flux in W/m**2.
     """
+    require_finite(surface_fluid_coefficient, name="surface_fluid_coefficient")
     require_finite(prandtl_number, name="prandtl_number")
     require_finite(fluid_exponent, name="fluid_exponent")
     prefactor, h_fg = _rohsenow_prefactor(
@@ -245,6 +246,7 @@ def nucleate_boiling_excess_temperature(
     and, checked against the critical heat flux (:func:`critical_heat_flux`), how much superheat
     margin remains before burnout. Returns the excess temperature in K.
     """
+    require_finite(surface_fluid_coefficient, name="surface_fluid_coefficient")
     require_finite(prandtl_number, name="prandtl_number")
     require_finite(fluid_exponent, name="fluid_exponent")
     prefactor, h_fg = _rohsenow_prefactor(
@@ -531,6 +533,7 @@ def film_boiling_total_coefficient(
     temperature, so it dominates in furnace and reactor-accident territory. Temperatures must be
     absolute and the surface above saturation. Returns the total coefficient in W/(m**2*K).
     """
+    require_finite(emissivity, name="emissivity")
     _check(convection_coefficient, "[power]/([area]*[temperature])", "convection_coefficient")
     _check(surface_temperature, "[temperature]", "surface_temperature")
     _check(saturation_temperature, "[temperature]", "saturation_temperature")

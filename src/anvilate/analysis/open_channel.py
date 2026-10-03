@@ -121,6 +121,8 @@ def manning_flow_velocity(
     :func:`hydraulic_radius`, and ``channel_slope`` S is the dimensionless bed slope (rise over
     run). This is the SI form of Manning's equation; the result is in m/s.
     """
+    require_finite(roughness_coefficient, name="roughness_coefficient")
+    require_finite(channel_slope, name="channel_slope")
     _check(hydraulic_radius, "[length]", "hydraulic_radius")
     r = hydraulic_radius.to("m").magnitude
     if roughness_coefficient <= 0:
@@ -156,6 +158,8 @@ def manning_flow_rate(
     :func:`hydraulic_radius`), and the dimensionless ``channel_slope`` S. This is the SI form; the
     result is in m³/s. Compare against the design storm or supply to size the channel.
     """
+    require_finite(roughness_coefficient, name="roughness_coefficient")
+    require_finite(channel_slope, name="channel_slope")
     _check(flow_area, "[area]", "flow_area")
     _check(hydraulic_radius, "[length]", "hydraulic_radius")
     a = flow_area.to("m**2").magnitude
@@ -282,6 +286,7 @@ def hydraulic_jump_downstream_depth(
     :func:`froude_number`. The jump is the workhorse energy dissipator of stilling-basin design.
     Returns the downstream depth y₂ in meters.
     """
+    require_finite(upstream_froude_number, name="upstream_froude_number")
     _check(upstream_depth, "[length]", "upstream_depth")
     y1 = upstream_depth.to("m").magnitude
     if y1 <= 0:
@@ -348,6 +353,7 @@ def trapezoidal_channel_properties(
     hydraulic depth A/T. Returns a dict with keys ``"area"``, ``"wetted_perimeter"``,
     ``"hydraulic_radius"``, ``"top_width"``.
     """
+    require_finite(side_slope, name="side_slope")
     _check(bottom_width, "[length]", "bottom_width")
     _check(depth, "[length]", "depth")
     b = bottom_width.to("m").magnitude
@@ -436,6 +442,7 @@ def rectangular_weir_flow(
     crest). The 3/2 power means a modest rise in head is a large rise in flow. Returns the discharge
     in m³/s.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(crest_length, "[length]", "crest_length")
     _check(head, "[length]", "head")
     b = crest_length.to("m").magnitude
@@ -473,6 +480,7 @@ def broad_crested_weir_flow(
     ``crest_length`` b (weir width), and ``head`` H (upstream depth above the crest). Returns the
     discharge in m³/s.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(crest_length, "[length]", "crest_length")
     _check(head, "[length]", "head")
     b = crest_length.to("m").magnitude
@@ -508,6 +516,8 @@ def triangular_weir_flow(
     commonly 90°), and the ``head`` H above the notch vertex. The steep 5/2 power gives it its fine
     low-flow resolution. Returns the discharge in m³/s.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
+    require_finite(notch_angle, name="notch_angle")
     _check(head, "[length]", "head")
     h = head.to("m").magnitude
     if not 0.0 < discharge_coefficient <= 1.0:
@@ -549,6 +559,7 @@ def rational_method_peak_runoff(
     starts from — feed Q to :func:`manning_flow_rate` (inverted for depth) or a pipe to size the
     conduit. C must be in (0, 1]. Returns the peak runoff as a volumetric flow rate (m³/s).
     """
+    require_finite(runoff_coefficient, name="runoff_coefficient")
     _check(rainfall_intensity, "[length]/[time]", "rainfall_intensity")
     _check(drainage_area, "[length]**2", "drainage_area")
     if not 0.0 < runoff_coefficient <= 1.0:

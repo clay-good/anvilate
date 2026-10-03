@@ -429,6 +429,7 @@ def thrust_from_coefficient(
     and the ``throat_area`` A_t: F = C_F·p_c·A_t. This is how a design sizes the throat for a target
     thrust once the chamber pressure and expected C_F are set. Returns the thrust in N.
     """
+    require_finite(thrust_coefficient, name="thrust_coefficient")
     _check(chamber_pressure, "[pressure]", "chamber_pressure")
     _check(throat_area, "[area]", "throat_area")
     p_c = chamber_pressure.to("Pa").magnitude

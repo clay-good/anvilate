@@ -77,6 +77,7 @@ def pv_array_power(
     module at 20% efficiency is rated 320 W. η is dimensionless in (0, 1]. Returns the power in
     watts.
     """
+    require_finite(module_efficiency, name="module_efficiency")
     _check(irradiance, "[power]/[length]**2", "irradiance")
     _check(area, "[length]**2", "area")
     _fraction(module_efficiency, "module_efficiency")
@@ -105,6 +106,7 @@ def pv_daily_energy(
     wiring, soiling, and temperature losses (typically ~0.75–0.8): E = P·PSH·D. Returns the daily
     energy in kilowatt-hours.
     """
+    require_finite(derate_factor, name="derate_factor")
     _check(rated_power, "[power]", "rated_power")
     _check(peak_sun_hours, "[time]", "peak_sun_hours")
     _fraction(derate_factor, "derate_factor")
@@ -132,6 +134,7 @@ def pv_array_size_for_load(
     ``derate_factor`` D for real-world losses: P = E/(PSH·D) — the inverse of
     :func:`pv_daily_energy`. Returns the required array rating in watts.
     """
+    require_finite(derate_factor, name="derate_factor")
     _check(daily_energy_demand, "[energy]", "daily_energy_demand")
     _check(peak_sun_hours, "[time]", "peak_sun_hours")
     _fraction(derate_factor, "derate_factor")
@@ -193,6 +196,7 @@ def pv_temperature_derated_power(
     which is why a rooftop array's summer output falls short of its rating even in full sun. Returns
     the derated power in W.
     """
+    require_finite(temperature_coefficient, name="temperature_coefficient")
     _check(rated_power, "[power]", "rated_power")
     _check(cell_temperature, "[temperature]", "cell_temperature")
     p_stc = rated_power.to("W").magnitude

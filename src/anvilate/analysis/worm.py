@@ -204,6 +204,9 @@ def worm_gear_efficiency(
     back-driving the worm and is reached at far lower friction — a normal worm is
     self-locking with a perfectly healthy forward efficiency.
     """
+    require_finite(lead_angle, name="lead_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(normal_pressure_angle, name="normal_pressure_angle")
     lam = _check_lead_angle(lead_angle)
     mu = _check_friction(friction_coefficient)
     phi_n = _check_pressure_angle(normal_pressure_angle)
@@ -241,6 +244,9 @@ def worm_output_torque(
     single-start worm often keeps barely half. The input torque must be a torque.
     Returns the output torque in N·m.
     """
+    require_finite(lead_angle, name="lead_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(normal_pressure_angle, name="normal_pressure_angle")
     _require(input_torque, "[force] * [length]", "input_torque")
     ratio = worm_gear_ratio(worm_starts=worm_starts, gear_teeth=gear_teeth)
     eta = worm_gear_efficiency(
@@ -266,6 +272,9 @@ def worm_is_self_locking(
     (hoists, holding fixtures); coarse multi-start ones back-drive. Returns True
     when the set is self-locking.
     """
+    require_finite(lead_angle, name="lead_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(normal_pressure_angle, name="normal_pressure_angle")
     lam = _check_lead_angle(lead_angle)
     mu = _check_friction(friction_coefficient)
     phi_n = _check_pressure_angle(normal_pressure_angle)
@@ -293,6 +302,9 @@ def worm_tangential_force(
     needs only W_Gt·tan λ; friction raises the input force by 1/η. Returns the
     worm tangential force in newtons.
     """
+    require_finite(lead_angle, name="lead_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(normal_pressure_angle, name="normal_pressure_angle")
     _require(gear_tangential_load, "[force]", "gear_tangential_load")
     lam = _check_lead_angle(lead_angle)
     eta = worm_gear_efficiency(
@@ -326,6 +338,9 @@ def worm_separating_force(
     0); a real 14.5°–30° tooth develops a significant radial load the bearings must
     carry. Returns the separating force in newtons.
     """
+    require_finite(lead_angle, name="lead_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(normal_pressure_angle, name="normal_pressure_angle")
     _require(gear_tangential_load, "[force]", "gear_tangential_load")
     lam = _check_lead_angle(lead_angle)
     phi_n = _check_pressure_angle(normal_pressure_angle)

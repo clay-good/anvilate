@@ -84,6 +84,7 @@ def aisi_plate_slenderness(
     coefficient (4.0 stiffened, 0.43 unstiffened). At λ ≤ 0.673 the element is fully
     effective; above it, it sheds load. Returns the dimensionless λ.
     """
+    require_finite(plate_buckling_coefficient, name="plate_buckling_coefficient")
     if not isinstance(flat_width, Quantity):
         raise _cfs_refusal(
             f"flat_width must be a [length] quantity; got {flat_width!r}",
@@ -168,6 +169,7 @@ def aisi_effective_width(
     and modulus on the effective section. Arguments are as in
     :func:`aisi_plate_slenderness`. Returns the effective width in mm.
     """
+    require_finite(plate_buckling_coefficient, name="plate_buckling_coefficient")
     lam = aisi_plate_slenderness(
         flat_width=flat_width,
         thickness=thickness,
@@ -805,6 +807,7 @@ def dsm_scorecard(
     either, so it is surfaced in the detail and the entry is downgraded to
     ``NOT_EVALUATED`` when it would otherwise have passed.
     """
+    require_finite(required, name="required")
     if strength is not None and not isinstance(strength, DSMStrength):
         raise _cfs_refusal(
             f"strength must be a DSMStrength; got {strength!r}",

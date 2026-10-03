@@ -26,7 +26,7 @@ from __future__ import annotations
 from math import acos, asin, cos, degrees, radians, sin, tan
 
 from ..refusal import RefusalError, Remedy
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _SITE_SOURCE = "the site's surveyed latitude"
 _DATE_SOURCE = "the analysis date (day of year) and its computed solar declination"
@@ -80,6 +80,8 @@ def solar_altitude_at_noon(*, latitude: float, declination: float) -> Quantity:
     when δ moves toward the site's hemisphere, and a fixed panel tilted near |φ − δ| meets the noon
     sun head-on. Returns the altitude in degrees.
     """
+    require_finite(latitude, name="latitude")
+    require_finite(declination, name="declination")
     if not -90.0 <= latitude <= 90.0:
         raise _solar_geometry_refusal(
             f"latitude must be in -90..90 degrees; got {latitude}",
@@ -109,6 +111,8 @@ def sunset_hour_angle(*, latitude: float, declination: float) -> Quantity:
     the polar circles when the sun does not rise or set at all (|tan φ · tan δ| > 1). Returns the
     sunset hour angle in degrees.
     """
+    require_finite(latitude, name="latitude")
+    require_finite(declination, name="declination")
     if not -90.0 <= latitude <= 90.0:
         raise _solar_geometry_refusal(
             f"latitude must be in -90..90 degrees; got {latitude}",
@@ -145,6 +149,8 @@ def daylight_hours(*, latitude: float, declination: float) -> Quantity:
     and the solar disc, which together add a few minutes to a real sunrise-to-sunset day. Raises
     inside the polar circles, where the sun does not rise or set. Returns the day length in hours.
     """
+    require_finite(latitude, name="latitude")
+    require_finite(declination, name="declination")
     omega = sunset_hour_angle(latitude=latitude, declination=declination)
     return Quantity(magnitude=2.0 * omega.to("degree").magnitude / 15.0, unit="hour")
 
@@ -157,6 +163,7 @@ def air_mass(*, solar_altitude: float) -> float:
     1.0 with the sun overhead and 1.5 at α ≈ 41.8° — the AM1.5 spectrum solar cells are rated to.
     A low sun means a long path and a redder, weaker beam. Returns the air mass as a plain float.
     """
+    require_finite(solar_altitude, name="solar_altitude")
     if not 0.0 < solar_altitude <= 90.0:
         raise _solar_geometry_refusal(
             f"solar_altitude must be in (0, 90] degrees; got {solar_altitude}",
@@ -187,6 +194,9 @@ def solar_altitude_angle(*, latitude: float, declination: float, hour_angle: flo
     geometric altitude, before atmospheric refraction, which lifts the apparent sun by about half a
     degree near the horizon. Returns the altitude in degrees.
     """
+    require_finite(latitude, name="latitude")
+    require_finite(declination, name="declination")
+    require_finite(hour_angle, name="hour_angle")
     if not -90.0 <= latitude <= 90.0:
         raise _solar_geometry_refusal(
             f"latitude (degrees) must lie in [-90, 90]; got {latitude}",

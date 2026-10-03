@@ -261,6 +261,7 @@ def spline_torque_capacity(
     mechanics is exact; the fraction and the engaged geometry are the caller's design values.
     All positive, N a positive whole number. Returns the torque in N·m.
     """
+    require_finite(load_fraction, name="load_fraction")
     _require(allowable_pressure, "[pressure]", "allowable_pressure")
     _require(mean_radius, "[length]", "mean_radius")
     _require(tooth_height, "[length]", "tooth_height")

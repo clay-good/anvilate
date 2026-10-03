@@ -25,7 +25,7 @@ from __future__ import annotations
 from math import sqrt
 
 from ..refusal import RefusalError, Remedy
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _FUEL_ANALYSIS_SOURCE = "the fuel ultimate analysis or supplier composition record"
 _COMBUSTION_CASE_SOURCE = "the burner operating case or calibrated flue-gas measurement"
@@ -82,6 +82,10 @@ def stoichiometric_air_fuel_ratio(
     net oxygen demand must be positive (a hydrocarbon fuel). Returns the dimensionless ratio by mass
     (~17.2 for methane, ~15.1 for octane).
     """
+    require_finite(carbon, name="carbon")
+    require_finite(hydrogen, name="hydrogen")
+    require_finite(oxygen, name="oxygen")
+    require_finite(sulfur, name="sulfur")
     for name, value in (
         ("carbon", carbon),
         ("hydrogen", hydrogen),
@@ -115,6 +119,7 @@ def excess_air_from_flue_oxygen(*, flue_oxygen_percent: float) -> float:
     target. The value must be below 20.9 (ambient air). Returns the excess air as a fraction (0.17
     for 17%).
     """
+    require_finite(flue_oxygen_percent, name="flue_oxygen_percent")
     if not 0.0 <= flue_oxygen_percent < 20.9:
         raise _combustion_refusal(
             f"flue_oxygen_percent must be in [0, 20.9); got {flue_oxygen_percent}",
@@ -136,6 +141,8 @@ def actual_air_fuel_ratio(
     burner's ratio rises from ~17.2 to ~20.6. The excess air fraction must be non-negative. Returns
     the dimensionless actual air-fuel ratio by mass.
     """
+    require_finite(stoichiometric_air_fuel_ratio, name="stoichiometric_air_fuel_ratio")
+    require_finite(excess_air_fraction, name="excess_air_fraction")
     if stoichiometric_air_fuel_ratio <= 0:
         raise _combustion_refusal(
             "stoichiometric_air_fuel_ratio must be positive",
@@ -164,6 +171,8 @@ def equivalence_ratio(
     combustion). It is the standard way to state the mixture strength independent of the particular
     fuel. Both ratios must be positive. Returns the dimensionless equivalence ratio.
     """
+    require_finite(stoichiometric_air_fuel_ratio, name="stoichiometric_air_fuel_ratio")
+    require_finite(actual_air_fuel_ratio, name="actual_air_fuel_ratio")
     if stoichiometric_air_fuel_ratio <= 0:
         raise _combustion_refusal(
             "stoichiometric_air_fuel_ratio must be positive",
@@ -187,6 +196,7 @@ def equivalence_ratio_from_excess_air(*, excess_air_fraction: float) -> float:
     excess air is stoichiometric (φ = 1); 20% excess air gives φ ≈ 0.83 (lean). The excess-air
     fraction must be greater than −1. Returns the dimensionless equivalence ratio.
     """
+    require_finite(excess_air_fraction, name="excess_air_fraction")
     if excess_air_fraction <= -1.0:
         raise _combustion_refusal(
             "excess_air_fraction must be greater than -1",
@@ -214,6 +224,8 @@ def siegert_dry_flue_gas_loss(
     for oil, 0.74 for coal). Subtract the result from 100% with :func:`combustion_efficiency`.
     Returns the dry flue-gas loss as a percentage.
     """
+    require_finite(flue_oxygen_percent, name="flue_oxygen_percent")
+    require_finite(siegert_factor, name="siegert_factor")
     if not isinstance(flue_temperature, Quantity):
         raise _combustion_refusal(
             f"flue_temperature must be a [temperature] quantity; got {flue_temperature!r}",
@@ -275,6 +287,8 @@ def combustion_efficiency(
     condensing gas boiler reaches the mid-90s; an old, poorly-tuned one runs in the 70s. Cutting the
     stack temperature or the excess air lifts it directly. Returns the efficiency as a percentage.
     """
+    require_finite(dry_flue_gas_loss_percent, name="dry_flue_gas_loss_percent")
+    require_finite(other_losses_percent, name="other_losses_percent")
     if dry_flue_gas_loss_percent < 0:
         raise _combustion_refusal(
             "dry_flue_gas_loss_percent must be non-negative",
@@ -308,6 +322,7 @@ def wobbe_index(*, higher_heating_value: Quantity, gas_specific_gravity: float) 
     appliances run safely on gas from any source (pipeline, LNG, biogas). Returns the Wobbe index in
     the same volumetric-energy units as the heating value.
     """
+    require_finite(gas_specific_gravity, name="gas_specific_gravity")
     if not isinstance(higher_heating_value, Quantity):
         raise _combustion_refusal(
             f"higher_heating_value must be a [energy]/[volume] quantity; "
@@ -350,6 +365,7 @@ def lower_heating_value(
     ``higher_heating_value`` and ``latent_heat`` are per-unit-mass energies. Returns the LHV in the
     same mass-specific units.
     """
+    require_finite(water_mass_per_fuel_mass, name="water_mass_per_fuel_mass")
     if not isinstance(higher_heating_value, Quantity):
         raise _combustion_refusal(
             f"higher_heating_value must be a [energy]/[mass] quantity; "
@@ -424,6 +440,7 @@ def adiabatic_flame_temperature(
     roughly 2000 K, so measured temperatures run several hundred kelvin below this. Temperatures
     must be absolute. Returns the adiabatic flame temperature in K.
     """
+    require_finite(air_fuel_ratio, name="air_fuel_ratio")
     if not isinstance(lower_heating_value, Quantity):
         raise _combustion_refusal(
             f"lower_heating_value must be a [energy]/[mass] quantity; got {lower_heating_value!r}",

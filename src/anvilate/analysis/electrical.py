@@ -135,6 +135,7 @@ def three_phase_power(
     ``line_voltage`` V_LL (line-to-line), the ``line_current`` I, and the ``power_factor`` cosφ
     (0 to 1 — the fraction of the apparent power that does real work). Returns the real power in kW.
     """
+    require_finite(power_factor, name="power_factor")
     _check(line_voltage, "[electric_potential]", "line_voltage")
     _check(line_current, "[current]", "line_current")
     v = line_voltage.to("V").magnitude
@@ -168,6 +169,7 @@ def line_current_for_power(
     conductor and its breaker must be sized to carry. A poor power factor raises the current for the
     same real power, which is why plants correct it. Returns the current in amperes.
     """
+    require_finite(power_factor, name="power_factor")
     _check(real_power, "[power]", "real_power")
     _check(line_voltage, "[electric_potential]", "line_voltage")
     p = real_power.to("W").magnitude
@@ -206,6 +208,8 @@ def motor_full_load_current(
     values (both in (0, 1]). Size the branch circuit off this with
     :func:`motor_branch_circuit_ampacity`. Returns the full-load current in amperes.
     """
+    require_finite(power_factor, name="power_factor")
+    require_finite(efficiency, name="efficiency")
     _check(output_power, "[power]", "output_power")
     _check(line_voltage, "[electric_potential]", "line_voltage")
     p = output_power.to("W").magnitude
@@ -298,6 +302,7 @@ def motor_slip_frequency(*, slip: float, line_frequency: Quantity) -> Quantity:
     the full line frequency. It is the quantity a slip-frequency-controlled or field-oriented drive
     commands to set torque. The slip is a fraction in [0, 1]. Returns the rotor frequency in Hz.
     """
+    require_finite(slip, name="slip")
     _check(line_frequency, "1/[time]", "line_frequency")
     if not 0.0 <= slip <= 1.0:
         raise _electrical_refusal(
@@ -328,6 +333,7 @@ def motor_locked_rotor_current(
     sizes the starting protection and drives the voltage dip the rest of the plant sees at start.
     Returns the locked-rotor current in amperes.
     """
+    require_finite(code_kva_per_hp, name="code_kva_per_hp")
     _check(rated_power, "[power]", "rated_power")
     _check(line_voltage, "[electric_potential]", "line_voltage")
     hp = rated_power.to("hp").magnitude
@@ -358,6 +364,7 @@ def motor_branch_circuit_ampacity(
     :func:`motor_full_load_current`) times the ``sizing_factor`` (1.25 for a continuous-duty motor).
     Pick a conductor whose ampacity is at least this. Returns the required ampacity in amperes.
     """
+    require_finite(sizing_factor, name="sizing_factor")
     _check(full_load_current, "[current]", "full_load_current")
     i = full_load_current.to("A").magnitude
     if i <= 0:
@@ -417,6 +424,7 @@ def voltage_drop_three_phase(
     runs, significant on long AC feeders). Kept under ~3% of the nominal voltage, it ensures a motor
     at the far end still starts and runs. Returns the line-to-line voltage drop in volts.
     """
+    require_finite(power_factor, name="power_factor")
     _check(line_current, "[current]", "line_current")
     _check(resistance, "[resistance]", "resistance")
     i = line_current.to("A").magnitude
@@ -464,6 +472,7 @@ def voltage_drop_single_phase(
     and any conductor ``reactance`` X. Kept under ~3% of nominal, it keeps the load's terminal
     voltage in tolerance. Returns the voltage drop in volts.
     """
+    require_finite(power_factor, name="power_factor")
     _check(load_current, "[current]", "load_current")
     _check(resistance, "[resistance]", "resistance")
     i = load_current.to("A").magnitude
@@ -532,6 +541,8 @@ def power_factor_correction_kvar(
     initial (you correct *up* toward unity). Returns the reactive capacitor rating — numerically in
     kVAR — as a kVA-dimensioned quantity (reactive power shares the volt-ampere dimension).
     """
+    require_finite(initial_power_factor, name="initial_power_factor")
+    require_finite(target_power_factor, name="target_power_factor")
     _check(real_power, "[power]", "real_power")
     p = real_power.to("kW").magnitude
     if p <= 0:
@@ -630,6 +641,7 @@ def transformer_available_fault_current(
     lower-impedance transformer (stiffer supply) drives it higher. Ignoring the source and cable
     impedance makes it conservative (an upper bound). Returns the available fault current in amps.
     """
+    require_finite(impedance_percent, name="impedance_percent")
     _check(full_load_current, "[current]", "full_load_current")
     i_fla = full_load_current.to("A").magnitude
     if i_fla <= 0:
@@ -656,6 +668,7 @@ def transformer_secondary_voltage(*, primary_voltage: Quantity, turns_ratio: flo
     transformer, distinct from the kVA-based full-load sizing of
     :func:`transformer_full_load_current`. Returns the secondary voltage in V.
     """
+    require_finite(turns_ratio, name="turns_ratio")
     _check(primary_voltage, "[electric_potential]", "primary_voltage")
     v_p = primary_voltage.to("V").magnitude
     if turns_ratio <= 0:
@@ -673,6 +686,7 @@ def transformer_secondary_current(*, primary_current: Quantity, turns_ratio: flo
     step-down transformer (n > 1) that lowers voltage raises current in proportion, conserving V·I —
     the reason a low-voltage secondary needs heavier conductors. Returns the secondary current in A.
     """
+    require_finite(turns_ratio, name="turns_ratio")
     _check(primary_current, "[current]", "primary_current")
     i_p = primary_current.to("A").magnitude
     if turns_ratio <= 0:
@@ -692,6 +706,7 @@ def transformer_reflected_impedance(
     transformer matches a load to a source (impedance matching), and why a step-down transformer
     makes a low load impedance look large to the source. Returns the reflected impedance in ohm.
     """
+    require_finite(turns_ratio, name="turns_ratio")
     _check(secondary_impedance, "[electric_potential]/[current]", "secondary_impedance")
     z_s = secondary_impedance.to("ohm").magnitude
     if z_s <= 0:
@@ -865,6 +880,7 @@ def parallel_ground_electrodes_resistance(
     above the ideal R₁/N, which is why grounding grids gain less than proportionally from added
     rods. Returns the combined resistance in ohms.
     """
+    require_finite(arrangement_efficiency, name="arrangement_efficiency")
     _check(single_rod_resistance, "[resistance]", "single_rod_resistance")
     if rod_count <= 0:
         raise _electrical_refusal(
@@ -902,6 +918,7 @@ def skin_depth(
     conductors are stranded (litz wire) or hollow, and why induction heating cooks only the surface.
     Returns the skin depth as a length.
     """
+    require_finite(relative_permeability, name="relative_permeability")
     _check(resistivity, "[resistance]*[length]", "resistivity")
     _check(frequency, "1/[time]", "frequency")
     rho = resistivity.to("ohm*m").magnitude

@@ -88,6 +88,7 @@ def tank_drain_time(
     ``final_head`` h₂ the liquid depths above the orifice at the start and end (h₂ = 0 to drain
     dry). Returns the drain time in seconds.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(tank_area, "[area]", "tank_area")
     _check(orifice_area, "[area]", "orifice_area")
     _check(initial_head, "[length]", "initial_head")

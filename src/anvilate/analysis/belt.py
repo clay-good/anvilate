@@ -101,6 +101,8 @@ def capstan_tension_ratio(*, friction_coefficient: float, wrap_angle: float) -> 
     capstan or bollard multiplies a small holding force so steeply. ``μ`` must be
     non-negative and ``β`` positive. Returns the dimensionless ratio.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     return _ratio(friction_coefficient, wrap_angle)
 
 
@@ -118,6 +120,8 @@ def belt_slack_tension(
     preload a band brake needs. ``tight_tension`` must be a force; the friction and
     wrap arguments are as there. Returns the slack tension in newtons.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     _require_force(tight_tension, "tight_tension")
     ratio = _ratio(friction_coefficient, wrap_angle)
     return Quantity(magnitude=tight_tension.to("N").magnitude / ratio, unit="N")
@@ -138,6 +142,8 @@ def belt_max_transmissible_force(
     ``tight_tension`` T₁ must be a force; the friction and wrap arguments are as in
     :func:`capstan_tension_ratio`. Returns the force in newtons.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     _require_force(tight_tension, "tight_tension")
     ratio = _ratio(friction_coefficient, wrap_angle)
     t1 = tight_tension.to("N").magnitude
@@ -233,6 +239,8 @@ def belt_max_transmissible_force_at_speed(
     itself (past that the belt cannot transmit; this raises). ``tight_tension``
     T₁ is the belt's allowable (maximum) tension. Returns the force in newtons.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     _require_force(tight_tension, "tight_tension")
     ratio = _ratio(friction_coefficient, wrap_angle)
     t1 = tight_tension.to("N").magnitude
@@ -279,6 +287,8 @@ def vee_belt_effective_friction(*, friction_coefficient: float, groove_angle: fl
     ``friction_coefficient`` μ must be non-negative and ``groove_angle`` β a positive
     angle **in degrees** below 180°. Returns the dimensionless effective μ'.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(groove_angle, name="groove_angle")
     if friction_coefficient < 0:
         raise _drive_refusal(
             f"friction_coefficient must be non-negative; got {friction_coefficient}",
@@ -508,6 +518,8 @@ def belt_tight_tension_for_power(
     belt slips. Centrifugal tension is neglected (a low-speed / first-cut selection). P and v
     must be positive; μ and θ as in :func:`capstan_tension_ratio`. Returns T₁ in N.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
+    require_finite(wrap_angle, name="wrap_angle")
     if not isinstance(power, Quantity):
         raise _drive_refusal(
             f"power must be a [power] quantity; got {power!r}",

@@ -79,6 +79,7 @@ def rtd_resistance(
     The temperatures must be absolute (their difference is what matters). Returns the resistance in
     the units of ``reference_resistance``.
     """
+    require_finite(temperature_coefficient, name="temperature_coefficient")
     _check(reference_resistance, "[resistance]", "reference_resistance")
     _check(temperature, "[temperature]", "temperature")
     _check(reference_temperature, "[temperature]", "reference_temperature")
@@ -123,6 +124,7 @@ def rtd_temperature(
     computes from the four-wire resistance reading. α must be non-zero and T₀ absolute. Returns the
     temperature in kelvin.
     """
+    require_finite(temperature_coefficient, name="temperature_coefficient")
     _check(resistance, "[resistance]", "resistance")
     _check(reference_resistance, "[resistance]", "reference_resistance")
     _check(reference_temperature, "[temperature]", "reference_temperature")

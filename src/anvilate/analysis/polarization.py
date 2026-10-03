@@ -58,6 +58,7 @@ def malus_transmitted_intensity(*, incident_intensity: Quantity, angle: float) -
     to the polarization, from the ``incident_intensity`` I₀: I = I₀*cos²θ. Aligned axes (θ = 0) pass
     everything; crossed axes (θ = π/2) block the beam. Returns the transmitted intensity in W/m**2.
     """
+    require_finite(angle, name="angle")
     _check(incident_intensity, "[power]/[area]", "incident_intensity")
     i0 = incident_intensity.to("W/m**2").magnitude
     if i0 < 0:

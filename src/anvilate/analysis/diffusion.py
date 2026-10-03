@@ -158,6 +158,8 @@ def error_function_concentration(
     the depth. Concentrations are plain numbers in any consistent unit (wt %, mole fraction,
     atoms/cm³) and the result is returned in that same unit.
     """
+    require_finite(surface_concentration, name="surface_concentration")
+    require_finite(initial_concentration, name="initial_concentration")
     _check(depth, "[length]", "depth")
     _check(diffusivity, "[length]**2/[time]", "diffusivity")
     _check(time, "[time]", "time")

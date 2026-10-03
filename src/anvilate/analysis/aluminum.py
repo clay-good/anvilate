@@ -521,6 +521,7 @@ def aluminum_member_buckling_stress(
     a slenderness a steel designer would still think of as stocky — C_c is 66 for
     6061-T6, against about 113 for A992 steel.
     """
+    require_finite(slenderness, name="slenderness")
     if slenderness <= 0:
         raise _aluminum_refusal(
             f"slenderness must be positive; got {slenderness}",
@@ -785,6 +786,7 @@ def aluminum_lateral_torsional_moment(
     caller's section properties; ``slenderness`` is L_b/r_ye with r_ye the effective
     radius of gyration from §F.4.2.
     """
+    require_finite(slenderness, name="slenderness")
     if not isinstance(plastic_moment, Quantity):
         raise _aluminum_refusal(
             f"plastic_moment must be a [force] * [length] quantity; got {plastic_moment!r}",
@@ -863,6 +865,9 @@ def aluminum_combined_interaction(
     that would pass a steel interaction can fail this one on the same ratios. Returns
     the dimensionless sum.
     """
+    require_finite(axial_ratio, name="axial_ratio")
+    require_finite(major_moment_ratio, name="major_moment_ratio")
+    require_finite(minor_moment_ratio, name="minor_moment_ratio")
     for value, name in (
         (axial_ratio, "axial_ratio"),
         (major_moment_ratio, "major_moment_ratio"),
@@ -1136,6 +1141,7 @@ def aluminum_compression_strength(
     lie: a temper this module does not have the buckling table for, and a member declared
     welded whose weld-affected properties were not supplied.
     """
+    require_finite(slenderness, name="slenderness")
     if not isinstance(properties, AlloyProperties):
         raise _aluminum_refusal(
             f"properties must be an AlloyProperties; got {properties!r}",
@@ -1329,6 +1335,7 @@ def aluminum_compression_scorecard(
     was absent so the message names it; pass the weld-affected properties that were not
     supplied, or the temper whose buckling table is not implemented.
     """
+    require_finite(required, name="required")
     if strength is None:
         detail = "not evaluated"
         if missing.strip():

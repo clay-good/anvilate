@@ -89,6 +89,7 @@ def isothermal_compression_power(
     compression ratio. A real machine always takes more (see
     :func:`adiabatic_compression_power`). Returns the power in watts.
     """
+    require_finite(pressure_ratio, name="pressure_ratio")
     from math import log
 
     _finite(pressure_ratio, name="pressure_ratio")
@@ -128,6 +129,8 @@ def adiabatic_compression_power(
     exceeds the isothermal power of :func:`isothermal_compression_power`; a real compressor's shaft
     power is this over its efficiency. Returns the power in watts.
     """
+    require_finite(pressure_ratio, name="pressure_ratio")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _finite(pressure_ratio, name="pressure_ratio")
     _finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(volumetric_flow, "[length]**3/[time]", "volumetric_flow")
@@ -173,6 +176,8 @@ def adiabatic_discharge_temperature(
     intercoolers — air taken from 15 °C to seven atmospheres in one shot leaves near 250 °C.
     Returns the discharge temperature in kelvin.
     """
+    require_finite(pressure_ratio, name="pressure_ratio")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _finite(pressure_ratio, name="pressure_ratio")
     _finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _check(inlet_temperature, "[temperature]", "inlet_temperature")
@@ -219,6 +224,9 @@ def compressor_volumetric_efficiency(
     compressor breathes nothing, and delivery goes to zero. Multiply the swept volume by this to
     get the actual induced volume. Returns the dimensionless volumetric efficiency.
     """
+    require_finite(clearance_fraction, name="clearance_fraction")
+    require_finite(pressure_ratio, name="pressure_ratio")
+    require_finite(polytropic_exponent, name="polytropic_exponent")
     _finite(pressure_ratio, name="pressure_ratio")
     if not 0.0 <= clearance_fraction < 1.0:
         raise _compression_refusal(
@@ -264,6 +272,7 @@ def optimal_stage_pressure_ratio(*, overall_pressure_ratio: float, stages: int) 
     A three-stage machine at an overall 27:1, for instance, runs each stage at 3:1. Returns the
     dimensionless per-stage ratio.
     """
+    require_finite(overall_pressure_ratio, name="overall_pressure_ratio")
     _finite(overall_pressure_ratio, name="overall_pressure_ratio")
     if isinstance(stages, bool) or not isinstance(stages, int):
         raise _compression_refusal(
@@ -305,6 +314,8 @@ def multistage_compression_power(
     the power falls toward the isothermal ideal (see :func:`isothermal_compression_power`); a single
     stage recovers :func:`adiabatic_compression_power`. Returns the power in watts.
     """
+    require_finite(overall_pressure_ratio, name="overall_pressure_ratio")
+    require_finite(heat_capacity_ratio, name="heat_capacity_ratio")
     _finite(overall_pressure_ratio, name="overall_pressure_ratio")
     if isinstance(stages, bool) or not isinstance(stages, int):
         raise _compression_refusal(

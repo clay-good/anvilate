@@ -117,6 +117,7 @@ def hydro_turbine_power(
     a good small plant). It is linear in both flow and head — double either and the power doubles —
     so a steady stream over a modest fall is a dependable resource. Returns the power in watts.
     """
+    require_finite(overall_efficiency, name="overall_efficiency")
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     _check(net_head, "[length]", "net_head")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
@@ -154,6 +155,7 @@ def hydro_flow_for_power(
     against the stream's available flow before committing to a rating. Returns the required
     volumetric flow rate in m³/s.
     """
+    require_finite(overall_efficiency, name="overall_efficiency")
     _check(target_power, "[power]", "target_power")
     _check(net_head, "[length]", "net_head")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")

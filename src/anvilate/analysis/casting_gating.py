@@ -70,6 +70,7 @@ def gating_fill_time(
     (:func:`gating_choke_area`). Distinct from the falling-head drain of
     :mod:`anvilate.analysis.tank_flow`, which integrates a dropping level. Returns the time in s.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(casting_volume, "[volume]", "casting_volume")
     _check(choke_area, "[area]", "choke_area")
     _check(effective_head, "[length]", "effective_head")
@@ -102,6 +103,7 @@ def gating_choke_area(
     gating system — every other channel area is scaled from the choke by the gating ratio. Returns
     the choke area in mm**2.
     """
+    require_finite(discharge_coefficient, name="discharge_coefficient")
     _check(casting_volume, "[volume]", "casting_volume")
     _check(fill_time, "[time]", "fill_time")
     _check(effective_head, "[length]", "effective_head")

@@ -153,6 +153,7 @@ def stress_intensity_factor(
     central crack in a wide plate, ~1.12 for an edge crack). σ must be a stress, a a
     positive length, and Y positive. Returns K_I in MPa·√m.
     """
+    require_finite(geometry_factor, name="geometry_factor")
     _require(remote_stress, "[pressure]", "remote_stress")
     _require(crack_length, "[length]", "crack_length")
     if geometry_factor <= 0:
@@ -186,6 +187,7 @@ def critical_crack_length(
     larger flaw — the basis of a damage-tolerance inspection interval. Returns the
     critical crack length in millimetres.
     """
+    require_finite(geometry_factor, name="geometry_factor")
     _require(fracture_toughness, "[pressure] * [length]**0.5", "fracture_toughness")
     _require(remote_stress, "[pressure]", "remote_stress")
     if geometry_factor <= 0:
@@ -220,6 +222,7 @@ def critical_fracture_stress(
     I apply? — so a longer undetected crack or a lower toughness cuts the allowable stress. Returns
     the critical stress in MPa.
     """
+    require_finite(geometry_factor, name="geometry_factor")
     _require(fracture_toughness, "[pressure] * [length]**0.5", "fracture_toughness")
     _require(crack_length, "[length]", "crack_length")
     if geometry_factor <= 0:
@@ -346,6 +349,7 @@ def paris_law_crack_growth_rate(
     as the crack lengthens. Δσ must be a stress, a a positive length, Y positive, and
     C and m positive. Returns da/dN in metres per cycle.
     """
+    require_finite(paris_coefficient, name="paris_coefficient")
     require_finite(geometry_factor, name="geometry_factor")
     require_finite(paris_exponent, name="paris_exponent")
     _require(stress_range, "[pressure]", "stress_range")
@@ -410,6 +414,7 @@ def paris_law_cycles_to_failure(
     a_f > a_i, and m must differ from 2 (the m = 2 case integrates to a logarithm and
     is not covered). Returns the dimensionless number of cycles.
     """
+    require_finite(paris_coefficient, name="paris_coefficient")
     require_finite(geometry_factor, name="geometry_factor")
     require_finite(paris_exponent, name="paris_exponent")
     _require(stress_range, "[pressure]", "stress_range")
@@ -749,6 +754,7 @@ def newman_raju_surface_flaw_sif(
     published solution uses different coefficients entirely, so a number produced here
     would be wrong rather than approximate.
     """
+    require_finite(parametric_angle, name="parametric_angle")
     if not isinstance(flaw, SurfaceFlaw):
         raise _fracture_refusal(
             f"flaw must be a SurfaceFlaw; got {flaw!r}", subject="flaw", source=_FLAW_SOURCE
@@ -900,6 +906,7 @@ def fad_option1_curve(
     only defined up to :func:`fad_limit_load_ratio`, which this function does not know —
     it is checked in :func:`fad_assessment`.
     """
+    require_finite(load_ratio, name="load_ratio")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if load_ratio < 0:
@@ -1162,6 +1169,7 @@ def fad_scorecard(
     ``NOT_EVALUATED``. The correlation scatters by enough that a pass built on it is not
     a pass — it is a reason to commission a toughness test.
     """
+    require_finite(required, name="required")
     if assessment is not None and not isinstance(assessment, FADAssessment):
         raise _fracture_refusal(
             f"assessment must be a FADAssessment; got {assessment!r}",

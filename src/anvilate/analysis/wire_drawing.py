@@ -85,6 +85,8 @@ def wire_drawing_stress(
     stress or the wire snaps — a pass past :func:`wire_drawing_max_reduction` is refused here
     rather than priced. Returns the stress in MPa.
     """
+    require_finite(die_half_angle, name="die_half_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
     _check(flow_stress, "[pressure]", "flow_stress")
     _check(initial_area, "[area]", "initial_area")
     _check(final_area, "[area]", "final_area")
@@ -178,6 +180,8 @@ def wire_drawing_max_reduction(*, die_half_angle: float, friction_coefficient: f
     lowers it. Bigger reductions are split across a train of dies — the reason wire is drawn in
     successive passes. Returns the maximum area reduction as a fraction (0 to 1).
     """
+    require_finite(die_half_angle, name="die_half_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
     if not 0.0 < die_half_angle < 90.0:
         raise _wire_drawing_refusal(
             "die_half_angle must be in (0, 90) degrees",

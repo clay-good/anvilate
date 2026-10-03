@@ -181,6 +181,7 @@ def required_section_modulus(
     ``allowable_stress`` must be
     positive.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     if not isinstance(bending_moment, Quantity):
         raise _section_refusal(
             f"bending_moment must be a [force] * [length] quantity; got {bending_moment!r}",

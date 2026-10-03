@@ -185,6 +185,7 @@ def rebound_height(*, drop_height: Quantity, coefficient_of_restitution: float) 
     ball settles in a geometric series — the reason a lively ball takes many quick bounces to stop.
     ``coefficient_of_restitution`` is in [0, 1]. Returns the rebound height in metres.
     """
+    require_finite(coefficient_of_restitution, name="coefficient_of_restitution")
     _check(drop_height, "[length]", "drop_height")
     h = drop_height.to("m").magnitude
     if h < 0:

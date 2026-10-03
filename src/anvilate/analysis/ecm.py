@@ -68,6 +68,7 @@ def ecm_material_removal_rate(
     passed, not on the metal's hardness — the reason ECM cuts hardened tool steel as fast as soft
     iron. Returns the removal rate in cm**3/min.
     """
+    require_finite(equivalent_weight, name="equivalent_weight")
     _check(current, "[current]", "current")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
@@ -101,6 +102,7 @@ def ecm_feed_rate(
     sets the equilibrium gap the operation runs at (:func:`ecm_equilibrium_gap`). Returns the feed
     rate in mm/min.
     """
+    require_finite(equivalent_weight, name="equivalent_weight")
     _check(current_density, "[current]/[length]**2", "current_density")
     _check(density, "[mass]/[length]**3", "density")
     if equivalent_weight <= 0:
@@ -143,6 +145,7 @@ def ecm_equilibrium_gap(
     forces a smaller gap, and pushed too far the gap closes to zero, the tool touches the work, and
     the electrolyte sparks into a short circuit. Returns the equilibrium gap in mm.
     """
+    require_finite(equivalent_weight, name="equivalent_weight")
     _check(electrolyte_conductivity, "[conductance]/[length]", "electrolyte_conductivity")
     _check(applied_voltage, "[electric_potential]", "applied_voltage")
     _check(feed_rate, "[length]/[time]", "feed_rate")

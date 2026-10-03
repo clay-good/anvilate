@@ -80,6 +80,7 @@ def ergun_pressure_drop(
     or pebble bed, and warns when a fine or densely packed bed will choke on pressure drop. Returns
     the pressure drop in Pa.
     """
+    require_finite(void_fraction, name="void_fraction")
     _check(bed_length, "[length]", "bed_length")
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(superficial_velocity, "[length]/[time]", "superficial_velocity")
@@ -178,6 +179,7 @@ def minimum_fluidization_velocity(
     it the particles are suspended. It sets the operating window of a fluidized-bed reactor or
     dryer. Returns the minimum fluidization velocity in m/s.
     """
+    require_finite(void_fraction, name="void_fraction")
     _check(particle_diameter, "[length]", "particle_diameter")
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     _check(fluid_density, "[mass]/[length]**3", "fluid_density")
@@ -256,6 +258,7 @@ def specific_surface_area(*, void_fraction: float, particle_diameter: Quantity) 
     sphericity below 1 for irregular packing. Returns the specific surface area in 1/m (m² of
     surface per m³ of bed).
     """
+    require_finite(void_fraction, name="void_fraction")
     _check(particle_diameter, "[length]", "particle_diameter")
     d_p = particle_diameter.to("m").magnitude
     if not 0.0 <= void_fraction < 1.0:

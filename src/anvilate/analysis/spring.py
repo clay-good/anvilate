@@ -130,6 +130,7 @@ def wahl_factor(spring_index: float) -> float:
     """The Wahl stress-correction factor K_w = (4C−1)/(4C−4) + 0.615/C for a
     spring of index ``spring_index`` (C), correcting the nominal shear stress for
     curvature and direct shear. ``spring_index`` must exceed 1."""
+    require_finite(spring_index, name="spring_index")
     c = spring_index
     if c <= 1:
         raise _spring_refusal(
@@ -175,6 +176,7 @@ def helical_spring_rate(
     dimension-checked, the coil geometry is validated through the spring
     index, and ``active_coils`` must be positive.
     """
+    require_finite(active_coils, name="active_coils")
     spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
     _require(shear_modulus, "[pressure]", "shear_modulus")
     if active_coils <= 0:
@@ -247,6 +249,7 @@ def helical_spring_solid_length(*, total_coils: float, wire_diameter: Quantity) 
     solid and stops acting like a spring (and its stress spikes). ``total_coils`` must
     be positive. Returns the solid length in mm.
     """
+    require_finite(total_coils, name="total_coils")
     _require(wire_diameter, "[length]", "wire_diameter")
     d = wire_diameter.to("mm").magnitude
     if total_coils <= 0:
@@ -322,6 +325,7 @@ def helical_spring_buckling(
     :class:`SpringBucklingResult`. Every quantity is dimension-checked and α must
     be positive.
     """
+    require_finite(end_condition_constant, name="end_condition_constant")
     _require(free_length, "[length]", "free_length")
     _require(mean_coil_diameter, "[length]", "mean_coil_diameter")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
@@ -492,6 +496,7 @@ def helical_torsion_spring_rate(
     radian in newton-metres (radians being dimensionless); real springs run a few
     percent stiffer as inter-coil friction adds to this ideal value.
     """
+    require_finite(active_coils, name="active_coils")
     spring_index(mean_coil_diameter=mean_coil_diameter, wire_diameter=wire_diameter)
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if active_coils <= 0:
@@ -691,6 +696,7 @@ def belleville_washer_force(
     same washer geometry tunes a bolt stack, a constant-pressure clamp, or a
     bistable detent. Returns the force in newtons.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     t, h, de, k1 = _belleville_geometry(
         thickness, cone_height, outer_diameter, inner_diameter, poisson_ratio
     )
@@ -733,6 +739,7 @@ def belleville_flat_load(
     usual catalogue anchor point (and the preload a bolt stack reaches when the
     washers go flat). Arguments as there. Returns the force in newtons.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
     t, h, de, k1 = _belleville_geometry(
         thickness, cone_height, outer_diameter, inner_diameter, poisson_ratio
     )

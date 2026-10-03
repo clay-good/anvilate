@@ -134,6 +134,7 @@ def gasket_operating_load(
     ``gasket_factor`` m (ASME Table 2-5.1, dimensionless), and internal ``pressure`` P.
     All must be positive. Returns the load in N.
     """
+    require_finite(gasket_factor, name="gasket_factor")
     g = _positive_mm(gasket_mean_diameter, "gasket_mean_diameter")
     b = _positive_mm(effective_seating_width, "effective_seating_width")
     if gasket_factor <= 0:
@@ -182,6 +183,7 @@ def governing_gasket_bolt_load(
     with a hard gasket is seating-governed; a high-pressure one is operation-governed.
     Arguments as for the two component functions. Returns the governing load in N.
     """
+    require_finite(gasket_factor, name="gasket_factor")
     seating = gasket_seating_load(
         gasket_mean_diameter=gasket_mean_diameter,
         effective_seating_width=effective_seating_width,

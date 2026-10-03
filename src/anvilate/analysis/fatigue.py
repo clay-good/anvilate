@@ -200,6 +200,8 @@ def fatigue_notch_factor(*, kt: float, notch_sensitivity: float) -> float:
     K_f before a Goodman/Soderberg/Gerber screen. ``kt`` must be at least 1 (a
     raiser never reduces stress) and ``notch_sensitivity`` must lie in [0, 1].
     """
+    require_finite(kt, name="kt")
+    require_finite(notch_sensitivity, name="notch_sensitivity")
     if kt < 1:
         raise _fatigue_refusal(
             f"kt must be at least 1 (a stress raiser); got {kt}",
@@ -350,6 +352,12 @@ def marin_endurance_limit(
     (typically at or below 1). Feed the result to :func:`goodman_safety_factor`
     and its siblings. Returns the corrected limit in MPa.
     """
+    require_finite(surface_factor, name="surface_factor")
+    require_finite(size_factor, name="size_factor")
+    require_finite(load_factor, name="load_factor")
+    require_finite(temperature_factor, name="temperature_factor")
+    require_finite(reliability_factor, name="reliability_factor")
+    require_finite(miscellaneous_factor, name="miscellaneous_factor")
     se_prime = _require_stress(base_endurance_limit, "base_endurance_limit")
     if se_prime <= 0:
         raise _fatigue_refusal(
@@ -608,6 +616,7 @@ def goodman_scorecard(
     endurance limit — the entry is ``NOT_EVALUATED`` rather than a silent pass,
     honouring No-silent-green for the fatigue dimension.
     """
+    require_finite(required, name="required")
     if endurance_limit is None:
         computed = None
     else:
@@ -682,6 +691,7 @@ def soderberg_scorecard(
     ``None`` the entry is ``NOT_EVALUATED`` rather than a silent pass, honouring
     No-silent-green for the fatigue dimension.
     """
+    require_finite(required, name="required")
     if endurance_limit is None:
         computed = None
     else:
@@ -776,6 +786,7 @@ def gerber_scorecard(
     the entry is ``NOT_EVALUATED`` rather than a silent pass, honouring
     No-silent-green for the fatigue dimension.
     """
+    require_finite(required, name="required")
     if endurance_limit is None:
         computed = None
     else:
@@ -1035,6 +1046,7 @@ def strain_life_total_amplitude(
     ``fatigue_ductility_coefficient`` εf' with ``fatigue_ductility_exponent`` c the plastic branch.
     Returns the dimensionless total strain amplitude Δε/2.
     """
+    require_finite(fatigue_ductility_coefficient, name="fatigue_ductility_coefficient")
     require_finite(reversals, name="reversals")
     require_finite(fatigue_ductility_exponent, name="fatigue_ductility_exponent")
     require_finite(fatigue_strength_exponent, name="fatigue_strength_exponent")
@@ -1267,6 +1279,7 @@ def weld_size_corrected_detail_category(
     :func:`weld_detail_endurance_cycles` or :func:`weld_detail_allowable_stress_range`.
     Below the reference thickness it returns the category unchanged. Returns MPa.
     """
+    require_finite(exponent, name="exponent")
     dsc = _require_stress(detail_category, "detail_category")
     if dsc <= 0:
         raise _fatigue_refusal(
@@ -1311,6 +1324,7 @@ def weld_effective_stress_range(
     claiming the bonus is a statement about the fabrication, not about the geometry, and it
     is the caller's to make. Returns Δσ_eff in MPa.
     """
+    require_finite(compression_factor, name="compression_factor")
     require_flag(
         stress_relieved,
         name="stress_relieved",
@@ -1354,6 +1368,7 @@ def weld_mean_stress_factor(
     with no compressive part; it reaches its floor (``compression_factor``, 0.6) for a
     fully compressive cycle on a stress-relieved detail. Returns the dimensionless factor.
     """
+    require_finite(compression_factor, name="compression_factor")
     smax = _require_stress(max_stress, "max_stress")
     smin = _require_stress(min_stress, "min_stress")
     full_range = smax - smin
@@ -1464,6 +1479,7 @@ def weld_fatigue_scorecard(
     trusted to the formula. Omitted, the limit is not applied and the entry says nothing
     about it either way.
     """
+    require_finite(required, name="required")
     if not isinstance(applied_cycles, Sequence):
         raise _fatigue_refusal(
             f"applied_cycles must be a sequence, not a single value; got {applied_cycles!r}",

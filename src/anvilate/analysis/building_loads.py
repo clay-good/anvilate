@@ -160,6 +160,10 @@ def wind_velocity_pressure(
     values. Scale the result by the gust factor and pressure coefficient with
     :func:`wind_design_pressure`. Returns the velocity pressure in Pa.
     """
+    require_finite(exposure_coefficient, name="exposure_coefficient")
+    require_finite(topographic_factor, name="topographic_factor")
+    require_finite(directionality_factor, name="directionality_factor")
+    require_finite(ground_elevation_factor, name="ground_elevation_factor")
     _check(basic_wind_speed, "[length]/[time]", "basic_wind_speed")
     v = basic_wind_speed.to("m/s").magnitude
     if v <= 0:
@@ -203,6 +207,8 @@ def wind_design_pressure(
     pushed in, negative for a leeward wall or roof sucked out — an ASCE 7 table value that carries
     its own sign). A negative result is a net suction. Returns the design pressure in Pa.
     """
+    require_finite(gust_effect_factor, name="gust_effect_factor")
+    require_finite(pressure_coefficient, name="pressure_coefficient")
     _check(velocity_pressure, "[pressure]", "velocity_pressure")
     qz = velocity_pressure.to("Pa").magnitude
     if qz <= 0:
@@ -236,6 +242,8 @@ def components_cladding_net_pressure(
     the governing one is the larger magnitude. A negative result is net suction, trying to pull the
     cladding off. Returns the net pressure in Pa.
     """
+    require_finite(external_pressure_coefficient, name="external_pressure_coefficient")
+    require_finite(internal_pressure_coefficient, name="internal_pressure_coefficient")
     _check(velocity_pressure, "[pressure]", "velocity_pressure")
     qh = velocity_pressure.to("Pa").magnitude
     if qh <= 0:
@@ -282,6 +290,9 @@ def seismic_response_coefficient(
 
     Returns the dimensionless Cs.
     """
+    require_finite(design_spectral_acceleration, name="design_spectral_acceleration")
+    require_finite(response_modification_factor, name="response_modification_factor")
+    require_finite(importance_factor, name="importance_factor")
     if design_spectral_acceleration <= 0:
         raise _building_loads_refusal(
             "design_spectral_acceleration must be positive",
@@ -366,6 +377,9 @@ def seismic_response_coefficient_upper_limit(
     The governing Cs is the smaller of the base value and this cap (subject also to a floor). A
     taller, longer-period building takes the cap, a lower seismic demand. Returns Cs_max.
     """
+    require_finite(design_spectral_acceleration_1s, name="design_spectral_acceleration_1s")
+    require_finite(response_modification_factor, name="response_modification_factor")
+    require_finite(importance_factor, name="importance_factor")
     _check(fundamental_period, "[time]", "fundamental_period")
     t = fundamental_period.to("s").magnitude
     if design_spectral_acceleration_1s <= 0:
@@ -407,6 +421,7 @@ def seismic_base_shear(
     ``response_coefficient`` Cs from :func:`seismic_response_coefficient`. This shear is then
     distributed up the height to each level. Returns the base shear in kN.
     """
+    require_finite(response_coefficient, name="response_coefficient")
     _check(seismic_weight, "[force]", "seismic_weight")
     w = seismic_weight.to("kN").magnitude
     if w <= 0:
@@ -589,6 +604,8 @@ def seismic_accidental_torsional_moment(
     building is torsionally irregular. This moment is resisted by the lateral system on top of the
     direct shear, and it loads the far side of the building hardest. Returns the moment in kN·m.
     """
+    require_finite(amplification_factor, name="amplification_factor")
+    require_finite(eccentricity_ratio, name="eccentricity_ratio")
     _check(story_shear, "[force]", "story_shear")
     _check(building_dimension, "[length]", "building_dimension")
     vx = story_shear.to("kN").magnitude
@@ -631,6 +648,8 @@ def seismic_design_story_drift(
     against :func:`allowable_story_drift` — using the raw elastic δxe understates the real sway by
     the factor Cd, a common and unconservative error. Returns the amplified design drift in mm.
     """
+    require_finite(deflection_amplification_factor, name="deflection_amplification_factor")
+    require_finite(importance_factor, name="importance_factor")
     _check(elastic_story_drift, "[length]", "elastic_story_drift")
     dxe = elastic_story_drift.to("mm").magnitude
     if dxe < 0:
@@ -667,6 +686,7 @@ def allowable_story_drift(
     against this — a drift within the limit protects the cladding, partitions, and P-delta
     stability. Returns the allowable drift in mm.
     """
+    require_finite(drift_limit_ratio, name="drift_limit_ratio")
     _check(story_height, "[length]", "story_height")
     h = story_height.to("mm").magnitude
     if h <= 0:
@@ -702,6 +722,7 @@ def seismic_stability_coefficient(
     amplified by 1/(1 − θ); above :func:`seismic_stability_coefficient_limit` the story is unstable.
     Returns the dimensionless θ.
     """
+    require_finite(deflection_amplification_factor, name="deflection_amplification_factor")
     _check(story_gravity_load, "[force]", "story_gravity_load")
     _check(design_story_drift, "[length]", "design_story_drift")
     _check(story_shear, "[force]", "story_shear")
@@ -749,6 +770,8 @@ def seismic_stability_coefficient_limit(
     θ_max = 0.5/(β·Cd), but never more than 0.25. Compare the θ from
     :func:`seismic_stability_coefficient` against this. Returns the dimensionless θ_max.
     """
+    require_finite(deflection_amplification_factor, name="deflection_amplification_factor")
+    require_finite(demand_capacity_ratio, name="demand_capacity_ratio")
     if deflection_amplification_factor <= 0:
         raise _building_loads_refusal(
             "deflection_amplification_factor must be positive",
@@ -784,6 +807,8 @@ def seismic_load_effect(
     uplift cases), giving E = ρ·Q_E − 0.2·SDS·D. Feed the result as the seismic effect to
     :func:`~anvilate.analysis.asce7_lrfd_factored_load`. Returns E in the horizontal effect's units.
     """
+    require_finite(design_spectral_acceleration, name="design_spectral_acceleration")
+    require_finite(redundancy_factor, name="redundancy_factor")
     require_flag(
         counteracting,
         name="counteracting",
@@ -855,6 +880,9 @@ def flat_roof_snow_load(
     ``importance_factor`` Is (occupancy). All three are ASCE 7 table values. Reduce it for a pitched
     roof with :func:`sloped_roof_snow_load`. Returns the flat-roof snow load in kPa.
     """
+    require_finite(exposure_factor, name="exposure_factor")
+    require_finite(thermal_factor, name="thermal_factor")
+    require_finite(importance_factor, name="importance_factor")
     _check(ground_snow_load, "[pressure]", "ground_snow_load")
     pg = ground_snow_load.to("kPa").magnitude
     if pg <= 0:
@@ -888,6 +916,7 @@ def sloped_roof_snow_load(
     which falls from 1 toward 0 as the roof steepens and its surface grows more slippery (an ASCE 7
     value from the pitch and the roof's slipperiness). Returns the sloped-roof snow load in kPa.
     """
+    require_finite(slope_factor, name="slope_factor")
     _check(flat_roof_snow_load, "[pressure]", "flat_roof_snow_load")
     pf = flat_roof_snow_load.to("kPa").magnitude
     if pf <= 0:
@@ -970,6 +999,7 @@ def reduced_live_load(
     full L0 is returned — and is floored at 0.50·L0 for a member supporting one floor or 0.40·L0 for
     one supporting two or more (``supports_multiple_floors``). Returns the reduced live load in kPa.
     """
+    require_finite(live_load_element_factor, name="live_load_element_factor")
     require_flag(
         supports_multiple_floors,
         name="supports_multiple_floors",

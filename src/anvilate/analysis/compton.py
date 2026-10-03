@@ -59,6 +59,7 @@ def compton_wavelength_shift(*, scattering_angle: float) -> Quantity:
     electron Compton wavelength lambda_C = 2.426 pm. It is zero for forward scatter and largest
     (2*lambda_C) for backscatter, and it is independent of the incident wavelength. Returns it in m.
     """
+    require_finite(scattering_angle, name="scattering_angle")
     if not 0.0 <= scattering_angle <= 180.0:
         raise _compton_refusal(
             "scattering_angle must be in [0, 180] degrees", subject="scattering_angle"
@@ -78,6 +79,7 @@ def compton_scattered_wavelength(
     wavelength (lower-energy) than the incident one, having given energy to the electron. Returns it
     in m.
     """
+    require_finite(scattering_angle, name="scattering_angle")
     _check(incident_wavelength, "[length]", "incident_wavelength")
     lam = incident_wavelength.to("m").magnitude
     if lam <= 0:
@@ -100,6 +102,7 @@ def compton_electron_energy(*, incident_wavelength: Quantity, scattering_angle: 
     ``scattering_angle`` theta. It is zero for forward scatter, greatest for backscatter, and what a
     detector measures. Returns the electron energy in J (convert to keV for x-ray/gamma scales).
     """
+    require_finite(scattering_angle, name="scattering_angle")
     _check(incident_wavelength, "[length]", "incident_wavelength")
     lam = incident_wavelength.to("m").magnitude
     if lam <= 0:

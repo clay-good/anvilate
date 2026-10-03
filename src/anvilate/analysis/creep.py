@@ -104,6 +104,7 @@ def larson_miller_parameter(
     higher P (hotter, or longer required life) demands a lower allowable stress. Returns
     the parameter (in kelvin, the T·log-hours product — often quoted divided by 1000).
     """
+    require_finite(constant, name="constant")
     _require(temperature, "[temperature]", "temperature")
     _require(rupture_time, "[time]", "rupture_time")
     t_kelvin = temperature.to("K").magnitude
@@ -167,6 +168,8 @@ def larson_miller_temperature_limit(
     This is the temperature margin a creep-limited design is really working to — a
     derating chart in one solve. Returns the limiting absolute temperature in kelvin.
     """
+    require_finite(parameter, name="parameter")
+    require_finite(constant, name="constant")
     _require(rupture_time, "[time]", "rupture_time")
     hours = rupture_time.to("hour").magnitude
     if hours <= 0:

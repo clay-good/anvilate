@@ -87,6 +87,7 @@ def sling_tension_factor(*, angle_from_horizontal: float) -> float:
     the sling flattens toward horizontal. ``angle_from_horizontal`` θ is in degrees,
     (0, 90]. Returns the dimensionless factor.
     """
+    require_finite(angle_from_horizontal, name="angle_from_horizontal")
     theta = _check_angle(angle_from_horizontal)
     return 1.0 / sin(radians(theta))
 
@@ -101,6 +102,7 @@ def sling_leg_tension(
     W/n amplified by the sling-angle factor (:func:`sling_tension_factor`). Screen it
     against the sling's rated capacity. Returns the tension in the load's force units.
     """
+    require_finite(angle_from_horizontal, name="angle_from_horizontal")
     _require_force(load)
     n = _check_legs(number_of_legs)
     theta = _check_angle(angle_from_horizontal)
@@ -120,6 +122,7 @@ def sling_horizontal_force(
     grows without bound as the sling flattens. Returns the force in the load's force
     units.
     """
+    require_finite(angle_from_horizontal, name="angle_from_horizontal")
     _require_force(load)
     n = _check_legs(number_of_legs)
     theta = _check_angle(angle_from_horizontal)
@@ -145,6 +148,7 @@ def tackle_mechanical_advantage(
     η = 1 — friction always costs, so the actual advantage is always below the part
     count. Returns the dimensionless mechanical advantage.
     """
+    require_finite(sheave_efficiency, name="sheave_efficiency")
     require_finite(supporting_parts, name="supporting_parts")
     n = _check_parts(supporting_parts)
     eta = _check_efficiency(sheave_efficiency)
@@ -172,6 +176,7 @@ def tackle_lead_line_tension(
     against; the frictionless estimate W/n understates it on every real tackle.
     Returns the tension in the load's force units.
     """
+    require_finite(sheave_efficiency, name="sheave_efficiency")
     _require_force(load)
     advantage = tackle_mechanical_advantage(
         supporting_parts=supporting_parts,

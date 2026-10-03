@@ -88,6 +88,7 @@ def flat_plate_collector_efficiency(
     absorbed input); see :func:`collector_stagnation_temperature` for where that happens. Returns
     the dimensionless efficiency.
     """
+    require_finite(optical_efficiency, name="optical_efficiency")
     _fraction(optical_efficiency, "optical_efficiency")
     _check(loss_coefficient, "[power] / [length]**2 / [temperature]", "loss_coefficient")
     _check(mean_fluid_temperature, "[temperature]", "mean_fluid_temperature")
@@ -136,6 +137,7 @@ def collector_useful_heat(
     is the heat available to the tank or load — the collector-side counterpart of a PV array's
     electrical output. Returns the useful heat in watts.
     """
+    require_finite(efficiency, name="efficiency")
     _fraction(efficiency, "efficiency")
     _check(irradiance, "[power] / [length]**2", "irradiance")
     _check(area, "[area]", "area")
@@ -171,6 +173,7 @@ def collector_stagnation_temperature(
     reaches and sets the material, glycol-degradation, and pressure-relief limits of the loop — flat
     plates commonly stagnate near 150–200 °C. Returns the stagnation temperature in °C.
     """
+    require_finite(optical_efficiency, name="optical_efficiency")
     _fraction(optical_efficiency, "optical_efficiency")
     _check(loss_coefficient, "[power] / [length]**2 / [temperature]", "loss_coefficient")
     _check(ambient_temperature, "[temperature]", "ambient_temperature")

@@ -139,6 +139,7 @@ def concentrated_stress(*, nominal_stress: Quantity, kt: float) -> Quantity:
     be a stress and ``kt`` at least 1 (a raiser never reduces stress). Returns the
     peak stress in MPa.
     """
+    require_finite(kt, name="kt")
     sigma = _require_stress(nominal_stress, "nominal_stress")
     if kt < 1:
         raise _stress_refusal(
@@ -356,6 +357,7 @@ def plane_stress_at_angle(
     (:func:`principal_angle_plane`) are where τ_n vanishes. Returns ``(normal_stress,
     shear_stress)`` in MPa.
     """
+    require_finite(angle, name="angle")
     sx = _require_stress(sigma_x, "sigma_x")
     sy = _require_stress(sigma_y, "sigma_y")
     txy = _require_stress(tau_xy, "tau_xy")
@@ -538,6 +540,9 @@ def strength_scorecard(
     strength where its clause demands a specification minimum is a data decision somebody can
     act on, and "safety factor unavailable" is not.
     """
+    require_finite(required, name="required")
+    if upper is not None:
+        require_finite(upper, name="upper")
     sigma = abs(_require_stress(stress, "stress"))
     if allowable is None:
         computed = None

@@ -86,6 +86,7 @@ def lift_force(
     the square of airspeed, so an aircraft needs far less lift coefficient (a smaller angle of
     attack) to hold its weight at cruise than on approach. Returns the lift force in N.
     """
+    require_finite(lift_coefficient, name="lift_coefficient")
     _check(air_density, "[mass]/[volume]", "air_density")
     _check(airspeed, "[velocity]", "airspeed")
     _check(wing_area, "[area]", "wing_area")
@@ -160,6 +161,9 @@ def induced_drag_coefficient(
     loading, ~0.7-0.85 for real wings): C_Di = C_L²/(π*e*AR). A long, high-aspect wing pays a
     smaller induced-drag penalty for the same lift. Returns the induced-drag coefficient as a float.
     """
+    require_finite(lift_coefficient, name="lift_coefficient")
+    require_finite(aspect_ratio, name="aspect_ratio")
+    require_finite(oswald_efficiency, name="oswald_efficiency")
     if aspect_ratio <= 0:
         raise _wing_aerodynamics_refusal(
             "aspect_ratio must be positive", subject="aspect_ratio", source=_PLANFORM_SOURCE
@@ -187,6 +191,7 @@ def stall_speed(
     lift equation at maximum lift: V_stall = √(2*W/(ρ*S*C_L,max)). Below it the wing cannot generate
     enough lift and stalls. Heavier weight or thinner air raises it. Returns the stall speed in m/s.
     """
+    require_finite(max_lift_coefficient, name="max_lift_coefficient")
     _check(weight, "[force]", "weight")
     _check(air_density, "[mass]/[volume]", "air_density")
     _check(wing_area, "[area]", "wing_area")
@@ -223,6 +228,8 @@ def lift_to_drag_ratio(*, lift_coefficient: float, drag_coefficient: float) -> f
     and best-glide performance. A trainer runs 10–15, a sailplane 40–60. Both coefficients are
     dimensionless and taken at the same flight condition. Returns the dimensionless L/D.
     """
+    require_finite(lift_coefficient, name="lift_coefficient")
+    require_finite(drag_coefficient, name="drag_coefficient")
     if lift_coefficient < 0:
         raise _wing_aerodynamics_refusal(
             "lift_coefficient must be non-negative",
@@ -244,6 +251,7 @@ def glide_range(*, lift_to_drag_ratio: float, altitude: Quantity) -> Quantity:
     is the height lost times L/D — and is independent of weight (a heavier aircraft glides
     the same distance, just faster). Returns the glide range in metres.
     """
+    require_finite(lift_to_drag_ratio, name="lift_to_drag_ratio")
     _check(altitude, "[length]", "altitude")
     h = altitude.to("m").magnitude
     if lift_to_drag_ratio < 0:
@@ -310,6 +318,9 @@ def finite_wing_lift_curve_slope(
     wing area), and ``oswald_efficiency`` e is the span efficiency, defaulting to 0.85 for a
     typical straight wing. Returns the finite-wing slope per radian as a plain float.
     """
+    require_finite(section_lift_curve_slope, name="section_lift_curve_slope")
+    require_finite(aspect_ratio, name="aspect_ratio")
+    require_finite(oswald_efficiency, name="oswald_efficiency")
     if section_lift_curve_slope <= 0:
         raise _wing_aerodynamics_refusal(
             f"section_lift_curve_slope must be positive; got {section_lift_curve_slope}",

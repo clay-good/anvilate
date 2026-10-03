@@ -127,6 +127,7 @@ def expected_defect_rate_ppm(*, capability_index: float) -> float:
     about 1350 ppm, 1.33 about 33 ppm, 1.5 about 3.4 ppm (short-term, no mean-shift assumption).
     Returns the defect rate in parts per million as a plain float.
     """
+    require_finite(capability_index, name="capability_index")
     z = 3.0 * capability_index
     phi = 0.5 * (1.0 + erf(-z / sqrt(2.0)))
     return 1.0e6 * phi

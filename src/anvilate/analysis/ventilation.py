@@ -81,6 +81,8 @@ def breathing_zone_outdoor_airflow(
     short-circuits to the return — gives the outdoor airflow the zone must actually be supplied.
     Returns the zone outdoor airflow in L/s.
     """
+    require_finite(occupancy, name="occupancy")
+    require_finite(zone_air_distribution_effectiveness, name="zone_air_distribution_effectiveness")
     _check(people_outdoor_rate, "[length]**3/[time]", "people_outdoor_rate")
     _check(area_outdoor_rate, "[length]/[time]", "area_outdoor_rate")
     _check(floor_area, "[length]**2", "floor_area")
@@ -140,6 +142,7 @@ def airflow_for_air_changes(
     ``air_changes_per_hour`` ACH times the ``room_volume`` V, Q = ACH·V. A lab wanting 6 air changes
     an hour in a 200 m³ room needs 1,200 m³/h. Returns the required airflow in m³/s.
     """
+    require_finite(air_changes_per_hour, name="air_changes_per_hour")
     _check(room_volume, "[length]**3", "room_volume")
     v = room_volume.to("m**3").magnitude
     if air_changes_per_hour <= 0:
@@ -169,6 +172,7 @@ def dilution_airflow(
     the ACGIH factor (≥ 1) that pads the ideal rate for incomplete mixing and poor capture. Returns
     the required dilution airflow in L/s.
     """
+    require_finite(mixing_factor, name="mixing_factor")
     _check(contaminant_generation_rate, "[mass]/[time]", "contaminant_generation_rate")
     _check(target_concentration, "[mass]/[length]**3", "target_concentration")
     if mixing_factor < 1.0:

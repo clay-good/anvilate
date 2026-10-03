@@ -479,6 +479,7 @@ def rc_concrete_shear_strength(
     (φ = 0.75) the section needs stirrups; above φ·(V_c + V_s,max) a larger section is
     required. f'c and λ are the caller's inputs. Returns V_c in kN.
     """
+    require_finite(lightweight_factor, name="lightweight_factor")
     _require(concrete_strength, "[pressure]", "concrete_strength")
     _require(beam_width, "[length]", "beam_width")
     _require(effective_depth, "[length]", "effective_depth")
@@ -792,6 +793,8 @@ def rc_strength_reduction_factor(
     0.75 spiral). Multiply φ by the nominal strength for the design strength. Returns the
     dimensionless φ in [φ_cc, 0.90].
     """
+    require_finite(net_tensile_strain, name="net_tensile_strain")
+    require_finite(compression_controlled_factor, name="compression_controlled_factor")
     _require(steel_yield, "[pressure]", "steel_yield")
     if steel_modulus is None:
         steel_modulus = Quantity(magnitude=_ACI_STEEL_MODULUS_MPA, unit="MPa")
@@ -855,6 +858,10 @@ def rc_development_length(
     with adequate cover and spacing, 1.7 for No. 22 and larger (or halve for confined
     cases) — exposed so the caller picks the row. Returns l_d in mm.
     """
+    require_finite(location_factor, name="location_factor")
+    require_finite(coating_factor, name="coating_factor")
+    require_finite(lightweight_factor, name="lightweight_factor")
+    require_finite(size_spacing_constant, name="size_spacing_constant")
     _require(bar_diameter, "[length]", "bar_diameter")
     _require(steel_yield, "[pressure]", "steel_yield")
     _require(concrete_strength, "[pressure]", "concrete_strength")
@@ -1083,6 +1090,7 @@ def rc_cracking_moment(
     distance from the centroid to the extreme tension fibre. ``concrete_strength`` f'c
     and ``lightweight_factor`` λ are the caller's. Returns M_cr in kN·m.
     """
+    require_finite(lightweight_factor, name="lightweight_factor")
     _require(concrete_strength, "[pressure]", "concrete_strength")
     _require(gross_inertia, "[length]**4", "gross_inertia")
     _require(extreme_tension_distance, "[length]", "extreme_tension_distance")

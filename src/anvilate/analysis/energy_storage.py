@@ -77,6 +77,8 @@ def battery_bank_capacity(
     round-trip losses). Both are dimensionless in (0, 1]. Returns the required capacity in
     amp-hours.
     """
+    require_finite(depth_of_discharge, name="depth_of_discharge")
+    require_finite(efficiency, name="efficiency")
     _check(load_power, "[power]", "load_power")
     _check(autonomy_time, "[time]", "autonomy_time")
     _check(system_voltage, "[electric_potential]", "system_voltage")
@@ -113,6 +115,8 @@ def usable_battery_energy(
     ``depth_of_discharge`` DoD, and the delivery ``efficiency`` η. Returns the deliverable energy in
     watt-hours.
     """
+    require_finite(depth_of_discharge, name="depth_of_discharge")
+    require_finite(efficiency, name="efficiency")
     _check(rated_capacity, "[current]*[time]", "rated_capacity")
     _check(system_voltage, "[electric_potential]", "system_voltage")
     _fraction(depth_of_discharge, "depth_of_discharge")
@@ -144,6 +148,8 @@ def battery_backup_time(
     :func:`battery_bank_capacity`. ``depth_of_discharge`` DoD and ``efficiency`` η are the usable
     fraction and the delivery efficiency. Returns the backup time in hours.
     """
+    require_finite(depth_of_discharge, name="depth_of_discharge")
+    require_finite(efficiency, name="efficiency")
     _check(load_power, "[power]", "load_power")
     if load_power.to("W").magnitude <= 0:
         raise _energy_storage_refusal(
@@ -206,6 +212,7 @@ def battery_delivered_energy(
     see by the loss fraction — a 10 kWh charge through an 0.9 battery delivers only 9 kWh. Returns
     the delivered energy in kWh.
     """
+    require_finite(round_trip_efficiency, name="round_trip_efficiency")
     _check(stored_energy, "[energy]", "stored_energy")
     _fraction(round_trip_efficiency, "round_trip_efficiency")
     e = stored_energy.to("kWh").magnitude
@@ -250,6 +257,7 @@ def current_from_c_rate(*, c_rate: float, capacity: Quantity) -> Quantity:
     must push 200 A, which is what sizes the cabling, contactors, and BMS current limit. Returns the
     current in amperes.
     """
+    require_finite(c_rate, name="c_rate")
     _check(capacity, "[current]*[time]", "capacity")
     cap = capacity.to("A*hour").magnitude
     if c_rate < 0:
@@ -272,6 +280,7 @@ def discharge_time_from_c_rate(*, c_rate: float) -> Quantity:
     (Peukert effect, :func:`anvilate.analysis.battery_peukert.peukert_runtime`), so treat this as an
     optimistic upper bound. Returns the discharge time in hours.
     """
+    require_finite(c_rate, name="c_rate")
     if c_rate <= 0:
         raise _energy_storage_refusal(
             "c_rate must be positive", subject="c_rate", source=_BATTERY_SOURCE

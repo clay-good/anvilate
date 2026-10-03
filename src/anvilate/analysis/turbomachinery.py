@@ -110,6 +110,7 @@ def impeller_outlet_swirl_velocity(
     characteristic; radial vanes (beta = 90) give c_theta = U; forward-curved (beta > 90) give
     c_theta > U for more head but a rising-then-falling, less stable curve. Returns c_theta in m/s.
     """
+    require_finite(blade_angle, name="blade_angle")
     _check(blade_speed, "[length]/[time]", "blade_speed")
     _check(meridional_velocity, "[length]/[time]", "meridional_velocity")
     u = blade_speed.to("m/s").magnitude

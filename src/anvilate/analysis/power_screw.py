@@ -163,6 +163,7 @@ def power_screw_raise_torque(
     ``friction_coefficient`` μ describe the thread; collar friction is not
     included. The load must be a force. Returns the torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(load, "[force]", "load")
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
     _reject_beyond_square_thread_range(dm, ell, mu)
@@ -189,6 +190,7 @@ def power_screw_raise_load(
     ``lead`` l, and ``friction_coefficient`` μ describe the thread; collar friction is
     not included. The torque must be a torque. Returns the load in N.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(torque, "[force] * [length]", "torque")
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
     _reject_beyond_square_thread_range(dm, ell, mu)
@@ -214,6 +216,7 @@ def power_screw_lower_torque(
     a brake is required. Arguments as in :func:`power_screw_raise_torque`. Returns
     the signed torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(load, "[force]", "load")
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
     f = load.to("N").magnitude
@@ -237,6 +240,7 @@ def power_screw_efficiency(
     self-locking screw (μ ≥ tan λ) always runs below 50%. Returns the dimensionless
     efficiency in (0, 1); a frictionless screw (μ = 0) returns 1.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
     tan_lambda = ell / (pi * dm)
     if mu == 0:
@@ -258,6 +262,7 @@ def power_screw_is_self_locking(
     lowering torque crosses zero at. Returns ``True`` when ``friction_coefficient``
     μ is at least the tangent of the lead angle.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     dm, ell, mu = _geometry(mean_diameter, lead, friction_coefficient)
     return mu >= ell / (pi * dm)
 
@@ -280,6 +285,7 @@ def power_screw_collar_torque(
     efficiency. The load must be a force, r_c a positive length, and μ_c non-negative.
     Returns the collar torque in N·m.
     """
+    require_finite(collar_friction_coefficient, name="collar_friction_coefficient")
     _require(load, "[force]", "load")
     _require(collar_mean_radius, "[length]", "collar_mean_radius")
     if collar_friction_coefficient < 0:

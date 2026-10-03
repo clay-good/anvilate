@@ -129,6 +129,7 @@ def point_source_illuminance(
     illuminance, and a steeply tilted surface (θ near π/2) catches almost nothing. Returns the
     illuminance as a Quantity in lux.
     """
+    require_finite(incidence_angle, name="incidence_angle")
     _check(luminous_intensity, "[luminosity]", "luminous_intensity")
     _check(distance, "[length]", "distance")
     d = distance.to("m").magnitude
@@ -158,6 +159,7 @@ def diffuse_surface_luminance(*, illuminance: Quantity, reflectance: float) -> Q
     brightness a person perceives, and the input to glare and contrast checks. ``reflectance`` must
     be in (0, 1]. Returns the luminance as a Quantity in cd/m².
     """
+    require_finite(reflectance, name="reflectance")
     _check(illuminance, "[luminosity]/[area]", "illuminance")
     _check_coefficient(reflectance, "reflectance")
     e = illuminance.to("lux").magnitude
@@ -178,6 +180,7 @@ def illuminance_for_target_luminance(*, target_luminance: Quantity, reflectance:
     ``target_luminance`` is a cd/m² quantity and ``reflectance`` must be in (0, 1]. Returns the
     required illuminance as a Quantity in lux.
     """
+    require_finite(reflectance, name="reflectance")
     _check(target_luminance, "[luminosity]/[area]", "target_luminance")
     if not 0.0 < reflectance <= 1.0:
         raise _illumination_refusal(
@@ -212,6 +215,8 @@ def lumen_method_illuminance(
     and the floor ``area`` A. CU and LLF are supplied photometric coefficients, dimensionless and in
     (0, 1]. Returns the maintained illuminance as a Quantity in lux.
     """
+    require_finite(coefficient_of_utilization, name="coefficient_of_utilization")
+    require_finite(light_loss_factor, name="light_loss_factor")
     _check(lumens_per_luminaire, "[luminosity]", "lumens_per_luminaire")
     _check(area, "[length]**2", "area")
     if luminaire_count <= 0:
@@ -245,6 +250,8 @@ def lumen_method_luminaire_count(
     next whole luminaire, and up again to a layout that tiles the room, so the installed level
     clears the target with margin.
     """
+    require_finite(coefficient_of_utilization, name="coefficient_of_utilization")
+    require_finite(light_loss_factor, name="light_loss_factor")
     _check(target_illuminance, "[luminosity]/[length]**2", "target_illuminance")
     _check(area, "[length]**2", "area")
     _check(lumens_per_luminaire, "[luminosity]", "lumens_per_luminaire")

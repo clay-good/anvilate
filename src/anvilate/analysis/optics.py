@@ -205,6 +205,7 @@ def diffraction_limited_spot_diameter(*, wavelength: Quantity, f_number: float) 
     pair a sensor with — stopping down (raising N) blurs the spot even as it deepens the focus.
     Returns the spot diameter in micrometres.
     """
+    require_finite(f_number, name="f_number")
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
@@ -233,6 +234,7 @@ def hyperfocal_distance(
     H = f²/(N·c). Focus there and depth of field is deepest; a longer lens or a wider aperture
     (lower N) pushes H farther out and shrinks that depth. Returns the hyperfocal distance in m.
     """
+    require_finite(f_number, name="f_number")
     _check(focal_length, "[length]", "focal_length")
     _check(circle_of_confusion, "[length]", "circle_of_confusion")
     f = focal_length.to("mm").magnitude
@@ -322,6 +324,9 @@ def snell_refraction_angle(
     need sin θ₂ > 1 it cannot refract at all — it totally internally reflects
     (:func:`critical_angle`). Returns the refracted angle in degrees.
     """
+    require_finite(incident_angle, name="incident_angle")
+    require_finite(incident_index, name="incident_index")
+    require_finite(refracted_index, name="refracted_index")
     if not 0.0 <= incident_angle < 90.0:
         raise _optics_refusal(
             "incident_angle must be in [0, 90) degrees from the normal",
@@ -359,6 +364,8 @@ def critical_angle(*, incident_index: float, transmitted_index: float) -> float:
     stays inside — the effect that guides light down an optical fibre and lights a prism periscope.
     Returns the critical angle in degrees.
     """
+    require_finite(incident_index, name="incident_index")
+    require_finite(transmitted_index, name="transmitted_index")
     if incident_index <= 0:
         raise _optics_refusal(
             "incident_index must be positive",
@@ -389,6 +396,8 @@ def fiber_numerical_aperture(*, core_index: float, cladding_index: float) -> flo
     A larger index contrast accepts a wider cone (easier coupling) but spreads pulses more by modal
     dispersion, the trade behind multi-mode versus single-mode fibre. Returns the NA (unitless).
     """
+    require_finite(core_index, name="core_index")
+    require_finite(cladding_index, name="cladding_index")
     if core_index <= 0:
         raise _optics_refusal(
             "core_index must be positive",
@@ -420,6 +429,9 @@ def abbe_number(*, index_d: float, index_F: float, index_C: float) -> float:
     spreads them, and pairing a crown and a flint cancels the dispersion in an achromatic doublet.
     Normal dispersion means n_F > n_C. Returns the Abbe number (unitless).
     """
+    require_finite(index_d, name="index_d")
+    require_finite(index_F, name="index_F")
+    require_finite(index_C, name="index_C")
     if index_d <= 1.0:
         raise _optics_refusal(
             "index_d must exceed 1",
@@ -445,6 +457,7 @@ def lensmaker_focal_length(
     Radii are signed — positive when the centre of curvature is on the outgoing (transmitted) side —
     so a biconvex lens takes R₁ > 0 and R₂ < 0. Returns the focal length in m.
     """
+    require_finite(refractive_index, name="refractive_index")
     _check(radius1, "[length]", "radius1")
     _check(radius2, "[length]", "radius2")
     r1 = radius1.to("m").magnitude

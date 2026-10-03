@@ -137,6 +137,7 @@ def edm_material_removal_rate(
     higher duty factor cuts faster, at the cost of the rougher surface the larger discharge energy
     (:func:`edm_discharge_energy`) brings. Returns the removal rate in mm**3/min.
     """
+    require_finite(duty_factor, name="duty_factor")
     _check(erosion_coefficient, "[length]**3/([time]*[current])", "erosion_coefficient")
     _check(peak_current, "[current]", "peak_current")
     _fraction(duty_factor, "duty_factor")

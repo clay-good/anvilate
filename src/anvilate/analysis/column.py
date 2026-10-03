@@ -171,6 +171,7 @@ def euler_buckling_load(
     critical load as a force. Every quantity argument is dimension-checked and
     ``effective_length_factor`` must be positive.
     """
+    require_finite(effective_length_factor, name="effective_length_factor")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(second_moment, "[length]**4", "second_moment")
     if second_moment.magnitude <= 0:
@@ -222,6 +223,8 @@ def euler_second_moment_for_load(
     A screening size only — an intermediate (stubby) column may be governed by
     inelastic (Johnson) failure or yield instead, which this elastic form ignores.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
+    require_finite(effective_length_factor, name="effective_length_factor")
     _require(design_load, "[force]", "design_load")
     _require(length, "[length]", "length")
     if length.magnitude <= 0:
@@ -251,6 +254,12 @@ def euler_second_moment_for_load(
             subject="design_load",
             source=_LOAD_SOURCE,
         )
+    if elastic_modulus.magnitude <= 0:
+        raise _column_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     effective_length = effective_length_factor * length.pint
     inertia = (
         required_safety_factor
@@ -267,6 +276,15 @@ def radius_of_gyration(*, second_moment: Quantity, area: Quantity) -> Quantity:
     slenderness. ``second_moment`` is the least I; ``area`` the cross-section."""
     _require(second_moment, "[length]**4", "second_moment")
     _require(area, "[length]**2", "area")
+    # √(I/A) of a non-positive I or A is a complex number or a division by zero, and
+    # neither is a radius; both are section properties that are positive by definition.
+    for name, value in (("second_moment", second_moment), ("area", area)):
+        if value.magnitude <= 0:
+            raise _column_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_SECTION_SOURCE,
+            )
     r = (second_moment.pint / area.pint) ** 0.5
     converted = r.to("mm")
     return Quantity(magnitude=float(converted.magnitude), unit="mm")
@@ -307,6 +325,7 @@ def euler_critical_stress(*, elastic_modulus: Quantity, slenderness_ratio: float
     The critical load divided by the section area, expressed through the
     slenderness ratio λ. ``slenderness_ratio`` must be positive. Returns a stress.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if slenderness_ratio <= 0:
         raise _column_refusal(
@@ -476,6 +495,7 @@ def aisc_inelastic_ltb_limit(
     I-shape (the default), (h_o/2)·√(I_y/C_w) for a channel. The 0.7·F_y term is the
     flange stress net of residual stress. Returns L_r in mm.
     """
+    require_finite(section_coefficient, name="section_coefficient")
     _require(effective_radius_of_gyration, "[length]", "effective_radius_of_gyration")
     _require(torsion_constant, "[length]**4", "torsion_constant")
     _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
@@ -537,6 +557,7 @@ def aisc_elastic_ltb_stress(
     I). The √ term is the warping contribution — it makes a compact, stocky-flanged beam
     noticeably stronger than the pure-torsion estimate. Returns F_cr in MPa.
     """
+    require_finite(section_coefficient, name="section_coefficient")
     _require(unbraced_length, "[length]", "unbraced_length")
     _require(effective_radius_of_gyration, "[length]", "effective_radius_of_gyration")
     if not isinstance(torsion_constant, Quantity):
@@ -707,6 +728,9 @@ def aisc_flange_local_buckling_moment(
     compact and M_n is M_p; a slender flange (λ > λ_rf) buckles elastically — use
     :func:`aisc_slender_flange_moment`. Returns M_n in kN·m.
     """
+    require_finite(flange_slenderness, name="flange_slenderness")
+    require_finite(plastic_limit, name="plastic_limit")
+    require_finite(noncompact_limit, name="noncompact_limit")
     _require(plastic_moment, "[force] * [length]", "plastic_moment")
     _require(residual_yield_moment, "[force] * [length]", "residual_yield_moment")
     mp = plastic_moment.to("kN*m").magnitude
@@ -760,6 +784,8 @@ def aisc_slender_flange_moment(
     strength falls with the square of flange slenderness, which is why thin wide flanges are
     inefficient. Returns M_n in kN·m.
     """
+    require_finite(flange_slenderness, name="flange_slenderness")
+    require_finite(flange_buckling_coefficient, name="flange_buckling_coefficient")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(elastic_section_modulus, "[length]**3", "elastic_section_modulus")
     if elastic_section_modulus.magnitude <= 0:
@@ -824,6 +850,7 @@ def johnson_critical_stress(
     ``slenderness_ratio`` up to λ₁; above it, use :func:`euler_critical_stress`.
     ``slenderness_ratio`` must be positive.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if slenderness_ratio <= 0:
@@ -834,6 +861,12 @@ def johnson_critical_stress(
         )
     sy = yield_strength.to("MPa").magnitude
     e = elastic_modulus.to("MPa").magnitude
+    if e <= 0:
+        raise _column_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     sigma = sy * (1 - sy * slenderness_ratio**2 / (4 * pi**2 * e))
     # The parabola keeps falling past its tangent point and crosses zero at sqrt(2)*lambda_1,
     # returning a NEGATIVE critical stress -- a column that must be pulled to make it buckle.
@@ -872,6 +905,7 @@ def secant_column_max_stress(
     load at or beyond it raises rather than returning a meaningless number.
     Every quantity argument is dimension-checked and must be positive.
     """
+    require_finite(effective_length_factor, name="effective_length_factor")
     _require(load, "[force]", "load")
     _require(eccentricity, "[length]", "eccentricity")
     _require(area, "[length]**2", "area")
@@ -942,6 +976,8 @@ def perry_robertson_stress(
     λ must be positive and ``imperfection_factor`` η non-negative. Returns the mean
     stress at failure in MPa.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
+    require_finite(imperfection_factor, name="imperfection_factor")
     _require(yield_strength, "[pressure]", "yield_strength")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if slenderness_ratio <= 0:
@@ -1028,6 +1064,8 @@ def rankine_gordon_stress(
     must be non-negative and ``rankine_constant`` positive. Returns the allowable
     mean stress in MPa.
     """
+    require_finite(slenderness_ratio, name="slenderness_ratio")
+    require_finite(rankine_constant, name="rankine_constant")
     _require(crushing_stress, "[pressure]", "crushing_stress")
     if slenderness_ratio < 0:
         raise _column_refusal(
@@ -1144,6 +1182,8 @@ def aisc_effective_length_factor_braced(*, g_top: float, g_bottom: float) -> flo
     always ≤ 1 for a braced frame, so bracing always helps. Feed K·L to the slenderness and
     buckling checks. Returns the dimensionless K.
     """
+    require_finite(g_top, name="g_top")
+    require_finite(g_bottom, name="g_bottom")
     for subject, magnitude in (("g_top", g_top), ("g_bottom", g_bottom)):
         if magnitude < 0:
             raise _column_refusal(
@@ -1166,6 +1206,8 @@ def aisc_effective_length_factor_sway(*, g_top: float, g_bottom: float) -> float
     (a sway frame on pinned columns is a mechanism). The large K is why an unbraced frame's
     columns govern — bracing or a moment frame is what tames it. Returns the dimensionless K.
     """
+    require_finite(g_top, name="g_top")
+    require_finite(g_bottom, name="g_bottom")
     for subject, magnitude in (("g_top", g_top), ("g_bottom", g_bottom)):
         if magnitude < 0:
             raise _column_refusal(
@@ -1194,6 +1236,8 @@ def aisc_moment_amplifier_b1(
     Feed B₁·M_nt (plus B₂·M_lt) as the required moment of the §H1.1 interaction
     (:func:`aisc_beam_column_interaction`). Returns the dimensionless amplifier.
     """
+    require_finite(moment_gradient_coefficient, name="moment_gradient_coefficient")
+    require_finite(load_factor, name="load_factor")
     _require(required_axial_strength, "[force]", "required_axial_strength")
     _require(elastic_buckling_load, "[force]", "elastic_buckling_load")
     pr = required_axial_strength.to("kN").magnitude
@@ -1245,6 +1289,7 @@ def aisc_moment_amplifier_b2(
     it and can run away — the quantitative stability check on the frame. Returns the
     dimensionless amplifier.
     """
+    require_finite(load_factor, name="load_factor")
     _require(story_axial_load, "[force]", "story_axial_load")
     _require(story_elastic_buckling_strength, "[force]", "story_elastic_buckling_strength")
     p_story = story_axial_load.to("kN").magnitude

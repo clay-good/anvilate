@@ -99,6 +99,7 @@ def centrifugal_speed_for_g_factor(*, g_factor: float, radius: Quantity) -> Quan
     the process is dialled to — a larger-diameter mold needs a lower speed for the same G, which is
     why big pipe molds turn slowly and small rings turn fast. Returns the rotational speed in rpm.
     """
+    require_finite(g_factor, name="g_factor")
     _check(radius, "[length]", "radius")
     r = radius.to("m").magnitude
     if g_factor <= 0:

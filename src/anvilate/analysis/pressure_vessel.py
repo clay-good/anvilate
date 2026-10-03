@@ -334,6 +334,7 @@ def thin_wall_cylinder_diametral_growth(
 
     Source: Roark's *Formulas for Stress and Strain*, the thin-shell pressure formulas.
     """
+    require_finite(poisson, name="poisson")
     stress = thin_wall_cylinder(pressure=pressure, radius=radius, wall_thickness=wall_thickness)
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     if not 0 <= poisson < 0.5:
@@ -380,6 +381,7 @@ def thin_wall_thickness_for_pressure(
     size comes out about 32% thin, and this raises naming the exact Lamé form
     (:func:`thick_wall_cylinder`) instead of returning the number.
     """
+    require_finite(required_safety_factor, name="required_safety_factor")
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -438,6 +440,7 @@ def asme_cylinder_thickness(
     Requires S·E > 0.6·P (above that pressure a thin shell cannot be sized — go to a
     thick-wall design). Returns the minimum thickness in mm.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -484,6 +487,7 @@ def asme_cylinder_mawp(
     *as-built* wall (less any corrosion allowance), not the design pressure. All positive,
     E in (0, 1]. Returns the MAWP in MPa.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     _require(thickness, "[length]", "thickness")
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -522,6 +526,7 @@ def asme_ellipsoidal_head_thickness(
     2:1 shape carries pressure almost as efficiently as the cylinder. Requires
     2·S·E > 0.2·P. Returns the minimum head thickness in mm.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     return _asme_head_thickness(
         coefficient=1.0,
         denom_factor=0.2,
@@ -552,6 +557,7 @@ def asme_torispherical_head_thickness(
     shallower, cheaper-to-form shape. Requires S·E > 0.1·P. Returns the thickness in
     mm.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     return _asme_head_thickness(
         coefficient=0.885,
         denom_factor=0.1,
@@ -617,6 +623,7 @@ def asme_ellipsoidal_head_mawp(
     as-built wall (less corrosion allowance) to get the head's pressure rating. All
     positive, E in (0, 1]. Returns the MAWP in MPa.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     return _asme_head_mawp(
         denom_factor=0.2,
         numer_leading=2.0,
@@ -643,6 +650,7 @@ def asme_torispherical_head_mawp(
     E. The 0.885 knuckle coefficient makes its rating lower than an ellipsoidal head
     of the same wall. All positive, E in (0, 1]. Returns the MAWP in MPa.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     return _asme_head_mawp(
         denom_factor=0.1,
         numer_leading=1.0,
@@ -705,6 +713,7 @@ def asme_spherical_shell_thickness(
     ``allowable_stress`` S the code allowable, and ``joint_efficiency`` E the weld
     efficiency. Requires 2·S·E > 0.2·P. Returns the minimum thickness in mm.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     _require(pressure, "[pressure]", "pressure")
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -750,6 +759,7 @@ def asme_spherical_shell_mawp(
     carries at code ``allowable_stress`` S and weld ``joint_efficiency`` E. All
     positive, E in (0, 1]. Returns the MAWP in MPa.
     """
+    require_finite(joint_efficiency, name="joint_efficiency")
     _require(thickness, "[length]", "thickness")
     _require(radius, "[length]", "radius")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -793,6 +803,8 @@ def asme_conical_head_thickness(
     ``joint_efficiency`` E the weld efficiency. Requires S·E > 0.6·P. Returns the
     minimum thickness in mm.
     """
+    require_finite(half_apex_angle_deg, name="half_apex_angle_deg")
+    require_finite(joint_efficiency, name="joint_efficiency")
     _require(pressure, "[pressure]", "pressure")
     _require(diameter, "[length]", "diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -847,6 +859,8 @@ def asme_conical_head_mawp(
     weld ``joint_efficiency`` E. All positive, α in [0, 90), E in (0, 1]. Returns the
     MAWP in MPa.
     """
+    require_finite(half_apex_angle_deg, name="half_apex_angle_deg")
+    require_finite(joint_efficiency, name="joint_efficiency")
     _require(thickness, "[length]", "thickness")
     _require(diameter, "[length]", "diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -908,6 +922,8 @@ def asme_b313_pipe_wall_thickness(
     t < D/6; above that the code's thick-wall form applies. All inputs positive,
     E in (0, 1]. Returns the thickness in mm.
     """
+    require_finite(quality_factor, name="quality_factor")
+    require_finite(coefficient_y, name="coefficient_y")
     _require(pressure, "[pressure]", "pressure")
     _require(outside_diameter, "[length]", "outside_diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -973,6 +989,8 @@ def asme_b313_pipe_pressure(
     corrosion allowance) to get the pressure rating. Requires D > 2·Y·t. All positive,
     E in (0, 1]. Returns the pressure in MPa.
     """
+    require_finite(quality_factor, name="quality_factor")
+    require_finite(coefficient_y, name="coefficient_y")
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(outside_diameter, "[length]", "outside_diameter")
     _require(allowable_stress, "[pressure]", "allowable_stress")
@@ -1025,6 +1043,7 @@ def asme_b313_minimum_ordered_wall(
     thicknesses positive; the mill tolerance in [0, 1). Returns the minimum nominal
     wall in mm.
     """
+    require_finite(mill_tolerance_fraction, name="mill_tolerance_fraction")
     _require(pressure_design_thickness, "[length]", "pressure_design_thickness")
     _require(mechanical_allowance, "[length]", "mechanical_allowance")
     if not 0 <= mill_tolerance_fraction < 1:
@@ -1066,6 +1085,7 @@ def asme_b313_branch_required_reinforcement_area(
     Compare A1 to the available excess-wall and added-pad area (A2+A3+A4); the branch
     is adequately reinforced when that meets or exceeds A1. Returns A1 in mm².
     """
+    require_finite(branch_angle_deg, name="branch_angle_deg")
     _require(header_pressure_design_thickness, "[length]", "header_pressure_design_thickness")
     _require(branch_outside_diameter, "[length]", "branch_outside_diameter")
     _require(branch_wall, "[length]", "branch_wall")
@@ -1192,6 +1212,7 @@ def asme_b313_branch_reinforcement(
     A3 0.1896 in²) and two Keon Sae weldolet sheets in millimetres — each of which
     reproduces d1, d2, L4, A1, A2 and A3 exactly.
     """
+    require_finite(branch_angle_deg, name="branch_angle_deg")
     for value, name in (
         (run_outside_diameter, "run_outside_diameter"),
         (run_wall, "run_wall"),
@@ -1318,6 +1339,7 @@ def asme_b313_branch_reinforcement_scorecard(
     ``reinforcement`` of ``None`` is ``NOT_EVALUATED`` — a branch whose run pressure
     design thickness was never computed has not been screened, and ``missing`` says so.
     """
+    require_finite(required, name="required")
     if reinforcement is not None and not isinstance(reinforcement, BranchReinforcement):
         raise _pressure_vessel_refusal(
             f"reinforcement must be a BranchReinforcement; got {reinforcement!r}",
@@ -1421,6 +1443,7 @@ def asme_b313_allowable_displacement_stress_range(
     Compare the computed expansion stress range against this. S_c, S_h, and f are
     user-supplied code inputs. Returns S_A in MPa.
     """
+    require_finite(stress_range_factor, name="stress_range_factor")
     _require(cold_allowable, "[pressure]", "cold_allowable")
     _require(hot_allowable, "[pressure]", "hot_allowable")
     # f is a cyclic *reduction* factor: Table 302.3.5 tops out at 1.0 for 7,000 equivalent
@@ -1510,6 +1533,8 @@ def asme_b313_displacement_stress(
     (1.0 for straight pipe). Compare the result against the allowable range
     (:func:`asme_b313_allowable_displacement_stress_range`). Returns S_E in MPa.
     """
+    require_finite(in_plane_sif, name="in_plane_sif")
+    require_finite(out_of_plane_sif, name="out_of_plane_sif")
     _require(in_plane_moment, "[force] * [length]", "in_plane_moment")
     _require(out_of_plane_moment, "[force] * [length]", "out_of_plane_moment")
     _require(torsional_moment, "[force] * [length]", "torsional_moment")
@@ -1775,6 +1800,7 @@ def thin_wall_sphere_diametral_growth(
 
     Source: Roark's *Formulas for Stress and Strain*, the thin-shell pressure formulas.
     """
+    require_finite(poisson, name="poisson")
     stress = thin_wall_sphere_stress(
         pressure=pressure, radius=radius, wall_thickness=wall_thickness
     )
@@ -1919,6 +1945,7 @@ def cylinder_external_pressure_buckling(
     result — short cylinders with stiffening rings or closed ends hold more. Returns
     the critical external pressure in MPa.
     """
+    require_finite(poisson, name="poisson")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
@@ -1972,6 +1999,7 @@ def sphere_external_pressure_buckling(
 
     Source: Timoshenko & Gere, *Theory of Elastic Stability*, the Zoelly buckling pressure.
     """
+    require_finite(poisson, name="poisson")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
@@ -2023,6 +2051,7 @@ def cylinder_axial_buckling_stress(
     sensitive to tiny dimples, buckle at only ~15–60% of it, so design codes apply a
     steep knockdown factor. Returns the critical axial stress in MPa.
     """
+    require_finite(poisson, name="poisson")
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
@@ -2229,6 +2258,9 @@ def asme_b313_pressure_scorecard(
     A wall entirely consumed by its allowances is ``NOT_EVALUATED`` too: there is no
     pressure-carrying wall left to rate, which is not the same as a rating of zero.
     """
+    require_finite(quality_factor, name="quality_factor")
+    require_finite(coefficient_y, name="coefficient_y")
+    require_finite(mill_tolerance_fraction, name="mill_tolerance_fraction")
     if allowable is not None and not isinstance(allowable, AllowableStress):
         raise _pressure_vessel_refusal(
             f"allowable must be an AllowableStress; got {allowable!r}",
@@ -2486,6 +2518,8 @@ def asme_b313_miter_bend_pressure(
 
     Returns the maximum allowable internal pressure in MPa.
     """
+    require_finite(miter_angle, name="miter_angle")
+    require_finite(quality_factor, name="quality_factor")
     _require(allowable_stress, "[pressure]", "allowable_stress")
     _require(wall_thickness, "[length]", "wall_thickness")
     _require(mean_radius, "[length]", "mean_radius")
@@ -2643,6 +2677,7 @@ def asme_ug37_nozzle_reinforcement(
     Returns a :class:`NozzleReinforcement` naming the deficit, since that is what sizes
     a pad.
     """
+    require_finite(strength_reduction_factor, name="strength_reduction_factor")
     for value, name in (
         (shell_thickness, "shell_thickness"),
         (shell_required_thickness, "shell_required_thickness"),
@@ -2745,6 +2780,7 @@ def asme_ug37_reinforcement_scorecard(
     ``reinforcement`` of ``None`` is ``NOT_EVALUATED``: an opening whose required shell
     thickness was never computed has not been screened, and ``missing`` says so.
     """
+    require_finite(required, name="required")
     if reinforcement is not None and not isinstance(reinforcement, NozzleReinforcement):
         raise _pressure_vessel_refusal(
             f"reinforcement must be a NozzleReinforcement; got {reinforcement!r}",
@@ -3373,6 +3409,7 @@ def asme_appendix_2_flange_stress_scorecard(
     hub-credited flange: this module cannot screen one, and ``missing`` should say so
     rather than leaving a reader to read the blank as a pass.
     """
+    require_finite(required, name="required")
     if stress is not None and not isinstance(stress, LooseRingFlangeStress):
         raise _pressure_vessel_refusal(
             f"stress must be a LooseRingFlangeStress; got {stress!r}",

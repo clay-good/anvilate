@@ -342,6 +342,7 @@ def bearing_life_hours(
     ``speed`` must be a positive rotational frequency (rpm or rad/s). Returns the
     life in hours.
     """
+    require_finite(life_exponent, name="life_exponent")
     life_mrev = bearing_basic_rating_life(
         dynamic_load_rating=dynamic_load_rating,
         equivalent_load=equivalent_load,
@@ -411,6 +412,8 @@ def bearing_equivalent_dynamic_load(
     and Y non-negative — Y = 0 is the pure-radial row of the table, not a bad input.
     Returns the equivalent load in newtons.
     """
+    require_finite(radial_factor, name="radial_factor")
+    require_finite(axial_factor, name="axial_factor")
     _require(radial_load, "[force]", "radial_load")
     _require(axial_load, "[force]", "axial_load")
     fr = radial_load.to("N").magnitude
@@ -528,6 +531,7 @@ def bearing_ball_pass_frequency_outer(
     BPFO = (N_b/2)·f_r·(1 − (d/D)·cos φ). A spectral peak here (and its harmonics) is the signature
     of outer-race spalling in vibration condition monitoring. Returns the frequency in Hz.
     """
+    require_finite(contact_angle, name="contact_angle")
     fr, nb, ratio = _defect_frequency_inputs(
         rotational_frequency,
         number_of_rolling_elements,
@@ -554,6 +558,7 @@ def bearing_ball_pass_frequency_inner(
     equals N_b·f_r. A BPFI peak — usually modulated by the shaft speed because the defect moves in
     and out of the load zone — signals inner-race spalling. Returns the frequency in Hz.
     """
+    require_finite(contact_angle, name="contact_angle")
     fr, nb, ratio = _defect_frequency_inputs(
         rotational_frequency,
         number_of_rolling_elements,
@@ -583,6 +588,7 @@ def bearing_fundamental_train_frequency(
     an answer back should know which of the numbers they supplied produced it. Returns the
     frequency in Hz.
     """
+    require_finite(contact_angle, name="contact_angle")
     fr, _nb, ratio = _defect_frequency_inputs(
         rotational_frequency,
         number_of_rolling_elements,
@@ -612,6 +618,7 @@ def bearing_ball_spin_frequency(
     taken and validated for the same reason as in :func:`bearing_fundamental_train_frequency`.
     Returns the frequency in Hz.
     """
+    require_finite(contact_angle, name="contact_angle")
     _require(rolling_element_diameter, "[length]", "rolling_element_diameter")
     _require(pitch_diameter, "[length]", "pitch_diameter")
     fr, _nb, ratio = _defect_frequency_inputs(

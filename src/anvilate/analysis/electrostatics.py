@@ -133,6 +133,7 @@ def electric_field_energy_density(
     to its breakdown limit. ``electric_field`` E and ``relative_permittivity`` ε_r ≥ 1. Returns the
     energy density in J/m³.
     """
+    require_finite(relative_permittivity, name="relative_permittivity")
     _check(electric_field, "[electric_potential]/[length]", "electric_field")
     e = electric_field.to("V/m").magnitude
     if relative_permittivity < 1.0:
@@ -162,6 +163,7 @@ def coaxial_capacitance(
     near a) gives a high capacitance per metre. ``outer_radius`` must exceed ``inner_radius`` and
     ε_r ≥ 1. Returns the capacitance in farads.
     """
+    require_finite(relative_permittivity, name="relative_permittivity")
     _check(length, "[length]", "length")
     _check(inner_radius, "[length]", "inner_radius")
     _check(outer_radius, "[length]", "outer_radius")

@@ -112,6 +112,7 @@ def snap_fit_permissible_deflection(
     ``thickness`` h flexes to Y = ε·L²/(1.5·h). A longer or thinner finger clears a
     deeper undercut at the same strain. ε must be positive. Returns Y in mm.
     """
+    require_finite(permissible_strain, name="permissible_strain")
     if permissible_strain <= 0:
         raise _snapfit_refusal(
             f"permissible_strain must be positive; got {permissible_strain}",
@@ -153,6 +154,7 @@ def snap_fit_deflection_force(
     finger's spring force — what holds the latch closed and, via the ramp, sets the
     mating force. ε must be positive. Returns the force in N.
     """
+    require_finite(permissible_strain, name="permissible_strain")
     if permissible_strain <= 0:
         raise _snapfit_refusal(
             f"permissible_strain must be positive; got {permissible_strain}",
@@ -186,6 +188,8 @@ def snap_fit_mating_force(
     approaches 1 the finger locks and cannot be pushed in. α must be in (0, 90) with
     μ·tan α < 1, and μ non-negative. Returns the mating force in N.
     """
+    require_finite(insertion_angle, name="insertion_angle")
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(deflection_force, "[force]", "deflection_force")
     if not 0 < insertion_angle < 90:
         raise _snapfit_refusal(

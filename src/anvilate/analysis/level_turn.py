@@ -93,6 +93,7 @@ def load_factor_from_bank_angle(*, bank_angle: float) -> float:
     doubles it (2 g). ``bank_angle`` φ is in degrees and must lie in [0, 90); a 90° bank would
     demand infinite lift and cannot hold altitude. Returns the dimensionless load factor (≥ 1).
     """
+    require_finite(bank_angle, name="bank_angle")
     if not 0 <= bank_angle < 90:
         raise _level_turn_refusal(
             f"bank_angle (degrees) must lie in [0, 90); got {bank_angle}",
@@ -111,6 +112,7 @@ def bank_angle_for_load_factor(*, load_factor: float) -> float:
     n = 1 at zero bank; n < 1 cannot hold altitude in a bank). Returns the bank angle in degrees,
     in [0, 90).
     """
+    require_finite(load_factor, name="load_factor")
     if load_factor < 1:
         raise _level_turn_refusal(
             f"load_factor must be at least 1; got {load_factor}",
@@ -129,6 +131,7 @@ def turn_radius(*, speed: Quantity, bank_angle: float) -> Quantity:
     tightens it. ``speed`` V is the true airspeed and ``bank_angle`` φ is in degrees, in (0, 90) —
     a level turn needs some bank. Returns the turn radius in metres.
     """
+    require_finite(bank_angle, name="bank_angle")
     _check(speed, "[velocity]", "speed")
     if not 0 < bank_angle < 90:
         raise _level_turn_refusal(
@@ -151,6 +154,7 @@ def turn_rate(*, speed: Quantity, bank_angle: float) -> Quantity:
     slow. ``speed`` V is the true airspeed and ``bank_angle`` φ is in degrees, in (0, 90). Returns
     the turn rate in degrees per second.
     """
+    require_finite(bank_angle, name="bank_angle")
     _check(speed, "[velocity]", "speed")
     if not 0 < bank_angle < 90:
         raise _level_turn_refusal(
@@ -175,6 +179,7 @@ def accelerated_stall_speed(*, level_stall_speed: Quantity, load_factor: float) 
     ``level_stall_speed`` V_s is the wings-level stall speed and ``load_factor`` n is dimensionless
     and at least 1. Returns the accelerated stall speed in metres per second.
     """
+    require_finite(load_factor, name="load_factor")
     _check(level_stall_speed, "[velocity]", "level_stall_speed")
     if load_factor < 1:
         raise _level_turn_refusal(

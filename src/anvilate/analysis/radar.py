@@ -198,6 +198,7 @@ def radar_received_power(
     ``target_range`` R: P_r = P_t*G²*λ²*σ/((4π)³*R⁴). The inverse-fourth-power range dependence is
     why doubling a radar's range needs sixteen times the power. Returns the received power in W.
     """
+    require_finite(antenna_gain, name="antenna_gain")
     _check(transmit_power, "[power]", "transmit_power")
     _check(wavelength, "[length]", "wavelength")
     _check(target_cross_section, "[area]", "target_cross_section")
@@ -248,6 +249,7 @@ def radar_max_range(
     R_max = [P_t*G²*λ²*σ/((4π)³*P_min)]^(1/4). The fourth-root makes range hard to extend.
     Returns the maximum range in m.
     """
+    require_finite(antenna_gain, name="antenna_gain")
     _check(transmit_power, "[power]", "transmit_power")
     _check(wavelength, "[length]", "wavelength")
     _check(target_cross_section, "[area]", "target_cross_section")

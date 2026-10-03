@@ -766,6 +766,7 @@ def max_transverse_shear_stress(
     than in bending. ``shear_force`` must be a force and ``area`` an area;
     ``form_factor`` must be positive. Returns the shear stress in MPa.
     """
+    require_finite(form_factor, name="form_factor")
     _require(shear_force, "[force]", "shear_force")
     _require(area, "[length]**2", "area")
     if area.magnitude <= 0:
@@ -1578,6 +1579,7 @@ def aisc_rectangular_hss_shear_strength(
     and ``shear_buckling_coefficient`` k_v = 5.0 for a rectangular HSS. A stocky wall
     yields at 0.6·F_y·A_w; a slender wall buckles below it. Returns V_n in kN.
     """
+    require_finite(shear_buckling_coefficient, name="shear_buckling_coefficient")
     _require(web_height, "[length]", "web_height")
     _require(thickness, "[length]", "thickness")
     _require(yield_strength, "[pressure]", "yield_strength")
@@ -1641,6 +1643,7 @@ def aisc_web_shear_strength(
     I-shapes; that is a resistance-factor bonus, not a change to this nominal strength.)
     Returns V_n in kN.
     """
+    require_finite(shear_buckling_coefficient, name="shear_buckling_coefficient")
     _require(overall_depth, "[length]", "overall_depth")
     _require(web_thickness, "[length]", "web_thickness")
     _require(clear_web_depth, "[length]", "clear_web_depth")
@@ -1934,6 +1937,7 @@ def span_deflection_limit(*, span: Quantity, ratio: float) -> Quantity:
     :func:`deflection_scorecard` as its ``limit``. ``span`` must be a positive
     length and ``ratio`` positive. Returns the limit in mm.
     """
+    require_finite(ratio, name="ratio")
     _require(span, "[length]", "span")
     length = span.to("mm").magnitude
     if length <= 0:
@@ -3428,6 +3432,14 @@ def fixed_pinned_partial_uniform_load(
     c = extreme_fibre.pint
     e = elastic_modulus.pint
 
+    if distributed_load.magnitude == 0:
+        raise _beam_refusal(
+            "distributed_load is zero: the peak deflection of a partial uniform load is "
+            "located through R/w, which has no location on an unloaded span. Treat an "
+            "unloaded bay as a span with nothing to evaluate.",
+            subject="distributed_load",
+            source=_LOAD_SOURCE,
+        )
     moment = w * loaded**2 * (2 * length_p - loaded) ** 2 / (8 * length_p**2)
     stress = moment * c / inertia
 
@@ -4129,6 +4141,14 @@ def fixed_fixed_partial_uniform_load(
     c = extreme_fibre.pint
     e = elastic_modulus.pint
 
+    if distributed_load.magnitude == 0:
+        raise _beam_refusal(
+            "distributed_load is zero: the peak deflection of a partial uniform load is "
+            "located through R/w, which has no location on an unloaded span. Treat an "
+            "unloaded bay as a span with nothing to evaluate.",
+            subject="distributed_load",
+            source=_LOAD_SOURCE,
+        )
     moment = (
         w
         * loaded**2

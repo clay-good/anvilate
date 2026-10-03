@@ -70,6 +70,7 @@ def washburn_capillary_pressure(
     degrees, 0 for perfect wetting): Δp = 2σ·cosθ/r. A finer pore sucks harder. Returns the pressure
     in Pa.
     """
+    require_finite(contact_angle, name="contact_angle")
     _check(surface_tension, "[force]/[length]", "surface_tension")
     _check(pore_radius, "[length]", "pore_radius")
     sigma = surface_tension.to("N/m").magnitude
@@ -100,6 +101,7 @@ def washburn_penetration_length(
     float in degrees): L = √(σ·r·cosθ·t/(2μ)). The advance grows as √t, so it is fast at first and
     slows as the column lengthens. Returns the penetration length in m.
     """
+    require_finite(contact_angle, name="contact_angle")
     _check(surface_tension, "[force]/[length]", "surface_tension")
     _check(pore_radius, "[length]", "pore_radius")
     _check(viscosity, "[pressure]*[time]", "viscosity")
@@ -149,6 +151,7 @@ def washburn_penetration_time(
     ``contact_angle`` θ (a plain float in degrees): t = 2μL²/(σ·r·cosθ). It rises with the square of
     the distance, so reaching twice as far takes four times as long. Returns the time in s.
     """
+    require_finite(contact_angle, name="contact_angle")
     _check(surface_tension, "[force]/[length]", "surface_tension")
     _check(pore_radius, "[length]", "pore_radius")
     _check(viscosity, "[pressure]*[time]", "viscosity")

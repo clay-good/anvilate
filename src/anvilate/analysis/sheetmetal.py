@@ -154,6 +154,7 @@ def neutral_axis_radius(
     to 0.5 (mid-thickness); a tighter bend pushes it inward (smaller K). Returns R_n
     in mm.
     """
+    require_finite(k_factor, name="k_factor")
     r, t = _bend_geometry(inner_radius, thickness)
     if not 0 <= k_factor <= 0.5:
         raise _sheetmetal_refusal(
@@ -175,6 +176,8 @@ def bend_allowance(
     ``inner_radius`` R and ``thickness`` t the bend section, and ``k_factor`` K the
     neutral-axis position (see :func:`neutral_axis_radius`). Returns BA in mm.
     """
+    require_finite(bend_angle, name="bend_angle")
+    require_finite(k_factor, name="k_factor")
     beta = _check_bend_angle(bend_angle)
     r_n = neutral_axis_radius(
         inner_radius=inner_radius, thickness=thickness, k_factor=k_factor
@@ -190,6 +193,7 @@ def outside_setback(*, bend_angle: float, inner_radius: Quantity, thickness: Qua
     (degrees), ``inner_radius`` R, and ``thickness`` t describe the bend. Returns
     OSSB in mm.
     """
+    require_finite(bend_angle, name="bend_angle")
     beta = _check_bend_angle(bend_angle)
     r, t = _bend_geometry(inner_radius, thickness)
     return Quantity(magnitude=(r + t) * tan(radians(beta) / 2.0), unit="mm")
@@ -207,6 +211,8 @@ def bend_deduction(
     (degrees), ``inner_radius`` R, ``thickness`` t, and ``k_factor`` K describe the
     bend. Returns BD in mm (positive for the usual ductile bend).
     """
+    require_finite(bend_angle, name="bend_angle")
+    require_finite(k_factor, name="k_factor")
     ossb = outside_setback(
         bend_angle=bend_angle, inner_radius=inner_radius, thickness=thickness
     ).magnitude
@@ -235,6 +241,8 @@ def flat_pattern_length(
     (Dimensioning the flanges to the outside mould lines instead gives the same
     result as Σ(outside flanges) − n_bends·:func:`bend_deduction`.)
     """
+    require_finite(bend_angle, name="bend_angle")
+    require_finite(k_factor, name="k_factor")
     if not isinstance(flange_lengths, Sequence):
         raise _sheetmetal_refusal(
             f"flange_lengths must be a sequence, not a single value; got {flange_lengths!r}",
@@ -274,6 +282,7 @@ def minimum_bend_radius(*, thickness: Quantity, reduction_of_area_percent: float
     ``thickness`` t must be positive and r in (0, 100] %. Returns R_min in mm,
     clamped at 0 for r ≥ 50 % (where the expression would go negative).
     """
+    require_finite(reduction_of_area_percent, name="reduction_of_area_percent")
     _require(thickness, "[length]", "thickness")
     t = thickness.to("mm").magnitude
     if t <= 0:
@@ -310,6 +319,7 @@ def air_bending_force(
     press or die maker's value if it differs. All quantities must be positive.
     Returns the force in kN.
     """
+    require_finite(force_coefficient, name="force_coefficient")
     _require(ultimate_tensile_strength, "[pressure]", "ultimate_tensile_strength")
     _require(bend_length, "[length]", "bend_length")
     _require(thickness, "[length]", "thickness")
@@ -395,6 +405,7 @@ def stripping_force(*, cutting_force: Quantity, strip_factor: float = 0.1) -> Qu
     for thin stock, tight clearances, or piercing near an edge). ``cutting_force`` must
     be a positive force and k in (0, 1]. Returns the force in the units of F.
     """
+    require_finite(strip_factor, name="strip_factor")
     _require(cutting_force, "[force]", "cutting_force")
     f = cutting_force.to("kN").magnitude
     if f <= 0:
@@ -473,6 +484,7 @@ def deep_draw_force(
     blank-holder work. The bracket must be positive (a draw ratio above C). Returns the
     force in kN.
     """
+    require_finite(draw_constant, name="draw_constant")
     _require(punch_diameter, "[length]", "punch_diameter")
     _require(thickness, "[length]", "thickness")
     _require(ultimate_tensile_strength, "[pressure]", "ultimate_tensile_strength")
@@ -558,6 +570,7 @@ def sprung_bend_radius(*, initial_bend_radius: Quantity, springback_factor: floa
     the final radius is always larger than the formed one — to end up at a target radius you form to
     a tighter R_i, the inverse of this relation. Returns the sprung radius in mm.
     """
+    require_finite(springback_factor, name="springback_factor")
     _require(initial_bend_radius, "[length]", "initial_bend_radius")
     r = initial_bend_radius.to("mm").magnitude
     if r <= 0:
@@ -591,6 +604,7 @@ def sprung_bend_angle(
     springs toward flat — which is how much a press brake must overbend to hit the target angle.
     Returns the sprung included angle in degrees.
     """
+    require_finite(initial_bend_angle, name="initial_bend_angle")
     theta_i = _check_bend_angle(initial_bend_angle)
     r_i, t = _bend_geometry(initial_bend_radius, thickness, "initial_bend_radius")
     _require(sprung_bend_radius, "[length]", "sprung_bend_radius")

@@ -70,6 +70,7 @@ def valve_flow_rate(
     higher SG) flows less for the same Cv and drop. Cv is positive, SG positive (1.0 for water).
     Returns the flow rate in US gallons per minute.
     """
+    require_finite(flow_coefficient, name="flow_coefficient")
     _check(pressure_drop, "[pressure]", "pressure_drop")
     if flow_coefficient <= 0:
         raise _control_valve_refusal(

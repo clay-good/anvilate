@@ -75,6 +75,7 @@ def rolling_resistance_force(
     on tarmac, higher on gravel or soft ground), F_r = C_rr·m·g. It is roughly independent of speed,
     so it dominates the road load at low speed and in stop-start driving. Returns the force in N.
     """
+    require_finite(rolling_resistance_coefficient, name="rolling_resistance_coefficient")
     _check(vehicle_mass, "[mass]", "vehicle_mass")
     m = vehicle_mass.to("kg").magnitude
     if m <= 0:
@@ -100,6 +101,7 @@ def grade_resistance_force(*, vehicle_mass: Quantity, grade_angle: float) -> Qua
     about a tenth of the vehicle's weight to the pull, which is why hill-climb sets the peak duty.
     Returns the force in N (positive uphill).
     """
+    require_finite(grade_angle, name="grade_angle")
     _check(vehicle_mass, "[mass]", "vehicle_mass")
     m = vehicle_mass.to("kg").magnitude
     if m <= 0:

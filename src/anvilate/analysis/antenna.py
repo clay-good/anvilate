@@ -107,6 +107,8 @@ def received_power(
     (lambda/(4*pi*d))^2 for ``distance`` d and ``wavelength`` lambda. It is the heart of a link
     budget, telling whether the signal clears the receiver's sensitivity. Returns the power in W.
     """
+    require_finite(transmit_gain, name="transmit_gain")
+    require_finite(receive_gain, name="receive_gain")
     _check(transmit_power, "[power]", "transmit_power")
     _check(distance, "[length]", "distance")
     _check(wavelength, "[length]", "wavelength")
@@ -151,6 +153,8 @@ def max_line_of_sight_range(
     ``wavelength`` lambda. It is the reach a free-space link holds before the signal drops. Returns
     the range in m.
     """
+    require_finite(transmit_gain, name="transmit_gain")
+    require_finite(receive_gain, name="receive_gain")
     _check(transmit_power, "[power]", "transmit_power")
     _check(receiver_sensitivity, "[power]", "receiver_sensitivity")
     _check(wavelength, "[length]", "wavelength")
@@ -235,6 +239,7 @@ def aperture_antenna_gain(
     so a big dish at high frequency is very directive. Returns the linear power gain (10*log10 for
     dBi).
     """
+    require_finite(efficiency, name="efficiency")
     _check(aperture_area, "[area]", "aperture_area")
     _check(wavelength, "[length]", "wavelength")
     a = aperture_area.to("m**2").magnitude
@@ -287,6 +292,8 @@ def dish_diameter_for_gain(
     ``efficiency``, from G = efficiency*(pi*D/lambda)^2: D = (lambda/pi)*sqrt(G/efficiency). It
     turns a link's required gain into a physical antenna size. Returns the diameter in m.
     """
+    require_finite(gain, name="gain")
+    require_finite(efficiency, name="efficiency")
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if gain <= 0:
@@ -311,6 +318,7 @@ def effective_aperture(*, gain: float, wavelength: Quantity) -> Quantity:
     equation uses on the receive side (the received power is the incident power density times A_e).
     A higher-gain antenna gathers from a larger effective area. Returns the effective aperture (m²).
     """
+    require_finite(gain, name="gain")
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if gain <= 0:
@@ -333,6 +341,7 @@ def aperture_efficiency(*, gain: float, physical_area: Quantity, wavelength: Qua
     exceed 1 (the effective area cannot beat the physical area). Returns the dimensionless
     efficiency.
     """
+    require_finite(gain, name="gain")
     _check(physical_area, "[area]", "physical_area")
     _check(wavelength, "[length]", "wavelength")
     a_phys = physical_area.to("m**2").magnitude

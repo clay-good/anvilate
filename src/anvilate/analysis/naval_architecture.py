@@ -244,6 +244,7 @@ def ittc_friction_coefficient(*, reynolds_number: float) -> float:
 
     Source: Tupper, *Introduction to Naval Architecture*, the ITTC-1957 correlation line.
     """
+    require_finite(reynolds_number, name="reynolds_number")
     if reynolds_number < 1.0e5:
         raise _naval_architecture_refusal(
             f"reynolds_number must be at least 1e5 for the ITTC-57 correlation, which is fitted "

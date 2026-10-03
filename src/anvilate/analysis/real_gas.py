@@ -106,6 +106,7 @@ def real_gas_molar_volume(
     volume the ideal-gas law would get wrong — the quantity that sizes a real high-pressure cylinder
     or receiver. Z must be positive and the temperature absolute. Returns the molar volume (m³/mol).
     """
+    require_finite(compressibility_factor, name="compressibility_factor")
     _check(pressure, "[pressure]", "pressure")
     _check(temperature, "[temperature]", "temperature")
     p = pressure.to("Pa").magnitude

@@ -145,6 +145,7 @@ def equivalent_noise_temperature(
     antennas and cryogenic low-noise receivers, where noise is naturally spoken of as a temperature
     (a 1 dB figure is about 75 K). Returns the equivalent noise temperature in K.
     """
+    require_finite(noise_factor, name="noise_factor")
     if noise_factor < 1.0:
         raise _noise_figure_refusal(
             "noise_factor must be at least 1", subject="noise_factor", source=_STAGE_SOURCE
@@ -212,6 +213,8 @@ def receiver_minimum_detectable_signal(
 
     Returns the minimum detectable power in W.
     """
+    require_finite(noise_factor, name="noise_factor")
+    require_finite(required_snr, name="required_snr")
     _check(bandwidth, "1/[time]", "bandwidth")
     t0 = _REFERENCE_TEMPERATURE
     if noise_temperature is not None:

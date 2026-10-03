@@ -73,6 +73,7 @@ def maximum_draft(*, roll_radius: Quantity, friction_coefficient: float) -> Quan
     single pass for more reduction than this and the rolls spin against a strip they cannot grab —
     the check that a proposed pass schedule is even feasible. Returns the maximum draft as a length.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _check(roll_radius, "[length]", "roll_radius")
     r = roll_radius.to("mm").magnitude
     if r <= 0:

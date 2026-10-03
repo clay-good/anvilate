@@ -132,6 +132,7 @@ def solar_cell_max_power(
     V_mp*I_mp at the maximum-power point, the operating point a maximum-power-point tracker holds.
     Returns the power in W.
     """
+    require_finite(fill_factor, name="fill_factor")
     _check(open_circuit_voltage, "[electric_potential]", "open_circuit_voltage")
     _check(short_circuit_current, "[current]", "short_circuit_current")
     v_oc = open_circuit_voltage.to("V").magnitude
@@ -218,6 +219,7 @@ def solar_cell_open_circuit_voltage(
     roof costs real output, and the sign of that coefficient is the single most-missed fact in
     array sizing. Temperature must be absolute. Returns the open-circuit voltage in V.
     """
+    require_finite(ideality_factor, name="ideality_factor")
     _check(photocurrent, "[current]", "photocurrent")
     _check(saturation_current, "[current]", "saturation_current")
     _check(temperature, "[temperature]", "temperature")

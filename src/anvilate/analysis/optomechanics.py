@@ -543,6 +543,8 @@ def athermal_focus_scorecard(
     focal shift follows Jamieson (1981); every glass property is the caller's, stated at the
     wavelength and temperature range the design runs at.
     """
+    require_finite(f_number, name="f_number")
+    require_finite(refractive_index, name="refractive_index")
     shift = thermal_focal_shift(
         focal_length=focal_length,
         refractive_index=refractive_index,
@@ -1012,6 +1014,7 @@ def tilted_plate_image_shift(
     :func:`decenter_line_of_sight` computes. The same plate adds astigmatism in a converging
     beam, and this function does not screen for it.
     """
+    require_finite(refractive_index, name="refractive_index")
     s = _plate_normal_shift(thickness, refractive_index, tilt)
     return Quantity(magnitude=s * sin(_radians(tilt, "tilt")) * 1e6, unit="µm")
 
@@ -1026,6 +1029,7 @@ def tilted_plate_focus_shift(
     s = t·[1 − cosθ/√(n² − sin²θ)] (Smith, Modern Optical Engineering). The difference is what
     enters a focus budget as a contributor. Returned in µm, positive away from the plate.
     """
+    require_finite(refractive_index, name="refractive_index")
     s = _plate_normal_shift(thickness, refractive_index, tilt)
     n = refractive_index
     nominal = thickness.to("m").magnitude * (n - 1.0) / n
@@ -2429,6 +2433,7 @@ def window_pressure_opd(
     directions. The value is the error the source states, not an RMS;
     :func:`window_pressure_budget_contributors` bounds the RMS a budget adds from it.
     """
+    require_finite(refractive_index, name="refractive_index")
     _check(differential, "[pressure]", "differential")
     _check(diameter, "[length]", "diameter")
     _check(thickness, "[length]", "thickness")
@@ -2482,6 +2487,8 @@ def window_pressure_focus_shift(
     Thin-plate theory holds while the bow is under half the thickness, and a bow beyond it
     is refused rather than extrapolated.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
+    require_finite(refractive_index, name="refractive_index")
     _check(image_distance, "[length]", "image_distance")
     distance = image_distance.to("m").magnitude
     if not distance > 0:
@@ -2546,6 +2553,8 @@ def window_pressure_budget_contributors(
     declared is refused by name, because a contributor left out of a budget is one the
     budget calls zero.
     """
+    require_finite(poisson_ratio, name="poisson_ratio")
+    require_finite(refractive_index, name="refractive_index")
     for label, value, dimension in (
         ("diameter", diameter, "[length]"),
         ("thickness", thickness, "[length]"),
@@ -3174,6 +3183,8 @@ def outgassing_census_scorecard(
     not evaluated, naming it, and the entry states how many materials it examined, so a
     clean census is distinguishable from an empty one.
     """
+    require_finite(total_mass_loss_limit, name="total_mass_loss_limit")
+    require_finite(condensable_limit, name="condensable_limit")
     for label, value in (
         ("total_mass_loss_limit", total_mass_loss_limit),
         ("condensable_limit", condensable_limit),

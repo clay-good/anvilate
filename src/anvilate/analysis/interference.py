@@ -184,6 +184,8 @@ def interference_fit(
     Every length/pressure argument is dimension-checked; D must exceed d, which
     must exceed any bore.
     """
+    require_finite(hub_poisson, name="hub_poisson")
+    require_finite(shaft_poisson, name="shaft_poisson")
     _require(radial_interference, "[length]", "radial_interference")
     radius, hub_ratio, shaft_ratio, compliance = _fit_geometry(
         interface_diameter=interface_diameter,
@@ -227,6 +229,8 @@ def interference_for_contact_pressure(
     for the diametral value a fit table lists); ``contact_pressure`` must be a
     pressure.
     """
+    require_finite(hub_poisson, name="hub_poisson")
+    require_finite(shaft_poisson, name="shaft_poisson")
     _require(contact_pressure, "[pressure]", "contact_pressure")
     radius, _hub_ratio, _shaft_ratio, compliance = _fit_geometry(
         interface_diameter=interface_diameter,
@@ -256,6 +260,7 @@ def interference_axial_capacity(
     :func:`interference_fit`, ``interface_diameter`` d is the mating diameter, and
     ``engagement_length`` L the axial length in contact. Returns the force in N.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     _require(contact_pressure, "[pressure]", "contact_pressure")
     _require(interface_diameter, "[length]", "interface_diameter")
     if interface_diameter.magnitude <= 0:
@@ -298,6 +303,7 @@ def interference_torque_capacity(
     torque is T = μ·p·π·d²·L/2 — the functional limit of a shrink-fit coupling.
     Arguments as for :func:`interference_axial_capacity`. Returns the torque in N·m.
     """
+    require_finite(friction_coefficient, name="friction_coefficient")
     axial = interference_axial_capacity(
         contact_pressure,
         interface_diameter=interface_diameter,

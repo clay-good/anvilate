@@ -115,6 +115,7 @@ def archard_wear_volume(
     ``hardness`` H (as a stress). K, and the positive quantities, must be positive.
     Returns the worn volume in mm³.
     """
+    require_finite(wear_coefficient, name="wear_coefficient")
     k = _check_coefficient(wear_coefficient)
     _require(load, "[force]", "load")
     _require(sliding_distance, "[length]", "sliding_distance")
@@ -146,6 +147,7 @@ def archard_wear_depth(
     number a running clearance, a liner thickness, or a brush length is checked against.
     All positive. Returns the wear depth in mm.
     """
+    require_finite(wear_coefficient, name="wear_coefficient")
     k = _check_coefficient(wear_coefficient)
     _require(contact_pressure, "[pressure]", "contact_pressure")
     _require(sliding_distance, "[length]", "sliding_distance")
@@ -177,6 +179,7 @@ def sliding_distance_for_wear_depth(
     runs before it wears past its allowance. Divide by the sliding speed for a time to
     replacement. All positive. Returns the sliding distance in m.
     """
+    require_finite(wear_coefficient, name="wear_coefficient")
     k = _check_coefficient(wear_coefficient)
     _require(contact_pressure, "[pressure]", "contact_pressure")
     _require(allowable_depth, "[length]", "allowable_depth")

@@ -78,6 +78,7 @@ def buck_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quanti
     always at or below the input, and D is the single control knob a feedback loop turns. Assumes an
     ideal, continuous-conduction converter. Returns the output voltage in V.
     """
+    require_finite(duty_cycle, name="duty_cycle")
     _check(input_voltage, "[electric_potential]", "input_voltage")
     v_in = input_voltage.to("V").magnitude
     if not 0.0 < duty_cycle < 1.0:
@@ -125,6 +126,7 @@ def boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> Quant
     1 (where losses and stress make the ideal relation optimistic). Assumes an ideal,
     continuous-conduction converter. Returns the output voltage in V.
     """
+    require_finite(duty_cycle, name="duty_cycle")
     _check(input_voltage, "[electric_potential]", "input_voltage")
     v_in = input_voltage.to("V").magnitude
     if not 0.0 < duty_cycle < 1.0:
@@ -172,6 +174,7 @@ def buck_boost_output_voltage(*, input_voltage: Quantity, duty_cycle: float) -> 
     polarity). It steps down for D < 0.5 and up for D > 0.5, so one topology spans both. Assumes an
     ideal, continuous-conduction converter. Returns the output voltage magnitude in V.
     """
+    require_finite(duty_cycle, name="duty_cycle")
     _check(input_voltage, "[electric_potential]", "input_voltage")
     v_in = input_voltage.to("V").magnitude
     if not 0.0 < duty_cycle < 1.0:
@@ -343,6 +346,7 @@ def buck_minimum_inductance_for_ccm(
     the output-voltage relation changes and control gets harder; a light load (small I_out) raises
     the bar. Returns the minimum inductance in H.
     """
+    require_finite(duty_cycle, name="duty_cycle")
     _check(output_voltage, "[electric_potential]", "output_voltage")
     _check(load_current, "[current]", "load_current")
     _check(switching_frequency, "1/[time]", "switching_frequency")

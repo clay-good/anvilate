@@ -18,7 +18,7 @@ from enum import StrEnum
 from math import sqrt
 
 from ..refusal import RefusalError, Remedy
-from ..units import Quantity
+from ..units import Quantity, require_finite
 
 _AISC_MATERIAL_SOURCE = "the governing steel material specification or certified property record"
 _AISC_SECTION_SOURCE = "the selected section table or verified cross-section calculation"
@@ -148,6 +148,9 @@ def classify_flexural_element(
     and SLENDER when λ > λ_r. The section's overall class is the worse of its flange and web.
     Returns the :class:`CompactnessClass`.
     """
+    require_finite(slenderness, name="slenderness")
+    require_finite(plastic_limit, name="plastic_limit")
+    require_finite(noncompact_limit, name="noncompact_limit")
     if slenderness < 0:
         raise _aisc_compactness_refusal(
             "slenderness must be non-negative",
