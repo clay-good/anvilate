@@ -7031,6 +7031,39 @@ def test_gerber_compressive_mean_falls_back_to_endurance_ratio():
     assert n == pytest.approx(200 / 80, rel=1e-9)
 
 
+@pytest.mark.parametrize("mean", ("-50 MPa", "-100 MPa", "-400 MPa"))
+@pytest.mark.parametrize("criterion", ("goodman_safety_factor", "soderberg_safety_factor"))
+def test_a_compressive_mean_earns_no_goodman_or_soderberg_credit(criterion, mean):
+    # Literal Goodman read n = 8.0 at -50 MPa and infinite life at -100 MPa for a
+    # component whose amplitude alone gives n = Se / sigma_a = 4.0, as Gerber returns.
+    from anvilate import analysis
+
+    strength = {
+        "goodman_safety_factor": "ultimate_strength",
+        "soderberg_safety_factor": "yield_strength",
+    }
+    n = getattr(analysis, criterion)(
+        alternating_stress=_q("50 MPa"),
+        mean_stress=_q(mean),
+        endurance_limit=_q("200 MPa"),
+        **{strength[criterion]: _q("400 MPa")},
+    )
+    assert n == pytest.approx(200 / 50, rel=1e-9)
+
+
+def test_a_compressive_mean_leaves_the_goodman_equivalent_stress_at_the_amplitude():
+    # 1 - (-200)/400 = 1.5 used to shrink 60 MPa to 40 MPa: credit the Goodman safety
+    # factor refuses for the same cycle.
+    from anvilate.analysis import goodman_equivalent_reversed_stress
+
+    r = goodman_equivalent_reversed_stress(
+        alternating_stress=_q("60 MPa"),
+        mean_stress=_q("-200 MPa"),
+        ultimate_strength=_q("400 MPa"),
+    )
+    assert r.to("MPa").magnitude == pytest.approx(60.0, rel=1e-12)
+
+
 def test_gerber_scorecard_honours_no_silent_green():
     from anvilate.scorecard import CheckStatus
 

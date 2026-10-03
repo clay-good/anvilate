@@ -475,7 +475,10 @@ def goodman_equivalent_reversed_stress(
     :func:`goodman_safety_factor`. ``alternating_stress`` σ_a is the amplitude,
     ``mean_stress`` σ_m the mean (tension positive), and ``ultimate_strength`` S_u the
     material's ultimate. A fully-reversed cycle (σ_m = 0) returns σ_a unchanged; a
-    tensile mean inflates it toward infinity as σ_m approaches S_u. Compared with
+    tensile mean inflates it toward infinity as σ_m approaches S_u. A compressive mean
+    earns no credit and also returns σ_a: extended into compression, the Goodman line
+    shrinks the equivalent stress, which :func:`goodman_safety_factor` does not allow
+    either (Shigley §6-12). Morrow, drawn from strain-life data, does credit it. Compared with
     :func:`smith_watson_topper_stress`, this is the Goodman rather than the SWT
     mean-stress model. σ_a must be non-negative and σ_m below S_u (a mean at the
     ultimate has zero fatigue life). Returns the equivalent reversed stress in MPa.
@@ -502,6 +505,9 @@ def goodman_equivalent_reversed_stress(
             subject="mean_stress and ultimate_strength",
             source=_LOAD_SOURCE,
         )
+    if sm <= 0:
+        # No credit for a compressive mean, as in `goodman_safety_factor`.
+        return Quantity(magnitude=sa, unit="MPa")
     return Quantity(magnitude=sa / (1.0 - sm / su), unit="MPa")
 
 
@@ -557,8 +563,14 @@ def goodman_safety_factor(
     ``alternating_stress`` is the stress amplitude σ_a (non-negative), ``mean_stress``
     the mean σ_m (tension positive), ``endurance_limit`` S_e and
     ``ultimate_strength`` S_u the material strengths (both positive). All must be
-    stresses. Returns ``inf`` when the combination predicts no fatigue failure
-    (a non-positive Goodman sum, e.g. a fully-compressive mean with no amplitude).
+    stresses.
+
+    A non-positive (compressive or zero) mean earns no fatigue credit, as in
+    :func:`gerber_safety_factor`: the screen falls back to the amplitude-only ratio
+    n = S_e/σ_a. Applied literally, the Goodman line credits a compressive mean: with
+    σ_a = 50, S_e = 200, S_u = 400 MPa it reads n = 8.0 at σ_m = −50 MPa and *infinite
+    life* at −100 MPa, against S_e/σ_a = 4.0 (Shigley §6-12). Returns ``inf`` only
+    when there is no amplitude and no tensile mean.
     """
     sa = _require_stress(alternating_stress, "alternating_stress")
     sm = _require_stress(mean_stress, "mean_stress")
@@ -577,8 +589,10 @@ def goodman_safety_factor(
                 subject=subject,
                 source=_MATERIAL_SOURCE,
             )
-    goodman_sum = sa / se + sm / su
-    return inf if goodman_sum <= 0 else 1.0 / goodman_sum
+    if sm <= 0:
+        # No credit for a compressive/zero mean: amplitude governs.
+        return inf if sa == 0 else se / sa
+    return 1.0 / (sa / se + sm / su)
 
 
 #: Why a fatigue check with no endurance limit did not run, and where one comes from.
@@ -651,8 +665,10 @@ def soderberg_safety_factor(
     from first-cycle yielding too. ``alternating_stress`` is the amplitude σ_a
     (non-negative), ``mean_stress`` the mean σ_m (tension positive), and
     ``endurance_limit`` S_e / ``yield_strength`` S_y the material strengths (both
-    positive). All must be stresses. Returns ``inf`` when the combination predicts
-    no fatigue failure (a non-positive Soderberg sum).
+    positive). All must be stresses. A non-positive (compressive or zero) mean
+    earns no fatigue credit: the screen falls back to n = S_e/σ_a, as
+    :func:`goodman_safety_factor` and :func:`gerber_safety_factor` do. Returns ``inf``
+    only when there is no amplitude and no tensile mean.
     """
     sa = _require_stress(alternating_stress, "alternating_stress")
     sm = _require_stress(mean_stress, "mean_stress")
@@ -671,8 +687,11 @@ def soderberg_safety_factor(
                 subject=subject,
                 source=_MATERIAL_SOURCE,
             )
-    soderberg_sum = sa / se + sm / sy
-    return inf if soderberg_sum <= 0 else 1.0 / soderberg_sum
+    if sm <= 0:
+        # No credit for a compressive/zero mean, as for Goodman and Gerber: a literal
+        # Soderberg sum lets the compression cancel the amplitude, up to infinite life.
+        return inf if sa == 0 else se / sa
+    return 1.0 / (sa / se + sm / sy)
 
 
 def soderberg_scorecard(
