@@ -101,7 +101,7 @@ def _crashes() -> tuple[list[str], int]:
     return crashes, probes
 
 
-def _non_finite_outcomes() -> tuple[list[str], int]:
+def _non_finite_outcomes(only: str | None = None) -> tuple[list[str], int]:
     """Every number set to NaN and to infinity in turn: refused, reported, never a PASS.
 
     A YAML document can write `.nan` and `.inf`, and a Python caller can pass either.
@@ -116,6 +116,8 @@ def _non_finite_outcomes() -> tuple[list[str], int]:
     registry = element_registry()
     problems, probes = [], 0
     for tag, element_type, document in _corpus():
+        if only is not None and element_type != only:
+            continue
         model, screen = registry[element_type]
         parameters = inspect.signature(screen).parameters
         keywords = {"required_safety_factor": 2.0} if "required_safety_factor" in parameters else {}
@@ -149,11 +151,17 @@ def test_no_element_passes_or_crashes_on_a_non_finite_number():
 
 
 def test_the_non_finite_sweep_finds_the_pass_an_unchecked_float_lets_through(monkeypatch):
-    """The adversary: without the plain-number finiteness rule, the feeder passes again."""
+    """The adversary: without the plain-number finiteness rule, the feeder passes again.
+
+    Only the feeder is screened. Every entry the suite builds is collected for the
+    session-end rendering gates, so an adversary that let infinities into every element
+    would leave its deliberately broken cards behind for those gates to report as the
+    library's: it did, as `n = 100.2 kN / inf kN` on a beam-column card.
+    """
     import anvilate.packs._guarded as guarded
 
     monkeypatch.setattr(guarded, "isfinite", lambda value: True)
-    problems, _probes = _non_finite_outcomes()
+    problems, _probes = _non_finite_outcomes(only="feeder")
     assert any("drop_limit_percent = inf -> a PASS card" in p for p in problems), problems
 
 
