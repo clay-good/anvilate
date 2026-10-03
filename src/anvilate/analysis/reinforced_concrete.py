@@ -169,7 +169,7 @@ def _reject_beyond_the_steel(
             f"steel is no longer in tension — the nominal-moment expression assumes it has "
             f"yielded in tension. This is an over-reinforced or mis-entered section; "
             f"screen it as such rather than reading a moment off it",
-            subject="reinforcement layout and section depth",
+            subject="tension_steel_area and effective_depth",
             source=_RC_REINFORCEMENT_SOURCE,
         )
 
@@ -260,7 +260,10 @@ def rc_t_beam_moment(
     if min(a_s, fy, fc, bf, bw, hf, d) <= 0:
         raise _rc_refusal(
             "all areas, strengths, and dimensions must be positive",
-            subject="T-beam reinforcement, strengths, and dimensions",
+            subject=(
+                "tension_steel_area, steel_yield, concrete_strength, flange_width, web_width, "
+                "flange_thickness, and effective_depth"
+            ),
             source=_RC_SECTION_SOURCE,
         )
     if bw > bf:
@@ -281,7 +284,7 @@ def rc_t_beam_moment(
     if a_sw <= 0:
         raise _rc_refusal(
             "the flange overhang alone balances the steel; check the geometry",
-            subject="T-beam reinforcement and flange geometry",
+            subject="tension_steel_area, flange_width, web_width, and flange_thickness",
             source=_RC_SECTION_SOURCE,
         )
     a_w = a_sw * fy / (_ACI_STRESS_BLOCK_FACTOR * fc * bw)
@@ -341,7 +344,10 @@ def rc_doubly_reinforced_moment(
     if min(a_s, a_sp, fy, fc, b, d, dp, es) <= 0:
         raise _rc_refusal(
             "all areas, strengths, and dimensions must be positive",
-            subject="doubly reinforced section inputs",
+            subject=(
+                "tension_steel_area, compression_steel_area, steel_yield, concrete_strength, "
+                "beam_width, effective_depth, compression_steel_depth, and steel_modulus"
+            ),
             source=_RC_SECTION_SOURCE,
         )
     if not dp < d:
@@ -412,7 +418,9 @@ def rc_tension_steel_for_moment(
     if mn <= 0 or fy <= 0 or fc <= 0 or b <= 0 or d <= 0:
         raise _rc_refusal(
             "all inputs must be positive",
-            subject="required moment, material strengths, and beam geometry",
+            subject=(
+                "required_moment, steel_yield, concrete_strength, beam_width, and effective_depth"
+            ),
             source=_RC_SECTION_SOURCE,
         )
     # T² − (1.7·f'c·b·d)·T + 1.7·f'c·b·M_n = 0, from M_n = T·d − T²/(1.7·f'c·b).
@@ -520,7 +528,7 @@ def rc_shear_reinforcement_strength(
     if av <= 0 or fyt <= 0 or d <= 0 or s <= 0:
         raise _rc_refusal(
             "all inputs must be positive",
-            subject="stirrup reinforcement and section dimensions",
+            subject="stirrup_area, stirrup_yield, effective_depth, and stirrup_spacing",
             source=_RC_REINFORCEMENT_SOURCE,
         )
     vs_n = av * fyt * d / s
@@ -564,7 +572,7 @@ def rc_stirrup_spacing_for_shear(
     if vs <= 0 or av <= 0 or fyt <= 0 or d <= 0:
         raise _rc_refusal(
             "all inputs must be positive",
-            subject="required shear and stirrup reinforcement inputs",
+            subject="required_shear_strength, stirrup_area, stirrup_yield, and effective_depth",
             source=_RC_REINFORCEMENT_SOURCE,
         )
     # The strength spacing alone is unbounded as V_s falls, and at a wide spacing no stirrup
@@ -607,7 +615,7 @@ def rc_column_axial_strength(
     if ag <= 0 or ast <= 0 or fc <= 0 or fy <= 0:
         raise _rc_refusal(
             "gross_area, steel_area, concrete_strength, and steel_yield must be positive",
-            subject="column geometry, reinforcement, and strengths",
+            subject="gross_area, steel_area, concrete_strength, and steel_yield",
             source=_RC_SECTION_SOURCE,
         )
     if ast >= ag:
@@ -670,7 +678,11 @@ def rc_column_balanced_point(
     if min(b, h, d, dp, a_s, a_sp, fc, fy, es) <= 0:
         raise _rc_refusal(
             "all dimensions, areas, and material properties must be positive",
-            subject="column geometry, reinforcement, and material properties",
+            subject=(
+                "width, total_depth, tension_steel_depth, compression_steel_depth, "
+                "tension_steel_area, compression_steel_area, concrete_strength, steel_yield, and "
+                "steel_modulus"
+            ),
             source=_RC_SECTION_SOURCE,
         )
     if not dp < d < h:
@@ -946,7 +958,7 @@ def rc_minimum_flexural_steel(
     if fc <= 0 or fy <= 0 or b <= 0 or d <= 0:
         raise _rc_refusal(
             "all inputs must be positive",
-            subject="minimum flexural reinforcement inputs",
+            subject="concrete_strength, steel_yield, beam_width, and effective_depth",
             source=_RC_SECTION_SOURCE,
         )
     ratio = max(0.25 * sqrt(fc) / fy, 1.4 / fy)
@@ -981,7 +993,7 @@ def rc_maximum_tension_controlled_steel(
     if fc <= 0 or fy <= 0 or b <= 0 or d <= 0:
         raise _rc_refusal(
             "all inputs must be positive",
-            subject="tension-controlled reinforcement inputs",
+            subject="concrete_strength, steel_yield, beam_width, and effective_depth",
             source=_RC_SECTION_SOURCE,
         )
     beta1 = rc_beta1(concrete_strength=concrete_strength)
@@ -1122,7 +1134,7 @@ def rc_effective_moment_of_inertia(
     if icr <= 0 or ig <= 0 or mcr <= 0 or ma <= 0:
         raise _rc_refusal(
             "all inertias and moments must be positive",
-            subject="section inertias and moment inputs",
+            subject="cracked_inertia, gross_inertia, cracking_moment, and applied_moment",
             source=_RC_SERVICE_SOURCE,
         )
     if icr > ig:

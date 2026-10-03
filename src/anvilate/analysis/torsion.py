@@ -234,7 +234,7 @@ def polar_second_moment_hollow(*, outer_diameter: Quantity, inner_diameter: Quan
         raise _torsion_refusal(
             f"inner_diameter ({inner_diameter}) must be non-negative and below "
             f"outer_diameter ({outer_diameter})",
-            subject="inner and outer shaft diameters",
+            subject="inner_diameter and outer_diameter",
             source=_SHAFT_GEOMETRY_SOURCE,
         )
     return _as_quantity(pi * (outer_diameter.pint**4 - inner_diameter.pint**4) / 32, "mm**4")
@@ -434,7 +434,7 @@ def shaft_diameter_de_goodman(
     if bending_fatigue_factor <= 0 or torsion_fatigue_factor <= 0:
         raise _torsion_refusal(
             "the fatigue stress-concentration factors must be positive",
-            subject="fatigue stress-concentration factors",
+            subject="bending_fatigue_factor and torsion_fatigue_factor",
             source=_SHAFT_DESIGN_SOURCE,
         )
     if required_safety_factor <= 0:
@@ -510,7 +510,7 @@ def shaft_diameter_de_gerber(
     if bending_fatigue_factor <= 0 or torsion_fatigue_factor <= 0:
         raise _torsion_refusal(
             "the fatigue stress-concentration factors must be positive",
-            subject="fatigue stress-concentration factors",
+            subject="bending_fatigue_factor and torsion_fatigue_factor",
             source=_SHAFT_DESIGN_SOURCE,
         )
     if required_safety_factor <= 0:
@@ -525,7 +525,7 @@ def shaft_diameter_de_gerber(
         raise _torsion_refusal(
             "the alternating load term is zero — there is no fatigue to size for; "
             "use the static shaft_diameter_for_bending_torsion instead",
-            subject="alternating shaft load",
+            subject="alternating_bending_moment and alternating_torque",
             source=_SHAFT_LOAD_SOURCE,
         )
     root = 1.0 + sqrt(1.0 + (2.0 * b * se / (a * sut)) ** 2)
@@ -696,7 +696,7 @@ def _rectangular_tube_median(width: Quantity, height: Quantity, wall_thickness: 
         raise _torsion_refusal(
             f"wall_thickness ({wall_thickness}) must be under half of both the width "
             f"({width}) and the height ({height}) to leave a cavity",
-            subject="rectangular tube wall and outer dimensions",
+            subject="width, height, and wall_thickness",
             source=_SHAFT_GEOMETRY_SOURCE,
         )
     # Median (wall-centreline) side lengths: one half-wall in from each outer face.
@@ -1015,14 +1015,14 @@ def _elliptical_axes(semi_major_axis: Quantity, semi_minor_axis: Quantity) -> tu
     if a <= 0 or b <= 0:
         raise _torsion_refusal(
             "semi_major_axis and semi_minor_axis must be positive",
-            subject="semi-major and semi-minor axes",
+            subject="semi_major_axis and semi_minor_axis",
             source=_SHAFT_GEOMETRY_SOURCE,
         )
     if b > a:
         raise _torsion_refusal(
             f"semi_minor_axis ({semi_minor_axis}) must not exceed semi_major_axis "
             f"({semi_major_axis})",
-            subject="semi-major and semi-minor axes",
+            subject="semi_major_axis and semi_minor_axis",
             source=_SHAFT_GEOMETRY_SOURCE,
         )
     return a, b

@@ -22,8 +22,33 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_SCHEMATIC_SOURCE = "the amplifier schematic's resistor values"
+_DATASHEET_SOURCE = "the op-amp datasheet (gain-bandwidth product and slew rate)"
+_DESIGN_SOURCE = "the amplifier design requirement (closed-loop gain, output swing, or bandwidth)"
+
+
+class _OpAmpInputError(RefusalError, ValueError):
+    """An operational-amplifier input that cannot be used without correction."""
+
+
+def _op_amp_refusal(message: str, *, subject: str, source: str) -> _OpAmpInputError:
+    return _OpAmpInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _op_amp_input_source(name: str) -> str:
+    if name in {"feedback_resistance", "ground_resistance", "input_resistance"}:
+        return _SCHEMATIC_SOURCE
+    if name in {"gain_bandwidth_product", "slew_rate"}:
+        return _DATASHEET_SOURCE
+    return _DESIGN_SOURCE
+
 
 __all__ = [
     "gain_bandwidth_limited_bandwidth",
@@ -46,9 +71,17 @@ def noninverting_gain(*, feedback_resistance: Quantity, ground_resistance: Quant
     rf = feedback_resistance.to("ohm").magnitude
     rg = ground_resistance.to("ohm").magnitude
     if rf < 0:
-        raise ValueError("feedback_resistance must be non-negative")
+        raise _op_amp_refusal(
+            "feedback_resistance must be non-negative",
+            subject="feedback_resistance",
+            source=_SCHEMATIC_SOURCE,
+        )
     if rg <= 0:
-        raise ValueError("ground_resistance must be positive")
+        raise _op_amp_refusal(
+            "ground_resistance must be positive",
+            subject="ground_resistance",
+            source=_SCHEMATIC_SOURCE,
+        )
     return 1.0 + rf / rg
 
 
@@ -64,9 +97,17 @@ def inverting_gain(*, feedback_resistance: Quantity, input_resistance: Quantity)
     rf = feedback_resistance.to("ohm").magnitude
     rin = input_resistance.to("ohm").magnitude
     if rf < 0:
-        raise ValueError("feedback_resistance must be non-negative")
+        raise _op_amp_refusal(
+            "feedback_resistance must be non-negative",
+            subject="feedback_resistance",
+            source=_SCHEMATIC_SOURCE,
+        )
     if rin <= 0:
-        raise ValueError("input_resistance must be positive")
+        raise _op_amp_refusal(
+            "input_resistance must be positive",
+            subject="input_resistance",
+            source=_SCHEMATIC_SOURCE,
+        )
     return -rf / rin
 
 
@@ -83,9 +124,15 @@ def gain_bandwidth_limited_bandwidth(
     _check(gain_bandwidth_product, "1/[time]", "gain_bandwidth_product")
     gbw = count_rate_per_second(gain_bandwidth_product, name="gain_bandwidth_product")
     if gbw <= 0:
-        raise ValueError("gain_bandwidth_product must be positive")
+        raise _op_amp_refusal(
+            "gain_bandwidth_product must be positive",
+            subject="gain_bandwidth_product",
+            source=_DATASHEET_SOURCE,
+        )
     if closed_loop_gain == 0:
-        raise ValueError("closed_loop_gain must be non-zero")
+        raise _op_amp_refusal(
+            "closed_loop_gain must be non-zero", subject="closed_loop_gain", source=_DESIGN_SOURCE
+        )
     return Quantity(magnitude=gbw / abs(closed_loop_gain), unit="Hz")
 
 
@@ -106,9 +153,15 @@ def slew_rate_full_power_bandwidth(
     sr = slew_rate.to("V/s").magnitude
     v_peak = peak_output_voltage.to("V").magnitude
     if sr <= 0:
-        raise ValueError("slew_rate must be positive")
+        raise _op_amp_refusal(
+            "slew_rate must be positive", subject="slew_rate", source=_DATASHEET_SOURCE
+        )
     if v_peak <= 0:
-        raise ValueError("peak_output_voltage must be positive")
+        raise _op_amp_refusal(
+            "peak_output_voltage must be positive",
+            subject="peak_output_voltage",
+            source=_DESIGN_SOURCE,
+        )
     return Quantity(magnitude=sr / (2.0 * pi * v_peak), unit="Hz")
 
 
@@ -125,16 +178,24 @@ def rise_time_from_bandwidth(*, bandwidth: Quantity) -> Quantity:
     _check(bandwidth, "1/[time]", "bandwidth")
     f = count_rate_per_second(bandwidth, name="bandwidth")
     if f <= 0:
-        raise ValueError("bandwidth must be positive")
+        raise _op_amp_refusal(
+            "bandwidth must be positive", subject="bandwidth", source=_DESIGN_SOURCE
+        )
     return Quantity(magnitude=0.35 / f, unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _op_amp_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_op_amp_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _op_amp_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_op_amp_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

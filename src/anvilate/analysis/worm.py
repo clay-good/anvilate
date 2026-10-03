@@ -213,7 +213,7 @@ def worm_gear_efficiency(
             f"tan(lead_angle {lead_angle} deg) = {mu * tan(lam)} is not below "
             f"cos(normal_pressure_angle {normal_pressure_angle} deg) = {cos(phi_n)}, so the "
             "efficiency correlation is outside its range of validity",
-            subject="the worm mesh friction coefficient and lead/pressure angles",
+            subject="friction_coefficient, lead_angle, and normal_pressure_angle",
             source="the Shigley worm-drive efficiency correlation and selected gearset data",
         )
     numerator = cos(phi_n) - mu * tan(lam)
@@ -335,7 +335,7 @@ def worm_separating_force(
         raise _drive_refusal(
             "cos(phi_n)*cos(lambda) - mu*sin(lambda) must be positive; the friction and "
             "lead angle exceed the mesh's driving capacity",
-            subject="the worm mesh friction coefficient and lead/pressure angles",
+            subject="friction_coefficient, lead_angle, and normal_pressure_angle",
             source="the worm mesh force-resolution equation and selected gearset data",
         )
     magnitude = gear_tangential_load.to("N").magnitude * sin(phi_n) / denominator

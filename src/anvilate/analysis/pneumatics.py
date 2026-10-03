@@ -22,9 +22,43 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
 from ._flags import require_flag
+
+_RECEIVER_SOURCE = "the receiver nameplate or drawing volume"
+_PRESSURE_BAND_SOURCE = "the compressor control settings (cut-in and cut-out pressures)"
+_DEMAND_SOURCE = "the plant's measured or estimated free-air demand"
+_SITE_SOURCE = "the site's local atmospheric pressure"
+_CYLINDER_SOURCE = "the cylinder datasheet (bore and stroke) and its cycle requirement"
+_SUPPLY_SOURCE = "the regulator setting at the cylinder supply"
+
+
+class _PneumaticsInputError(RefusalError, ValueError):
+    """A compressed-air system input that cannot be used without correction."""
+
+
+def _pneumatics_refusal(message: str, *, subject: str, source: str) -> _PneumaticsInputError:
+    return _PneumaticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _pneumatics_input_source(name: str) -> str:
+    if name == "receiver_volume":
+        return _RECEIVER_SOURCE
+    if name in {"max_pressure", "min_pressure"}:
+        return _PRESSURE_BAND_SOURCE
+    if name == "atmospheric_pressure":
+        return _SITE_SOURCE
+    if name in {"bore_diameter", "cycle_rate", "stroke"}:
+        return _CYLINDER_SOURCE
+    if name == "gauge_supply_pressure":
+        return _SUPPLY_SOURCE
+    return _DEMAND_SOURCE
+
 
 _STANDARD_ATMOSPHERE_PA = 101325.0
 
@@ -62,10 +96,23 @@ def air_receiver_holdup_time(
     p_min = min_pressure.to("Pa").magnitude
     q = net_demand.to("m**3/s").magnitude
     p_atm = atmospheric_pressure.to("Pa").magnitude
-    if v <= 0 or q <= 0 or p_atm <= 0:
-        raise ValueError("receiver_volume, net_demand, and atmospheric_pressure must be positive")
+    for subject, magnitude in (
+        ("receiver_volume", v),
+        ("net_demand", q),
+        ("atmospheric_pressure", p_atm),
+    ):
+        if magnitude <= 0:
+            raise _pneumatics_refusal(
+                "receiver_volume, net_demand, and atmospheric_pressure must be positive",
+                subject=subject,
+                source=_pneumatics_input_source(subject),
+            )
     if p_max <= p_min:
-        raise ValueError("max_pressure must exceed min_pressure")
+        raise _pneumatics_refusal(
+            "max_pressure must exceed min_pressure",
+            subject="max_pressure and min_pressure",
+            source=_PRESSURE_BAND_SOURCE,
+        )
     return Quantity(magnitude=v * (p_max - p_min) / (q * p_atm), unit="s")
 
 
@@ -94,10 +141,23 @@ def air_receiver_volume_for_demand(
     p_max = max_pressure.to("Pa").magnitude
     p_min = min_pressure.to("Pa").magnitude
     p_atm = atmospheric_pressure.to("Pa").magnitude
-    if q <= 0 or t <= 0 or p_atm <= 0:
-        raise ValueError("net_demand, holdup_time, and atmospheric_pressure must be positive")
+    for subject, magnitude in (
+        ("net_demand", q),
+        ("holdup_time", t),
+        ("atmospheric_pressure", p_atm),
+    ):
+        if magnitude <= 0:
+            raise _pneumatics_refusal(
+                "net_demand, holdup_time, and atmospheric_pressure must be positive",
+                subject=subject,
+                source=_pneumatics_input_source(subject),
+            )
     if p_max <= p_min:
-        raise ValueError("max_pressure must exceed min_pressure")
+        raise _pneumatics_refusal(
+            "max_pressure must exceed min_pressure",
+            subject="max_pressure and min_pressure",
+            source=_PRESSURE_BAND_SOURCE,
+        )
     return Quantity(magnitude=q * t * p_atm / (p_max - p_min), unit="m**3")
 
 
@@ -130,13 +190,25 @@ def cylinder_air_consumption_per_stroke(
         _check(atmospheric_pressure, "[pressure]", "atmospheric_pressure")
         p_atm = atmospheric_pressure.to("Pa").magnitude
     if d <= 0:
-        raise ValueError("bore_diameter must be positive")
+        raise _pneumatics_refusal(
+            "bore_diameter must be positive", subject="bore_diameter", source=_CYLINDER_SOURCE
+        )
     if length <= 0:
-        raise ValueError("stroke must be positive")
+        raise _pneumatics_refusal(
+            "stroke must be positive", subject="stroke", source=_CYLINDER_SOURCE
+        )
     if p_g <= 0:
-        raise ValueError("gauge_supply_pressure must be positive")
+        raise _pneumatics_refusal(
+            "gauge_supply_pressure must be positive",
+            subject="gauge_supply_pressure",
+            source=_SUPPLY_SOURCE,
+        )
     if p_atm <= 0:
-        raise ValueError("atmospheric_pressure must be positive")
+        raise _pneumatics_refusal(
+            "atmospheric_pressure must be positive",
+            subject="atmospheric_pressure",
+            source=_SITE_SOURCE,
+        )
     swept = pi / 4.0 * d**2 * length
     free_air = swept * (p_g + p_atm) / p_atm
     return Quantity(magnitude=free_air * 1000.0, unit="liter")
@@ -175,7 +247,9 @@ def cylinder_free_air_demand(
     _check(cycle_rate, "1/[time]", "cycle_rate")
     f = 60.0 * count_rate_per_second(cycle_rate, name="cycle_rate")
     if f <= 0:
-        raise ValueError("cycle_rate must be positive")
+        raise _pneumatics_refusal(
+            "cycle_rate must be positive", subject="cycle_rate", source=_CYLINDER_SOURCE
+        )
     strokes_per_cycle = 2.0 if double_acting else 1.0
     return Quantity(
         magnitude=per_stroke.to("liter").magnitude * strokes_per_cycle * f, unit="liter/min"
@@ -184,10 +258,16 @@ def cylinder_free_air_demand(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _pneumatics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_pneumatics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _pneumatics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_pneumatics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

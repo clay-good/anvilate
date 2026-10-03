@@ -25,7 +25,25 @@ from __future__ import annotations
 
 from math import acos, asin, cos, degrees, radians, sin, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_SITE_SOURCE = "the site's surveyed latitude"
+_DATE_SOURCE = "the analysis date (day of year) and its computed solar declination"
+_TIME_SOURCE = "the solar time of the analysis and its hour angle"
+_ALTITUDE_SOURCE = "the computed solar altitude for the site, date, and time"
+
+
+class _SolarGeometryInputError(RefusalError, ValueError):
+    """A solar-position input that cannot be used without correction."""
+
+
+def _solar_geometry_refusal(message: str, *, subject: str, source: str) -> _SolarGeometryInputError:
+    return _SolarGeometryInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "solar_altitude_angle",
@@ -45,7 +63,11 @@ def solar_declination(*, day_of_year: int) -> Quantity:
     −23.45° in December, and zero at the equinoxes. Returns the declination in degrees.
     """
     if not 1 <= day_of_year <= 366:
-        raise ValueError(f"day_of_year must be in 1..366; got {day_of_year}")
+        raise _solar_geometry_refusal(
+            f"day_of_year must be in 1..366; got {day_of_year}",
+            subject="day_of_year",
+            source=_DATE_SOURCE,
+        )
     delta = 23.45 * sin(radians(360.0 * (284 + day_of_year) / 365.0))
     return Quantity(magnitude=delta, unit="degree")
 
@@ -59,9 +81,17 @@ def solar_altitude_at_noon(*, latitude: float, declination: float) -> Quantity:
     sun head-on. Returns the altitude in degrees.
     """
     if not -90.0 <= latitude <= 90.0:
-        raise ValueError(f"latitude must be in -90..90 degrees; got {latitude}")
+        raise _solar_geometry_refusal(
+            f"latitude must be in -90..90 degrees; got {latitude}",
+            subject="latitude",
+            source=_SITE_SOURCE,
+        )
     if not -23.45 <= declination <= 23.45:
-        raise ValueError(f"declination must be in -23.45..23.45 degrees; got {declination}")
+        raise _solar_geometry_refusal(
+            f"declination must be in -23.45..23.45 degrees; got {declination}",
+            subject="declination",
+            source=_DATE_SOURCE,
+        )
     alpha = 90.0 - abs(latitude - declination)
     return Quantity(magnitude=alpha, unit="degree")
 
@@ -80,14 +110,24 @@ def sunset_hour_angle(*, latitude: float, declination: float) -> Quantity:
     sunset hour angle in degrees.
     """
     if not -90.0 <= latitude <= 90.0:
-        raise ValueError(f"latitude must be in -90..90 degrees; got {latitude}")
+        raise _solar_geometry_refusal(
+            f"latitude must be in -90..90 degrees; got {latitude}",
+            subject="latitude",
+            source=_SITE_SOURCE,
+        )
     if not -23.45 <= declination <= 23.45:
-        raise ValueError(f"declination must be in -23.45..23.45 degrees; got {declination}")
+        raise _solar_geometry_refusal(
+            f"declination must be in -23.45..23.45 degrees; got {declination}",
+            subject="declination",
+            source=_DATE_SOURCE,
+        )
     cosine = -tan(radians(latitude)) * tan(radians(declination))
     if not -1.0 <= cosine <= 1.0:
-        raise ValueError(
+        raise _solar_geometry_refusal(
             f"the sun neither rises nor sets at latitude {latitude}° with declination "
-            f"{declination}° (polar day or polar night), so there is no sunset hour angle"
+            f"{declination}° (polar day or polar night), so there is no sunset hour angle",
+            subject="latitude and declination",
+            source=_SITE_SOURCE,
         )
     return Quantity(magnitude=degrees(acos(cosine)), unit="degree")
 
@@ -118,7 +158,11 @@ def air_mass(*, solar_altitude: float) -> float:
     A low sun means a long path and a redder, weaker beam. Returns the air mass as a plain float.
     """
     if not 0.0 < solar_altitude <= 90.0:
-        raise ValueError(f"solar_altitude must be in (0, 90] degrees; got {solar_altitude}")
+        raise _solar_geometry_refusal(
+            f"solar_altitude must be in (0, 90] degrees; got {solar_altitude}",
+            subject="solar_altitude",
+            source=_ALTITUDE_SOURCE,
+        )
     return 1.0 / sin(radians(solar_altitude))
 
 
@@ -144,11 +188,23 @@ def solar_altitude_angle(*, latitude: float, declination: float, hour_angle: flo
     degree near the horizon. Returns the altitude in degrees.
     """
     if not -90.0 <= latitude <= 90.0:
-        raise ValueError(f"latitude (degrees) must lie in [-90, 90]; got {latitude}")
+        raise _solar_geometry_refusal(
+            f"latitude (degrees) must lie in [-90, 90]; got {latitude}",
+            subject="latitude",
+            source=_SITE_SOURCE,
+        )
     if not -90.0 <= declination <= 90.0:
-        raise ValueError(f"declination (degrees) must lie in [-90, 90]; got {declination}")
+        raise _solar_geometry_refusal(
+            f"declination (degrees) must lie in [-90, 90]; got {declination}",
+            subject="declination",
+            source=_DATE_SOURCE,
+        )
     if not -180.0 <= hour_angle <= 180.0:
-        raise ValueError(f"hour_angle (degrees) must lie in [-180, 180]; got {hour_angle}")
+        raise _solar_geometry_refusal(
+            f"hour_angle (degrees) must lie in [-180, 180]; got {hour_angle}",
+            subject="hour_angle",
+            source=_TIME_SOURCE,
+        )
     phi = radians(latitude)
     delta = radians(declination)
     omega = radians(hour_angle)

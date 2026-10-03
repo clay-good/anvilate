@@ -23,7 +23,35 @@ from __future__ import annotations
 
 from math import exp
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_KINETICS_SOURCE = "the cited or fitted first-order rate constant at the reactor temperature"
+_RESIDENCE_SOURCE = "the reactor volume and design feed rate"
+_DAMKOHLER_SOURCE = "the Damkohler number computed from the rate constant and residence time"
+_TRAIN_SOURCE = "the reactor-train layout (number of tanks in series)"
+
+
+class _ReactorInputError(RefusalError, ValueError):
+    """A reactor-design input that cannot be used without correction."""
+
+
+def _reactor_refusal(message: str, *, subject: str, source: str) -> _ReactorInputError:
+    return _ReactorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _reactor_input_source(name: str) -> str:
+    if name == "residence_time":
+        return _RESIDENCE_SOURCE
+    if name == "damkohler_number":
+        return _DAMKOHLER_SOURCE
+    if name == "stages":
+        return _TRAIN_SOURCE
+    return _KINETICS_SOURCE
+
 
 __all__ = [
     "damkohler_number_first_order",
@@ -48,9 +76,15 @@ def damkohler_number_first_order(*, rate_constant: Quantity, residence_time: Qua
     k = rate_constant.to("1/s").magnitude
     tau = residence_time.to("s").magnitude
     if k < 0:
-        raise ValueError("rate_constant must be non-negative")
+        raise _reactor_refusal(
+            "rate_constant must be non-negative", subject="rate_constant", source=_KINETICS_SOURCE
+        )
     if tau < 0:
-        raise ValueError("residence_time must be non-negative")
+        raise _reactor_refusal(
+            "residence_time must be non-negative",
+            subject="residence_time",
+            source=_RESIDENCE_SOURCE,
+        )
     return k * tau
 
 
@@ -64,7 +98,11 @@ def pfr_conversion_first_order(*, damkohler_number: float) -> float:
     Returns the conversion (0 to 1) as a plain float.
     """
     if damkohler_number < 0:
-        raise ValueError("damkohler_number must be non-negative")
+        raise _reactor_refusal(
+            "damkohler_number must be non-negative",
+            subject="damkohler_number",
+            source=_DAMKOHLER_SOURCE,
+        )
     return 1.0 - exp(-damkohler_number)
 
 
@@ -79,7 +117,11 @@ def cstr_conversion_first_order(*, damkohler_number: float) -> float:
     the same conversion. Returns the conversion (0 to 1) as a plain float.
     """
     if damkohler_number < 0:
-        raise ValueError("damkohler_number must be non-negative")
+        raise _reactor_refusal(
+            "damkohler_number must be non-negative",
+            subject="damkohler_number",
+            source=_DAMKOHLER_SOURCE,
+        )
     return damkohler_number / (1.0 + damkohler_number)
 
 
@@ -100,22 +142,38 @@ def cstr_series_conversion_first_order(*, damkohler_number: float, stages: int) 
     """
     require_finite(damkohler_number, name="damkohler_number")
     if damkohler_number < 0:
-        raise ValueError("damkohler_number must be non-negative")
+        raise _reactor_refusal(
+            "damkohler_number must be non-negative",
+            subject="damkohler_number",
+            source=_DAMKOHLER_SOURCE,
+        )
     require_finite(stages, name="stages")
     if int(stages) != stages:
-        raise ValueError(f"stages must be a whole number of tanks; got {stages}")
+        raise _reactor_refusal(
+            f"stages must be a whole number of tanks; got {stages}",
+            subject="stages",
+            source=_TRAIN_SOURCE,
+        )
     n = int(stages)
     if n < 1:
-        raise ValueError(f"stages must be at least 1; got {n}")
+        raise _reactor_refusal(
+            f"stages must be at least 1; got {n}", subject="stages", source=_TRAIN_SOURCE
+        )
     return 1.0 - 1.0 / (1.0 + damkohler_number / n) ** n
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _reactor_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_reactor_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _reactor_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_reactor_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

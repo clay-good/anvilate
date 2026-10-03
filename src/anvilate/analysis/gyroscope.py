@@ -24,8 +24,33 @@ forced precession develops.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_ROTOR_SOURCE = "the rotor's CAD mass properties or measured polar moment of inertia"
+_SPEED_SOURCE = "the rotor's rated or measured spin speed"
+_MOTION_SOURCE = "the load case's applied moment or vehicle precession rate"
+
+
+class _GyroscopeInputError(RefusalError, ValueError):
+    """A gyroscopic-effect input that cannot be used without correction."""
+
+
+def _gyroscope_refusal(message: str, *, subject: str, source: str) -> _GyroscopeInputError:
+    return _GyroscopeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _gyroscope_input_source(name: str) -> str:
+    if name == "polar_moment_of_inertia":
+        return _ROTOR_SOURCE
+    if name == "spin_speed":
+        return _SPEED_SOURCE
+    return _MOTION_SOURCE
+
 
 __all__ = [
     "gyroscopic_precession_rate",
@@ -50,9 +75,15 @@ def gyroscopic_spin_angular_momentum(
     inertia = polar_moment_of_inertia.to("kg*m**2").magnitude
     omega = angular_speed_rad_per_s(spin_speed, name="spin_speed")
     if inertia <= 0:
-        raise ValueError("polar_moment_of_inertia must be positive")
+        raise _gyroscope_refusal(
+            "polar_moment_of_inertia must be positive",
+            subject="polar_moment_of_inertia",
+            source=_ROTOR_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError("spin_speed must be positive")
+        raise _gyroscope_refusal(
+            "spin_speed must be positive", subject="spin_speed", source=_SPEED_SOURCE
+        )
     return Quantity(magnitude=inertia * omega, unit="N*m*s")
 
 
@@ -75,11 +106,19 @@ def gyroscopic_precession_rate(
     inertia = polar_moment_of_inertia.to("kg*m**2").magnitude
     omega = angular_speed_rad_per_s(spin_speed, name="spin_speed")
     if moment <= 0:
-        raise ValueError("applied_moment must be positive")
+        raise _gyroscope_refusal(
+            "applied_moment must be positive", subject="applied_moment", source=_MOTION_SOURCE
+        )
     if inertia <= 0:
-        raise ValueError("polar_moment_of_inertia must be positive")
+        raise _gyroscope_refusal(
+            "polar_moment_of_inertia must be positive",
+            subject="polar_moment_of_inertia",
+            source=_ROTOR_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError("spin_speed must be positive")
+        raise _gyroscope_refusal(
+            "spin_speed must be positive", subject="spin_speed", source=_SPEED_SOURCE
+        )
     return Quantity(magnitude=moment / (inertia * omega), unit="rad/s")
 
 
@@ -102,20 +141,34 @@ def gyroscopic_reaction_moment(
     omega = angular_speed_rad_per_s(spin_speed, name="spin_speed")
     precession = angular_speed_rad_per_s(precession_rate, name="precession_rate")
     if inertia <= 0:
-        raise ValueError("polar_moment_of_inertia must be positive")
+        raise _gyroscope_refusal(
+            "polar_moment_of_inertia must be positive",
+            subject="polar_moment_of_inertia",
+            source=_ROTOR_SOURCE,
+        )
     if omega <= 0:
-        raise ValueError("spin_speed must be positive")
+        raise _gyroscope_refusal(
+            "spin_speed must be positive", subject="spin_speed", source=_SPEED_SOURCE
+        )
     if precession <= 0:
-        raise ValueError("precession_rate must be positive")
+        raise _gyroscope_refusal(
+            "precession_rate must be positive", subject="precession_rate", source=_MOTION_SOURCE
+        )
     return Quantity(magnitude=inertia * omega * precession, unit="N*m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _gyroscope_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_gyroscope_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _gyroscope_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_gyroscope_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

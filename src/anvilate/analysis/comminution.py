@@ -25,7 +25,29 @@ from __future__ import annotations
 
 from math import log, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ORE_TEST_SOURCE = "the ore's laboratory grindability test (Bond work index or fitted law constant)"
+_SIZING_SOURCE = "the circuit's feed and product size distributions (screen analyses)"
+
+
+class _ComminutionInputError(RefusalError, ValueError):
+    """A comminution input that cannot be used without correction."""
+
+
+def _comminution_refusal(message: str, *, subject: str, source: str) -> _ComminutionInputError:
+    return _ComminutionInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _comminution_input_source(name: str) -> str:
+    if name in {"bond_work_index", "kick_constant", "rittinger_constant"}:
+        return _ORE_TEST_SOURCE
+    return _SIZING_SOURCE
+
 
 __all__ = [
     "bond_comminution_work",
@@ -55,11 +77,24 @@ def rittinger_comminution_energy(
     x1 = feed_size.to("m").magnitude
     x2 = product_size.to("m").magnitude
     if c_r < 0:
-        raise ValueError("rittinger_constant must be non-negative")
-    if x1 <= 0 or x2 <= 0:
-        raise ValueError("feed_size and product_size must be positive")
+        raise _comminution_refusal(
+            "rittinger_constant must be non-negative",
+            subject="rittinger_constant",
+            source=_ORE_TEST_SOURCE,
+        )
+    for subject, magnitude in (("feed_size", x1), ("product_size", x2)):
+        if magnitude <= 0:
+            raise _comminution_refusal(
+                "feed_size and product_size must be positive",
+                subject=subject,
+                source=_SIZING_SOURCE,
+            )
     if x2 > x1:
-        raise ValueError("product_size cannot exceed feed_size (grinding makes particles smaller)")
+        raise _comminution_refusal(
+            "product_size cannot exceed feed_size (grinding makes particles smaller)",
+            subject="feed_size and product_size",
+            source=_SIZING_SOURCE,
+        )
     return Quantity(magnitude=c_r * (1.0 / x2 - 1.0 / x1), unit="J/kg")
 
 
@@ -84,11 +119,22 @@ def kick_comminution_energy(
     x1 = feed_size.to("m").magnitude
     x2 = product_size.to("m").magnitude
     if c_k < 0:
-        raise ValueError("kick_constant must be non-negative")
-    if x1 <= 0 or x2 <= 0:
-        raise ValueError("feed_size and product_size must be positive")
+        raise _comminution_refusal(
+            "kick_constant must be non-negative", subject="kick_constant", source=_ORE_TEST_SOURCE
+        )
+    for subject, magnitude in (("feed_size", x1), ("product_size", x2)):
+        if magnitude <= 0:
+            raise _comminution_refusal(
+                "feed_size and product_size must be positive",
+                subject=subject,
+                source=_SIZING_SOURCE,
+            )
     if x2 > x1:
-        raise ValueError("product_size cannot exceed feed_size (grinding makes particles smaller)")
+        raise _comminution_refusal(
+            "product_size cannot exceed feed_size (grinding makes particles smaller)",
+            subject="feed_size and product_size",
+            source=_SIZING_SOURCE,
+        )
     return Quantity(magnitude=c_k * log(x1 / x2), unit="J/kg")
 
 
@@ -115,12 +161,23 @@ def bond_comminution_work(
     f80 = feed_size_80.to("um").magnitude
     p80 = product_size_80.to("um").magnitude
     if wi < 0:
-        raise ValueError("bond_work_index must be non-negative")
-    if f80 <= 0 or p80 <= 0:
-        raise ValueError("feed_size_80 and product_size_80 must be positive")
+        raise _comminution_refusal(
+            "bond_work_index must be non-negative",
+            subject="bond_work_index",
+            source=_ORE_TEST_SOURCE,
+        )
+    for subject, magnitude in (("feed_size_80", f80), ("product_size_80", p80)):
+        if magnitude <= 0:
+            raise _comminution_refusal(
+                "feed_size_80 and product_size_80 must be positive",
+                subject=subject,
+                source=_SIZING_SOURCE,
+            )
     if p80 > f80:
-        raise ValueError(
-            "product_size_80 cannot exceed feed_size_80 (grinding makes particles smaller)"
+        raise _comminution_refusal(
+            "product_size_80 cannot exceed feed_size_80 (grinding makes particles smaller)",
+            subject="feed_size_80 and product_size_80",
+            source=_SIZING_SOURCE,
         )
     work = wi * (10.0 / sqrt(p80) - 10.0 / sqrt(f80))
     return Quantity(magnitude=work, unit="kW*hour/tonne")
@@ -128,10 +185,16 @@ def bond_comminution_work(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _comminution_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_comminution_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _comminution_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_comminution_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

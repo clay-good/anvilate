@@ -25,8 +25,36 @@ from __future__ import annotations
 
 from math import asin, degrees
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_PROBE_SOURCE = "the transducer datasheet (element diameter and centre frequency)"
+_MATERIAL_SOURCE = "the material's velocity calibration block or cited sound speed"
+_INSTRUMENT_SOURCE = "the flaw detector's measured time of flight"
+_DIRECTIVITY_SOURCE = "the transducer datasheet and material sound speed, for a directional beam"
+
+
+class _UltrasonicTestingInputError(RefusalError, ValueError):
+    """An ultrasonic-testing input that cannot be used without correction."""
+
+
+def _ultrasonic_testing_refusal(
+    message: str, *, subject: str, source: str
+) -> _UltrasonicTestingInputError:
+    return _UltrasonicTestingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _ultrasonic_testing_input_source(name: str) -> str:
+    if name == "sound_speed":
+        return _MATERIAL_SOURCE
+    if name == "time_of_flight":
+        return _INSTRUMENT_SOURCE
+    return _PROBE_SOURCE
+
 
 __all__ = [
     "near_field_length",
@@ -54,11 +82,19 @@ def near_field_length(
     f = count_rate_per_second(frequency, name="frequency")
     c = sound_speed.to("m/s").magnitude
     if d <= 0:
-        raise ValueError("transducer_diameter must be positive")
+        raise _ultrasonic_testing_refusal(
+            "transducer_diameter must be positive",
+            subject="transducer_diameter",
+            source=_PROBE_SOURCE,
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _ultrasonic_testing_refusal(
+            "frequency must be positive", subject="frequency", source=_PROBE_SOURCE
+        )
     if c <= 0:
-        raise ValueError("sound_speed must be positive")
+        raise _ultrasonic_testing_refusal(
+            "sound_speed must be positive", subject="sound_speed", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=d**2 * f / (4.0 * c), unit="m")
 
 
@@ -82,16 +118,26 @@ def ultrasonic_beam_divergence(
     f = count_rate_per_second(frequency, name="frequency")
     c = sound_speed.to("m/s").magnitude
     if d <= 0:
-        raise ValueError("transducer_diameter must be positive")
+        raise _ultrasonic_testing_refusal(
+            "transducer_diameter must be positive",
+            subject="transducer_diameter",
+            source=_PROBE_SOURCE,
+        )
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _ultrasonic_testing_refusal(
+            "frequency must be positive", subject="frequency", source=_PROBE_SOURCE
+        )
     if c <= 0:
-        raise ValueError("sound_speed must be positive")
+        raise _ultrasonic_testing_refusal(
+            "sound_speed must be positive", subject="sound_speed", source=_MATERIAL_SOURCE
+        )
     ratio = 1.22 * c / (f * d)
     if ratio > 1.0:
-        raise ValueError(
+        raise _ultrasonic_testing_refusal(
             "beam is not directional: 1.22*c/(f*D) exceeds 1 (the wavelength is too large for "
-            "the probe)"
+            "the probe)",
+            subject="transducer_diameter, frequency, and sound_speed",
+            source=_DIRECTIVITY_SOURCE,
         )
     return degrees(asin(ratio))
 
@@ -110,18 +156,28 @@ def pulse_echo_thickness(*, time_of_flight: Quantity, sound_speed: Quantity) -> 
     t = time_of_flight.to("s").magnitude
     c = sound_speed.to("m/s").magnitude
     if t <= 0:
-        raise ValueError("time_of_flight must be positive")
+        raise _ultrasonic_testing_refusal(
+            "time_of_flight must be positive", subject="time_of_flight", source=_INSTRUMENT_SOURCE
+        )
     if c <= 0:
-        raise ValueError("sound_speed must be positive")
+        raise _ultrasonic_testing_refusal(
+            "sound_speed must be positive", subject="sound_speed", source=_MATERIAL_SOURCE
+        )
     return Quantity(magnitude=c * t / 2.0, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _ultrasonic_testing_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_ultrasonic_testing_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _ultrasonic_testing_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_ultrasonic_testing_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

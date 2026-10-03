@@ -23,7 +23,37 @@ from __future__ import annotations
 
 from math import log10, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_HULL_SOURCE = "the lines plan or hydrostatic tables (waterline length, beam, draft, displacement)"
+_SPEED_SOURCE = "the vessel's design or trial speed"
+_STABILITY_SOURCE = "the inclining experiment or loading-condition stability booklet"
+_FLOW_SOURCE = "the hull Reynolds number at the design speed and water temperature"
+
+
+class _NavalArchitectureInputError(RefusalError, ValueError):
+    """A naval-architecture input that cannot be used without correction."""
+
+
+def _naval_architecture_refusal(
+    message: str, *, subject: str, source: str
+) -> _NavalArchitectureInputError:
+    return _NavalArchitectureInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _naval_architecture_input_source(name: str) -> str:
+    if name == "speed":
+        return _SPEED_SOURCE
+    if name in {"metacentric_height", "roll_radius_of_gyration"}:
+        return _STABILITY_SOURCE
+    if name == "reynolds_number":
+        return _FLOW_SOURCE
+    return _HULL_SOURCE
+
 
 _STANDARD_GRAVITY = 9.80665  # m/s**2
 
@@ -49,7 +79,9 @@ def hull_speed(*, waterline_length: Quantity) -> Quantity:
     _check(waterline_length, "[length]", "waterline_length")
     length = waterline_length.to("m").magnitude
     if length <= 0:
-        raise ValueError("waterline_length must be positive")
+        raise _naval_architecture_refusal(
+            "waterline_length must be positive", subject="waterline_length", source=_HULL_SOURCE
+        )
     return Quantity(magnitude=sqrt(_STANDARD_GRAVITY * length / (2.0 * pi)), unit="m/s")
 
 
@@ -68,9 +100,13 @@ def hull_froude_number(*, speed: Quantity, waterline_length: Quantity) -> float:
     v = speed.to("m/s").magnitude
     length = waterline_length.to("m").magnitude
     if v < 0:
-        raise ValueError("speed must be non-negative")
+        raise _naval_architecture_refusal(
+            "speed must be non-negative", subject="speed", source=_SPEED_SOURCE
+        )
     if length <= 0:
-        raise ValueError("waterline_length must be positive")
+        raise _naval_architecture_refusal(
+            "waterline_length must be positive", subject="waterline_length", source=_HULL_SOURCE
+        )
     return v / sqrt(_STANDARD_GRAVITY * length)
 
 
@@ -100,14 +136,25 @@ def block_coefficient(
     b = beam.to("m").magnitude
     t = draft.to("m").magnitude
     if vol <= 0:
-        raise ValueError("displacement_volume must be positive")
-    if length <= 0 or b <= 0 or t <= 0:
-        raise ValueError("waterline_length, beam, and draft must be positive")
+        raise _naval_architecture_refusal(
+            "displacement_volume must be positive",
+            subject="displacement_volume",
+            source=_HULL_SOURCE,
+        )
+    for subject, magnitude in (("waterline_length", length), ("beam", b), ("draft", t)):
+        if magnitude <= 0:
+            raise _naval_architecture_refusal(
+                "waterline_length, beam, and draft must be positive",
+                subject=subject,
+                source=_HULL_SOURCE,
+            )
     c_b = vol / (length * b * t)
     if c_b > 1.0:
-        raise ValueError(
+        raise _naval_architecture_refusal(
             "block coefficient exceeds 1: the displacement volume is larger than L*B*T "
-            "(check the inputs)"
+            "(check the inputs)",
+            subject="displacement_volume, waterline_length, beam, and draft",
+            source=_HULL_SOURCE,
         )
     return c_b
 
@@ -133,18 +180,32 @@ def roll_period(*, roll_radius_of_gyration: Quantity, metacentric_height: Quanti
     k = roll_radius_of_gyration.to("m").magnitude
     gm = metacentric_height.to("m").magnitude
     if k <= 0:
-        raise ValueError("roll_radius_of_gyration must be positive")
+        raise _naval_architecture_refusal(
+            "roll_radius_of_gyration must be positive",
+            subject="roll_radius_of_gyration",
+            source=_STABILITY_SOURCE,
+        )
     if gm <= 0:
-        raise ValueError("metacentric_height must be positive (a negative GM is unstable)")
+        raise _naval_architecture_refusal(
+            "metacentric_height must be positive (a negative GM is unstable)",
+            subject="metacentric_height",
+            source=_STABILITY_SOURCE,
+        )
     return Quantity(magnitude=2.0 * pi * k / sqrt(_STANDARD_GRAVITY * gm), unit="s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _naval_architecture_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_naval_architecture_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _naval_architecture_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_naval_architecture_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -184,9 +245,11 @@ def ittc_friction_coefficient(*, reynolds_number: float) -> float:
     Source: Tupper, *Introduction to Naval Architecture*, the ITTC-1957 correlation line.
     """
     if reynolds_number < 1.0e5:
-        raise ValueError(
+        raise _naval_architecture_refusal(
             f"reynolds_number must be at least 1e5 for the ITTC-57 correlation, which is fitted "
             f"to turbulent plank data and blows up toward its pole at Re = 100; "
-            f"got {reynolds_number}"
+            f"got {reynolds_number}",
+            subject="reynolds_number",
+            source=_FLOW_SOURCE,
         )
     return 0.075 / (log10(reynolds_number) - 2.0) ** 2

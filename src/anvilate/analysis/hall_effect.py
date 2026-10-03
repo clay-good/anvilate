@@ -21,7 +21,32 @@ carrier density it implies.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ELEMENT_SOURCE = "the Hall element datasheet (carrier density and thickness)"
+_EXCITATION_SOURCE = "the bias-current specification or calibrated field measurement"
+_READING_SOURCE = "the calibrated Hall-voltage reading"
+
+
+class _HallEffectInputError(RefusalError, ValueError):
+    """A Hall-effect input that cannot be used without correction."""
+
+
+def _hall_effect_refusal(message: str, *, subject: str, source: str) -> _HallEffectInputError:
+    return _HallEffectInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _hall_effect_input_source(name: str) -> str:
+    if name in {"carrier_density", "thickness"}:
+        return _ELEMENT_SOURCE
+    if name == "hall_voltage":
+        return _READING_SOURCE
+    return _EXCITATION_SOURCE
+
 
 _ELEMENTARY_CHARGE = 1.602176634e-19  # coulomb
 
@@ -55,9 +80,13 @@ def hall_voltage(
     n = carrier_density.to("1/m**3").magnitude
     t = thickness.to("m").magnitude
     if n <= 0:
-        raise ValueError("carrier_density must be positive")
+        raise _hall_effect_refusal(
+            "carrier_density must be positive", subject="carrier_density", source=_ELEMENT_SOURCE
+        )
     if t <= 0:
-        raise ValueError("thickness must be positive")
+        raise _hall_effect_refusal(
+            "thickness must be positive", subject="thickness", source=_ELEMENT_SOURCE
+        )
     v = i * b / (n * _ELEMENTARY_CHARGE * t)
     return Quantity(magnitude=v, unit="V")
 
@@ -85,11 +114,17 @@ def hall_flux_density_from_voltage(
     n = carrier_density.to("1/m**3").magnitude
     t = thickness.to("m").magnitude
     if i <= 0:
-        raise ValueError("current must be positive")
+        raise _hall_effect_refusal(
+            "current must be positive", subject="current", source=_EXCITATION_SOURCE
+        )
     if n <= 0:
-        raise ValueError("carrier_density must be positive")
+        raise _hall_effect_refusal(
+            "carrier_density must be positive", subject="carrier_density", source=_ELEMENT_SOURCE
+        )
     if t <= 0:
-        raise ValueError("thickness must be positive")
+        raise _hall_effect_refusal(
+            "thickness must be positive", subject="thickness", source=_ELEMENT_SOURCE
+        )
     b = v * n * _ELEMENTARY_CHARGE * t / i
     return Quantity(magnitude=b, unit="T")
 
@@ -118,19 +153,29 @@ def hall_carrier_density(
     t = thickness.to("m").magnitude
     v = hall_voltage.to("V").magnitude
     if t <= 0:
-        raise ValueError("thickness must be positive")
+        raise _hall_effect_refusal(
+            "thickness must be positive", subject="thickness", source=_ELEMENT_SOURCE
+        )
     if v == 0:
-        raise ValueError("hall_voltage must be non-zero")
+        raise _hall_effect_refusal(
+            "hall_voltage must be non-zero", subject="hall_voltage", source=_READING_SOURCE
+        )
     n = i * b / (_ELEMENTARY_CHARGE * t * v)
     return Quantity(magnitude=n, unit="1/m**3")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _hall_effect_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_hall_effect_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _hall_effect_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_hall_effect_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

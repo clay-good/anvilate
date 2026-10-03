@@ -33,8 +33,41 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_STROUHAL_SOURCE = "the cited Strouhal number for the cross-section and Reynolds range"
+_FLOW_SOURCE = "the design flow or wind velocity from the load case"
+_STRUCTURE_SOURCE = "the member drawing (cross-section width or diameter) and mass properties"
+_MODAL_SOURCE = "the member's modal analysis or measured natural frequency and damping"
+_FLUID_SOURCE = "the cited fluid density at the operating condition"
+
+
+class _VortexSheddingInputError(RefusalError, ValueError):
+    """A vortex-shedding input that cannot be used without correction."""
+
+
+def _vortex_shedding_refusal(
+    message: str, *, subject: str, source: str
+) -> _VortexSheddingInputError:
+    return _VortexSheddingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _vortex_shedding_input_source(name: str) -> str:
+    if name == "strouhal_number":
+        return _STROUHAL_SOURCE
+    if name in {"characteristic_length", "mass_per_unit_length"}:
+        return _STRUCTURE_SOURCE
+    if name in {"damping_ratio", "natural_frequency"}:
+        return _MODAL_SOURCE
+    if name == "fluid_density":
+        return _FLUID_SOURCE
+    return _FLOW_SOURCE
+
 
 __all__ = [
     "lock_in_velocity",
@@ -60,11 +93,18 @@ def vortex_shedding_frequency(
     _check(velocity, "[length]/[time]", "velocity")
     _check(characteristic_length, "[length]", "characteristic_length")
     if strouhal_number <= 0:
-        raise ValueError("strouhal_number must be positive")
+        raise _vortex_shedding_refusal(
+            "strouhal_number must be positive", subject="strouhal_number", source=_STROUHAL_SOURCE
+        )
     v = velocity.to("m/s").magnitude
     d = characteristic_length.to("m").magnitude
-    if v <= 0 or d <= 0:
-        raise ValueError("velocity and characteristic_length must be positive")
+    for subject, magnitude in (("velocity", v), ("characteristic_length", d)):
+        if magnitude <= 0:
+            raise _vortex_shedding_refusal(
+                "velocity and characteristic_length must be positive",
+                subject=subject,
+                source=_vortex_shedding_input_source(subject),
+            )
     return Quantity(magnitude=strouhal_number * v / d, unit="Hz")
 
 
@@ -84,11 +124,18 @@ def lock_in_velocity(
     _check(natural_frequency, "1/[time]", "natural_frequency")
     _check(characteristic_length, "[length]", "characteristic_length")
     if strouhal_number <= 0:
-        raise ValueError("strouhal_number must be positive")
+        raise _vortex_shedding_refusal(
+            "strouhal_number must be positive", subject="strouhal_number", source=_STROUHAL_SOURCE
+        )
     f_n = count_rate_per_second(natural_frequency, name="natural_frequency")
     d = characteristic_length.to("m").magnitude
-    if f_n <= 0 or d <= 0:
-        raise ValueError("natural_frequency and characteristic_length must be positive")
+    for subject, magnitude in (("natural_frequency", f_n), ("characteristic_length", d)):
+        if magnitude <= 0:
+            raise _vortex_shedding_refusal(
+                "natural_frequency and characteristic_length must be positive",
+                subject=subject,
+                source=_vortex_shedding_input_source(subject),
+            )
     return Quantity(magnitude=f_n * d / strouhal_number, unit="m/s")
 
 
@@ -112,8 +159,17 @@ def reduced_velocity(
     v = velocity.to("m/s").magnitude
     f_n = count_rate_per_second(natural_frequency, name="natural_frequency")
     d = characteristic_length.to("m").magnitude
-    if v <= 0 or f_n <= 0 or d <= 0:
-        raise ValueError("velocity, natural_frequency, and characteristic_length must be positive")
+    for subject, magnitude in (
+        ("velocity", v),
+        ("natural_frequency", f_n),
+        ("characteristic_length", d),
+    ):
+        if magnitude <= 0:
+            raise _vortex_shedding_refusal(
+                "velocity, natural_frequency, and characteristic_length must be positive",
+                subject=subject,
+                source=_vortex_shedding_input_source(subject),
+            )
     return v / (f_n * d)
 
 
@@ -149,22 +205,40 @@ def scruton_number(
     rho = fluid_density.to("kg/m**3").magnitude
     d = characteristic_length.to("m").magnitude
     if m <= 0:
-        raise ValueError("mass_per_unit_length must be positive")
+        raise _vortex_shedding_refusal(
+            "mass_per_unit_length must be positive",
+            subject="mass_per_unit_length",
+            source=_STRUCTURE_SOURCE,
+        )
     if damping_ratio <= 0:
-        raise ValueError("damping_ratio must be positive")
+        raise _vortex_shedding_refusal(
+            "damping_ratio must be positive", subject="damping_ratio", source=_MODAL_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("fluid_density must be positive")
+        raise _vortex_shedding_refusal(
+            "fluid_density must be positive", subject="fluid_density", source=_FLUID_SOURCE
+        )
     if d <= 0:
-        raise ValueError("characteristic_length must be positive")
+        raise _vortex_shedding_refusal(
+            "characteristic_length must be positive",
+            subject="characteristic_length",
+            source=_STRUCTURE_SOURCE,
+        )
     return 4.0 * pi * m * damping_ratio / (rho * d * d)
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _vortex_shedding_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_vortex_shedding_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _vortex_shedding_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_vortex_shedding_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

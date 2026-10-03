@@ -34,8 +34,33 @@ from __future__ import annotations
 
 from math import cos, radians, sin, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_LINKAGE_DRAWING_SOURCE = "the mechanism drawing (crank radius and connecting-rod length)"
+_SPEED_SOURCE = "the crank's rated or measured rotational speed"
+_LOAD_SOURCE = "the piston load case or indicator-diagram force"
+
+
+class _SliderCrankInputError(RefusalError, ValueError):
+    """A slider-crank input that cannot be used without correction."""
+
+
+def _slider_crank_refusal(message: str, *, subject: str, source: str) -> _SliderCrankInputError:
+    return _SliderCrankInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _slider_crank_input_source(name: str) -> str:
+    if name in {"crank_radius", "rod_length"}:
+        return _LINKAGE_DRAWING_SOURCE
+    if name == "crank_speed":
+        return _SPEED_SOURCE
+    return _LOAD_SOURCE
+
 
 __all__ = [
     "slider_crank_displacement",
@@ -48,10 +73,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _slider_crank_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_slider_crank_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _slider_crank_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_slider_crank_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -67,11 +98,17 @@ def _geometry(crank_radius: Quantity, rod_length: Quantity) -> tuple[float, floa
     r = crank_radius.to("mm").magnitude
     length = rod_length.to("mm").magnitude
     if r <= 0:
-        raise ValueError(f"crank_radius must be positive; got {crank_radius}")
+        raise _slider_crank_refusal(
+            f"crank_radius must be positive; got {crank_radius}",
+            subject="crank_radius",
+            source=_LINKAGE_DRAWING_SOURCE,
+        )
     if length <= r:
-        raise ValueError(
+        raise _slider_crank_refusal(
             f"rod_length must exceed crank_radius (or the linkage jams); "
-            f"got rod {rod_length} vs crank {crank_radius}"
+            f"got rod {rod_length} vs crank {crank_radius}",
+            subject="rod_length",
+            source=_LINKAGE_DRAWING_SOURCE,
         )
     return r, length
 
@@ -110,11 +147,17 @@ def slider_crank_velocity(
     """
     r, length = _geometry(crank_radius, rod_length)
     if not isinstance(crank_speed, Quantity):
-        raise ValueError(f"crank_speed must be a [frequency] quantity; got {crank_speed!r}")
+        raise _slider_crank_refusal(
+            f"crank_speed must be a [frequency] quantity; got {crank_speed!r}",
+            subject="crank_speed",
+            source=_SPEED_SOURCE,
+        )
     if not crank_speed.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _slider_crank_refusal(
             f"crank_speed must be a rotational-speed ([frequency]) quantity; got "
-            f"{crank_speed.dimensionality} ({crank_speed})"
+            f"{crank_speed.dimensionality} ({crank_speed})",
+            subject="crank_speed",
+            source=_SPEED_SOURCE,
         )
     theta = radians(crank_angle)
     omega = angular_speed_rad_per_s(crank_speed, name="crank_speed")
@@ -143,11 +186,17 @@ def slider_crank_acceleration(
     """
     r, length = _geometry(crank_radius, rod_length)
     if not isinstance(crank_speed, Quantity):
-        raise ValueError(f"crank_speed must be a [frequency] quantity; got {crank_speed!r}")
+        raise _slider_crank_refusal(
+            f"crank_speed must be a [frequency] quantity; got {crank_speed!r}",
+            subject="crank_speed",
+            source=_SPEED_SOURCE,
+        )
     if not crank_speed.has_dimension("[frequency]"):
-        raise ValueError(
+        raise _slider_crank_refusal(
             f"crank_speed must be a rotational-speed ([frequency]) quantity; got "
-            f"{crank_speed.dimensionality} ({crank_speed})"
+            f"{crank_speed.dimensionality} ({crank_speed})",
+            subject="crank_speed",
+            source=_SPEED_SOURCE,
         )
     theta = radians(crank_angle)
     omega = angular_speed_rad_per_s(crank_speed, name="crank_speed")

@@ -20,7 +20,34 @@ costs.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_PISTON_DRAWING_SOURCE = "the cylinder drawing or catalogue piston bore"
+_DUTY_SOURCE = "the press load case or applied input force"
+_STROKE_SOURCE = "the press stroke requirement or measured ram travel"
+
+
+class _HydraulicPressInputError(RefusalError, ValueError):
+    """A hydraulic-press input that cannot be used without correction."""
+
+
+def _hydraulic_press_refusal(
+    message: str, *, subject: str, source: str
+) -> _HydraulicPressInputError:
+    return _HydraulicPressInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _hydraulic_press_input_source(name: str) -> str:
+    if name in {"input_piston_area", "output_piston_area"}:
+        return _PISTON_DRAWING_SOURCE
+    if name == "output_stroke":
+        return _STROKE_SOURCE
+    return _DUTY_SOURCE
+
 
 __all__ = [
     "hydraulic_press_input_stroke",
@@ -43,9 +70,15 @@ def hydraulic_press_transmitted_pressure(
     f = input_force.to("N").magnitude
     a = input_piston_area.to("m**2").magnitude
     if f < 0:
-        raise ValueError("input_force must be non-negative")
+        raise _hydraulic_press_refusal(
+            "input_force must be non-negative", subject="input_force", source=_DUTY_SOURCE
+        )
     if a <= 0:
-        raise ValueError("input_piston_area must be positive")
+        raise _hydraulic_press_refusal(
+            "input_piston_area must be positive",
+            subject="input_piston_area",
+            source=_PISTON_DRAWING_SOURCE,
+        )
     return Quantity(magnitude=f / a, unit="Pa")
 
 
@@ -66,9 +99,14 @@ def hydraulic_press_output_force(
     a_in = input_piston_area.to("m**2").magnitude
     a_out = output_piston_area.to("m**2").magnitude
     if f < 0:
-        raise ValueError("input_force must be non-negative")
-    if a_in <= 0 or a_out <= 0:
-        raise ValueError("piston areas must be positive")
+        raise _hydraulic_press_refusal(
+            "input_force must be non-negative", subject="input_force", source=_DUTY_SOURCE
+        )
+    for subject, magnitude in (("input_piston_area", a_in), ("output_piston_area", a_out)):
+        if magnitude <= 0:
+            raise _hydraulic_press_refusal(
+                "piston areas must be positive", subject=subject, source=_PISTON_DRAWING_SOURCE
+            )
     return Quantity(magnitude=f * a_out / a_in, unit="N")
 
 
@@ -89,18 +127,29 @@ def hydraulic_press_input_stroke(
     a_in = input_piston_area.to("m**2").magnitude
     a_out = output_piston_area.to("m**2").magnitude
     if s < 0:
-        raise ValueError("output_stroke must be non-negative")
-    if a_in <= 0 or a_out <= 0:
-        raise ValueError("piston areas must be positive")
+        raise _hydraulic_press_refusal(
+            "output_stroke must be non-negative", subject="output_stroke", source=_STROKE_SOURCE
+        )
+    for subject, magnitude in (("input_piston_area", a_in), ("output_piston_area", a_out)):
+        if magnitude <= 0:
+            raise _hydraulic_press_refusal(
+                "piston areas must be positive", subject=subject, source=_PISTON_DRAWING_SOURCE
+            )
     return Quantity(magnitude=s * a_out / a_in, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _hydraulic_press_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_hydraulic_press_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _hydraulic_press_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_hydraulic_press_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -25,7 +25,35 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CYCLONE_DRAWING_SOURCE = "the cyclone drawing and its design family's turn and head counts"
+_GAS_SOURCE = "the cited gas density and viscosity at the operating temperature"
+_DUTY_SOURCE = "the design gas flow and the resulting inlet velocity"
+_DUST_SOURCE = "the dust's measured particle density and size distribution"
+
+
+class _CycloneInputError(RefusalError, ValueError):
+    """A cyclone-separator input that cannot be used without correction."""
+
+
+def _cyclone_refusal(message: str, *, subject: str, source: str) -> _CycloneInputError:
+    return _CycloneInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _cyclone_input_source(name: str) -> str:
+    if name in {"effective_turns", "inlet_width", "velocity_head_count"}:
+        return _CYCLONE_DRAWING_SOURCE
+    if name in {"gas_density", "gas_viscosity"}:
+        return _GAS_SOURCE
+    if name in {"cut_diameter", "particle_density", "particle_diameter"}:
+        return _DUST_SOURCE
+    return _DUTY_SOURCE
+
 
 __all__ = [
     "cyclone_collection_efficiency",
@@ -58,18 +86,35 @@ def cyclone_cut_diameter(
     _check(particle_density, "[mass]/[length]**3", "particle_density")
     _check(gas_density, "[mass]/[length]**3", "gas_density")
     if gas_density.magnitude <= 0:
-        raise ValueError(f"gas_density must be positive; got {gas_density}")
+        raise _cyclone_refusal(
+            f"gas_density must be positive; got {gas_density}",
+            subject="gas_density",
+            source=_GAS_SOURCE,
+        )
     mu = gas_viscosity.to("Pa*s").magnitude
     b = inlet_width.to("m").magnitude
     v_i = inlet_velocity.to("m/s").magnitude
     rho_p = particle_density.to("kg/m**3").magnitude
     rho = gas_density.to("kg/m**3").magnitude
     if effective_turns <= 0:
-        raise ValueError("effective_turns must be positive")
-    if mu <= 0 or b <= 0 or v_i <= 0:
-        raise ValueError("gas_viscosity, inlet_width, and inlet_velocity must be positive")
+        raise _cyclone_refusal(
+            "effective_turns must be positive",
+            subject="effective_turns",
+            source=_CYCLONE_DRAWING_SOURCE,
+        )
+    for subject, magnitude in (("gas_viscosity", mu), ("inlet_width", b), ("inlet_velocity", v_i)):
+        if magnitude <= 0:
+            raise _cyclone_refusal(
+                "gas_viscosity, inlet_width, and inlet_velocity must be positive",
+                subject=subject,
+                source=_cyclone_input_source(subject),
+            )
     if rho_p <= rho:
-        raise ValueError("particle_density must exceed gas_density for the particle to separate")
+        raise _cyclone_refusal(
+            "particle_density must exceed gas_density for the particle to separate",
+            subject="particle_density and gas_density",
+            source=_DUST_SOURCE,
+        )
     d_pc = sqrt(9.0 * mu * b / (2.0 * pi * effective_turns * v_i * (rho_p - rho)))
     return Quantity(magnitude=d_pc, unit="m").to("um")
 
@@ -88,9 +133,13 @@ def cyclone_collection_efficiency(*, particle_diameter: Quantity, cut_diameter: 
     d_p = particle_diameter.to("m").magnitude
     d_pc = cut_diameter.to("m").magnitude
     if d_p <= 0:
-        raise ValueError("particle_diameter must be positive")
+        raise _cyclone_refusal(
+            "particle_diameter must be positive", subject="particle_diameter", source=_DUST_SOURCE
+        )
     if d_pc <= 0:
-        raise ValueError("cut_diameter must be positive")
+        raise _cyclone_refusal(
+            "cut_diameter must be positive", subject="cut_diameter", source=_DUST_SOURCE
+        )
     return 1.0 / (1.0 + (d_pc / d_p) ** 2)
 
 
@@ -115,20 +164,34 @@ def cyclone_pressure_drop(
     v = inlet_velocity.to("m/s").magnitude
     rho = gas_density.to("kg/m**3").magnitude
     if v <= 0:
-        raise ValueError("inlet_velocity must be positive")
+        raise _cyclone_refusal(
+            "inlet_velocity must be positive", subject="inlet_velocity", source=_DUTY_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("gas_density must be positive")
+        raise _cyclone_refusal(
+            "gas_density must be positive", subject="gas_density", source=_GAS_SOURCE
+        )
     if velocity_head_count <= 0:
-        raise ValueError("velocity_head_count must be positive")
+        raise _cyclone_refusal(
+            "velocity_head_count must be positive",
+            subject="velocity_head_count",
+            source=_CYCLONE_DRAWING_SOURCE,
+        )
     return Quantity(magnitude=velocity_head_count * 0.5 * rho * v**2, unit="Pa")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _cyclone_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_cyclone_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _cyclone_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_cyclone_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

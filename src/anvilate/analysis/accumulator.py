@@ -55,7 +55,7 @@ def _fraction(precharge: float, p_min: float, p_max: float, n: float) -> float:
     if precharge <= 0 or p_min <= 0 or p_max <= 0:
         raise _accumulator_refusal(
             "all pressures must be positive (absolute)",
-            subject="precharge, minimum, and maximum pressures",
+            subject="precharge_pressure, minimum_pressure, and maximum_pressure",
             source=_ACCUMULATOR_PRESSURE_SOURCE,
         )
     if precharge > p_min:

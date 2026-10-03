@@ -21,8 +21,33 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_COMPONENT_SOURCE = "the schematic's resistor value or measured source resistance"
+_TEMPERATURE_SOURCE = "the component's absolute operating temperature"
+_BANDWIDTH_SOURCE = "the measurement system's equivalent noise bandwidth"
+
+
+class _ThermalNoiseInputError(RefusalError, ValueError):
+    """A thermal-noise input that cannot be used without correction."""
+
+
+def _thermal_noise_refusal(message: str, *, subject: str, source: str) -> _ThermalNoiseInputError:
+    return _ThermalNoiseInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _thermal_noise_input_source(name: str) -> str:
+    if name == "temperature":
+        return _TEMPERATURE_SOURCE
+    if name == "bandwidth":
+        return _BANDWIDTH_SOURCE
+    return _COMPONENT_SOURCE
+
 
 _BOLTZMANN = 1.380649e-23  # J/K
 
@@ -50,11 +75,19 @@ def johnson_noise_voltage(
     t = temperature.to("K").magnitude
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if r <= 0:
-        raise ValueError("resistance must be positive")
+        raise _thermal_noise_refusal(
+            "resistance must be positive", subject="resistance", source=_COMPONENT_SOURCE
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _thermal_noise_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_TEMPERATURE_SOURCE,
+        )
     if b < 0:
-        raise ValueError("bandwidth must be non-negative")
+        raise _thermal_noise_refusal(
+            "bandwidth must be non-negative", subject="bandwidth", source=_BANDWIDTH_SOURCE
+        )
     return Quantity(magnitude=sqrt(4.0 * _BOLTZMANN * t * r * b), unit="V")
 
 
@@ -70,9 +103,15 @@ def johnson_noise_power(*, temperature: Quantity, bandwidth: Quantity) -> Quanti
     t = temperature.to("K").magnitude
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _thermal_noise_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_TEMPERATURE_SOURCE,
+        )
     if b < 0:
-        raise ValueError("bandwidth must be non-negative")
+        raise _thermal_noise_refusal(
+            "bandwidth must be non-negative", subject="bandwidth", source=_BANDWIDTH_SOURCE
+        )
     return Quantity(magnitude=_BOLTZMANN * t * b, unit="W")
 
 
@@ -93,20 +132,34 @@ def johnson_noise_current(
     t = temperature.to("K").magnitude
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if r <= 0:
-        raise ValueError("resistance must be positive")
+        raise _thermal_noise_refusal(
+            "resistance must be positive", subject="resistance", source=_COMPONENT_SOURCE
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _thermal_noise_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_TEMPERATURE_SOURCE,
+        )
     if b < 0:
-        raise ValueError("bandwidth must be non-negative")
+        raise _thermal_noise_refusal(
+            "bandwidth must be non-negative", subject="bandwidth", source=_BANDWIDTH_SOURCE
+        )
     return Quantity(magnitude=sqrt(4.0 * _BOLTZMANN * t * b / r), unit="A")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _thermal_noise_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_thermal_noise_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _thermal_noise_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_thermal_noise_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

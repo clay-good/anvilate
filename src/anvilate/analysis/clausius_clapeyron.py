@@ -25,7 +25,41 @@ from __future__ import annotations
 
 from math import exp, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SATURATION_DATA_SOURCE = "the cited saturation-pressure table or measured vapor-pressure point"
+_STATE_SOURCE = "the absolute operating temperature or pressure from the operating case"
+_LATENT_HEAT_SOURCE = "the cited enthalpy of vaporization for the substance"
+
+
+class _ClausiusClapeyronInputError(RefusalError, ValueError):
+    """A vapor-pressure input that cannot be used without correction."""
+
+
+def _clausius_clapeyron_refusal(
+    message: str, *, subject: str, source: str
+) -> _ClausiusClapeyronInputError:
+    return _ClausiusClapeyronInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _clausius_clapeyron_input_source(name: str) -> str:
+    if name in {
+        "pressure1",
+        "pressure2",
+        "reference_pressure",
+        "reference_temperature",
+        "temperature1",
+        "temperature2",
+    }:
+        return _SATURATION_DATA_SOURCE
+    if name == "enthalpy_of_vaporization":
+        return _LATENT_HEAT_SOURCE
+    return _STATE_SOURCE
+
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K), universal
 
@@ -59,10 +93,23 @@ def clausius_clapeyron_vapor_pressure(
     t1 = reference_temperature.to("K").magnitude
     t = temperature.to("K").magnitude
     dh = enthalpy_of_vaporization.to("J/mol").magnitude
-    if p1 <= 0 or t1 <= 0 or t <= 0:
-        raise ValueError("pressures and temperatures must be positive")
+    for subject, magnitude in (
+        ("reference_pressure", p1),
+        ("reference_temperature", t1),
+        ("temperature", t),
+    ):
+        if magnitude <= 0:
+            raise _clausius_clapeyron_refusal(
+                "pressures and temperatures must be positive",
+                subject=subject,
+                source=_clausius_clapeyron_input_source(subject),
+            )
     if dh <= 0:
-        raise ValueError("enthalpy_of_vaporization must be positive")
+        raise _clausius_clapeyron_refusal(
+            "enthalpy_of_vaporization must be positive",
+            subject="enthalpy_of_vaporization",
+            source=_LATENT_HEAT_SOURCE,
+        )
     p = p1 * exp((dh / _GAS_CONSTANT) * (1.0 / t1 - 1.0 / t))
     return Quantity(magnitude=p, unit="Pa")
 
@@ -90,10 +137,24 @@ def clausius_clapeyron_enthalpy_of_vaporization(
     t1 = temperature1.to("K").magnitude
     p2 = pressure2.to("Pa").magnitude
     t2 = temperature2.to("K").magnitude
-    if p1 <= 0 or p2 <= 0 or t1 <= 0 or t2 <= 0:
-        raise ValueError("pressures and temperatures must be positive")
+    for subject, magnitude in (
+        ("pressure1", p1),
+        ("pressure2", p2),
+        ("temperature1", t1),
+        ("temperature2", t2),
+    ):
+        if magnitude <= 0:
+            raise _clausius_clapeyron_refusal(
+                "pressures and temperatures must be positive",
+                subject=subject,
+                source=_SATURATION_DATA_SOURCE,
+            )
     if t1 == t2:
-        raise ValueError("temperature1 and temperature2 must differ")
+        raise _clausius_clapeyron_refusal(
+            "temperature1 and temperature2 must differ",
+            subject="temperature1 and temperature2",
+            source=_SATURATION_DATA_SOURCE,
+        )
     dh = -_GAS_CONSTANT * log(p2 / p1) / (1.0 / t2 - 1.0 / t1)
     return Quantity(magnitude=dh / 1000.0, unit="kJ/mol")
 
@@ -122,24 +183,45 @@ def clausius_clapeyron_boiling_temperature(
     t1 = reference_temperature.to("K").magnitude
     p = pressure.to("Pa").magnitude
     dh = enthalpy_of_vaporization.to("J/mol").magnitude
-    if p1 <= 0 or t1 <= 0 or p <= 0:
-        raise ValueError("pressures and temperature must be positive")
+    for subject, magnitude in (
+        ("reference_pressure", p1),
+        ("reference_temperature", t1),
+        ("pressure", p),
+    ):
+        if magnitude <= 0:
+            raise _clausius_clapeyron_refusal(
+                "pressures and temperature must be positive",
+                subject=subject,
+                source=_clausius_clapeyron_input_source(subject),
+            )
     if dh <= 0:
-        raise ValueError("enthalpy_of_vaporization must be positive")
+        raise _clausius_clapeyron_refusal(
+            "enthalpy_of_vaporization must be positive",
+            subject="enthalpy_of_vaporization",
+            source=_LATENT_HEAT_SOURCE,
+        )
     inverse_t = 1.0 / t1 - (_GAS_CONSTANT / dh) * log(p / p1)
     if inverse_t <= 0:
-        raise ValueError(
-            "the given pressure lies beyond the model's valid range (implied temperature diverges)"
+        raise _clausius_clapeyron_refusal(
+            "the given pressure lies beyond the model's valid range (implied temperature diverges)",
+            subject="pressure",
+            source=_STATE_SOURCE,
         )
     return Quantity(magnitude=1.0 / inverse_t, unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _clausius_clapeyron_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_clausius_clapeyron_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _clausius_clapeyron_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_clausius_clapeyron_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

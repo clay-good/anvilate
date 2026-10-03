@@ -24,7 +24,32 @@ from __future__ import annotations
 
 from math import exp, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_KINETIC_DATA_SOURCE = "the cited or fitted Arrhenius parameters for the reaction"
+_TEMPERATURE_SOURCE = "the absolute temperatures of the operating or test conditions"
+_RATE_DATA_SOURCE = "the measured rate constants at the two test temperatures"
+
+
+class _ArrheniusInputError(RefusalError, ValueError):
+    """An Arrhenius-kinetics input that cannot be used without correction."""
+
+
+def _arrhenius_refusal(message: str, *, subject: str, source: str) -> _ArrheniusInputError:
+    return _ArrheniusInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _arrhenius_input_source(name: str) -> str:
+    if name in {"temperature", "temperature_high", "temperature_low"}:
+        return _TEMPERATURE_SOURCE
+    if name in {"rate_constant_high", "rate_constant_low"}:
+        return _RATE_DATA_SOURCE
+    return _KINETIC_DATA_SOURCE
+
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K)
 
@@ -52,9 +77,17 @@ def arrhenius_rate_constant(
     ea = activation_energy.to("J/mol").magnitude
     t = temperature.to("K").magnitude
     if a <= 0:
-        raise ValueError("pre_exponential_factor must be positive")
+        raise _arrhenius_refusal(
+            "pre_exponential_factor must be positive",
+            subject="pre_exponential_factor",
+            source=_KINETIC_DATA_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _arrhenius_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_TEMPERATURE_SOURCE,
+        )
     return Quantity(magnitude=a * exp(-ea / (_GAS_CONSTANT * t)), unit="1/s")
 
 
@@ -77,10 +110,19 @@ def arrhenius_rate_ratio(
     ea = activation_energy.to("J/mol").magnitude
     t1 = temperature_low.to("K").magnitude
     t2 = temperature_high.to("K").magnitude
-    if t1 <= 0 or t2 <= 0:
-        raise ValueError("temperatures must be positive (absolute temperature)")
+    for subject, magnitude in (("temperature_low", t1), ("temperature_high", t2)):
+        if magnitude <= 0:
+            raise _arrhenius_refusal(
+                "temperatures must be positive (absolute temperature)",
+                subject=subject,
+                source=_TEMPERATURE_SOURCE,
+            )
     if t2 <= t1:
-        raise ValueError("temperature_high must exceed temperature_low")
+        raise _arrhenius_refusal(
+            "temperature_high must exceed temperature_low",
+            subject="temperature_low and temperature_high",
+            source=_TEMPERATURE_SOURCE,
+        )
     return exp((ea / _GAS_CONSTANT) * (1.0 / t1 - 1.0 / t2))
 
 
@@ -106,24 +148,46 @@ def arrhenius_activation_energy(
     k2 = rate_constant_high.to("1/s").magnitude
     t1 = temperature_low.to("K").magnitude
     t2 = temperature_high.to("K").magnitude
-    if k1 <= 0 or k2 <= 0:
-        raise ValueError("rate constants must be positive")
-    if t1 <= 0 or t2 <= 0:
-        raise ValueError("temperatures must be positive (absolute temperature)")
+    for subject, magnitude in (("rate_constant_low", k1), ("rate_constant_high", k2)):
+        if magnitude <= 0:
+            raise _arrhenius_refusal(
+                "rate constants must be positive", subject=subject, source=_RATE_DATA_SOURCE
+            )
+    for subject, magnitude in (("temperature_low", t1), ("temperature_high", t2)):
+        if magnitude <= 0:
+            raise _arrhenius_refusal(
+                "temperatures must be positive (absolute temperature)",
+                subject=subject,
+                source=_TEMPERATURE_SOURCE,
+            )
     if t2 <= t1:
-        raise ValueError("temperature_high must exceed temperature_low")
+        raise _arrhenius_refusal(
+            "temperature_high must exceed temperature_low",
+            subject="temperature_low and temperature_high",
+            source=_TEMPERATURE_SOURCE,
+        )
     if k2 <= k1:
-        raise ValueError("rate_constant_high must exceed rate_constant_low (rate rises with T)")
+        raise _arrhenius_refusal(
+            "rate_constant_high must exceed rate_constant_low (rate rises with T)",
+            subject="rate_constant_low and rate_constant_high",
+            source=_RATE_DATA_SOURCE,
+        )
     ea = _GAS_CONSTANT * log(k2 / k1) / (1.0 / t1 - 1.0 / t2)
     return Quantity(magnitude=ea, unit="J/mol")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _arrhenius_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_arrhenius_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _arrhenius_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_arrhenius_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

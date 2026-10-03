@@ -22,7 +22,34 @@ linear regulator's dropout and load current impose, and the efficiency that leav
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_RAIL_SOURCE = "the power-tree design (input rail and regulated output voltage)"
+_LOAD_SOURCE = "the load's current budget"
+_DATASHEET_SOURCE = "the regulator datasheet's quiescent (ground) current"
+
+
+class _LinearRegulatorInputError(RefusalError, ValueError):
+    """A linear-regulator input that cannot be used without correction."""
+
+
+def _linear_regulator_refusal(
+    message: str, *, subject: str, source: str
+) -> _LinearRegulatorInputError:
+    return _LinearRegulatorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _linear_regulator_input_source(name: str) -> str:
+    if name == "load_current":
+        return _LOAD_SOURCE
+    if name == "quiescent_current":
+        return _DATASHEET_SOURCE
+    return _RAIL_SOURCE
+
 
 __all__ = [
     "linear_regulator_dissipation",
@@ -55,13 +82,19 @@ def linear_regulator_dissipation(
     i_load = load_current.to("A").magnitude
     i_q = _quiescent(quiescent_current)
     if v_out <= 0:
-        raise ValueError("output_voltage must be positive")
+        raise _linear_regulator_refusal(
+            "output_voltage must be positive", subject="output_voltage", source=_RAIL_SOURCE
+        )
     if v_in <= v_out:
-        raise ValueError(
-            "input_voltage must exceed output_voltage (a linear regulator cannot boost)"
+        raise _linear_regulator_refusal(
+            "input_voltage must exceed output_voltage (a linear regulator cannot boost)",
+            subject="input_voltage and output_voltage",
+            source=_RAIL_SOURCE,
         )
     if i_load < 0:
-        raise ValueError("load_current must be non-negative")
+        raise _linear_regulator_refusal(
+            "load_current must be non-negative", subject="load_current", source=_LOAD_SOURCE
+        )
     return Quantity(magnitude=(v_in - v_out) * i_load + v_in * i_q, unit="W")
 
 
@@ -89,13 +122,19 @@ def linear_regulator_efficiency(
     i_load = load_current.to("A").magnitude
     i_q = _quiescent(quiescent_current)
     if v_out <= 0:
-        raise ValueError("output_voltage must be positive")
+        raise _linear_regulator_refusal(
+            "output_voltage must be positive", subject="output_voltage", source=_RAIL_SOURCE
+        )
     if v_in <= v_out:
-        raise ValueError(
-            "input_voltage must exceed output_voltage (a linear regulator cannot boost)"
+        raise _linear_regulator_refusal(
+            "input_voltage must exceed output_voltage (a linear regulator cannot boost)",
+            subject="input_voltage and output_voltage",
+            source=_RAIL_SOURCE,
         )
     if i_load <= 0:
-        raise ValueError("load_current must be positive")
+        raise _linear_regulator_refusal(
+            "load_current must be positive", subject="load_current", source=_LOAD_SOURCE
+        )
     return v_out * i_load / (v_in * (i_load + i_q))
 
 
@@ -105,16 +144,26 @@ def _quiescent(quiescent_current: Quantity | None) -> float:
     _check(quiescent_current, "[current]", "quiescent_current")
     i_q = quiescent_current.to("A").magnitude
     if i_q < 0:
-        raise ValueError("quiescent_current must be non-negative")
+        raise _linear_regulator_refusal(
+            "quiescent_current must be non-negative",
+            subject="quiescent_current",
+            source=_DATASHEET_SOURCE,
+        )
     return i_q
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _linear_regulator_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_linear_regulator_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _linear_regulator_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_linear_regulator_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

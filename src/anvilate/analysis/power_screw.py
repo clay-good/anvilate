@@ -25,7 +25,36 @@ from __future__ import annotations
 
 from math import atan, degrees, pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SCREW_DRAWING_SOURCE = "the screw drawing or thread standard (mean diameter and lead)"
+_FRICTION_SOURCE = "the thread or collar friction test record or cited lubricated-pair coefficient"
+_COLLAR_DRAWING_SOURCE = "the thrust-collar drawing"
+_DUTY_SOURCE = "the screw's axial load case or drive torque"
+_SCREW_FRICTION_RANGE_SOURCE = "the thread friction record and screw drawing (square-thread range)"
+
+
+class _PowerScrewInputError(RefusalError, ValueError):
+    """A power-screw input that cannot be used without correction."""
+
+
+def _power_screw_refusal(message: str, *, subject: str, source: str) -> _PowerScrewInputError:
+    return _PowerScrewInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _power_screw_input_source(name: str) -> str:
+    if name in {"lead", "mean_diameter"}:
+        return _SCREW_DRAWING_SOURCE
+    if name in {"collar_friction_coefficient", "friction_coefficient"}:
+        return _FRICTION_SOURCE
+    if name == "collar_mean_radius":
+        return _COLLAR_DRAWING_SOURCE
+    return _DUTY_SOURCE
+
 
 __all__ = [
     "lead_angle",
@@ -40,10 +69,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _power_screw_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_power_screw_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _power_screw_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_power_screw_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -61,15 +96,25 @@ def _geometry(
     dm = mean_diameter.to("mm").magnitude
     ell = lead.to("mm").magnitude
     if dm <= 0:
-        raise ValueError(f"mean_diameter must be positive; got {mean_diameter}")
+        raise _power_screw_refusal(
+            f"mean_diameter must be positive; got {mean_diameter}",
+            subject="mean_diameter",
+            source=_SCREW_DRAWING_SOURCE,
+        )
     if ell <= 0:
-        raise ValueError(f"lead must be positive; got {lead}")
+        raise _power_screw_refusal(
+            f"lead must be positive; got {lead}", subject="lead", source=_SCREW_DRAWING_SOURCE
+        )
     # A NaN μ passes the comparison below, and `power_screw_is_self_locking` then answers
     # `mu >= ell / (pi * dm)` — False — which reads as "this screw backdrives" about a
     # friction coefficient nobody supplied.
     require_finite(friction_coefficient, name="friction_coefficient")
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _power_screw_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_FRICTION_SOURCE,
+        )
     return dm, ell, friction_coefficient
 
 
@@ -83,10 +128,12 @@ def _reject_beyond_square_thread_range(dm: float, ell: float, mu: float) -> None
     """
     tan_lambda = ell / (pi * dm)
     if mu * tan_lambda >= 1.0:
-        raise ValueError(
+        raise _power_screw_refusal(
             f"friction_coefficient * tan(lead angle) = {mu * tan_lambda:.4f} >= 1, where the "
             f"square-thread expressions turn negative and stop describing a screw. "
-            f"Check the friction coefficient ({mu}) and the lead-to-diameter ratio."
+            f"Check the friction coefficient ({mu}) and the lead-to-diameter ratio.",
+            subject="friction_coefficient and lead",
+            source=_SCREW_FRICTION_RANGE_SOURCE,
         )
 
 
@@ -236,11 +283,17 @@ def power_screw_collar_torque(
     _require(load, "[force]", "load")
     _require(collar_mean_radius, "[length]", "collar_mean_radius")
     if collar_friction_coefficient < 0:
-        raise ValueError(
-            f"collar_friction_coefficient must be non-negative; got {collar_friction_coefficient}"
+        raise _power_screw_refusal(
+            f"collar_friction_coefficient must be non-negative; got {collar_friction_coefficient}",
+            subject="collar_friction_coefficient",
+            source=_FRICTION_SOURCE,
         )
     f = load.to("N").magnitude
     r_c = collar_mean_radius.to("m").magnitude
     if r_c <= 0:
-        raise ValueError(f"collar_mean_radius must be positive; got {collar_mean_radius}")
+        raise _power_screw_refusal(
+            f"collar_mean_radius must be positive; got {collar_mean_radius}",
+            subject="collar_mean_radius",
+            source=_COLLAR_DRAWING_SOURCE,
+        )
     return Quantity(magnitude=collar_friction_coefficient * f * r_c, unit="N*m")

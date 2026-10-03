@@ -22,7 +22,32 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SCHEMATIC_SOURCE = "the circuit schematic's resistor values or measured resistances"
+_OPERATING_SOURCE = "the circuit's measured or specified operating current or voltage"
+_SOURCE_DATASHEET = "the source's datasheet (open-circuit voltage and internal resistance)"
+
+
+class _DcCircuitInputError(RefusalError, ValueError):
+    """A DC-circuit input that cannot be used without correction."""
+
+
+def _dc_circuit_refusal(message: str, *, subject: str, source: str) -> _DcCircuitInputError:
+    return _DcCircuitInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _dc_circuit_input_source(name: str) -> str:
+    if name == "current":
+        return _OPERATING_SOURCE
+    if name in {"source_resistance", "source_voltage"}:
+        return _SOURCE_DATASHEET
+    return _SCHEMATIC_SOURCE
+
 
 __all__ = [
     "maximum_power_transfer",
@@ -44,9 +69,13 @@ def ohms_law_voltage(*, current: Quantity, resistance: Quantity) -> Quantity:
     i = current.to("A").magnitude
     r = resistance.to("ohm").magnitude
     if i < 0:
-        raise ValueError("current must be non-negative")
+        raise _dc_circuit_refusal(
+            "current must be non-negative", subject="current", source=_OPERATING_SOURCE
+        )
     if r < 0:
-        raise ValueError("resistance must be non-negative")
+        raise _dc_circuit_refusal(
+            "resistance must be non-negative", subject="resistance", source=_SCHEMATIC_SOURCE
+        )
     return Quantity(magnitude=i * r, unit="V")
 
 
@@ -62,7 +91,9 @@ def resistive_power(*, current: Quantity, resistance: Quantity) -> Quantity:
     i = current.to("A").magnitude
     r = resistance.to("ohm").magnitude
     if r < 0:
-        raise ValueError("resistance must be non-negative")
+        raise _dc_circuit_refusal(
+            "resistance must be non-negative", subject="resistance", source=_SCHEMATIC_SOURCE
+        )
     return Quantity(magnitude=i * i * r, unit="W")
 
 
@@ -83,9 +114,17 @@ def maximum_power_transfer(*, source_voltage: Quantity, source_resistance: Quant
     v_s = source_voltage.to("V").magnitude
     r_s = source_resistance.to("ohm").magnitude
     if v_s < 0:
-        raise ValueError("source_voltage must be non-negative")
+        raise _dc_circuit_refusal(
+            "source_voltage must be non-negative",
+            subject="source_voltage",
+            source=_SOURCE_DATASHEET,
+        )
     if r_s <= 0:
-        raise ValueError("source_resistance must be positive")
+        raise _dc_circuit_refusal(
+            "source_resistance must be positive",
+            subject="source_resistance",
+            source=_SOURCE_DATASHEET,
+        )
     return Quantity(magnitude=v_s**2 / (4.0 * r_s), unit="W")
 
 
@@ -97,25 +136,41 @@ def parallel_resistance(*, resistances: Sequence[Quantity]) -> Quantity:
     through. Returns the equivalent resistance in ohm.
     """
     if not isinstance(resistances, Sequence):
-        raise ValueError(f"resistances must be a sequence, not a single value; got {resistances!r}")
+        raise _dc_circuit_refusal(
+            f"resistances must be a sequence, not a single value; got {resistances!r}",
+            subject="resistances",
+            source=_SCHEMATIC_SOURCE,
+        )
     if len(resistances) == 0:
-        raise ValueError("resistances must contain at least one resistor")
+        raise _dc_circuit_refusal(
+            "resistances must contain at least one resistor",
+            subject="resistances",
+            source=_SCHEMATIC_SOURCE,
+        )
     conductance_sum = 0.0
     for idx, res in enumerate(resistances):
         _check(res, "[resistance]", f"resistances[{idx}]")
         r = res.to("ohm").magnitude
         if r <= 0:
-            raise ValueError("each resistance must be positive")
+            raise _dc_circuit_refusal(
+                "each resistance must be positive", subject="resistances", source=_SCHEMATIC_SOURCE
+            )
         conductance_sum += 1.0 / r
     return Quantity(magnitude=1.0 / conductance_sum, unit="ohm")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _dc_circuit_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_dc_circuit_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _dc_circuit_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_dc_circuit_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

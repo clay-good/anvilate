@@ -29,7 +29,32 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FLANGE_DRAWING_SOURCE = "the flange and gasket drawing (gasket diameter and seating width)"
+_GASKET_FACTOR_SOURCE = "the gasket's ASME VIII-1 Table 2-5.1 factors or manufacturer data"
+_DESIGN_PRESSURE_SOURCE = "the vessel's design pressure"
+
+
+class _GasketInputError(RefusalError, ValueError):
+    """A bolted-flange gasket input that cannot be used without correction."""
+
+
+def _gasket_refusal(message: str, *, subject: str, source: str) -> _GasketInputError:
+    return _GasketInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _gasket_input_source(name: str) -> str:
+    if name in {"gasket_factor", "seating_stress"}:
+        return _GASKET_FACTOR_SOURCE
+    if name == "pressure":
+        return _DESIGN_PRESSURE_SOURCE
+    return _FLANGE_DRAWING_SOURCE
+
 
 __all__ = [
     "gasket_seating_load",
@@ -40,15 +65,23 @@ __all__ = [
 
 def _positive_mm(value: Quantity, name: str) -> float:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+        raise _gasket_refusal(
+            f"{name} must be a [length] quantity; got {value!r}",
+            subject=name,
+            source=_gasket_input_source(name),
+        )
     if not value.has_dimension("[length]"):
-        raise ValueError(
-            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})"
+        raise _gasket_refusal(
+            f"{name} must be a [length] quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_gasket_input_source(name),
         )
     require_finite(value, name=name)
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _gasket_refusal(
+            f"{name} must be positive; got {value}", subject=name, source=_gasket_input_source(name)
+        )
     return magnitude
 
 
@@ -65,14 +98,24 @@ def gasket_seating_load(
     g = _positive_mm(gasket_mean_diameter, "gasket_mean_diameter")
     b = _positive_mm(effective_seating_width, "effective_seating_width")
     if not isinstance(seating_stress, Quantity):
-        raise ValueError(f"seating_stress must be a [pressure] quantity; got {seating_stress!r}")
+        raise _gasket_refusal(
+            f"seating_stress must be a [pressure] quantity; got {seating_stress!r}",
+            subject="seating_stress",
+            source=_GASKET_FACTOR_SOURCE,
+        )
     if not seating_stress.has_dimension("[pressure]"):
-        raise ValueError(
-            f"seating_stress must be a [pressure] quantity; got {seating_stress.dimensionality}"
+        raise _gasket_refusal(
+            f"seating_stress must be a [pressure] quantity; got {seating_stress.dimensionality}",
+            subject="seating_stress",
+            source=_GASKET_FACTOR_SOURCE,
         )
     y = seating_stress.to("MPa").magnitude
     if y <= 0:
-        raise ValueError(f"seating_stress must be positive; got {seating_stress}")
+        raise _gasket_refusal(
+            f"seating_stress must be positive; got {seating_stress}",
+            subject="seating_stress",
+            source=_GASKET_FACTOR_SOURCE,
+        )
     return Quantity(magnitude=pi * b * g * y, unit="N")
 
 
@@ -94,17 +137,31 @@ def gasket_operating_load(
     g = _positive_mm(gasket_mean_diameter, "gasket_mean_diameter")
     b = _positive_mm(effective_seating_width, "effective_seating_width")
     if gasket_factor <= 0:
-        raise ValueError(f"gasket_factor must be positive; got {gasket_factor}")
+        raise _gasket_refusal(
+            f"gasket_factor must be positive; got {gasket_factor}",
+            subject="gasket_factor",
+            source=_GASKET_FACTOR_SOURCE,
+        )
     if not isinstance(pressure, Quantity):
-        raise ValueError(f"pressure must be a [pressure] quantity; got {pressure!r}")
+        raise _gasket_refusal(
+            f"pressure must be a [pressure] quantity; got {pressure!r}",
+            subject="pressure",
+            source=_DESIGN_PRESSURE_SOURCE,
+        )
     if not pressure.has_dimension("[pressure]"):
-        raise ValueError(
-            f"pressure must be a [pressure] quantity; got {pressure.dimensionality} ({pressure})"
+        raise _gasket_refusal(
+            f"pressure must be a [pressure] quantity; got {pressure.dimensionality} ({pressure})",
+            subject="pressure",
+            source=_DESIGN_PRESSURE_SOURCE,
         )
     require_finite(pressure, name="pressure")
     p = pressure.to("MPa").magnitude
     if p <= 0:
-        raise ValueError(f"pressure must be positive; got {pressure}")
+        raise _gasket_refusal(
+            f"pressure must be positive; got {pressure}",
+            subject="pressure",
+            source=_DESIGN_PRESSURE_SOURCE,
+        )
     end_force = pi / 4.0 * g**2 * p
     gasket_reaction = 2.0 * b * pi * g * gasket_factor * p
     return Quantity(magnitude=end_force + gasket_reaction, unit="N")

@@ -24,8 +24,35 @@ from __future__ import annotations
 
 from math import pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import revolutions_per_second
+
+_UNIT_DATASHEET_SOURCE = "the pump or motor datasheet (displacement and efficiencies)"
+_SPEED_SOURCE = "the drive's rated or measured shaft speed"
+_CIRCUIT_SOURCE = "the hydraulic circuit's design pressure drop or flow"
+
+
+class _HydraulicMotorInputError(RefusalError, ValueError):
+    """A rotary-hydraulic input that cannot be used without correction."""
+
+
+def _hydraulic_motor_refusal(
+    message: str, *, subject: str, source: str
+) -> _HydraulicMotorInputError:
+    return _HydraulicMotorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _hydraulic_motor_input_source(name: str) -> str:
+    if name in {"displacement", "mechanical_efficiency", "volumetric_efficiency"}:
+        return _UNIT_DATASHEET_SOURCE
+    if name == "rotational_speed":
+        return _SPEED_SOURCE
+    return _CIRCUIT_SOURCE
+
 
 __all__ = [
     "hydraulic_motor_speed",
@@ -54,9 +81,15 @@ def hydraulic_pump_flow_rate(
     d = displacement.to("m**3").magnitude
     rev_per_second = revolutions_per_second(rotational_speed, name="rotational_speed")
     if d <= 0:
-        raise ValueError("displacement must be positive")
+        raise _hydraulic_motor_refusal(
+            "displacement must be positive", subject="displacement", source=_UNIT_DATASHEET_SOURCE
+        )
     if rev_per_second < 0:
-        raise ValueError("rotational_speed must be non-negative")
+        raise _hydraulic_motor_refusal(
+            "rotational_speed must be non-negative",
+            subject="rotational_speed",
+            source=_SPEED_SOURCE,
+        )
     return Quantity(magnitude=d * rev_per_second * volumetric_efficiency, unit="m**3/s")
 
 
@@ -81,9 +114,13 @@ def hydraulic_motor_torque(
     d = displacement.to("m**3").magnitude
     dp = pressure_drop.to("Pa").magnitude
     if d <= 0:
-        raise ValueError("displacement must be positive")
+        raise _hydraulic_motor_refusal(
+            "displacement must be positive", subject="displacement", source=_UNIT_DATASHEET_SOURCE
+        )
     if dp < 0:
-        raise ValueError("pressure_drop must be non-negative")
+        raise _hydraulic_motor_refusal(
+            "pressure_drop must be non-negative", subject="pressure_drop", source=_CIRCUIT_SOURCE
+        )
     return Quantity(magnitude=d * dp / (2.0 * pi) * mechanical_efficiency, unit="N*m")
 
 
@@ -107,24 +144,38 @@ def hydraulic_motor_speed(
     q = flow_rate.to("m**3/s").magnitude
     d = displacement.to("m**3").magnitude
     if q < 0:
-        raise ValueError("flow_rate must be non-negative")
+        raise _hydraulic_motor_refusal(
+            "flow_rate must be non-negative", subject="flow_rate", source=_CIRCUIT_SOURCE
+        )
     if d <= 0:
-        raise ValueError("displacement must be positive")
+        raise _hydraulic_motor_refusal(
+            "displacement must be positive", subject="displacement", source=_UNIT_DATASHEET_SOURCE
+        )
     rev_per_second = q * volumetric_efficiency / d
     return Quantity(magnitude=rev_per_second * 60.0, unit="rpm")
 
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be in (0, 1]; got {value}")
+        raise _hydraulic_motor_refusal(
+            f"{name} must be in (0, 1]; got {value}",
+            subject=name,
+            source=_hydraulic_motor_input_source(name),
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _hydraulic_motor_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_hydraulic_motor_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _hydraulic_motor_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_hydraulic_motor_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

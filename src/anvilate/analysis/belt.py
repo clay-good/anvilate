@@ -328,7 +328,7 @@ def _pulley_geometry(
         raise _drive_refusal(
             f"large_pulley_diameter ({large_pulley_diameter}) must be at least "
             f"small_pulley_diameter ({small_pulley_diameter})",
-            subject="the large and small pulley diameter assignments",
+            subject="large_pulley_diameter and small_pulley_diameter",
             source=_PULLEY_GEOMETRY_SOURCE,
         )
     if c <= (big - small) / 2.0:

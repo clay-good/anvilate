@@ -17,7 +17,33 @@ the ``total_pressure`` Δp the system needs (the summed duct and fitting losses)
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SYSTEM_PRESSURE_SOURCE = "the duct system pressure-loss calculation or measured traverse"
+_DUCT_DRAWING_SOURCE = "the duct layout drawing or measured duct dimensions"
+_AIRFLOW_SOURCE = "the zone airflow requirement or load calculation"
+_FAN_CURVE_SOURCE = "the fan manufacturer's performance curve at the duty point"
+
+
+class _HvacDuctInputError(RefusalError, ValueError):
+    """An HVAC duct or fan input that cannot be used without correction."""
+
+
+def _duct_refusal(message: str, *, subject: str, source: str) -> _HvacDuctInputError:
+    return _HvacDuctInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _duct_input_source(name: str) -> str:
+    if name in {"width", "height"}:
+        return _DUCT_DRAWING_SOURCE
+    if name == "flow_rate":
+        return _AIRFLOW_SOURCE
+    return _SYSTEM_PRESSURE_SOURCE
+
 
 __all__ = [
     "circular_equivalent_diameter",
@@ -44,8 +70,13 @@ def fan_total_pressure(
     _check(velocity_pressure, "[pressure]", "velocity_pressure")
     ps = static_pressure.to("Pa").magnitude
     pv = velocity_pressure.to("Pa").magnitude
-    if ps < 0 or pv < 0:
-        raise ValueError("static_pressure and velocity_pressure must be non-negative")
+    for name, value in (("static_pressure", ps), ("velocity_pressure", pv)):
+        if value < 0:
+            raise _duct_refusal(
+                "static_pressure and velocity_pressure must be non-negative",
+                subject=name,
+                source=_SYSTEM_PRESSURE_SOURCE,
+            )
     return Quantity(magnitude=ps + pv, unit="Pa")
 
 
@@ -62,8 +93,13 @@ def circular_equivalent_diameter(*, width: Quantity, height: Quantity) -> Quanti
     _check(height, "[length]", "height")
     a = width.to("m").magnitude
     b = height.to("m").magnitude
-    if a <= 0 or b <= 0:
-        raise ValueError("width and height must be positive")
+    for name, value in (("width", a), ("height", b)):
+        if value <= 0:
+            raise _duct_refusal(
+                "width and height must be positive",
+                subject=name,
+                source=_DUCT_DRAWING_SOURCE,
+            )
     d_e = 1.30 * (a * b) ** 0.625 / (a + b) ** 0.25
     return Quantity(magnitude=d_e, unit="m")
 
@@ -85,21 +121,37 @@ def fan_power(
     _check(flow_rate, "[length]**3/[time]", "flow_rate")
     _check(total_pressure, "[pressure]", "total_pressure")
     if flow_rate.to("m**3/s").magnitude <= 0:
-        raise ValueError("flow_rate must be positive")
+        raise _duct_refusal(
+            "flow_rate must be positive", subject="flow_rate", source=_AIRFLOW_SOURCE
+        )
     if total_pressure.to("Pa").magnitude <= 0:
-        raise ValueError("total_pressure must be positive")
+        raise _duct_refusal(
+            "total_pressure must be positive",
+            subject="total_pressure",
+            source=_SYSTEM_PRESSURE_SOURCE,
+        )
     if not 0.0 < fan_efficiency <= 1.0:
-        raise ValueError(f"fan_efficiency must be in (0, 1]; got {fan_efficiency}")
+        raise _duct_refusal(
+            f"fan_efficiency must be in (0, 1]; got {fan_efficiency}",
+            subject="fan_efficiency",
+            source=_FAN_CURVE_SOURCE,
+        )
     power = flow_rate.pint * total_pressure.pint / fan_efficiency
     return Quantity(magnitude=float(power.to("W").magnitude), unit="W")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _duct_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_duct_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _duct_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_duct_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

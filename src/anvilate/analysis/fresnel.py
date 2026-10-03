@@ -59,7 +59,7 @@ def _transmitted_cosine(n_1: float, n_2: float, incidence_angle: float) -> tuple
     if n_1 <= 0 or n_2 <= 0:
         raise _fresnel_refusal(
             "refractive indices must be positive",
-            subject="incident and transmitted refractive indices",
+            subject="incident_index and transmitted_index",
             source=_REFRACTIVE_INDEX_SOURCE,
         )
     if not 0.0 <= incidence_angle < 90.0:
@@ -77,7 +77,7 @@ def _transmitted_cosine(n_1: float, n_2: float, incidence_angle: float) -> tuple
             f"total internal reflection: {incidence_angle} degrees is at or beyond the critical "
             f"angle {critical:.4f} degrees for n1 = {n_1} into n2 = {n_2}, so no light is "
             f"transmitted and the Fresnel reflectance is simply 1",
-            subject="incidence angle and refractive indices",
+            subject="incidence_angle, incident_index, and transmitted_index",
             source=_INCIDENCE_GEOMETRY_SOURCE,
         )
     return cos(theta_i), sqrt(1.0 - sin_t * sin_t)

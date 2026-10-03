@@ -26,8 +26,38 @@ from __future__ import annotations
 
 from math import log2
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_CHANNEL_SOURCE = "the channel's allocated bandwidth"
+_LINK_BUDGET_SOURCE = "the link budget's signal-to-noise ratio (linear, not dB)"
+_REQUIREMENT_SOURCE = "the link's required data rate or spectral efficiency"
+_MODULATION_SOURCE = "the modulation scheme's number of signal levels"
+
+
+class _ChannelCapacityInputError(RefusalError, ValueError):
+    """A channel-capacity input that cannot be used without correction."""
+
+
+def _channel_capacity_refusal(
+    message: str, *, subject: str, source: str
+) -> _ChannelCapacityInputError:
+    return _ChannelCapacityInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _channel_capacity_input_source(name: str) -> str:
+    if name == "signal_to_noise_ratio":
+        return _LINK_BUDGET_SOURCE
+    if name in {"capacity", "spectral_efficiency"}:
+        return _REQUIREMENT_SOURCE
+    if name == "signal_levels":
+        return _MODULATION_SOURCE
+    return _CHANNEL_SOURCE
+
 
 __all__ = [
     "nyquist_channel_capacity",
@@ -49,9 +79,15 @@ def shannon_capacity(*, bandwidth: Quantity, signal_to_noise_ratio: float) -> fl
     _check(bandwidth, "1/[time]", "bandwidth")
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if b < 0:
-        raise ValueError("bandwidth must be non-negative")
+        raise _channel_capacity_refusal(
+            "bandwidth must be non-negative", subject="bandwidth", source=_CHANNEL_SOURCE
+        )
     if signal_to_noise_ratio < 0:
-        raise ValueError("signal_to_noise_ratio must be non-negative")
+        raise _channel_capacity_refusal(
+            "signal_to_noise_ratio must be non-negative",
+            subject="signal_to_noise_ratio",
+            source=_LINK_BUDGET_SOURCE,
+        )
     return b * log2(1.0 + signal_to_noise_ratio)
 
 
@@ -64,9 +100,15 @@ def shannon_required_bandwidth(*, capacity: float, signal_to_noise_ratio: float)
     bandwidth. Returns the required bandwidth in Hz.
     """
     if capacity < 0:
-        raise ValueError("capacity must be non-negative")
+        raise _channel_capacity_refusal(
+            "capacity must be non-negative", subject="capacity", source=_REQUIREMENT_SOURCE
+        )
     if signal_to_noise_ratio <= 0:
-        raise ValueError("signal_to_noise_ratio must be positive")
+        raise _channel_capacity_refusal(
+            "signal_to_noise_ratio must be positive",
+            subject="signal_to_noise_ratio",
+            source=_LINK_BUDGET_SOURCE,
+        )
     return Quantity(magnitude=capacity / log2(1.0 + signal_to_noise_ratio), unit="Hz")
 
 
@@ -81,9 +123,13 @@ def nyquist_channel_capacity(*, bandwidth: Quantity, signal_levels: int) -> floa
     _check(bandwidth, "1/[time]", "bandwidth")
     b = count_rate_per_second(bandwidth, name="bandwidth")
     if b < 0:
-        raise ValueError("bandwidth must be non-negative")
+        raise _channel_capacity_refusal(
+            "bandwidth must be non-negative", subject="bandwidth", source=_CHANNEL_SOURCE
+        )
     if signal_levels < 2:
-        raise ValueError("signal_levels must be at least 2")
+        raise _channel_capacity_refusal(
+            "signal_levels must be at least 2", subject="signal_levels", source=_MODULATION_SOURCE
+        )
     return 2.0 * b * log2(signal_levels)
 
 
@@ -98,7 +144,11 @@ def spectral_efficiency(*, signal_to_noise_ratio: float) -> float:
     power ratio (not dB) and must be non-negative. Returns the spectral efficiency in bit/s/Hz.
     """
     if signal_to_noise_ratio < 0:
-        raise ValueError("signal_to_noise_ratio must be non-negative")
+        raise _channel_capacity_refusal(
+            "signal_to_noise_ratio must be non-negative",
+            subject="signal_to_noise_ratio",
+            source=_LINK_BUDGET_SOURCE,
+        )
     return log2(1.0 + signal_to_noise_ratio)
 
 
@@ -114,16 +164,26 @@ def shannon_minimum_eb_n0(*, spectral_efficiency: float) -> float:
     """
     require_finite(spectral_efficiency, name="spectral_efficiency")
     if spectral_efficiency <= 0:
-        raise ValueError("spectral_efficiency must be positive")
+        raise _channel_capacity_refusal(
+            "spectral_efficiency must be positive",
+            subject="spectral_efficiency",
+            source=_REQUIREMENT_SOURCE,
+        )
     return (2.0**spectral_efficiency - 1.0) / spectral_efficiency
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _channel_capacity_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_channel_capacity_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _channel_capacity_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_channel_capacity_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

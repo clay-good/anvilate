@@ -677,7 +677,7 @@ def gear_contact_stress(
     if d1 <= 0 or d2 <= 0:
         raise _drive_refusal(
             "pinion_pitch_diameter and gear_pitch_diameter must be positive",
-            subject="pinion and gear pitch diameters",
+            subject="pinion_pitch_diameter and gear_pitch_diameter",
             source=_GEAR_GEOMETRY_SOURCE,
         )
     normal_load = tangential_load.to("N").magnitude / cos(phi)
@@ -743,7 +743,7 @@ def agma_contact_stress(
     if dw1 <= 0 or b <= 0 or e1 <= 0 or e2 <= 0:
         raise _drive_refusal(
             "pinion_pitch_diameter, face_width, and both moduli must be positive",
-            subject="gear contact geometry and elastic moduli",
+            subject="pinion_pitch_diameter, face_width, modulus_pinion, and modulus_gear",
             source=_GEAR_RATING_SOURCE,
         )
     for nu, name in ((poisson_pinion, "poisson_pinion"), (poisson_gear, "poisson_gear")):
@@ -1309,7 +1309,7 @@ def gear_train_value(
             f"driver_teeth and driven_teeth must be non-empty and equal length "
             f"(one entry per mesh); got {len(driver_teeth)} drivers and "
             f"{len(driven_teeth)} driven",
-            subject="gear-train tooth-count sequences",
+            subject="driver_teeth and driven_teeth",
             source=_GEAR_TRAIN_SOURCE,
         )
     drivers = [_check_tooth_count(n, "driver_teeth entry") for n in driver_teeth]
@@ -1355,7 +1355,7 @@ def gear_train_efficiency(*, mesh_efficiencies: Sequence[float]) -> float:
         if not 0.0 < eff <= 1.0:
             raise _drive_refusal(
                 f"each mesh efficiency must lie in (0, 1]; got {eff}",
-                subject="mesh efficiency",
+                subject="mesh_efficiencies",
                 source=_GEAR_RATING_SOURCE,
             )
     return prod(effs)
@@ -1405,14 +1405,14 @@ def planetary_planet_teeth(*, sun_teeth: int, ring_teeth: int) -> int:
         raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
             f"got ring {ring} vs sun {sun}",
-            subject="sun and ring tooth counts",
+            subject="sun_teeth and ring_teeth",
             source=_GEAR_TRAIN_SOURCE,
         )
     if (ring - sun) % 2:
         raise _drive_refusal(
             f"no whole-tooth planet fits: ring_teeth - sun_teeth = {ring - sun} is odd, "
             f"so N_p = (N_r - N_s)/2 is not a whole number",
-            subject="sun and ring tooth counts",
+            subject="sun_teeth and ring_teeth",
             source=_GEAR_TRAIN_SOURCE,
         )
     return (ring - sun) // 2
@@ -1435,7 +1435,7 @@ def planetary_can_assemble(*, sun_teeth: int, ring_teeth: int, planet_count: int
         raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
             f"got ring {ring} vs sun {sun}",
-            subject="sun and ring tooth counts",
+            subject="sun_teeth and ring_teeth",
             source=_GEAR_TRAIN_SOURCE,
         )
     return (sun + ring) % count == 0
@@ -1490,7 +1490,7 @@ def planetary_speed(
         raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
             f"got ring {ring} vs sun {sun}",
-            subject="sun and ring tooth counts",
+            subject="sun_teeth and ring_teeth",
             source=_GEAR_TRAIN_SOURCE,
         )
     speeds = {"sun_speed": sun_speed, "carrier_speed": carrier_speed, "ring_speed": ring_speed}
@@ -1499,7 +1499,7 @@ def planetary_speed(
         raise _drive_refusal(
             f"exactly one of sun_speed, carrier_speed, ring_speed must be None (the "
             f"unknown to solve for); got {len(unknowns)} unknowns",
-            subject="planetary member speeds",
+            subject="sun_speed, carrier_speed, and ring_speed",
             source=_GEAR_TRAIN_SOURCE,
         )
     (unknown,) = unknowns
@@ -1564,7 +1564,7 @@ def planetary_torques(
         raise _drive_refusal(
             f"ring_teeth must exceed sun_teeth (the ring encloses the sun); "
             f"got ring {ring} vs sun {sun}",
-            subject="sun and ring tooth counts",
+            subject="sun_teeth and ring_teeth",
             source=_GEAR_TRAIN_SOURCE,
         )
     _require(input_torque, "[force] * [length]", "input_torque")

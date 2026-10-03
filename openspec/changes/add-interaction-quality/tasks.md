@@ -132,6 +132,27 @@
       The complete radioactivity family adds 12 structured sites for half-life, molar mass,
       activity, and elapsed-time inputs, sourced to isotope certificates, nuclear-data tables,
       calibrated source records, handling logs, or the governing target-activity limit.
+      The complete radiation-shielding and HVAC-duct families add 14 structured sites for
+      attenuation coefficients, shield thickness, target transmission, duct dimensions, airflow,
+      system pressures, and fan efficiency, sourced to cited attenuation data, shield or duct
+      drawings, the dose-rate design basis, the airflow load calculation, the pressure-loss
+      calculation, or the fan curve. A guard covering two inputs names whichever one failed.
+      **The migration has a meter now:** docs/api/raised-refusals-without-remedies.txt counts
+      the bare `raise ValueError` sites per file, and tests/test_raised_refusal_ledger.py
+      holds it exact both ways, so a new bare refusal fails and so does a migration that does
+      not lower its line. It started at 4,036 sites in 218 files. A further 47 analysis
+      modules then migrated in one pass (photometry through boundary layers: wave, coupling,
+      power screw, vacuum electronics, hydraulic press and motor, clarifier, slider-crank,
+      gas transport, conveyor, Clausius-Clapeyron, reactor, interference fits, spectroscopy,
+      fuel cells, thin films, DC motors and circuits, Hall effect, four-bar linkages, linear
+      regulators, Nernst, rotor momentum, gyroscopes, gaskets, snap-fits, solar thermal and
+      geometry, measurement uncertainty, Arrhenius, thermal noise, ventilation,
+      electrostatics, channel capacity, radiation pressure, comminution, pneumatics, vortex
+      shedding, control valves, ultrasonic testing, plasma, colligative properties, naval
+      architecture, op-amps, and cyclones), leaving 3,592 in 171.
+      tests/test_refusal_remedies_analysis.py pins one or two exact remedies per module and
+      sweeps every public function of every migrated module with bare numbers: whatever it
+      refuses must be a `RefusalError` whose subject names one of its parameters.
       The complete adhesive-joint and coating families add 11 structured sites for joint geometry,
       loads, bond strength, film thickness, and volume solids, sourced to drawings, load cases,
       product or qualification records, coating specifications, and calibrated gage records.
@@ -292,6 +313,11 @@
       go to a hidden sibling renamed on completion, and the STEP writer removes its file on
       a KeyboardInterrupt as well as on an error
 - [ ] 7.3 Every refusal in the suite carries a remedy with a resolvable subject
+      — progress: in the analysis package, every literal remedy subject (1,117 of them) names a
+      parameter or public model field of its module, held by
+      tests/test_refusal_remedies_analysis.py. Fifty had been prose ("sun and ring tooth
+      counts", "doubly reinforced section inputs") that a person can follow and a program
+      cannot resolve. Open until the ledger of bare refusals (2.1) is empty.
 - [x] 7.4 Rendering with color disabled loses no information — the terminal carries no
       ANSI escape (tests/test_cli.py), and every coloured status in the HTML report is a word
       (tests/test_report.py)

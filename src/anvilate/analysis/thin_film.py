@@ -22,7 +22,29 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_INDEX_SOURCE = "the optical material certificate at the design wavelength"
+_DESIGN_SOURCE = "the coating design specification (design wavelength and layer thickness)"
+
+
+class _ThinFilmInputError(RefusalError, ValueError):
+    """A thin-film coating input that cannot be used without correction."""
+
+
+def _thin_film_refusal(message: str, *, subject: str, source: str) -> _ThinFilmInputError:
+    return _ThinFilmInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _thin_film_input_source(name: str) -> str:
+    if name in {"coating_index", "medium_index", "substrate_index"}:
+        return _INDEX_SOURCE
+    return _DESIGN_SOURCE
+
 
 __all__ = [
     "single_layer_ar_reflectance",
@@ -43,9 +65,13 @@ def quarter_wave_thickness(*, wavelength: Quantity, coating_index: float) -> Qua
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _thin_film_refusal(
+            "wavelength must be positive", subject="wavelength", source=_DESIGN_SOURCE
+        )
     if coating_index <= 0:
-        raise ValueError("coating_index must be positive")
+        raise _thin_film_refusal(
+            "coating_index must be positive", subject="coating_index", source=_INDEX_SOURCE
+        )
     return Quantity(magnitude=lam / (4.0 * coating_index), unit="m")
 
 
@@ -58,9 +84,13 @@ def optimal_ar_coating_index(*, substrate_index: float, medium_index: float = 1.
     to this ideal (MgF2 at 1.38 for glass at ~1.5). Returns the index as a plain float.
     """
     if substrate_index <= 0:
-        raise ValueError("substrate_index must be positive")
+        raise _thin_film_refusal(
+            "substrate_index must be positive", subject="substrate_index", source=_INDEX_SOURCE
+        )
     if medium_index <= 0:
-        raise ValueError("medium_index must be positive")
+        raise _thin_film_refusal(
+            "medium_index must be positive", subject="medium_index", source=_INDEX_SOURCE
+        )
     return sqrt(medium_index * substrate_index)
 
 
@@ -75,18 +105,28 @@ def thin_film_tuned_wavelength(*, thickness: Quantity, coating_index: float) -> 
     _check(thickness, "[length]", "thickness")
     t = thickness.to("m").magnitude
     if t <= 0:
-        raise ValueError("thickness must be positive")
+        raise _thin_film_refusal(
+            "thickness must be positive", subject="thickness", source=_DESIGN_SOURCE
+        )
     if coating_index <= 0:
-        raise ValueError("coating_index must be positive")
+        raise _thin_film_refusal(
+            "coating_index must be positive", subject="coating_index", source=_INDEX_SOURCE
+        )
     return Quantity(magnitude=4.0 * coating_index * t, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _thin_film_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_thin_film_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _thin_film_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_thin_film_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -120,8 +160,15 @@ def single_layer_ar_reflectance(
     design wavelength; away from either, the reflectance rises. Returns the reflectance as a plain
     float in [0, 1).
     """
-    if coating_index <= 0 or substrate_index <= 0 or medium_index <= 0:
-        raise ValueError("refractive indices must be positive")
+    for subject, magnitude in (
+        ("coating_index", coating_index),
+        ("substrate_index", substrate_index),
+        ("medium_index", medium_index),
+    ):
+        if magnitude <= 0:
+            raise _thin_film_refusal(
+                "refractive indices must be positive", subject=subject, source=_INDEX_SOURCE
+            )
     numerator = medium_index * substrate_index - coating_index**2
     denominator = medium_index * substrate_index + coating_index**2
     return (numerator / denominator) ** 2

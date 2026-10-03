@@ -19,7 +19,29 @@ efficiency measured against the 683 lm/W peak of the photopic response.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_PHOTOMETRIC_SOURCE = "the lamp's photometric test report (integrating-sphere or goniophotometer)"
+_ELECTRICAL_SOURCE = "the lamp's rated or measured electrical input power"
+
+
+class _PhotometryInputError(RefusalError, ValueError):
+    """A photometric input that cannot be used without correction."""
+
+
+def _photometry_refusal(message: str, *, subject: str, source: str) -> _PhotometryInputError:
+    return _PhotometryInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _photometry_input_source(name: str) -> str:
+    if name == "electrical_power":
+        return _ELECTRICAL_SOURCE
+    return _PHOTOMETRIC_SOURCE
+
 
 _MAX_LUMINOUS_EFFICACY = 683.0  # lm/W, monochromatic 555 nm (peak photopic response)
 
@@ -42,9 +64,17 @@ def luminous_efficacy(*, luminous_flux: Quantity, electrical_power: Quantity) ->
     flux = luminous_flux.to("lm").magnitude
     p = electrical_power.to("W").magnitude
     if flux < 0:
-        raise ValueError("luminous_flux must be non-negative")
+        raise _photometry_refusal(
+            "luminous_flux must be non-negative",
+            subject="luminous_flux",
+            source=_PHOTOMETRIC_SOURCE,
+        )
     if p <= 0:
-        raise ValueError("electrical_power must be positive")
+        raise _photometry_refusal(
+            "electrical_power must be positive",
+            subject="electrical_power",
+            source=_ELECTRICAL_SOURCE,
+        )
     return Quantity(magnitude=flux / p, unit="lm/W")
 
 
@@ -62,9 +92,17 @@ def luminous_flux_from_power(
     p = electrical_power.to("W").magnitude
     eff = luminous_efficacy.to("lm/W").magnitude
     if p < 0:
-        raise ValueError("electrical_power must be non-negative")
+        raise _photometry_refusal(
+            "electrical_power must be non-negative",
+            subject="electrical_power",
+            source=_ELECTRICAL_SOURCE,
+        )
     if eff < 0:
-        raise ValueError("luminous_efficacy must be non-negative")
+        raise _photometry_refusal(
+            "luminous_efficacy must be non-negative",
+            subject="luminous_efficacy",
+            source=_PHOTOMETRIC_SOURCE,
+        )
     return Quantity(magnitude=p * eff, unit="lm")
 
 
@@ -79,28 +117,40 @@ def luminous_efficiency(*, luminous_efficacy: Quantity) -> float:
     _check(luminous_efficacy, "[luminosity]/[power]", "luminous_efficacy")
     eff = luminous_efficacy.to("lm/W").magnitude
     if eff < 0:
-        raise ValueError("luminous_efficacy must be non-negative")
+        raise _photometry_refusal(
+            "luminous_efficacy must be non-negative",
+            subject="luminous_efficacy",
+            source=_PHOTOMETRIC_SOURCE,
+        )
     # 683 lm/W is the physical ceiling for any source, so the documented [0, 1] range and
     # the efficacy bound are the same statement. Without the upper half this returned 1.46
     # for a mis-scaled 1000 lm/W -- a source 46% better than ideal, reported as a bare
     # float that downstream code reads as a fraction. Every sibling in the library that
     # promises a bounded fraction enforces the bound.
     if eff > _MAX_LUMINOUS_EFFICACY:
-        raise ValueError(
+        raise _photometry_refusal(
             f"luminous_efficacy is {luminous_efficacy}, above the {_MAX_LUMINOUS_EFFICACY:g} lm/W "
             f"of monochromatic 555 nm light — the physical maximum for any source. The efficiency "
             f"would be {eff / _MAX_LUMINOUS_EFFICACY:.3f}, better than ideal; check whether the "
-            f"figure is a radiant-side or per-optical-watt efficacy"
+            f"figure is a radiant-side or per-optical-watt efficacy",
+            subject="luminous_efficacy",
+            source=_PHOTOMETRIC_SOURCE,
         )
     return eff / _MAX_LUMINOUS_EFFICACY
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _photometry_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_photometry_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _photometry_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_photometry_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

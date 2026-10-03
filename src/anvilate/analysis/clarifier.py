@@ -22,7 +22,29 @@ performance, and the weir loading rate at its outlet.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_BASIN_DRAWING_SOURCE = "the basin drawing (volume, surface area, and weir length)"
+_DESIGN_FLOW_SOURCE = "the plant's design flow basis or metered flow record"
+
+
+class _ClarifierInputError(RefusalError, ValueError):
+    """A clarifier hydraulic-design input that cannot be used without correction."""
+
+
+def _clarifier_refusal(message: str, *, subject: str, source: str) -> _ClarifierInputError:
+    return _ClarifierInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _clarifier_input_source(name: str) -> str:
+    if name in {"surface_area", "volume", "weir_length"}:
+        return _BASIN_DRAWING_SOURCE
+    return _DESIGN_FLOW_SOURCE
+
 
 __all__ = [
     "hydraulic_retention_time",
@@ -44,9 +66,13 @@ def hydraulic_retention_time(*, volume: Quantity, flow_rate: Quantity) -> Quanti
     v = volume.to("m**3").magnitude
     q = flow_rate.to("m**3/hour").magnitude
     if v < 0:
-        raise ValueError("volume must be non-negative")
+        raise _clarifier_refusal(
+            "volume must be non-negative", subject="volume", source=_BASIN_DRAWING_SOURCE
+        )
     if q <= 0:
-        raise ValueError("flow_rate must be positive")
+        raise _clarifier_refusal(
+            "flow_rate must be positive", subject="flow_rate", source=_DESIGN_FLOW_SOURCE
+        )
     return Quantity(magnitude=v / q, unit="hour")
 
 
@@ -65,9 +91,13 @@ def surface_overflow_rate(*, flow_rate: Quantity, surface_area: Quantity) -> Qua
     q = flow_rate.to("m**3/day").magnitude
     a = surface_area.to("m**2").magnitude
     if q < 0:
-        raise ValueError("flow_rate must be non-negative")
+        raise _clarifier_refusal(
+            "flow_rate must be non-negative", subject="flow_rate", source=_DESIGN_FLOW_SOURCE
+        )
     if a <= 0:
-        raise ValueError("surface_area must be positive")
+        raise _clarifier_refusal(
+            "surface_area must be positive", subject="surface_area", source=_BASIN_DRAWING_SOURCE
+        )
     return Quantity(magnitude=q / a, unit="m/day")
 
 
@@ -85,18 +115,28 @@ def weir_loading_rate(*, flow_rate: Quantity, weir_length: Quantity) -> Quantity
     q = flow_rate.to("m**3/day").magnitude
     length = weir_length.to("m").magnitude
     if q < 0:
-        raise ValueError("flow_rate must be non-negative")
+        raise _clarifier_refusal(
+            "flow_rate must be non-negative", subject="flow_rate", source=_DESIGN_FLOW_SOURCE
+        )
     if length <= 0:
-        raise ValueError("weir_length must be positive")
+        raise _clarifier_refusal(
+            "weir_length must be positive", subject="weir_length", source=_BASIN_DRAWING_SOURCE
+        )
     return Quantity(magnitude=q / length, unit="m**2/day")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _clarifier_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_clarifier_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _clarifier_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_clarifier_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

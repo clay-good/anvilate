@@ -20,7 +20,32 @@ plain floats.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_THERMO_SOURCE = "the cited reaction Gibbs energy and enthalpy at the cell temperature"
+_REACTION_SOURCE = "the balanced cell half-reactions"
+_POLARIZATION_SOURCE = "the cell's measured polarization curve at the operating current"
+
+
+class _FuelCellInputError(RefusalError, ValueError):
+    """A fuel-cell input that cannot be used without correction."""
+
+
+def _fuel_cell_refusal(message: str, *, subject: str, source: str) -> _FuelCellInputError:
+    return _FuelCellInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fuel_cell_input_source(name: str) -> str:
+    if name == "electrons_transferred":
+        return _REACTION_SOURCE
+    if name == "cell_voltage":
+        return _POLARIZATION_SOURCE
+    return _THERMO_SOURCE
+
 
 _FARADAY = 96485.33212  # C/mol, Faraday constant
 
@@ -46,12 +71,18 @@ def reversible_cell_voltage(
     """
     _check(gibbs_free_energy_change, "[energy]/[substance]", "gibbs_free_energy_change")
     if not isinstance(electrons_transferred, int) or electrons_transferred < 1:
-        raise ValueError("electrons_transferred must be an integer of at least 1")
+        raise _fuel_cell_refusal(
+            "electrons_transferred must be an integer of at least 1",
+            subject="electrons_transferred",
+            source=_REACTION_SOURCE,
+        )
     dg = gibbs_free_energy_change.to("J/mol").magnitude
     if dg >= 0:
-        raise ValueError(
+        raise _fuel_cell_refusal(
             "gibbs_free_energy_change must be negative (a spontaneous cell); got "
-            f"{gibbs_free_energy_change}"
+            f"{gibbs_free_energy_change}",
+            subject="gibbs_free_energy_change",
+            source=_THERMO_SOURCE,
         )
     return Quantity(magnitude=-dg / (electrons_transferred * _FARADAY), unit="V")
 
@@ -73,9 +104,15 @@ def thermodynamic_efficiency(
     dg = gibbs_free_energy_change.to("J/mol").magnitude
     dh = enthalpy_change.to("J/mol").magnitude
     if dh == 0:
-        raise ValueError("enthalpy_change must be non-zero")
+        raise _fuel_cell_refusal(
+            "enthalpy_change must be non-zero", subject="enthalpy_change", source=_THERMO_SOURCE
+        )
     if dg > 0 or dh > 0:
-        raise ValueError("ΔG and ΔH must be negative (a spontaneous, exothermic reaction)")
+        raise _fuel_cell_refusal(
+            "ΔG and ΔH must be negative (a spontaneous, exothermic reaction)",
+            subject="gibbs_free_energy_change and enthalpy_change",
+            source=_THERMO_SOURCE,
+        )
     return dg / dh
 
 
@@ -95,20 +132,36 @@ def voltage_efficiency(*, cell_voltage: Quantity, reversible_voltage: Quantity) 
     v = cell_voltage.to("V").magnitude
     e_rev = reversible_voltage.to("V").magnitude
     if e_rev <= 0:
-        raise ValueError("reversible_voltage must be positive")
+        raise _fuel_cell_refusal(
+            "reversible_voltage must be positive",
+            subject="reversible_voltage",
+            source=_THERMO_SOURCE,
+        )
     if v < 0:
-        raise ValueError("cell_voltage must be non-negative")
+        raise _fuel_cell_refusal(
+            "cell_voltage must be non-negative", subject="cell_voltage", source=_POLARIZATION_SOURCE
+        )
     if v > e_rev:
-        raise ValueError("cell_voltage cannot exceed reversible_voltage (η_V > 1 is impossible)")
+        raise _fuel_cell_refusal(
+            "cell_voltage cannot exceed reversible_voltage (η_V > 1 is impossible)",
+            subject="cell_voltage",
+            source=_POLARIZATION_SOURCE,
+        )
     return v / e_rev
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _fuel_cell_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_fuel_cell_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _fuel_cell_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_fuel_cell_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

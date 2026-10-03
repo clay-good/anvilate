@@ -29,7 +29,33 @@ from __future__ import annotations
 
 from math import pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_DIAGNOSTIC_SOURCE = "the plasma diagnostic record (probe, interferometer, or Thomson scattering)"
+_FIELD_SOURCE = "the magnet design or measured magnetic flux density"
+_MASS_SOURCE = "the plasma's ion species and measured density"
+_RELATIVISTIC_SOURCE = "the field and mass density, or a relativistic Alfven treatment"
+
+
+class _PlasmaInputError(RefusalError, ValueError):
+    """A plasma-physics input that cannot be used without correction."""
+
+
+def _plasma_refusal(message: str, *, subject: str, source: str) -> _PlasmaInputError:
+    return _PlasmaInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _plasma_input_source(name: str) -> str:
+    if name == "magnetic_flux_density":
+        return _FIELD_SOURCE
+    if name == "mass_density":
+        return _MASS_SOURCE
+    return _DIAGNOSTIC_SOURCE
+
 
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
 _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m
@@ -58,7 +84,11 @@ def plasma_frequency(*, electron_density: Quantity) -> Quantity:
     _check(electron_density, "1/[length]**3", "electron_density")
     n = electron_density.to("1/m**3").magnitude
     if n < 0:
-        raise ValueError("electron_density must be non-negative")
+        raise _plasma_refusal(
+            "electron_density must be non-negative",
+            subject="electron_density",
+            source=_DIAGNOSTIC_SOURCE,
+        )
     omega_p = sqrt(n * _ELEMENTARY_CHARGE**2 / (_VACUUM_PERMITTIVITY * _ELECTRON_MASS))
     return Quantity(magnitude=omega_p / (2.0 * pi), unit="Hz")
 
@@ -76,9 +106,17 @@ def debye_length(*, electron_density: Quantity, electron_temperature: Quantity) 
     n = electron_density.to("1/m**3").magnitude
     t = electron_temperature.to("K").magnitude
     if n <= 0:
-        raise ValueError("electron_density must be positive")
+        raise _plasma_refusal(
+            "electron_density must be positive",
+            subject="electron_density",
+            source=_DIAGNOSTIC_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("electron_temperature must be positive (absolute temperature)")
+        raise _plasma_refusal(
+            "electron_temperature must be positive (absolute temperature)",
+            subject="electron_temperature",
+            source=_DIAGNOSTIC_SOURCE,
+        )
     lam = sqrt(_VACUUM_PERMITTIVITY * _BOLTZMANN * t / (n * _ELEMENTARY_CHARGE**2))
     return Quantity(magnitude=lam, unit="m")
 
@@ -102,10 +140,16 @@ def plasma_parameter(*, electron_density: Quantity, electron_temperature: Quanti
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _plasma_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_plasma_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _plasma_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_plasma_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to
@@ -141,11 +185,23 @@ def plasma_beta(
     t = temperature.to("K").magnitude
     b = magnetic_flux_density.to("T").magnitude
     if n <= 0:
-        raise ValueError("electron_density must be positive")
+        raise _plasma_refusal(
+            "electron_density must be positive",
+            subject="electron_density",
+            source=_DIAGNOSTIC_SOURCE,
+        )
     if t <= 0:
-        raise ValueError("temperature must be a positive absolute temperature")
+        raise _plasma_refusal(
+            "temperature must be a positive absolute temperature",
+            subject="temperature",
+            source=_DIAGNOSTIC_SOURCE,
+        )
     if b <= 0:
-        raise ValueError("magnetic_flux_density must be positive")
+        raise _plasma_refusal(
+            "magnetic_flux_density must be positive",
+            subject="magnetic_flux_density",
+            source=_FIELD_SOURCE,
+        )
     return 2.0 * _VACUUM_PERMEABILITY * n * _BOLTZMANN * t / (b * b)
 
 
@@ -171,19 +227,27 @@ def alfven_speed(*, magnetic_flux_density: Quantity, mass_density: Quantity) -> 
     b = magnetic_flux_density.to("T").magnitude
     rho = mass_density.to("kg/m**3").magnitude
     if b < 0:
-        raise ValueError("magnetic_flux_density must be non-negative")
+        raise _plasma_refusal(
+            "magnetic_flux_density must be non-negative",
+            subject="magnetic_flux_density",
+            source=_FIELD_SOURCE,
+        )
     if rho <= 0:
-        raise ValueError("mass_density must be positive")
+        raise _plasma_refusal(
+            "mass_density must be positive", subject="mass_density", source=_MASS_SOURCE
+        )
     speed = b / sqrt(_VACUUM_PERMEABILITY * rho)
     # The docstring says this form "overstates the speed once it approaches c", and the
     # comparison is one line: both arguments are here. Unguarded it returned 8.9e16 m/s —
     # 3e8 times the speed of light — for a pulsar-magnetosphere field and density, and a
     # solar-corona case 1.37x over the relativistic v_A/sqrt(1 + v_A^2/c^2).
     if speed >= _SPEED_OF_LIGHT:
-        raise ValueError(
+        raise _plasma_refusal(
             f"the non-relativistic Alfven speed comes out at {speed:.4g} m/s, "
             f"{speed / _SPEED_OF_LIGHT:.4g}x the speed of light. B/sqrt(mu0*rho) is the "
             f"low-speed limit and it has no ceiling; in a plasma this tenuous the "
-            f"relativistic form v_A/sqrt(1 + v_A^2/c^2) governs"
+            f"relativistic form v_A/sqrt(1 + v_A^2/c^2) governs",
+            subject="magnetic_flux_density and mass_density",
+            source=_RELATIVISTIC_SOURCE,
         )
     return Quantity(magnitude=speed, unit="m/s")

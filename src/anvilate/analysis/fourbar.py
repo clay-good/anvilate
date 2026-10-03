@@ -28,7 +28,29 @@ from __future__ import annotations
 
 from math import acos, cos, degrees, radians, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_LINKAGE_SOURCE = "the linkage drawing (ground, input, coupler, and output link lengths)"
+_POSE_SOURCE = "the mechanism's specified input-crank angle"
+
+
+class _FourBarInputError(RefusalError, ValueError):
+    """A four-bar linkage input that cannot be used without correction."""
+
+
+def _fourbar_refusal(message: str, *, subject: str, source: str) -> _FourBarInputError:
+    return _FourBarInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _fourbar_input_source(name: str) -> str:
+    if name == "input_angle":
+        return _POSE_SOURCE
+    return _LINKAGE_SOURCE
+
 
 __all__ = [
     "is_grashof",
@@ -51,10 +73,16 @@ def _lengths_mm(
     out: dict[str, float] = {}
     for name, value in named.items():
         if not isinstance(value, Quantity):
-            raise ValueError(f"{name} must be a [length] quantity; got {value!r}")
+            raise _fourbar_refusal(
+                f"{name} must be a [length] quantity; got {value!r}",
+                subject=name,
+                source=_fourbar_input_source(name),
+            )
         if not value.has_dimension("[length]"):
-            raise ValueError(
-                f"{name} link must be a [length] quantity; got {value.dimensionality} ({value})"
+            raise _fourbar_refusal(
+                f"{name} link must be a [length] quantity; got {value.dimensionality} ({value})",
+                subject=name,
+                source=_fourbar_input_source(name),
             )
         # `require_finite` first: a NaN length passes `mm <= 0`, fails every subsequent
         # comparison too, and `is_grashof` comes back False — a definite "triple-rocker"
@@ -62,13 +90,19 @@ def _lengths_mm(
         require_finite(value, name=f"{name} link length")
         mm = value.to("mm").magnitude
         if mm <= 0:
-            raise ValueError(f"{name} link length must be positive; got {value}")
+            raise _fourbar_refusal(
+                f"{name} link length must be positive; got {value}",
+                subject=name,
+                source=_fourbar_input_source(name),
+            )
         out[name] = mm
     longest = max(out.values())
     if longest >= sum(out.values()) - longest:
-        raise ValueError(
+        raise _fourbar_refusal(
             "link lengths do not form a closable four-bar (the longest link must be "
-            "shorter than the sum of the other three)"
+            "shorter than the sum of the other three)",
+            subject="ground, input_link, coupler, and output_link",
+            source=_LINKAGE_SOURCE,
         )
     return out
 
@@ -141,21 +175,29 @@ def _toggle_cosines(r1: float, r2: float, r3: float, r4: float) -> tuple[float, 
     input link cannot act as the crank.
     """
     if r3 <= r2:
-        raise ValueError(
+        raise _fourbar_refusal(
             "the coupler must be longer than the input link for the input to crank "
-            "through its folded toggle position"
+            "through its folded toggle position",
+            subject="coupler and input_link",
+            source=_LINKAGE_SOURCE,
         )
     return r2 + r3, r3 - r2
 
 
 def _toggle_angle(numerator: float, denominator: float, what: str) -> float:
     if denominator == 0:
-        raise ValueError(f"the {what} toggle position is degenerate for these link lengths")
+        raise _fourbar_refusal(
+            f"the {what} toggle position is degenerate for these link lengths",
+            subject="ground, input_link, coupler, and output_link",
+            source=_LINKAGE_SOURCE,
+        )
     value = numerator / denominator
     if not -1.0 <= value <= 1.0:
-        raise ValueError(
+        raise _fourbar_refusal(
             f"the linkage has no {what} toggle position, so the input link is not a crank "
-            "(fourbar_time_ratio and fourbar_rocker_swing_angle need a crank-rocker)"
+            "(fourbar_time_ratio and fourbar_rocker_swing_angle need a crank-rocker)",
+            subject="ground, input_link, coupler, and output_link",
+            source=_LINKAGE_SOURCE,
         )
     return acos(value)
 
@@ -192,7 +234,11 @@ def fourbar_time_ratio(
     theta_fold = _toggle_angle(r1**2 + folded**2 - r4**2, 2.0 * r1 * folded, "folded")
     advance = abs(degrees(theta_fold) - degrees(theta_ext))
     if advance >= 180.0:
-        raise ValueError("the advance angle must be below 180° for a time ratio to be defined")
+        raise _fourbar_refusal(
+            "the advance angle must be below 180° for a time ratio to be defined",
+            subject="ground, input_link, coupler, and output_link",
+            source=_LINKAGE_SOURCE,
+        )
     return (180.0 + advance) / (180.0 - advance)
 
 
@@ -262,9 +308,11 @@ def fourbar_transmission_angle(
     theta2 = radians(input_angle)
     diagonal = sqrt(r1**2 + r2**2 - 2.0 * r1 * r2 * cos(theta2))
     if diagonal > r3 + r4 or diagonal < abs(r3 - r4):
-        raise ValueError(
+        raise _fourbar_refusal(
             f"the linkage cannot assemble at input_angle {input_angle}°: the "
-            f"coupler and output cannot reach across the diagonal ({diagonal:.3g} mm)"
+            f"coupler and output cannot reach across the diagonal ({diagonal:.3g} mm)",
+            subject="input_angle",
+            source=_POSE_SOURCE,
         )
     cos_mu = (r3**2 + r4**2 - diagonal**2) / (2.0 * r3 * r4)
     cos_mu = max(-1.0, min(1.0, cos_mu))  # guard float drift past the domain

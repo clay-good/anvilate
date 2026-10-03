@@ -22,7 +22,35 @@ produces at the solvent's cryoscopic and ebullioscopic constants.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SOLUTION_SOURCE = "the solution's prepared concentration or molality record"
+_STATE_SOURCE = "the solution's measured absolute temperature"
+_SOLVENT_SOURCE = "the solvent's cited cryoscopic or ebullioscopic constant"
+_DISSOCIATION_SOURCE = "the solute's formula or measured osmotic activity"
+
+
+class _ColligativeInputError(RefusalError, ValueError):
+    """A colligative-property input that cannot be used without correction."""
+
+
+def _colligative_refusal(message: str, *, subject: str, source: str) -> _ColligativeInputError:
+    return _ColligativeInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _colligative_input_source(name: str) -> str:
+    if name == "temperature":
+        return _STATE_SOURCE
+    if name in {"cryoscopic_constant", "ebullioscopic_constant"}:
+        return _SOLVENT_SOURCE
+    if name == "vant_hoff_factor":
+        return _DISSOCIATION_SOURCE
+    return _SOLUTION_SOURCE
+
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K)
 
@@ -49,11 +77,21 @@ def osmotic_pressure(
     c = concentration.to("mol/m**3").magnitude
     t = temperature.to("K").magnitude
     if c < 0:
-        raise ValueError("concentration must be non-negative")
+        raise _colligative_refusal(
+            "concentration must be non-negative", subject="concentration", source=_SOLUTION_SOURCE
+        )
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _colligative_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_STATE_SOURCE,
+        )
     if vant_hoff_factor <= 0:
-        raise ValueError("vant_hoff_factor must be positive")
+        raise _colligative_refusal(
+            "vant_hoff_factor must be positive",
+            subject="vant_hoff_factor",
+            source=_DISSOCIATION_SOURCE,
+        )
     return Quantity(magnitude=vant_hoff_factor * c * _GAS_CONSTANT * t, unit="Pa")
 
 
@@ -72,11 +110,21 @@ def freezing_point_depression(
     b = molality.to("mol/kg").magnitude
     kf = cryoscopic_constant.to("K*kg/mol").magnitude
     if b < 0:
-        raise ValueError("molality must be non-negative")
+        raise _colligative_refusal(
+            "molality must be non-negative", subject="molality", source=_SOLUTION_SOURCE
+        )
     if kf <= 0:
-        raise ValueError("cryoscopic_constant must be positive")
+        raise _colligative_refusal(
+            "cryoscopic_constant must be positive",
+            subject="cryoscopic_constant",
+            source=_SOLVENT_SOURCE,
+        )
     if vant_hoff_factor <= 0:
-        raise ValueError("vant_hoff_factor must be positive")
+        raise _colligative_refusal(
+            "vant_hoff_factor must be positive",
+            subject="vant_hoff_factor",
+            source=_DISSOCIATION_SOURCE,
+        )
     return Quantity(magnitude=vant_hoff_factor * kf * b, unit="K")
 
 
@@ -95,20 +143,36 @@ def boiling_point_elevation(
     b = molality.to("mol/kg").magnitude
     kb = ebullioscopic_constant.to("K*kg/mol").magnitude
     if b < 0:
-        raise ValueError("molality must be non-negative")
+        raise _colligative_refusal(
+            "molality must be non-negative", subject="molality", source=_SOLUTION_SOURCE
+        )
     if kb <= 0:
-        raise ValueError("ebullioscopic_constant must be positive")
+        raise _colligative_refusal(
+            "ebullioscopic_constant must be positive",
+            subject="ebullioscopic_constant",
+            source=_SOLVENT_SOURCE,
+        )
     if vant_hoff_factor <= 0:
-        raise ValueError("vant_hoff_factor must be positive")
+        raise _colligative_refusal(
+            "vant_hoff_factor must be positive",
+            subject="vant_hoff_factor",
+            source=_DISSOCIATION_SOURCE,
+        )
     return Quantity(magnitude=vant_hoff_factor * kb * b, unit="K")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _colligative_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_colligative_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _colligative_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_colligative_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

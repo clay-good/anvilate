@@ -24,7 +24,40 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_COLLECTOR_TEST_SOURCE = "the collector's ISO 9806 or SRCC efficiency test report"
+_WEATHER_SOURCE = "the site's design irradiance and ambient temperature"
+_OPERATING_SOURCE = "the collector loop's mean fluid temperature"
+_ARRAY_SOURCE = "the array layout drawing (gross or aperture area)"
+
+
+class _SolarThermalInputError(RefusalError, ValueError):
+    """A solar-thermal collector input that cannot be used without correction."""
+
+
+def _solar_thermal_refusal(message: str, *, subject: str, source: str) -> _SolarThermalInputError:
+    return _SolarThermalInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _solar_thermal_input_source(name: str) -> str:
+    if name in {
+        "efficiency",
+        "loss_coefficient",
+        "optical_efficiency",
+        "second_order_loss_coefficient",
+    }:
+        return _COLLECTOR_TEST_SOURCE
+    if name == "mean_fluid_temperature":
+        return _OPERATING_SOURCE
+    if name == "area":
+        return _ARRAY_SOURCE
+    return _WEATHER_SOURCE
+
 
 __all__ = [
     "collector_stagnation_temperature",
@@ -64,9 +97,15 @@ def flat_plate_collector_efficiency(
     delta_t = mean_fluid_temperature.to("degC").magnitude - ambient_temperature.to("degC").magnitude
     g = irradiance.to("W/m**2").magnitude
     if a1 < 0:
-        raise ValueError("loss_coefficient must be non-negative")
+        raise _solar_thermal_refusal(
+            "loss_coefficient must be non-negative",
+            subject="loss_coefficient",
+            source=_COLLECTOR_TEST_SOURCE,
+        )
     if g <= 0:
-        raise ValueError("irradiance must be positive")
+        raise _solar_thermal_refusal(
+            "irradiance must be positive", subject="irradiance", source=_WEATHER_SOURCE
+        )
     a2 = 0.0
     if second_order_loss_coefficient is not None:
         _check(
@@ -76,7 +115,11 @@ def flat_plate_collector_efficiency(
         )
         a2 = second_order_loss_coefficient.to("W/(m**2*K**2)").magnitude
         if a2 < 0:
-            raise ValueError("second_order_loss_coefficient must be non-negative")
+            raise _solar_thermal_refusal(
+                "second_order_loss_coefficient must be non-negative",
+                subject="second_order_loss_coefficient",
+                source=_COLLECTOR_TEST_SOURCE,
+            )
     return optical_efficiency - a1 * delta_t / g - a2 * delta_t**2 / g
 
 
@@ -98,8 +141,13 @@ def collector_useful_heat(
     _check(area, "[area]", "area")
     g = irradiance.to("W/m**2").magnitude
     a = area.to("m**2").magnitude
-    if g <= 0 or a <= 0:
-        raise ValueError("irradiance and area must be positive")
+    for subject, magnitude in (("irradiance", g), ("area", a)):
+        if magnitude <= 0:
+            raise _solar_thermal_refusal(
+                "irradiance and area must be positive",
+                subject=subject,
+                source=_solar_thermal_input_source(subject),
+            )
     return Quantity(magnitude=efficiency * g * a, unit="W")
 
 
@@ -131,9 +179,15 @@ def collector_stagnation_temperature(
     g = irradiance.to("W/m**2").magnitude
     t_a = ambient_temperature.to("degC").magnitude
     if a1 <= 0:
-        raise ValueError("loss_coefficient must be positive")
+        raise _solar_thermal_refusal(
+            "loss_coefficient must be positive",
+            subject="loss_coefficient",
+            source=_COLLECTOR_TEST_SOURCE,
+        )
     if g <= 0:
-        raise ValueError("irradiance must be positive")
+        raise _solar_thermal_refusal(
+            "irradiance must be positive", subject="irradiance", source=_WEATHER_SOURCE
+        )
     a2 = 0.0
     if second_order_loss_coefficient is not None:
         _check(
@@ -143,7 +197,11 @@ def collector_stagnation_temperature(
         )
         a2 = second_order_loss_coefficient.to("W/(m**2*K**2)").magnitude
         if a2 < 0:
-            raise ValueError("second_order_loss_coefficient must be non-negative")
+            raise _solar_thermal_refusal(
+                "second_order_loss_coefficient must be non-negative",
+                subject="second_order_loss_coefficient",
+                source=_COLLECTOR_TEST_SOURCE,
+            )
     if a2 == 0.0:
         delta_t = optical_efficiency * g / a1
     else:
@@ -153,15 +211,25 @@ def collector_stagnation_temperature(
 
 def _fraction(value: float, name: str) -> None:
     if not 0.0 < value <= 1.0:
-        raise ValueError(f"{name} must be in (0, 1]; got {value}")
+        raise _solar_thermal_refusal(
+            f"{name} must be in (0, 1]; got {value}",
+            subject=name,
+            source=_solar_thermal_input_source(name),
+        )
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _solar_thermal_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_solar_thermal_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _solar_thermal_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_solar_thermal_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -22,7 +22,35 @@ and speed, the speed a capacity requires, and the power the lift alone demands.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_MATERIAL_SOURCE = "the bulk material's measured or cited loose bulk density"
+_BELT_SOURCE = "the belt drawing and troughing-idler load cross-section"
+_DUTY_SOURCE = "the conveyor's design capacity and drive speed"
+_PROFILE_SOURCE = "the conveyor profile drawing (net lift)"
+
+
+class _ConveyorInputError(RefusalError, ValueError):
+    """A belt-conveyor input that cannot be used without correction."""
+
+
+def _conveyor_refusal(message: str, *, subject: str, source: str) -> _ConveyorInputError:
+    return _ConveyorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _conveyor_input_source(name: str) -> str:
+    if name == "bulk_density":
+        return _MATERIAL_SOURCE
+    if name == "cross_section_area":
+        return _BELT_SOURCE
+    if name == "lift_height":
+        return _PROFILE_SOURCE
+    return _DUTY_SOURCE
+
 
 _GRAVITY = 9.80665  # m/s^2, standard gravity
 
@@ -52,10 +80,17 @@ def conveyor_mass_flow(
     rho = bulk_density.to("kg/m**3").magnitude
     a = cross_section_area.to("m**2").magnitude
     v = belt_speed.to("m/s").magnitude
-    if rho <= 0 or a <= 0:
-        raise ValueError("bulk_density and cross_section_area must be positive")
+    for subject, magnitude in (("bulk_density", rho), ("cross_section_area", a)):
+        if magnitude <= 0:
+            raise _conveyor_refusal(
+                "bulk_density and cross_section_area must be positive",
+                subject=subject,
+                source=_conveyor_input_source(subject),
+            )
     if v < 0:
-        raise ValueError("belt_speed must be non-negative")
+        raise _conveyor_refusal(
+            "belt_speed must be non-negative", subject="belt_speed", source=_DUTY_SOURCE
+        )
     return Quantity(magnitude=rho * a * v, unit="kg/s")
 
 
@@ -80,9 +115,16 @@ def belt_speed_for_capacity(
     rho = bulk_density.to("kg/m**3").magnitude
     a = cross_section_area.to("m**2").magnitude
     if m < 0:
-        raise ValueError("mass_flow must be non-negative")
-    if rho <= 0 or a <= 0:
-        raise ValueError("bulk_density and cross_section_area must be positive")
+        raise _conveyor_refusal(
+            "mass_flow must be non-negative", subject="mass_flow", source=_DUTY_SOURCE
+        )
+    for subject, magnitude in (("bulk_density", rho), ("cross_section_area", a)):
+        if magnitude <= 0:
+            raise _conveyor_refusal(
+                "bulk_density and cross_section_area must be positive",
+                subject=subject,
+                source=_conveyor_input_source(subject),
+            )
     return Quantity(magnitude=m / (rho * a), unit="m/s")
 
 
@@ -101,18 +143,28 @@ def conveyor_lift_power(*, mass_flow: Quantity, lift_height: Quantity) -> Quanti
     m = mass_flow.to("kg/s").magnitude
     h = lift_height.to("m").magnitude
     if m < 0:
-        raise ValueError("mass_flow must be non-negative")
+        raise _conveyor_refusal(
+            "mass_flow must be non-negative", subject="mass_flow", source=_DUTY_SOURCE
+        )
     if h < 0:
-        raise ValueError("lift_height must be non-negative")
+        raise _conveyor_refusal(
+            "lift_height must be non-negative", subject="lift_height", source=_PROFILE_SOURCE
+        )
     return Quantity(magnitude=m * _GRAVITY * h / 1000.0, unit="kW")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _conveyor_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_conveyor_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _conveyor_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_conveyor_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

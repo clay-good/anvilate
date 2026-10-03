@@ -21,7 +21,35 @@ from __future__ import annotations
 
 from math import exp, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CELL_STATE_SOURCE = "the cell's measured absolute temperature"
+_REACTION_SOURCE = "the balanced half-reaction"
+_POTENTIAL_SOURCE = "the cited standard potential or calibrated electrode reading"
+_ACTIVITY_SOURCE = "the measured species activities that form the reaction quotient"
+
+
+class _NernstInputError(RefusalError, ValueError):
+    """A Nernst-equation input that cannot be used without correction."""
+
+
+def _nernst_refusal(message: str, *, subject: str, source: str) -> _NernstInputError:
+    return _NernstInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _nernst_input_source(name: str) -> str:
+    if name == "temperature":
+        return _CELL_STATE_SOURCE
+    if name == "electrons_transferred":
+        return _REACTION_SOURCE
+    if name == "reaction_quotient":
+        return _ACTIVITY_SOURCE
+    return _POTENTIAL_SOURCE
+
 
 _GAS_CONSTANT = 8.314462618  # J/(mol*K)
 _FARADAY = 96485.33212  # C/mol
@@ -53,11 +81,23 @@ def nernst_potential(
     e0 = standard_potential.to("V").magnitude
     t = temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _nernst_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_CELL_STATE_SOURCE,
+        )
     if electrons_transferred <= 0:
-        raise ValueError("electrons_transferred must be a positive integer")
+        raise _nernst_refusal(
+            "electrons_transferred must be a positive integer",
+            subject="electrons_transferred",
+            source=_REACTION_SOURCE,
+        )
     if reaction_quotient <= 0:
-        raise ValueError("reaction_quotient must be positive")
+        raise _nernst_refusal(
+            "reaction_quotient must be positive",
+            subject="reaction_quotient",
+            source=_ACTIVITY_SOURCE,
+        )
     e = e0 - (_GAS_CONSTANT * t / (electrons_transferred * _FARADAY)) * log(reaction_quotient)
     return Quantity(magnitude=e, unit="V")
 
@@ -73,9 +113,17 @@ def nernst_slope(*, temperature: Quantity, electrons_transferred: int) -> Quanti
     _check(temperature, "[temperature]", "temperature")
     t = temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _nernst_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_CELL_STATE_SOURCE,
+        )
     if electrons_transferred <= 0:
-        raise ValueError("electrons_transferred must be a positive integer")
+        raise _nernst_refusal(
+            "electrons_transferred must be a positive integer",
+            subject="electrons_transferred",
+            source=_REACTION_SOURCE,
+        )
     return Quantity(
         magnitude=_LN10 * _GAS_CONSTANT * t / (electrons_transferred * _FARADAY), unit="V"
     )
@@ -103,18 +151,32 @@ def nernst_reaction_quotient(
     e = potential.to("V").magnitude
     t = temperature.to("K").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _nernst_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_CELL_STATE_SOURCE,
+        )
     if electrons_transferred <= 0:
-        raise ValueError("electrons_transferred must be a positive integer")
+        raise _nernst_refusal(
+            "electrons_transferred must be a positive integer",
+            subject="electrons_transferred",
+            source=_REACTION_SOURCE,
+        )
     return exp(electrons_transferred * _FARADAY * (e0 - e) / (_GAS_CONSTANT * t))
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _nernst_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_nernst_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _nernst_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_nernst_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

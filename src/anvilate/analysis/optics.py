@@ -344,7 +344,7 @@ def snell_refraction_angle(
     if sin_theta2 > 1.0:
         raise _optics_refusal(
             "no refraction: total internal reflection (n1*sin(theta1) exceeds n2)",
-            subject="incident angle and refractive indices",
+            subject="incident_angle, incident_index, and refracted_index",
             source=_OPTICAL_SETUP_SOURCE,
         )
     return degrees(asin(sin_theta2))
@@ -374,7 +374,7 @@ def critical_angle(*, incident_index: float, transmitted_index: float) -> float:
     if transmitted_index >= incident_index:
         raise _optics_refusal(
             "incident_index must exceed transmitted_index (need a dense-to-rare step)",
-            subject="incident and transmitted refractive indices",
+            subject="incident_index and transmitted_index",
             source=_OPTICAL_PROPERTY_SOURCE,
         )
     return degrees(asin(transmitted_index / incident_index))
@@ -404,7 +404,7 @@ def fiber_numerical_aperture(*, core_index: float, cladding_index: float) -> flo
     if cladding_index >= core_index:
         raise _optics_refusal(
             "core_index must exceed cladding_index (light guides in the denser core)",
-            subject="core and cladding refractive indices",
+            subject="core_index and cladding_index",
             source=_OPTICAL_PROPERTY_SOURCE,
         )
     return sqrt(core_index * core_index - cladding_index * cladding_index)
@@ -429,7 +429,7 @@ def abbe_number(*, index_d: float, index_F: float, index_C: float) -> float:
     if index_F <= index_C:
         raise _optics_refusal(
             "index_F must exceed index_C (normal dispersion: blue bends more)",
-            subject="Fraunhofer F and C refractive indices",
+            subject="index_F and index_C",
             source=_OPTICAL_PROPERTY_SOURCE,
         )
     return (index_d - 1.0) / (index_F - index_C)
@@ -458,14 +458,14 @@ def lensmaker_focal_length(
     if r1 == 0.0 or r2 == 0.0:
         raise _optics_refusal(
             "surface radii must be nonzero",
-            subject="lens surface radii",
+            subject="radius1 and radius2",
             source=_OPTICAL_GEOMETRY_SOURCE,
         )
     inv_f = (refractive_index - 1.0) * (1.0 / r1 - 1.0 / r2)
     if inv_f == 0.0:
         raise _optics_refusal(
             "the two surfaces give zero net power (flat or afocal lens)",
-            subject="lens surface radii",
+            subject="radius1 and radius2",
             source=_OPTICAL_GEOMETRY_SOURCE,
         )
     return Quantity(magnitude=1.0 / inv_f, unit="m")
@@ -505,14 +505,14 @@ def combined_thin_lens_focal_length(
     if f1 == 0.0 or f2 == 0.0:
         raise _optics_refusal(
             "focal lengths must be nonzero",
-            subject="lens focal lengths",
+            subject="focal_length1 and focal_length2",
             source=_OPTICAL_GEOMETRY_SOURCE,
         )
     inv_f = 1.0 / f1 + 1.0 / f2
     if inv_f == 0.0:
         raise _optics_refusal(
             "the two lenses cancel (afocal combination)",
-            subject="lens focal lengths",
+            subject="focal_length1 and focal_length2",
             source=_OPTICAL_GEOMETRY_SOURCE,
         )
     return Quantity(magnitude=1.0 / inv_f, unit="m")

@@ -28,7 +28,35 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FLOW_SOURCE = "the operating case's freestream velocity"
+_PLATE_SOURCE = "the plate drawing (station distance or plate length)"
+_FLUID_SOURCE = "the cited kinematic viscosity at the operating temperature"
+_REGIME_SOURCE = "the operating case and plate drawing, within the correlation's Reynolds range"
+_PROFILE_SOURCE = "the computed or measured boundary-layer thicknesses"
+
+
+class _BoundaryLayerInputError(RefusalError, ValueError):
+    """A boundary-layer input that cannot be used without correction."""
+
+
+def _boundary_layer_refusal(message: str, *, subject: str, source: str) -> _BoundaryLayerInputError:
+    return _BoundaryLayerInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _boundary_layer_input_source(name: str) -> str:
+    if name in {"distance", "plate_length"}:
+        return _PLATE_SOURCE
+    if name == "kinematic_viscosity":
+        return _FLUID_SOURCE
+    if name in {"displacement_thickness", "momentum_thickness"}:
+        return _PROFILE_SOURCE
+    return _FLOW_SOURCE
 
 
 def _reynolds(velocity: Quantity, length: Quantity, kinematic_viscosity: Quantity) -> float:
@@ -36,11 +64,21 @@ def _reynolds(velocity: Quantity, length: Quantity, kinematic_viscosity: Quantit
     x = length.to("m").magnitude
     nu = kinematic_viscosity.to("m**2/s").magnitude
     if u <= 0:
-        raise ValueError("freestream_velocity must be positive")
+        raise _boundary_layer_refusal(
+            "freestream_velocity must be positive",
+            subject="freestream_velocity",
+            source=_FLOW_SOURCE,
+        )
     if x <= 0:
-        raise ValueError("distance must be positive")
+        raise _boundary_layer_refusal(
+            "distance must be positive", subject="distance", source=_PLATE_SOURCE
+        )
     if nu <= 0:
-        raise ValueError("kinematic_viscosity must be positive")
+        raise _boundary_layer_refusal(
+            "kinematic_viscosity must be positive",
+            subject="kinematic_viscosity",
+            source=_FLUID_SOURCE,
+        )
     return u * x / nu
 
 
@@ -59,28 +97,34 @@ _TURBULENT_FIT_LIMIT = 1.0e7
 
 def _require_laminar(reynolds: float, symbol: str) -> float:
     if reynolds > _TRANSITION_REYNOLDS:
-        raise ValueError(
+        raise _boundary_layer_refusal(
             f"the Blasius laminar forms hold below the transition at "
             f"{_TRANSITION_REYNOLDS:.0e}, and {symbol} = {reynolds:.4g} is past it: the "
             f"layer has tripped to turbulence and the laminar result understates the "
             f"thickness and the drag by up to an order of magnitude. Use the "
-            f"turbulent_* form."
+            f"turbulent_* form.",
+            subject="freestream_velocity, distance, and kinematic_viscosity",
+            source=_REGIME_SOURCE,
         )
     return reynolds
 
 
 def _require_turbulent(reynolds: float, symbol: str) -> float:
     if reynolds < _TRANSITION_REYNOLDS:
-        raise ValueError(
+        raise _boundary_layer_refusal(
             f"the 1/7-power turbulent forms hold above the transition at "
             f"{_TRANSITION_REYNOLDS:.0e}, and {symbol} = {reynolds:.4g} is below it: the "
-            f"layer is still laminar. Use the laminar_* form."
+            f"layer is still laminar. Use the laminar_* form.",
+            subject="freestream_velocity, distance, and kinematic_viscosity",
+            source=_REGIME_SOURCE,
         )
     if reynolds > _TURBULENT_FIT_LIMIT:
-        raise ValueError(
+        raise _boundary_layer_refusal(
             f"the 1/7-power turbulent correlations are fitted to about "
             f"{_TURBULENT_FIT_LIMIT:.0e}, and {symbol} = {reynolds:.4g} is past the end of "
-            f"the fit; use a log-law or Schlichting correlation instead of extrapolating."
+            f"the fit; use a log-law or Schlichting correlation instead of extrapolating.",
+            subject="freestream_velocity, distance, and kinematic_viscosity",
+            source=_REGIME_SOURCE,
         )
     return reynolds
 
@@ -201,9 +245,17 @@ def boundary_layer_shape_factor(
     delta_star = displacement_thickness.to("m").magnitude
     theta = momentum_thickness.to("m").magnitude
     if delta_star <= 0:
-        raise ValueError("displacement_thickness must be positive")
+        raise _boundary_layer_refusal(
+            "displacement_thickness must be positive",
+            subject="displacement_thickness",
+            source=_PROFILE_SOURCE,
+        )
     if theta <= 0:
-        raise ValueError("momentum_thickness must be positive")
+        raise _boundary_layer_refusal(
+            "momentum_thickness must be positive",
+            subject="momentum_thickness",
+            source=_PROFILE_SOURCE,
+        )
     return delta_star / theta
 
 
@@ -325,10 +377,16 @@ def turbulent_plate_drag_coefficient(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _boundary_layer_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_boundary_layer_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _boundary_layer_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_boundary_layer_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

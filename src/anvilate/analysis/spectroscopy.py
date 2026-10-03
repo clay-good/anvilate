@@ -21,7 +21,35 @@ the concentration a measured absorbance infers at a known path length and molar 
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_ABSORPTIVITY_SOURCE = "the analyte's calibration curve or cited absorptivity at the wavelength"
+_SAMPLE_SOURCE = "the prepared sample's concentration record"
+_CELL_SOURCE = "the cuvette or flow-cell path length specification"
+_READING_SOURCE = "the spectrophotometer's blank-corrected absorbance reading"
+
+
+class _SpectroscopyInputError(RefusalError, ValueError):
+    """A Beer-Lambert spectroscopy input that cannot be used without correction."""
+
+
+def _spectroscopy_refusal(message: str, *, subject: str, source: str) -> _SpectroscopyInputError:
+    return _SpectroscopyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _spectroscopy_input_source(name: str) -> str:
+    if name == "molar_absorptivity":
+        return _ABSORPTIVITY_SOURCE
+    if name == "concentration":
+        return _SAMPLE_SOURCE
+    if name == "path_length":
+        return _CELL_SOURCE
+    return _READING_SOURCE
+
 
 __all__ = [
     "absorbance",
@@ -48,11 +76,19 @@ def absorbance(
     c = concentration.to("mol/L").magnitude
     length = path_length.to("cm").magnitude
     if eps < 0:
-        raise ValueError("molar_absorptivity must be non-negative")
+        raise _spectroscopy_refusal(
+            "molar_absorptivity must be non-negative",
+            subject="molar_absorptivity",
+            source=_ABSORPTIVITY_SOURCE,
+        )
     if c < 0:
-        raise ValueError("concentration must be non-negative")
+        raise _spectroscopy_refusal(
+            "concentration must be non-negative", subject="concentration", source=_SAMPLE_SOURCE
+        )
     if length <= 0:
-        raise ValueError("path_length must be positive")
+        raise _spectroscopy_refusal(
+            "path_length must be positive", subject="path_length", source=_CELL_SOURCE
+        )
     return eps * c * length
 
 
@@ -65,7 +101,9 @@ def transmittance_from_absorbance(*, absorbance: float) -> float:
     """
     require_finite(absorbance, name="absorbance")
     if absorbance < 0:
-        raise ValueError("absorbance must be non-negative")
+        raise _spectroscopy_refusal(
+            "absorbance must be non-negative", subject="absorbance", source=_READING_SOURCE
+        )
     return 10.0 ** (-absorbance)
 
 
@@ -84,20 +122,34 @@ def concentration_from_absorbance(
     eps = molar_absorptivity.to("L/(mol*cm)").magnitude
     length = path_length.to("cm").magnitude
     if absorbance < 0:
-        raise ValueError("absorbance must be non-negative")
+        raise _spectroscopy_refusal(
+            "absorbance must be non-negative", subject="absorbance", source=_READING_SOURCE
+        )
     if eps <= 0:
-        raise ValueError("molar_absorptivity must be positive")
+        raise _spectroscopy_refusal(
+            "molar_absorptivity must be positive",
+            subject="molar_absorptivity",
+            source=_ABSORPTIVITY_SOURCE,
+        )
     if length <= 0:
-        raise ValueError("path_length must be positive")
+        raise _spectroscopy_refusal(
+            "path_length must be positive", subject="path_length", source=_CELL_SOURCE
+        )
     return Quantity(magnitude=absorbance / (eps * length), unit="mol/L")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _spectroscopy_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_spectroscopy_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _spectroscopy_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_spectroscopy_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

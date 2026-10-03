@@ -120,7 +120,7 @@ def spring_index(*, mean_coil_diameter: Quantity, wire_diameter: Quantity) -> fl
         raise _spring_refusal(
             f"wire_diameter ({wire_diameter}) must be positive and below the mean coil "
             f"diameter ({mean_coil_diameter})",
-            subject="wire and mean coil diameters",
+            subject="wire_diameter and mean_coil_diameter",
             source=_SPRING_GEOMETRY_SOURCE,
         )
     return big / small
@@ -412,21 +412,21 @@ def _rates_in_n_per_mm(spring_rates: Sequence[Quantity]) -> list[float]:
         if not isinstance(rate, Quantity):
             raise _spring_refusal(
                 f"rate must be a [force] / [length] quantity; got {rate!r}",
-                subject="spring rate",
+                subject="spring_rates",
                 source=_SPRING_DESIGN_SOURCE,
             )
         if not rate.has_dimension("[force] / [length]"):
             raise _spring_refusal(
                 f"each spring rate must be a [force]/[length] quantity; got "
                 f"{rate.dimensionality} ({rate})",
-                subject="spring rate",
+                subject="spring_rates",
                 source=_SPRING_DESIGN_SOURCE,
             )
         k = rate.to("N/mm").magnitude
         if k <= 0:
             raise _spring_refusal(
                 f"each spring rate must be positive; got {rate}",
-                subject="spring rate",
+                subject="spring_rates",
                 source=_SPRING_DESIGN_SOURCE,
             )
         values.append(k)
@@ -654,7 +654,7 @@ def _belleville_geometry(
     if de <= di:
         raise _spring_refusal(
             f"outer_diameter ({outer_diameter}) must exceed inner_diameter ({inner_diameter})",
-            subject="Belleville washer diameters",
+            subject="outer_diameter and inner_diameter",
             source=_SPRING_GEOMETRY_SOURCE,
         )
     if not 0 <= poisson_ratio < 0.5:

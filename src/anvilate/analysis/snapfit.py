@@ -31,7 +31,35 @@ from __future__ import annotations
 
 from math import radians, tan
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FINGER_DRAWING_SOURCE = "the snap-fit finger drawing (length, width, thickness, and angles)"
+_MATERIAL_SOURCE = "the resin datasheet's permissible strain and secant modulus"
+_FRICTION_SOURCE = "the cited or tested friction coefficient for the mating plastics"
+_FORCE_SOURCE = "the computed deflection force or assembly-force requirement"
+
+
+class _SnapFitInputError(RefusalError, ValueError):
+    """A snap-fit input that cannot be used without correction."""
+
+
+def _snapfit_refusal(message: str, *, subject: str, source: str) -> _SnapFitInputError:
+    return _SnapFitInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _snapfit_input_source(name: str) -> str:
+    if name in {"elastic_modulus", "permissible_strain"}:
+        return _MATERIAL_SOURCE
+    if name == "friction_coefficient":
+        return _FRICTION_SOURCE
+    if name == "deflection_force":
+        return _FORCE_SOURCE
+    return _FINGER_DRAWING_SOURCE
+
 
 __all__ = [
     "snap_fit_permissible_deflection",
@@ -43,10 +71,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _snapfit_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_snapfit_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _snapfit_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_snapfit_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -59,7 +93,11 @@ def _positive_length(value: Quantity, name: str) -> float:
     _require(value, "[length]", name)
     magnitude = value.to("mm").magnitude
     if magnitude <= 0:
-        raise ValueError(f"{name} must be positive; got {value}")
+        raise _snapfit_refusal(
+            f"{name} must be positive; got {value}",
+            subject=name,
+            source=_snapfit_input_source(name),
+        )
     return magnitude
 
 
@@ -75,7 +113,11 @@ def snap_fit_permissible_deflection(
     deeper undercut at the same strain. ε must be positive. Returns Y in mm.
     """
     if permissible_strain <= 0:
-        raise ValueError(f"permissible_strain must be positive; got {permissible_strain}")
+        raise _snapfit_refusal(
+            f"permissible_strain must be positive; got {permissible_strain}",
+            subject="permissible_strain",
+            source=_MATERIAL_SOURCE,
+        )
     ell = _positive_length(length, "length")
     h = _positive_length(thickness, "thickness")
     return Quantity(magnitude=permissible_strain * ell**2 / (1.5 * h), unit="mm")
@@ -112,14 +154,22 @@ def snap_fit_deflection_force(
     mating force. ε must be positive. Returns the force in N.
     """
     if permissible_strain <= 0:
-        raise ValueError(f"permissible_strain must be positive; got {permissible_strain}")
+        raise _snapfit_refusal(
+            f"permissible_strain must be positive; got {permissible_strain}",
+            subject="permissible_strain",
+            source=_MATERIAL_SOURCE,
+        )
     _require(elastic_modulus, "[pressure]", "elastic_modulus")
     w = _positive_length(width, "width")
     h = _positive_length(thickness, "thickness")
     ell = _positive_length(length, "length")
     e = elastic_modulus.to("MPa").magnitude
     if e <= 0:
-        raise ValueError(f"elastic_modulus must be positive; got {elastic_modulus}")
+        raise _snapfit_refusal(
+            f"elastic_modulus must be positive; got {elastic_modulus}",
+            subject="elastic_modulus",
+            source=_MATERIAL_SOURCE,
+        )
     force = e * w * h**2 * permissible_strain / (6.0 * ell)
     return Quantity(magnitude=force, unit="N")
 
@@ -138,17 +188,31 @@ def snap_fit_mating_force(
     """
     _require(deflection_force, "[force]", "deflection_force")
     if not 0 < insertion_angle < 90:
-        raise ValueError(f"insertion_angle must be in (0, 90) degrees; got {insertion_angle}")
+        raise _snapfit_refusal(
+            f"insertion_angle must be in (0, 90) degrees; got {insertion_angle}",
+            subject="insertion_angle",
+            source=_FINGER_DRAWING_SOURCE,
+        )
     if friction_coefficient < 0:
-        raise ValueError(f"friction_coefficient must be non-negative; got {friction_coefficient}")
+        raise _snapfit_refusal(
+            f"friction_coefficient must be non-negative; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_FRICTION_SOURCE,
+        )
     p = deflection_force.to("N").magnitude
     if p <= 0:
-        raise ValueError(f"deflection_force must be positive; got {deflection_force}")
+        raise _snapfit_refusal(
+            f"deflection_force must be positive; got {deflection_force}",
+            subject="deflection_force",
+            source=_FORCE_SOURCE,
+        )
     tan_a = tan(radians(insertion_angle))
     denominator = 1.0 - friction_coefficient * tan_a
     if denominator <= 0:
-        raise ValueError(
+        raise _snapfit_refusal(
             "friction_coefficient*tan(insertion_angle) >= 1: the finger self-locks and "
-            "cannot be pushed in; lower the insertion_angle or friction"
+            "cannot be pushed in; lower the insertion_angle or friction",
+            subject="friction_coefficient and insertion_angle",
+            source=_FINGER_DRAWING_SOURCE,
         )
     return Quantity(magnitude=p * (friction_coefficient + tan_a) / denominator, unit="N")

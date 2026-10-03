@@ -2822,7 +2822,7 @@ def test_spring_rejects_wire_wider_than_coil():
         (
             "spring_index",
             {"mean_coil_diameter": _q("5 mm"), "wire_diameter": _q("5 mm")},
-            "wire and mean coil diameters",
+            "wire_diameter and mean_coil_diameter",
             "the spring drawing or selected manufacturer catalogue",
         ),
         (
@@ -37463,7 +37463,7 @@ def test_malus_law_transmission_inverse_and_unpolarized_half():
         (
             "fresnel_s_reflectance",
             {"incident_index": 1.5, "transmitted_index": 1.0, "incidence_angle": 60.0},
-            "incidence angle and refractive indices",
+            "incidence_angle, incident_index, and transmitted_index",
             "the optical layout or calibrated incidence-angle setup",
         ),
     ),
@@ -39540,6 +39540,112 @@ def test_every_radioactivity_refusal_site_is_structured():
             unstructured.append(node.exc)
 
     assert len(structured) == 12
+    assert unstructured == []
+    for call in structured:
+        assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    (
+        (
+            "half_value_layer",
+            {"attenuation_coefficient": _q("0 1/mm")},
+            "attenuation_coefficient",
+            "the shield material's cited attenuation data at the beam energy",
+        ),
+        (
+            "radiation_transmission_fraction",
+            {"attenuation_coefficient": _q("0.0668 1/mm"), "thickness": _q("-1 mm")},
+            "thickness",
+            "the shield drawing or measured shield thickness",
+        ),
+        (
+            "radiation_transmission_fraction",
+            {"attenuation_coefficient": _q("0.0668 1/mm"), "thickness": _q("1 s")},
+            "thickness",
+            "the shield drawing or measured shield thickness",
+        ),
+        (
+            "shield_thickness_for_transmission",
+            {"attenuation_coefficient": _q("0.0668 1/mm"), "transmission_fraction": 1.5},
+            "transmission_fraction",
+            "the governing dose-rate limit or shielding design basis",
+        ),
+        (
+            "fan_total_pressure",
+            {"static_pressure": _q("250 Pa"), "velocity_pressure": _q("-1 Pa")},
+            "velocity_pressure",
+            "the duct system pressure-loss calculation or measured traverse",
+        ),
+        (
+            "circular_equivalent_diameter",
+            {"width": _q("400 mm"), "height": _q("0 mm")},
+            "height",
+            "the duct layout drawing or measured duct dimensions",
+        ),
+        (
+            "circular_equivalent_diameter",
+            {"width": _q("400 s"), "height": _q("200 mm")},
+            "width",
+            "the duct layout drawing or measured duct dimensions",
+        ),
+        (
+            "fan_power",
+            {"flow_rate": _q("0 m**3/s"), "total_pressure": _q("500 Pa"), "fan_efficiency": 0.7},
+            "flow_rate",
+            "the zone airflow requirement or load calculation",
+        ),
+        (
+            "fan_power",
+            {"flow_rate": _q("1 m**3/s"), "total_pressure": _q("500 Pa"), "fan_efficiency": 1.2},
+            "fan_efficiency",
+            "the fan manufacturer's performance curve at the duty point",
+        ),
+    ),
+)
+def test_shielding_and_duct_refusals_carry_structured_remedies(
+    function_name, kwargs, subject, source
+):
+    from anvilate import analysis
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert refused.value.remedies[0].model_dump() == {
+        "action": "replace",
+        "subject": subject,
+        "source": source,
+    }
+
+
+@pytest.mark.parametrize(
+    ("module", "helper", "sites"),
+    (
+        ("radiation_shielding", "_shielding_refusal", 7),
+        ("hvac_duct", "_duct_refusal", 7),
+    ),
+)
+def test_every_shielding_and_duct_refusal_site_is_structured(module, helper, sites):
+    import ast
+    import pathlib
+
+    from conftest import parsed_source
+
+    path = pathlib.Path(__file__).parents[1] / f"src/anvilate/analysis/{module}.py"
+    structured = []
+    unstructured = []
+    for node in ast.walk(parsed_source(path)):
+        if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+            continue
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == helper:
+            structured.append(node.exc)
+        if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
+            unstructured.append(node.exc)
+
+    assert len(structured) == sites
     assert unstructured == []
     for call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno

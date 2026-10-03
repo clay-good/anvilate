@@ -100,7 +100,7 @@ def stoichiometric_air_fuel_ratio(
     if oxygen_demand <= 0:
         raise _combustion_refusal(
             "net oxygen demand must be positive (a combustible fuel)",
-            subject="fuel ultimate analysis",
+            subject="carbon, hydrogen, oxygen, and sulfur",
             source=_FUEL_ANALYSIS_SOURCE,
         )
     return oxygen_demand / _OXYGEN_MASS_FRACTION_AIR
@@ -244,7 +244,7 @@ def siegert_dry_flue_gas_loss(
     if t_flue <= t_air:
         raise _combustion_refusal(
             "flue_temperature must exceed the combustion air temperature",
-            subject="flue and combustion-air temperatures",
+            subject="flue_temperature and combustion_air_temperature",
             source=_COMBUSTION_CASE_SOURCE,
         )
     if not 0 <= flue_oxygen_percent < 21:
@@ -291,7 +291,7 @@ def combustion_efficiency(
     if efficiency <= 0:
         raise _combustion_refusal(
             "the losses given exceed 100% (check the inputs)",
-            subject="combustion loss inputs",
+            subject="dry_flue_gas_loss_percent and other_losses_percent",
             source=_COMBUSTION_MODEL_SOURCE,
         )
     return efficiency
@@ -392,7 +392,7 @@ def lower_heating_value(
     if lhv <= 0:
         raise _combustion_refusal(
             "the water latent-heat term exceeds the higher heating value (LHV ≤ 0); check inputs",
-            subject="heating value and water-content inputs",
+            subject="higher_heating_value, water_mass_per_fuel_mass, and latent_heat",
             source=_THERMOCHEMICAL_SOURCE,
         )
     return Quantity(magnitude=lhv, unit="MJ/kg")

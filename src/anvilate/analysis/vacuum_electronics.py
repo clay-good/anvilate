@@ -20,7 +20,34 @@ from __future__ import annotations
 
 from math import exp, pi, sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CATHODE_SOURCE = "the cathode material's cited emission data (work function, Richardson constant)"
+_THERMAL_SOURCE = "the cathode's measured or specified absolute operating temperature"
+_ELECTRODE_SOURCE = "the electrode drawing and supply voltage specification"
+
+
+class _VacuumElectronicsInputError(RefusalError, ValueError):
+    """A vacuum electron-emission input that cannot be used without correction."""
+
+
+def _vacuum_electronics_refusal(
+    message: str, *, subject: str, source: str
+) -> _VacuumElectronicsInputError:
+    return _VacuumElectronicsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _vacuum_electronics_input_source(name: str) -> str:
+    if name in {"richardson_constant", "work_function"}:
+        return _CATHODE_SOURCE
+    if name == "temperature":
+        return _THERMAL_SOURCE
+    return _ELECTRODE_SOURCE
+
 
 _BOLTZMANN = 1.380649e-23  # J/K
 _ELEMENTARY_CHARGE = 1.602176634e-19  # C
@@ -53,9 +80,15 @@ def thermionic_current_density(
     t = temperature.to("K").magnitude
     w = work_function.to("J").magnitude
     if t <= 0:
-        raise ValueError("temperature must be positive (absolute temperature)")
+        raise _vacuum_electronics_refusal(
+            "temperature must be positive (absolute temperature)",
+            subject="temperature",
+            source=_THERMAL_SOURCE,
+        )
     if w <= 0:
-        raise ValueError("work_function must be positive")
+        raise _vacuum_electronics_refusal(
+            "work_function must be positive", subject="work_function", source=_CATHODE_SOURCE
+        )
     a = _richardson_value(richardson_constant)
     j = a * t * t * exp(-w / (_BOLTZMANN * t))
     return Quantity(magnitude=j, unit="A/m**2")
@@ -71,7 +104,11 @@ def schottky_barrier_lowering(*, electric_field: Quantity) -> Quantity:
     _check(electric_field, "[electric_potential]/[length]", "electric_field")
     e_field = electric_field.to("V/m").magnitude
     if e_field < 0:
-        raise ValueError("electric_field must be non-negative")
+        raise _vacuum_electronics_refusal(
+            "electric_field must be non-negative",
+            subject="electric_field",
+            source=_ELECTRODE_SOURCE,
+        )
     q = _ELEMENTARY_CHARGE
     dw = sqrt(q**3 * e_field / (4.0 * pi * _VACUUM_PERMITTIVITY))
     return Quantity(magnitude=dw, unit="J")
@@ -90,9 +127,13 @@ def child_langmuir_current_density(*, anode_voltage: Quantity, gap: Quantity) ->
     v = anode_voltage.to("V").magnitude
     d = gap.to("m").magnitude
     if v <= 0:
-        raise ValueError("anode_voltage must be positive")
+        raise _vacuum_electronics_refusal(
+            "anode_voltage must be positive", subject="anode_voltage", source=_ELECTRODE_SOURCE
+        )
     if d <= 0:
-        raise ValueError("gap must be positive")
+        raise _vacuum_electronics_refusal(
+            "gap must be positive", subject="gap", source=_ELECTRODE_SOURCE
+        )
     coeff = (4.0 / 9.0) * _VACUUM_PERMITTIVITY * sqrt(2.0 * _ELEMENTARY_CHARGE / _ELECTRON_MASS)
     j = coeff * v**1.5 / (d * d)
     return Quantity(magnitude=j, unit="A/m**2")
@@ -104,16 +145,26 @@ def _richardson_value(richardson_constant: Quantity | None) -> float:
     _check(richardson_constant, "[current]/[area]/[temperature]**2", "richardson_constant")
     a = richardson_constant.to("A/(m**2*K**2)").magnitude
     if a <= 0:
-        raise ValueError("richardson_constant must be positive")
+        raise _vacuum_electronics_refusal(
+            "richardson_constant must be positive",
+            subject="richardson_constant",
+            source=_CATHODE_SOURCE,
+        )
     return a
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _vacuum_electronics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_vacuum_electronics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _vacuum_electronics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_vacuum_electronics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

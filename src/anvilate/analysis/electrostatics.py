@@ -19,7 +19,37 @@ from __future__ import annotations
 
 from math import log, pi
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_CHARGE_SOURCE = "the measured or specified charges"
+_GEOMETRY_SOURCE = "the electrode or conductor drawing (separations, radii, and length)"
+_DIELECTRIC_SOURCE = "the dielectric's datasheet relative permittivity"
+_FIELD_SOURCE = "the computed or measured electric field"
+
+
+class _ElectrostaticsInputError(RefusalError, ValueError):
+    """An electrostatics input that cannot be used without correction."""
+
+
+def _electrostatics_refusal(
+    message: str, *, subject: str, source: str
+) -> _ElectrostaticsInputError:
+    return _ElectrostaticsInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _electrostatics_input_source(name: str) -> str:
+    if name in {"charge", "charge1", "charge2"}:
+        return _CHARGE_SOURCE
+    if name == "relative_permittivity":
+        return _DIELECTRIC_SOURCE
+    if name == "electric_field":
+        return _FIELD_SOURCE
+    return _GEOMETRY_SOURCE
+
 
 _COULOMB_CONSTANT = 8.9875517873681764e9  # N*m**2/C**2, 1/(4*pi*eps0)
 _VACUUM_PERMITTIVITY = 8.8541878128e-12  # F/m (eps0)
@@ -48,7 +78,9 @@ def coulomb_force(*, charge1: Quantity, charge2: Quantity, separation: Quantity)
     q2 = charge2.to("C").magnitude
     r = separation.to("m").magnitude
     if r <= 0:
-        raise ValueError("separation must be positive")
+        raise _electrostatics_refusal(
+            "separation must be positive", subject="separation", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=_COULOMB_CONSTANT * q1 * q2 / (r * r), unit="N")
 
 
@@ -64,7 +96,9 @@ def electric_field_point_charge(*, charge: Quantity, distance: Quantity) -> Quan
     q = charge.to("C").magnitude
     r = distance.to("m").magnitude
     if r <= 0:
-        raise ValueError("distance must be positive")
+        raise _electrostatics_refusal(
+            "distance must be positive", subject="distance", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=_COULOMB_CONSTANT * q / (r * r), unit="V/m")
 
 
@@ -80,7 +114,9 @@ def electric_potential_point_charge(*, charge: Quantity, distance: Quantity) -> 
     q = charge.to("C").magnitude
     r = distance.to("m").magnitude
     if r <= 0:
-        raise ValueError("distance must be positive")
+        raise _electrostatics_refusal(
+            "distance must be positive", subject="distance", source=_GEOMETRY_SOURCE
+        )
     return Quantity(magnitude=_COULOMB_CONSTANT * q / r, unit="V")
 
 
@@ -100,7 +136,11 @@ def electric_field_energy_density(
     _check(electric_field, "[electric_potential]/[length]", "electric_field")
     e = electric_field.to("V/m").magnitude
     if relative_permittivity < 1.0:
-        raise ValueError("relative_permittivity must be at least 1")
+        raise _electrostatics_refusal(
+            "relative_permittivity must be at least 1",
+            subject="relative_permittivity",
+            source=_DIELECTRIC_SOURCE,
+        )
     return Quantity(
         magnitude=0.5 * _VACUUM_PERMITTIVITY * relative_permittivity * e**2, unit="J/m**3"
     )
@@ -129,23 +169,39 @@ def coaxial_capacitance(
     a = inner_radius.to("m").magnitude
     b = outer_radius.to("m").magnitude
     if length_m <= 0:
-        raise ValueError("length must be positive")
+        raise _electrostatics_refusal(
+            "length must be positive", subject="length", source=_GEOMETRY_SOURCE
+        )
     if a <= 0:
-        raise ValueError("inner_radius must be positive")
+        raise _electrostatics_refusal(
+            "inner_radius must be positive", subject="inner_radius", source=_GEOMETRY_SOURCE
+        )
     if b <= a:
-        raise ValueError("outer_radius must exceed inner_radius")
+        raise _electrostatics_refusal(
+            "outer_radius must exceed inner_radius", subject="outer_radius", source=_GEOMETRY_SOURCE
+        )
     if relative_permittivity < 1.0:
-        raise ValueError("relative_permittivity must be at least 1")
+        raise _electrostatics_refusal(
+            "relative_permittivity must be at least 1",
+            subject="relative_permittivity",
+            source=_DIELECTRIC_SOURCE,
+        )
     c = 2.0 * pi * _VACUUM_PERMITTIVITY * relative_permittivity * length_m / log(b / a)
     return Quantity(magnitude=c, unit="F")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _electrostatics_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_electrostatics_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _electrostatics_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_electrostatics_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

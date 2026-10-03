@@ -19,8 +19,33 @@ why the module carries no medium of its own.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import count_rate_per_second
+
+_FREQUENCY_SOURCE = "the source's frequency specification or calibrated frequency measurement"
+_WAVELENGTH_SOURCE = "the measured or specified wavelength"
+_MEDIUM_SOURCE = "the cited wave speed for the propagation medium and wave type"
+
+
+class _WaveInputError(RefusalError, ValueError):
+    """A wave-relation input that cannot be used without correction."""
+
+
+def _wave_refusal(message: str, *, subject: str, source: str) -> _WaveInputError:
+    return _WaveInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _wave_input_source(name: str) -> str:
+    if name == "frequency":
+        return _FREQUENCY_SOURCE
+    if name == "wavelength":
+        return _WAVELENGTH_SOURCE
+    return _MEDIUM_SOURCE
+
 
 __all__ = [
     "frequency_from_wavelength",
@@ -41,9 +66,13 @@ def wave_speed(*, frequency: Quantity, wavelength: Quantity) -> Quantity:
     f = count_rate_per_second(frequency, name="frequency")
     lam = wavelength.to("m").magnitude
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _wave_refusal(
+            "frequency must be positive", subject="frequency", source=_FREQUENCY_SOURCE
+        )
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _wave_refusal(
+            "wavelength must be positive", subject="wavelength", source=_WAVELENGTH_SOURCE
+        )
     return Quantity(magnitude=f * lam, unit="m/s")
 
 
@@ -59,9 +88,13 @@ def wavelength_from_frequency(*, frequency: Quantity, wave_speed: Quantity) -> Q
     f = count_rate_per_second(frequency, name="frequency")
     v = wave_speed.to("m/s").magnitude
     if f <= 0:
-        raise ValueError("frequency must be positive")
+        raise _wave_refusal(
+            "frequency must be positive", subject="frequency", source=_FREQUENCY_SOURCE
+        )
     if v <= 0:
-        raise ValueError("wave_speed must be positive")
+        raise _wave_refusal(
+            "wave_speed must be positive", subject="wave_speed", source=_MEDIUM_SOURCE
+        )
     return Quantity(magnitude=v / f, unit="m")
 
 
@@ -76,18 +109,28 @@ def frequency_from_wavelength(*, wavelength: Quantity, wave_speed: Quantity) -> 
     lam = wavelength.to("m").magnitude
     v = wave_speed.to("m/s").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _wave_refusal(
+            "wavelength must be positive", subject="wavelength", source=_WAVELENGTH_SOURCE
+        )
     if v <= 0:
-        raise ValueError("wave_speed must be positive")
+        raise _wave_refusal(
+            "wave_speed must be positive", subject="wave_speed", source=_MEDIUM_SOURCE
+        )
     return Quantity(magnitude=v / lam, unit="Hz")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _wave_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_wave_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _wave_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_wave_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

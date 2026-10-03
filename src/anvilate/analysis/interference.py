@@ -21,7 +21,41 @@ import math
 
 from pydantic import BaseModel, ConfigDict
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_FIT_DRAWING_SOURCE = "the hub and shaft drawing (diameters, engagement, and fit tolerance)"
+_MATERIAL_SOURCE = "the hub and shaft material records (modulus, Poisson ratio, expansion)"
+_FRICTION_SOURCE = "the cited or tested friction coefficient for the mating surfaces"
+_PRESSURE_SOURCE = "the required contact pressure from the joint's torque or axial load case"
+
+
+class _InterferenceFitInputError(RefusalError, ValueError):
+    """An interference-fit input that cannot be used without correction."""
+
+
+def _interference_refusal(message: str, *, subject: str, source: str) -> _InterferenceFitInputError:
+    return _InterferenceFitInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _interference_input_source(name: str) -> str:
+    if name in {
+        "hub_modulus",
+        "hub_poisson",
+        "shaft_modulus",
+        "shaft_poisson",
+        "thermal_expansion_coefficient",
+    }:
+        return _MATERIAL_SOURCE
+    if name == "friction_coefficient":
+        return _FRICTION_SOURCE
+    if name == "contact_pressure":
+        return _PRESSURE_SOURCE
+    return _FIT_DRAWING_SOURCE
+
 
 __all__ = [
     "InterferenceFit",
@@ -35,10 +69,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _interference_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_interference_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _interference_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_interference_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -105,9 +145,11 @@ def _fit_geometry(
     e_i = shaft_modulus.to("MPa").magnitude
 
     if not (big_d > d > d_i >= 0):
-        raise ValueError(
+        raise _interference_refusal(
             f"need hub_outer_diameter > interface_diameter > shaft_bore_diameter >= 0; "
-            f"got {hub_outer_diameter}, {interface_diameter}, {shaft_bore_diameter}"
+            f"got {hub_outer_diameter}, {interface_diameter}, {shaft_bore_diameter}",
+            subject="hub_outer_diameter, interface_diameter, and shaft_bore_diameter",
+            source=_FIT_DRAWING_SOURCE,
         )
 
     hub_ratio = (big_d**2 + d**2) / (big_d**2 - d**2)  # (D²+d²)/(D²−d²)
@@ -217,12 +259,24 @@ def interference_axial_capacity(
     _require(contact_pressure, "[pressure]", "contact_pressure")
     _require(interface_diameter, "[length]", "interface_diameter")
     if interface_diameter.magnitude <= 0:
-        raise ValueError(f"interface_diameter must be positive; got {interface_diameter}")
+        raise _interference_refusal(
+            f"interface_diameter must be positive; got {interface_diameter}",
+            subject="interface_diameter",
+            source=_FIT_DRAWING_SOURCE,
+        )
     _require(engagement_length, "[length]", "engagement_length")
     if engagement_length.magnitude <= 0:
-        raise ValueError(f"engagement_length must be positive; got {engagement_length}")
+        raise _interference_refusal(
+            f"engagement_length must be positive; got {engagement_length}",
+            subject="engagement_length",
+            source=_FIT_DRAWING_SOURCE,
+        )
     if friction_coefficient <= 0:
-        raise ValueError(f"friction_coefficient must be positive; got {friction_coefficient}")
+        raise _interference_refusal(
+            f"friction_coefficient must be positive; got {friction_coefficient}",
+            subject="friction_coefficient",
+            source=_FRICTION_SOURCE,
+        )
     force = (
         friction_coefficient
         * contact_pressure.pint
@@ -277,9 +331,21 @@ def shrink_fit_temperature_rise(
     d = interface_diameter.to("m").magnitude
     alpha = thermal_expansion_coefficient.to("1/K").magnitude
     if delta < 0:
-        raise ValueError("diametral_interference must be non-negative")
+        raise _interference_refusal(
+            "diametral_interference must be non-negative",
+            subject="diametral_interference",
+            source=_FIT_DRAWING_SOURCE,
+        )
     if d <= 0:
-        raise ValueError("interface_diameter must be positive")
+        raise _interference_refusal(
+            "interface_diameter must be positive",
+            subject="interface_diameter",
+            source=_FIT_DRAWING_SOURCE,
+        )
     if alpha <= 0:
-        raise ValueError("thermal_expansion_coefficient must be positive")
+        raise _interference_refusal(
+            "thermal_expansion_coefficient must be positive",
+            subject="thermal_expansion_coefficient",
+            source=_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=delta / (alpha * d), unit="K")

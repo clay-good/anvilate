@@ -23,7 +23,30 @@ from __future__ import annotations
 
 from math import exp, log
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SHIELD_MATERIAL_SOURCE = "the shield material's cited attenuation data at the beam energy"
+_SHIELD_DRAWING_SOURCE = "the shield drawing or measured shield thickness"
+_TARGET_TRANSMISSION_SOURCE = "the governing dose-rate limit or shielding design basis"
+
+
+class _RadiationShieldingInputError(RefusalError, ValueError):
+    """A radiation-shielding input that cannot be used without correction."""
+
+
+def _shielding_refusal(message: str, *, subject: str, source: str) -> _RadiationShieldingInputError:
+    return _RadiationShieldingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _shielding_input_source(name: str) -> str:
+    if name == "thickness":
+        return _SHIELD_DRAWING_SOURCE
+    return _SHIELD_MATERIAL_SOURCE
+
 
 __all__ = [
     "half_value_layer",
@@ -47,9 +70,17 @@ def radiation_transmission_fraction(
     mu = attenuation_coefficient.to("1/m").magnitude
     x = thickness.to("m").magnitude
     if mu <= 0:
-        raise ValueError("attenuation_coefficient must be positive")
+        raise _shielding_refusal(
+            "attenuation_coefficient must be positive",
+            subject="attenuation_coefficient",
+            source=_SHIELD_MATERIAL_SOURCE,
+        )
     if x < 0:
-        raise ValueError("thickness must be non-negative")
+        raise _shielding_refusal(
+            "thickness must be non-negative",
+            subject="thickness",
+            source=_SHIELD_DRAWING_SOURCE,
+        )
     return exp(-mu * x)
 
 
@@ -63,7 +94,11 @@ def half_value_layer(*, attenuation_coefficient: Quantity) -> Quantity:
     _check(attenuation_coefficient, "1/[length]", "attenuation_coefficient")
     mu = attenuation_coefficient.to("1/m").magnitude
     if mu <= 0:
-        raise ValueError("attenuation_coefficient must be positive")
+        raise _shielding_refusal(
+            "attenuation_coefficient must be positive",
+            subject="attenuation_coefficient",
+            source=_SHIELD_MATERIAL_SOURCE,
+        )
     return Quantity(magnitude=log(2.0) / mu, unit="m")
 
 
@@ -80,18 +115,32 @@ def shield_thickness_for_transmission(
     _check(attenuation_coefficient, "1/[length]", "attenuation_coefficient")
     mu = attenuation_coefficient.to("1/m").magnitude
     if mu <= 0:
-        raise ValueError("attenuation_coefficient must be positive")
+        raise _shielding_refusal(
+            "attenuation_coefficient must be positive",
+            subject="attenuation_coefficient",
+            source=_SHIELD_MATERIAL_SOURCE,
+        )
     if not 0.0 < transmission_fraction <= 1.0:
-        raise ValueError("transmission_fraction must be in (0, 1]")
+        raise _shielding_refusal(
+            "transmission_fraction must be in (0, 1]",
+            subject="transmission_fraction",
+            source=_TARGET_TRANSMISSION_SOURCE,
+        )
     return Quantity(magnitude=-log(transmission_fraction) / mu, unit="m")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _shielding_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_shielding_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _shielding_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_shielding_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

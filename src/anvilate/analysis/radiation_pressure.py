@@ -20,7 +20,37 @@ reflecting surface, and the force that pressure gives over an area.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_SPECTRAL_SOURCE = "the source's spectral specification or calibrated wavelength record"
+_IRRADIANCE_SOURCE = "the calibrated irradiance measurement or source power specification"
+_SURFACE_SOURCE = "the illuminated-surface drawing or measured target area"
+_OPTICAL_PROPERTY_SOURCE = "the surface's measured or cited reflectance at the source wavelength"
+
+
+class _RadiationPressureInputError(RefusalError, ValueError):
+    """A radiation-pressure input that cannot be used without correction."""
+
+
+def _radiation_pressure_refusal(
+    message: str, *, subject: str, source: str
+) -> _RadiationPressureInputError:
+    return _RadiationPressureInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _radiation_pressure_input_source(name: str) -> str:
+    if name == "wavelength":
+        return _SPECTRAL_SOURCE
+    if name == "area":
+        return _SURFACE_SOURCE
+    if name == "reflectivity":
+        return _OPTICAL_PROPERTY_SOURCE
+    return _IRRADIANCE_SOURCE
+
 
 _PLANCK = 6.62607015e-34  # J*s
 _SPEED_OF_LIGHT = 299792458.0  # m/s
@@ -42,7 +72,9 @@ def photon_momentum(*, wavelength: Quantity) -> Quantity:
     _check(wavelength, "[length]", "wavelength")
     lam = wavelength.to("m").magnitude
     if lam <= 0:
-        raise ValueError("wavelength must be positive")
+        raise _radiation_pressure_refusal(
+            "wavelength must be positive", subject="wavelength", source=_SPECTRAL_SOURCE
+        )
     return Quantity(magnitude=_PLANCK / lam, unit="kg*m/s")
 
 
@@ -59,9 +91,15 @@ def radiation_pressure_from_intensity(
     _check(intensity, "[power]/[area]", "intensity")
     i = intensity.to("W/m**2").magnitude
     if i < 0:
-        raise ValueError("intensity must be non-negative")
+        raise _radiation_pressure_refusal(
+            "intensity must be non-negative", subject="intensity", source=_IRRADIANCE_SOURCE
+        )
     if not 0.0 <= reflectivity <= 1.0:
-        raise ValueError(f"reflectivity must be in [0, 1]; got {reflectivity}")
+        raise _radiation_pressure_refusal(
+            f"reflectivity must be in [0, 1]; got {reflectivity}",
+            subject="reflectivity",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=(1.0 + reflectivity) * i / _SPEED_OF_LIGHT, unit="Pa")
 
 
@@ -78,20 +116,34 @@ def radiation_force(*, intensity: Quantity, area: Quantity, reflectivity: float 
     i = intensity.to("W/m**2").magnitude
     a = area.to("m**2").magnitude
     if i < 0:
-        raise ValueError("intensity must be non-negative")
+        raise _radiation_pressure_refusal(
+            "intensity must be non-negative", subject="intensity", source=_IRRADIANCE_SOURCE
+        )
     if a <= 0:
-        raise ValueError("area must be positive")
+        raise _radiation_pressure_refusal(
+            "area must be positive", subject="area", source=_SURFACE_SOURCE
+        )
     if not 0.0 <= reflectivity <= 1.0:
-        raise ValueError(f"reflectivity must be in [0, 1]; got {reflectivity}")
+        raise _radiation_pressure_refusal(
+            f"reflectivity must be in [0, 1]; got {reflectivity}",
+            subject="reflectivity",
+            source=_OPTICAL_PROPERTY_SOURCE,
+        )
     return Quantity(magnitude=(1.0 + reflectivity) * i * a / _SPEED_OF_LIGHT, unit="N")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _radiation_pressure_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_radiation_pressure_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _radiation_pressure_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_radiation_pressure_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

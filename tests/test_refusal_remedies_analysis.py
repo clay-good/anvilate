@@ -1,0 +1,364 @@
+"""Structured remedies on analysis-module refusals (interaction-quality 2.1).
+
+One case per migrated module at least: the refusal is a ``RefusalError`` that is still a
+``ValueError``, and its remedy names the rejected input and where a correct value comes from.
+Whether every site in a module is migrated is held by tests/test_raised_refusal_ledger.py.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from anvilate import analysis
+from anvilate.refusal import RefusalError
+from anvilate.units import Quantity
+
+
+def _q(text: str) -> Quantity:
+    return Quantity.parse(text)
+
+
+_CASES = (
+    (
+        "luminous_efficacy",
+        {"luminous_flux": _q("800 lm"), "electrical_power": _q("0 W")},
+        "electrical_power",
+        "the lamp's rated or measured electrical input power",
+    ),
+    (
+        "luminous_efficiency",
+        {"luminous_efficacy": _q("1000 lm/W")},
+        "luminous_efficacy",
+        "the lamp's photometric test report (integrating-sphere or goniophotometer)",
+    ),
+    (
+        "wave_speed",
+        {"frequency": _q("440 Hz"), "wavelength": _q("0 m")},
+        "wavelength",
+        "the measured or specified wavelength",
+    ),
+    (
+        "wavelength_from_frequency",
+        {"frequency": _q("440 Hz"), "wave_speed": _q("343 m")},
+        "wave_speed",
+        "the cited wave speed for the propagation medium and wave type",
+    ),
+    (
+        "flange_coupling_torque",
+        {
+            "bolt_shear_force": _q("10 kN"),
+            "bolt_circle_radius": _q("60 mm"),
+            "num_bolts": 0,
+        },
+        "num_bolts",
+        "the coupling drawing (bolt count and bolt-circle radius)",
+    ),
+    (
+        "flange_coupling_bolt_count",
+        {
+            "torque": _q("2 kN*m"),
+            "bolt_circle_radius": _q("60 mm"),
+            "allowable_bolt_force": _q("0 kN"),
+        },
+        "allowable_bolt_force",
+        "the bolt's rated or allowable shear capacity from its grade record",
+    ),
+    (
+        "power_screw_raise_torque",
+        {
+            "load": _q("10 kN"),
+            "mean_diameter": _q("10 mm"),
+            "lead": _q("40 mm"),
+            "friction_coefficient": 0.9,
+        },
+        "friction_coefficient and lead",
+        "the thread friction record and screw drawing (square-thread range)",
+    ),
+    (
+        "lead_angle",
+        {"mean_diameter": _q("30 mm"), "lead": _q("-6 mm")},
+        "lead",
+        "the screw drawing or thread standard (mean diameter and lead)",
+    ),
+    (
+        "thermionic_current_density",
+        {"temperature": _q("0 K"), "work_function": _q("4.5 eV")},
+        "temperature",
+        "the cathode's measured or specified absolute operating temperature",
+    ),
+    (
+        "child_langmuir_current_density",
+        {"anode_voltage": _q("100 V"), "gap": _q("1 s")},
+        "gap",
+        "the electrode drawing and supply voltage specification",
+    ),
+    (
+        "hydraulic_press_output_force",
+        {
+            "input_force": _q("100 N"),
+            "input_piston_area": _q("10 cm**2"),
+            "output_piston_area": _q("0 cm**2"),
+        },
+        "output_piston_area",
+        "the cylinder drawing or catalogue piston bore",
+    ),
+    (
+        "hydraulic_press_input_stroke",
+        {
+            "output_stroke": _q("-1 mm"),
+            "input_piston_area": _q("10 cm**2"),
+            "output_piston_area": _q("100 cm**2"),
+        },
+        "output_stroke",
+        "the press stroke requirement or measured ram travel",
+    ),
+    (
+        "hydraulic_retention_time",
+        {"volume": _q("500 m**3"), "flow_rate": _q("0 m**3/h")},
+        "flow_rate",
+        "the plant's design flow basis or metered flow record",
+    ),
+    (
+        "weir_loading_rate",
+        {"flow_rate": _q("100 m**3/h"), "weir_length": _q("0 m")},
+        "weir_length",
+        "the basin drawing (volume, surface area, and weir length)",
+    ),
+    (
+        "slider_crank_displacement",
+        {"crank_radius": _q("50 mm"), "rod_length": _q("40 mm"), "crank_angle": 0.5},
+        "rod_length",
+        "the mechanism drawing (crank radius and connecting-rod length)",
+    ),
+    (
+        "slider_crank_velocity",
+        {
+            "crank_radius": _q("50 mm"),
+            "rod_length": _q("200 mm"),
+            "crank_angle": 0.5,
+            "crank_speed": _q("3000 m"),
+        },
+        "crank_speed",
+        "the crank's rated or measured rotational speed",
+    ),
+    (
+        "sutherland_viscosity",
+        {
+            "temperature": _q("300 K"),
+            "reference_viscosity": _q("1.716e-5 Pa*s"),
+            "reference_temperature": _q("0 K"),
+            "sutherland_constant": _q("110.4 K"),
+        },
+        "reference_temperature",
+        "the cited Sutherland reference values and constant for the gas",
+    ),
+    (
+        "prandtl_number",
+        {
+            "dynamic_viscosity": _q("1.8e-5 Pa*s"),
+            "specific_heat": _q("-1005 J/(kg*K)"),
+            "thermal_conductivity": _q("0.026 W/(m*K)"),
+        },
+        "specific_heat",
+        "the cited gas property table at the operating state",
+    ),
+    (
+        "conveyor_mass_flow",
+        {
+            "bulk_density": _q("1600 kg/m**3"),
+            "cross_section_area": _q("0 m**2"),
+            "belt_speed": _q("2 m/s"),
+        },
+        "cross_section_area",
+        "the belt drawing and troughing-idler load cross-section",
+    ),
+    (
+        "conveyor_lift_power",
+        {"mass_flow": _q("100 kg/s"), "lift_height": _q("-5 m")},
+        "lift_height",
+        "the conveyor profile drawing (net lift)",
+    ),
+    (
+        "rittinger_comminution_energy",
+        {
+            "rittinger_constant": _q("1 kW*h*mm/t"),
+            "feed_size": _q("1 mm"),
+            "product_size": _q("2 mm"),
+        },
+        "feed_size and product_size",
+        "the circuit's feed and product size distributions (screen analyses)",
+    ),
+    (
+        "air_receiver_holdup_time",
+        {
+            "receiver_volume": _q("1 m**3"),
+            "max_pressure": _q("6 bar"),
+            "min_pressure": _q("7 bar"),
+            "net_demand": _q("1 m**3/min"),
+            "atmospheric_pressure": _q("1 atm"),
+        },
+        "max_pressure and min_pressure",
+        "the compressor control settings (cut-in and cut-out pressures)",
+    ),
+    (
+        "valve_authority",
+        {"valve_pressure_drop": _q("0 kPa"), "system_pressure_drop": _q("0 kPa")},
+        "valve_pressure_drop and system_pressure_drop",
+        "the piping system's hydraulic calculation of pressure drops",
+    ),
+    (
+        "block_coefficient",
+        {
+            "displacement_volume": _q("200 m**3"),
+            "waterline_length": _q("10 m"),
+            "beam": _q("3 m"),
+            "draft": _q("1 m"),
+        },
+        "displacement_volume, waterline_length, beam, and draft",
+        "the lines plan or hydrostatic tables (waterline length, beam, draft, displacement)",
+    ),
+    (
+        "cyclone_cut_diameter",
+        {
+            "gas_viscosity": _q("1.8e-5 Pa*s"),
+            "inlet_width": _q("0.2 m"),
+            "effective_turns": 6.0,
+            "inlet_velocity": _q("15 m/s"),
+            "particle_density": _q("1 kg/m**3"),
+            "gas_density": _q("1.2 kg/m**3"),
+        },
+        "particle_density and gas_density",
+        "the dust's measured particle density and size distribution",
+    ),
+    (
+        "vortex_shedding_frequency",
+        {"strouhal_number": 0.2, "velocity": _q("10 m/s"), "characteristic_length": _q("0 m")},
+        "characteristic_length",
+        "the member drawing (cross-section width or diameter) and mass properties",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("function_name", "kwargs", "subject", "source"),
+    _CASES,
+    ids=[f"{case[0]}-{case[2]}" for case in _CASES],
+)
+def test_analysis_refusal_carries_a_structured_remedy(function_name, kwargs, subject, source):
+    with pytest.raises(ValueError) as refused:
+        getattr(analysis, function_name)(**kwargs)
+
+    assert isinstance(refused.value, RefusalError)
+    assert [remedy.model_dump() for remedy in refused.value.remedies] == [
+        {"action": "replace", "subject": subject, "source": source}
+    ]
+
+
+def _migrated_modules() -> set[str]:
+    """Analysis modules with no line in the ledger of bare refusals."""
+    from pathlib import Path
+
+    root = Path(__file__).parents[1]
+    ledger = root / "docs/api/raised-refusals-without-remedies.txt"
+    pending = {
+        line.rsplit(" ", 1)[0]
+        for line in ledger.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    return {
+        path.stem
+        for path in (root / "src/anvilate/analysis").glob("*.py")
+        if not path.stem.startswith("_") and path.relative_to(root).as_posix() not in pending
+    }
+
+
+def test_a_migrated_module_names_a_parameter_in_every_remedy_it_raises():
+    """Bind every required parameter to a bare number, as the front-door probe does.
+
+    In a module with no bare refusal left, whatever refusal the call meets must carry a
+    remedy whose subject names one of the function's own parameters. The per-case table
+    above pins the exact source text; this sweep is what reaches every migrated function.
+    """
+    import inspect
+
+    migrated = _migrated_modules()
+    probed, failures = [], []
+    for name in sorted(analysis.__all__):
+        function = getattr(analysis, name)
+        if not inspect.isfunction(function):
+            continue
+        if function.__module__.rsplit(".", 1)[-1] not in migrated:
+            continue
+        parameters = [
+            p.name
+            for p in inspect.signature(function).parameters.values()
+            if p.default is inspect.Parameter.empty
+            and p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+        ]
+        if not parameters:
+            continue
+        probed.append(name)
+        try:
+            function(**dict.fromkeys(parameters, 1.0))
+        except RefusalError as refusal:
+            if not any(
+                parameter in remedy.subject
+                for remedy in refusal.remedies
+                for parameter in parameters
+            ):
+                failures.append(f"{name}: {[str(r) for r in refusal.remedies]}")
+        except ValueError as refusal:
+            failures.append(f"{name}: unstructured {type(refusal).__name__}: {refusal}")
+
+    # The floor goes first in spirit: an empty migration list would pass vacuously.
+    assert len(probed) > 100, f"only {len(probed)} migrated functions were probed"
+    assert not failures, "\n".join(failures)
+
+
+def test_every_literal_remedy_subject_names_a_public_parameter():
+    """interaction-quality 7.3: a remedy's subject must be something a caller can resolve.
+
+    Fifty subjects read as prose — "sun and ring tooth counts", "doubly reinforced section
+    inputs" — which a person follows and a program cannot. Each subject written as a literal
+    must contain the name of a parameter of one of its module's public functions; a subject
+    computed at run time is held by the bare-number sweep above instead.
+    """
+    import ast
+    import re
+    from pathlib import Path
+
+    from conftest import parsed_source
+
+    root = Path(__file__).parents[1] / "src/anvilate/analysis"
+    checked, prose = 0, []
+    for path in sorted(root.glob("*.py")):
+        tree = parsed_source(path)
+        public = set()
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+                arguments = node.args
+                public |= {
+                    a.arg for a in arguments.posonlyargs + arguments.args + arguments.kwonlyargs
+                }
+                if arguments.vararg is not None:
+                    public.add(arguments.vararg.arg)
+            if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+                public |= {
+                    field.target.id
+                    for field in node.body
+                    if isinstance(field, ast.AnnAssign) and isinstance(field.target, ast.Name)
+                }
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.keyword)
+                and node.arg == "subject"
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                continue
+            checked += 1
+            if not set(re.findall(r"[A-Za-z_]\w*", node.value.value)) & public:
+                prose.append(f"{path.name}:{node.value.lineno}: {node.value.value!r}")
+
+    assert checked > 800, f"only {checked} literal subjects found"
+    assert not prose, "\n".join(prose)

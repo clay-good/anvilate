@@ -20,7 +20,37 @@ values, and the Prandtl number is a plain dimensionless float.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_OPERATING_STATE_SOURCE = "the gas's absolute operating temperature from the operating case"
+_REFERENCE_DATA_SOURCE = "the cited Sutherland reference values and constant for the gas"
+_PROPERTY_SOURCE = "the cited gas property table at the operating state"
+
+
+class _GasTransportInputError(RefusalError, ValueError):
+    """A gas transport-property input that cannot be used without correction."""
+
+
+def _gas_transport_refusal(message: str, *, subject: str, source: str) -> _GasTransportInputError:
+    return _GasTransportInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _gas_transport_input_source(name: str) -> str:
+    if name == "temperature":
+        return _OPERATING_STATE_SOURCE
+    if name in {
+        "reference_conductivity",
+        "reference_temperature",
+        "reference_viscosity",
+        "sutherland_constant",
+    }:
+        return _REFERENCE_DATA_SOURCE
+    return _PROPERTY_SOURCE
+
 
 __all__ = [
     "sutherland_viscosity",
@@ -51,10 +81,19 @@ def sutherland_viscosity(
     t = temperature.to("K").magnitude
     t_ref = reference_temperature.to("K").magnitude
     s = sutherland_constant.to("K").magnitude
-    if t <= 0 or t_ref <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("temperature", t), ("reference_temperature", t_ref)):
+        if magnitude <= 0:
+            raise _gas_transport_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_gas_transport_input_source(subject),
+            )
     if s < 0:
-        raise ValueError("sutherland_constant must be non-negative")
+        raise _gas_transport_refusal(
+            "sutherland_constant must be non-negative",
+            subject="sutherland_constant",
+            source=_REFERENCE_DATA_SOURCE,
+        )
     factor = (t / t_ref) ** 1.5 * (t_ref + s) / (t + s)
     mu_ref = reference_viscosity.to("Pa*s").magnitude
     return Quantity(magnitude=mu_ref * factor, unit="Pa*s")
@@ -83,10 +122,19 @@ def sutherland_thermal_conductivity(
     t = temperature.to("K").magnitude
     t_ref = reference_temperature.to("K").magnitude
     s = sutherland_constant.to("K").magnitude
-    if t <= 0 or t_ref <= 0:
-        raise ValueError("temperatures must be positive absolute (kelvin) values")
+    for subject, magnitude in (("temperature", t), ("reference_temperature", t_ref)):
+        if magnitude <= 0:
+            raise _gas_transport_refusal(
+                "temperatures must be positive absolute (kelvin) values",
+                subject=subject,
+                source=_gas_transport_input_source(subject),
+            )
     if s < 0:
-        raise ValueError("sutherland_constant must be non-negative")
+        raise _gas_transport_refusal(
+            "sutherland_constant must be non-negative",
+            subject="sutherland_constant",
+            source=_REFERENCE_DATA_SOURCE,
+        )
     factor = (t / t_ref) ** 1.5 * (t_ref + s) / (t + s)
     k_ref = reference_conductivity.to("W/(m*K)").magnitude
     return Quantity(magnitude=k_ref * factor, unit="W/(m*K)")
@@ -115,19 +163,34 @@ def prandtl_number(
     mu = dynamic_viscosity.to("Pa*s").magnitude
     cp = specific_heat.to("J/(kg*K)").magnitude
     k = thermal_conductivity.to("W/(m*K)").magnitude
-    if mu < 0 or cp < 0:
-        raise ValueError("dynamic_viscosity and specific_heat must be non-negative")
+    for subject, magnitude in (("dynamic_viscosity", mu), ("specific_heat", cp)):
+        if magnitude < 0:
+            raise _gas_transport_refusal(
+                "dynamic_viscosity and specific_heat must be non-negative",
+                subject=subject,
+                source=_PROPERTY_SOURCE,
+            )
     if k <= 0:
-        raise ValueError("thermal_conductivity must be positive")
+        raise _gas_transport_refusal(
+            "thermal_conductivity must be positive",
+            subject="thermal_conductivity",
+            source=_PROPERTY_SOURCE,
+        )
     return mu * cp / k
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _gas_transport_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_gas_transport_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _gas_transport_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_gas_transport_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -274,7 +274,7 @@ class ElasticBuckling(RevalidatedModel):
             raise _cfs_refusal(
                 "source must record where the elastic buckling values came from — the "
                 "finite-strip run, the software and version, or the reference",
-                subject="elastic buckling source",
+                subject="ElasticBuckling.source",
                 source=_CFS_BUCKLING_SOURCE,
             )
         return self

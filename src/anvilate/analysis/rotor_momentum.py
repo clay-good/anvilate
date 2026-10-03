@@ -23,7 +23,35 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_WEIGHT_SOURCE = "the vehicle's gross-weight and hover thrust requirement"
+_ATMOSPHERE_SOURCE = "the density altitude of the operating case"
+_ROTOR_SOURCE = "the rotor drawing (blade radius and disk area)"
+_POWER_SOURCE = "the measured or rated shaft power at hover"
+
+
+class _RotorMomentumInputError(RefusalError, ValueError):
+    """A rotor hover input that cannot be used without correction."""
+
+
+def _rotor_momentum_refusal(message: str, *, subject: str, source: str) -> _RotorMomentumInputError:
+    return _RotorMomentumInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _rotor_momentum_input_source(name: str) -> str:
+    if name == "air_density":
+        return _ATMOSPHERE_SOURCE
+    if name == "disk_area":
+        return _ROTOR_SOURCE
+    if name == "actual_power":
+        return _POWER_SOURCE
+    return _WEIGHT_SOURCE
+
 
 __all__ = [
     "figure_of_merit",
@@ -48,11 +76,17 @@ def hover_induced_velocity(
     rho = air_density.to("kg/m**3").magnitude
     a = disk_area.to("m**2").magnitude
     if t <= 0:
-        raise ValueError("thrust must be positive")
+        raise _rotor_momentum_refusal(
+            "thrust must be positive", subject="thrust", source=_WEIGHT_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("air_density must be positive")
+        raise _rotor_momentum_refusal(
+            "air_density must be positive", subject="air_density", source=_ATMOSPHERE_SOURCE
+        )
     if a <= 0:
-        raise ValueError("disk_area must be positive")
+        raise _rotor_momentum_refusal(
+            "disk_area must be positive", subject="disk_area", source=_ROTOR_SOURCE
+        )
     return Quantity(magnitude=sqrt(t / (2.0 * rho * a)), unit="m/s")
 
 
@@ -71,11 +105,17 @@ def ideal_hover_power(*, thrust: Quantity, air_density: Quantity, disk_area: Qua
     rho = air_density.to("kg/m**3").magnitude
     a = disk_area.to("m**2").magnitude
     if t <= 0:
-        raise ValueError("thrust must be positive")
+        raise _rotor_momentum_refusal(
+            "thrust must be positive", subject="thrust", source=_WEIGHT_SOURCE
+        )
     if rho <= 0:
-        raise ValueError("air_density must be positive")
+        raise _rotor_momentum_refusal(
+            "air_density must be positive", subject="air_density", source=_ATMOSPHERE_SOURCE
+        )
     if a <= 0:
-        raise ValueError("disk_area must be positive")
+        raise _rotor_momentum_refusal(
+            "disk_area must be positive", subject="disk_area", source=_ROTOR_SOURCE
+        )
     return Quantity(magnitude=t**1.5 / sqrt(2.0 * rho * a), unit="W")
 
 
@@ -92,7 +132,9 @@ def figure_of_merit(
     _check(actual_power, "[power]", "actual_power")
     p_actual = actual_power.to("W").magnitude
     if p_actual <= 0:
-        raise ValueError("actual_power must be positive")
+        raise _rotor_momentum_refusal(
+            "actual_power must be positive", subject="actual_power", source=_POWER_SOURCE
+        )
     p_ideal = (
         ideal_hover_power(thrust=thrust, air_density=air_density, disk_area=disk_area)
         .to("W")
@@ -103,10 +145,16 @@ def figure_of_merit(
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _rotor_momentum_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_rotor_momentum_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _rotor_momentum_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_rotor_momentum_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

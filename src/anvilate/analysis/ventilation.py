@@ -20,7 +20,40 @@ standard values; the engineer of record owns the ventilation design.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_STANDARD_SOURCE = "the ASHRAE 62.1 outdoor-air rates and zone effectiveness for the space type"
+_SPACE_SOURCE = "the architectural drawing (floor area, room volume, and design occupancy)"
+_AIRFLOW_SOURCE = "the measured or design supply airflow"
+_EXPOSURE_SOURCE = "the contaminant source survey and governing exposure limit"
+
+
+class _VentilationInputError(RefusalError, ValueError):
+    """A ventilation input that cannot be used without correction."""
+
+
+def _ventilation_refusal(message: str, *, subject: str, source: str) -> _VentilationInputError:
+    return _VentilationInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _ventilation_input_source(name: str) -> str:
+    if name in {
+        "air_changes_per_hour",
+        "area_outdoor_rate",
+        "people_outdoor_rate",
+        "zone_air_distribution_effectiveness",
+    }:
+        return _STANDARD_SOURCE
+    if name == "airflow":
+        return _AIRFLOW_SOURCE
+    if name in {"contaminant_generation_rate", "mixing_factor", "target_concentration"}:
+        return _EXPOSURE_SOURCE
+    return _SPACE_SOURCE
+
 
 __all__ = [
     "air_changes_per_hour",
@@ -55,11 +88,21 @@ def breathing_zone_outdoor_airflow(
     # no outdoor air, which the screen reports as not evaluated rather than as a pass. A
     # negative area is not a smaller room.
     if floor_area.magnitude < 0:
-        raise ValueError(f"floor_area must be zero or positive; got {floor_area}")
+        raise _ventilation_refusal(
+            f"floor_area must be zero or positive; got {floor_area}",
+            subject="floor_area",
+            source=_SPACE_SOURCE,
+        )
     if occupancy < 0:
-        raise ValueError("occupancy must be non-negative")
+        raise _ventilation_refusal(
+            "occupancy must be non-negative", subject="occupancy", source=_SPACE_SOURCE
+        )
     if not 0.0 < zone_air_distribution_effectiveness <= 1.0:
-        raise ValueError("zone_air_distribution_effectiveness must be in (0, 1]")
+        raise _ventilation_refusal(
+            "zone_air_distribution_effectiveness must be in (0, 1]",
+            subject="zone_air_distribution_effectiveness",
+            source=_STANDARD_SOURCE,
+        )
     people = people_outdoor_rate.pint * occupancy
     area = area_outdoor_rate.pint * floor_area.pint
     v_bz = (people + area).to("L/s")
@@ -79,7 +122,9 @@ def air_changes_per_hour(*, airflow: Quantity, room_volume: Quantity) -> float:
     _check(room_volume, "[length]**3", "room_volume")
     v = room_volume.to("m**3").magnitude
     if v <= 0:
-        raise ValueError("room_volume must be positive")
+        raise _ventilation_refusal(
+            "room_volume must be positive", subject="room_volume", source=_SPACE_SOURCE
+        )
     return (airflow.pint / room_volume.pint).to("1/hour").magnitude
 
 
@@ -98,9 +143,15 @@ def airflow_for_air_changes(
     _check(room_volume, "[length]**3", "room_volume")
     v = room_volume.to("m**3").magnitude
     if air_changes_per_hour <= 0:
-        raise ValueError("air_changes_per_hour must be positive")
+        raise _ventilation_refusal(
+            "air_changes_per_hour must be positive",
+            subject="air_changes_per_hour",
+            source=_STANDARD_SOURCE,
+        )
     if v <= 0:
-        raise ValueError("room_volume must be positive")
+        raise _ventilation_refusal(
+            "room_volume must be positive", subject="room_volume", source=_SPACE_SOURCE
+        )
     return Quantity(magnitude=air_changes_per_hour * v / 3600.0, unit="m**3/s")
 
 
@@ -121,20 +172,32 @@ def dilution_airflow(
     _check(contaminant_generation_rate, "[mass]/[time]", "contaminant_generation_rate")
     _check(target_concentration, "[mass]/[length]**3", "target_concentration")
     if mixing_factor < 1.0:
-        raise ValueError("mixing_factor must be at least 1")
+        raise _ventilation_refusal(
+            "mixing_factor must be at least 1", subject="mixing_factor", source=_EXPOSURE_SOURCE
+        )
     c = target_concentration.to("kg/m**3").magnitude
     if c <= 0:
-        raise ValueError("target_concentration must be positive")
+        raise _ventilation_refusal(
+            "target_concentration must be positive",
+            subject="target_concentration",
+            source=_EXPOSURE_SOURCE,
+        )
     q = mixing_factor * contaminant_generation_rate.pint / target_concentration.pint
     return Quantity(magnitude=float(q.to("L/s").magnitude), unit="L/s")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _ventilation_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_ventilation_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _ventilation_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_ventilation_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

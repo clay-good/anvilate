@@ -23,8 +23,30 @@ resistance require.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ..units.rotation import angular_speed_rad_per_s
+
+_MOTOR_DATASHEET_SOURCE = "the motor datasheet (torque and back-EMF constants, armature resistance)"
+_OPERATING_POINT_SOURCE = "the duty cycle or measured motor current and speed"
+
+
+class _DcMotorInputError(RefusalError, ValueError):
+    """A DC-motor input that cannot be used without correction."""
+
+
+def _dc_motor_refusal(message: str, *, subject: str, source: str) -> _DcMotorInputError:
+    return _DcMotorInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _dc_motor_input_source(name: str) -> str:
+    if name in {"armature_resistance", "back_emf_constant", "torque_constant"}:
+        return _MOTOR_DATASHEET_SOURCE
+    return _OPERATING_POINT_SOURCE
+
 
 __all__ = [
     "dc_motor_back_emf",
@@ -46,9 +68,17 @@ def dc_motor_back_emf(*, back_emf_constant: Quantity, angular_speed: Quantity) -
     ke = back_emf_constant.to("V*s/rad").magnitude
     omega = angular_speed_rad_per_s(angular_speed, name="angular_speed")
     if ke < 0:
-        raise ValueError("back_emf_constant must be non-negative")
+        raise _dc_motor_refusal(
+            "back_emf_constant must be non-negative",
+            subject="back_emf_constant",
+            source=_MOTOR_DATASHEET_SOURCE,
+        )
     if omega < 0:
-        raise ValueError("angular_speed must be non-negative")
+        raise _dc_motor_refusal(
+            "angular_speed must be non-negative",
+            subject="angular_speed",
+            source=_OPERATING_POINT_SOURCE,
+        )
     return Quantity(magnitude=ke * omega, unit="V")
 
 
@@ -66,9 +96,17 @@ def dc_motor_torque(*, torque_constant: Quantity, armature_current: Quantity) ->
     kt = torque_constant.to("N*m/A").magnitude
     i = armature_current.to("A").magnitude
     if kt < 0:
-        raise ValueError("torque_constant must be non-negative")
+        raise _dc_motor_refusal(
+            "torque_constant must be non-negative",
+            subject="torque_constant",
+            source=_MOTOR_DATASHEET_SOURCE,
+        )
     if i < 0:
-        raise ValueError("armature_current must be non-negative")
+        raise _dc_motor_refusal(
+            "armature_current must be non-negative",
+            subject="armature_current",
+            source=_OPERATING_POINT_SOURCE,
+        )
     return Quantity(magnitude=kt * i, unit="N*m")
 
 
@@ -93,20 +131,36 @@ def dc_motor_terminal_voltage(
     i = armature_current.to("A").magnitude
     r = armature_resistance.to("ohm").magnitude
     if e < 0:
-        raise ValueError("back_emf must be non-negative")
+        raise _dc_motor_refusal(
+            "back_emf must be non-negative", subject="back_emf", source=_OPERATING_POINT_SOURCE
+        )
     if i < 0:
-        raise ValueError("armature_current must be non-negative")
+        raise _dc_motor_refusal(
+            "armature_current must be non-negative",
+            subject="armature_current",
+            source=_OPERATING_POINT_SOURCE,
+        )
     if r < 0:
-        raise ValueError("armature_resistance must be non-negative")
+        raise _dc_motor_refusal(
+            "armature_resistance must be non-negative",
+            subject="armature_resistance",
+            source=_MOTOR_DATASHEET_SOURCE,
+        )
     return Quantity(magnitude=e + i * r, unit="V")
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _dc_motor_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_dc_motor_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _dc_motor_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_dc_motor_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

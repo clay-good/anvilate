@@ -25,7 +25,32 @@ from __future__ import annotations
 
 from math import sqrt
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
+
+_VALVE_DATASHEET_SOURCE = "the valve manufacturer's rated flow coefficient"
+_PROCESS_SOURCE = "the process datasheet (flow, pressure drop, and fluid specific gravity)"
+_SYSTEM_SOURCE = "the piping system's hydraulic calculation of pressure drops"
+
+
+class _ControlValveInputError(RefusalError, ValueError):
+    """A control-valve sizing input that cannot be used without correction."""
+
+
+def _control_valve_refusal(message: str, *, subject: str, source: str) -> _ControlValveInputError:
+    return _ControlValveInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _control_valve_input_source(name: str) -> str:
+    if name == "flow_coefficient":
+        return _VALVE_DATASHEET_SOURCE
+    if name in {"system_pressure_drop", "valve_pressure_drop"}:
+        return _SYSTEM_SOURCE
+    return _PROCESS_SOURCE
+
 
 __all__ = [
     "valve_flow_rate",
@@ -47,13 +72,21 @@ def valve_flow_rate(
     """
     _check(pressure_drop, "[pressure]", "pressure_drop")
     if flow_coefficient <= 0:
-        raise ValueError("flow_coefficient must be positive")
+        raise _control_valve_refusal(
+            "flow_coefficient must be positive",
+            subject="flow_coefficient",
+            source=_VALVE_DATASHEET_SOURCE,
+        )
     require_finite(specific_gravity, name="specific_gravity")
     if specific_gravity <= 0:
-        raise ValueError("specific_gravity must be positive")
+        raise _control_valve_refusal(
+            "specific_gravity must be positive", subject="specific_gravity", source=_PROCESS_SOURCE
+        )
     delta_p_psi = pressure_drop.to("psi").magnitude
     if delta_p_psi <= 0:
-        raise ValueError("pressure_drop must be positive")
+        raise _control_valve_refusal(
+            "pressure_drop must be positive", subject="pressure_drop", source=_PROCESS_SOURCE
+        )
     q_gpm = flow_coefficient * sqrt(delta_p_psi / specific_gravity)
     return Quantity(magnitude=q_gpm, unit="gallon/minute")
 
@@ -74,13 +107,19 @@ def required_flow_coefficient(
     _check(pressure_drop, "[pressure]", "pressure_drop")
     require_finite(specific_gravity, name="specific_gravity")
     if specific_gravity <= 0:
-        raise ValueError("specific_gravity must be positive")
+        raise _control_valve_refusal(
+            "specific_gravity must be positive", subject="specific_gravity", source=_PROCESS_SOURCE
+        )
     q_gpm = flow_rate.to("gallon/minute").magnitude
     delta_p_psi = pressure_drop.to("psi").magnitude
     if q_gpm <= 0:
-        raise ValueError("flow_rate must be positive")
+        raise _control_valve_refusal(
+            "flow_rate must be positive", subject="flow_rate", source=_PROCESS_SOURCE
+        )
     if delta_p_psi <= 0:
-        raise ValueError("pressure_drop must be positive")
+        raise _control_valve_refusal(
+            "pressure_drop must be positive", subject="pressure_drop", source=_PROCESS_SOURCE
+        )
     return q_gpm / sqrt(delta_p_psi / specific_gravity)
 
 
@@ -101,21 +140,39 @@ def valve_authority(*, valve_pressure_drop: Quantity, system_pressure_drop: Quan
     dp_valve = valve_pressure_drop.to("psi").magnitude
     dp_system = system_pressure_drop.to("psi").magnitude
     if dp_valve < 0:
-        raise ValueError("valve_pressure_drop must be non-negative")
+        raise _control_valve_refusal(
+            "valve_pressure_drop must be non-negative",
+            subject="valve_pressure_drop",
+            source=_SYSTEM_SOURCE,
+        )
     if dp_system < 0:
-        raise ValueError("system_pressure_drop must be non-negative")
+        raise _control_valve_refusal(
+            "system_pressure_drop must be non-negative",
+            subject="system_pressure_drop",
+            source=_SYSTEM_SOURCE,
+        )
     total = dp_valve + dp_system
     if total <= 0:
-        raise ValueError("the total pressure drop must be positive")
+        raise _control_valve_refusal(
+            "the total pressure drop must be positive",
+            subject="valve_pressure_drop and system_pressure_drop",
+            source=_SYSTEM_SOURCE,
+        )
     return dp_valve / total
 
 
 def _check(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _control_valve_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_control_valve_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _control_valve_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_control_valve_input_source(name),
         )
     # The dimension is the easy half. Every comparison with NaN is False, so a NaN walks
     # past whatever `<= 0` guard follows; an infinity passes it too and then divides to

@@ -22,8 +22,33 @@ torque requires.
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from ._counting import whole_count_ceil
+
+_COUPLING_DRAWING_SOURCE = "the coupling drawing (bolt count and bolt-circle radius)"
+_BOLT_RATING_SOURCE = "the bolt's rated or allowable shear capacity from its grade record"
+_DUTY_SOURCE = "the shaft duty load case"
+
+
+class _CouplingInputError(RefusalError, ValueError):
+    """A flange-coupling input that cannot be used without correction."""
+
+
+def _coupling_refusal(message: str, *, subject: str, source: str) -> _CouplingInputError:
+    return _CouplingInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
+
+def _coupling_input_source(name: str) -> str:
+    if name in {"bolt_circle_radius", "num_bolts"}:
+        return _COUPLING_DRAWING_SOURCE
+    if name in {"allowable_bolt_force", "bolt_shear_force"}:
+        return _BOLT_RATING_SOURCE
+    return _DUTY_SOURCE
+
 
 __all__ = [
     "flange_coupling_torque",
@@ -34,10 +59,16 @@ __all__ = [
 
 def _require(value: Quantity, expected: str, name: str) -> None:
     if not isinstance(value, Quantity):
-        raise ValueError(f"{name} must be a {expected} quantity; got {value!r}")
+        raise _coupling_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_coupling_input_source(name),
+        )
     if not value.has_dimension(expected):
-        raise ValueError(
-            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})"
+        raise _coupling_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_coupling_input_source(name),
         )
     # Dimension is the easy half. A NaN magnitude passes every `<= 0` guard downstream
     # (all comparisons with NaN are False) and is then DROPPED by the max()/min() that
@@ -62,9 +93,17 @@ def flange_coupling_torque(
     _require(bolt_shear_force, "[force]", "bolt_shear_force")
     _require(bolt_circle_radius, "[length]", "bolt_circle_radius")
     if num_bolts < 1:
-        raise ValueError(f"num_bolts must be a positive integer; got {num_bolts}")
+        raise _coupling_refusal(
+            f"num_bolts must be a positive integer; got {num_bolts}",
+            subject="num_bolts",
+            source=_COUPLING_DRAWING_SOURCE,
+        )
     if bolt_circle_radius.to("mm").magnitude <= 0:
-        raise ValueError(f"bolt_circle_radius must be positive; got {bolt_circle_radius}")
+        raise _coupling_refusal(
+            f"bolt_circle_radius must be positive; got {bolt_circle_radius}",
+            subject="bolt_circle_radius",
+            source=_COUPLING_DRAWING_SOURCE,
+        )
     torque = num_bolts * bolt_shear_force.pint * bolt_circle_radius.pint
     return Quantity(magnitude=float(torque.to("N*m").magnitude), unit="N*m")
 
@@ -86,9 +125,17 @@ def flange_coupling_bolt_force(
     _require(torque, "[force] * [length]", "torque")
     _require(bolt_circle_radius, "[length]", "bolt_circle_radius")
     if num_bolts < 1:
-        raise ValueError(f"num_bolts must be a positive integer; got {num_bolts}")
+        raise _coupling_refusal(
+            f"num_bolts must be a positive integer; got {num_bolts}",
+            subject="num_bolts",
+            source=_COUPLING_DRAWING_SOURCE,
+        )
     if bolt_circle_radius.to("mm").magnitude <= 0:
-        raise ValueError(f"bolt_circle_radius must be positive; got {bolt_circle_radius}")
+        raise _coupling_refusal(
+            f"bolt_circle_radius must be positive; got {bolt_circle_radius}",
+            subject="bolt_circle_radius",
+            source=_COUPLING_DRAWING_SOURCE,
+        )
     force = torque.pint / (num_bolts * bolt_circle_radius.pint)
     return Quantity(magnitude=float(force.to("N").magnitude), unit="N")
 
@@ -114,8 +161,16 @@ def flange_coupling_bolt_count(
     r = bolt_circle_radius.to("m").magnitude
     f = allowable_bolt_force.to("N").magnitude
     if r <= 0:
-        raise ValueError(f"bolt_circle_radius must be positive; got {bolt_circle_radius}")
+        raise _coupling_refusal(
+            f"bolt_circle_radius must be positive; got {bolt_circle_radius}",
+            subject="bolt_circle_radius",
+            source=_COUPLING_DRAWING_SOURCE,
+        )
     if f <= 0:
-        raise ValueError(f"allowable_bolt_force must be positive; got {allowable_bolt_force}")
+        raise _coupling_refusal(
+            f"allowable_bolt_force must be positive; got {allowable_bolt_force}",
+            subject="allowable_bolt_force",
+            source=_BOLT_RATING_SOURCE,
+        )
     t = torque.to("N*m").magnitude
     return whole_count_ceil(t / (f * r))

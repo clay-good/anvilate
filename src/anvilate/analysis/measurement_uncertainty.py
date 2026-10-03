@@ -19,7 +19,26 @@ sample size is a plain integer. Inputs and outputs are dimension-checked
 
 from __future__ import annotations
 
+from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+
+_REPEATABILITY_SOURCE = "the repeated-observation record (sample standard deviation and count)"
+_BUDGET_SOURCE = "the uncertainty budget's standard-uncertainty components"
+_COVERAGE_SOURCE = "the coverage factor for the required confidence level"
+
+
+class _MeasurementUncertaintyInputError(RefusalError, ValueError):
+    """A measurement-uncertainty input that cannot be used without correction."""
+
+
+def _measurement_uncertainty_refusal(
+    message: str, *, subject: str, source: str
+) -> _MeasurementUncertaintyInputError:
+    return _MeasurementUncertaintyInputError(
+        message,
+        remedies=(Remedy(action="replace", subject=subject, source=source),),
+    )
+
 
 __all__ = [
     "standard_uncertainty_of_mean",
@@ -38,14 +57,26 @@ def standard_uncertainty_of_mean(*, standard_deviation: Quantity, sample_size: i
     ``standard_deviation``.
     """
     if not isinstance(sample_size, int) or sample_size < 1:
-        raise ValueError("sample_size must be an integer of at least 1")
+        raise _measurement_uncertainty_refusal(
+            "sample_size must be an integer of at least 1",
+            subject="sample_size",
+            source=_REPEATABILITY_SOURCE,
+        )
     # Before `.to(...)`: this module checks `isinstance(..., Quantity)` elsewhere and did
     # not here, so anything else came back as an `AttributeError` from inside the call.
     if not isinstance(standard_deviation, Quantity):
-        raise ValueError(f"standard_deviation must be a Quantity; got {standard_deviation!r}")
+        raise _measurement_uncertainty_refusal(
+            f"standard_deviation must be a Quantity; got {standard_deviation!r}",
+            subject="standard_deviation",
+            source=_REPEATABILITY_SOURCE,
+        )
     s = standard_deviation.to(standard_deviation.unit).magnitude
     if s < 0:
-        raise ValueError("standard_deviation must be non-negative")
+        raise _measurement_uncertainty_refusal(
+            "standard_deviation must be non-negative",
+            subject="standard_deviation",
+            source=_REPEATABILITY_SOURCE,
+        )
     return Quantity(magnitude=s / sample_size**0.5, unit=standard_deviation.unit)
 
 
@@ -60,18 +91,28 @@ def combined_standard_uncertainty(*components: Quantity) -> Quantity:
     first component.
     """
     if not components:
-        raise ValueError("combined_standard_uncertainty needs at least one component")
+        raise _measurement_uncertainty_refusal(
+            "combined_standard_uncertainty needs at least one component",
+            subject="components",
+            source=_BUDGET_SOURCE,
+        )
     ref_unit = components[0].unit
     total = 0.0
     for u in components:
         if not u.has_dimension(components[0].dimensionality):
-            raise ValueError(
+            raise _measurement_uncertainty_refusal(
                 "all uncertainty components must share a dimension; got "
-                f"{u.dimensionality} and {components[0].dimensionality}"
+                f"{u.dimensionality} and {components[0].dimensionality}",
+                subject="components",
+                source=_BUDGET_SOURCE,
             )
         value = u.to(ref_unit).magnitude
         if value < 0:
-            raise ValueError("uncertainty components must be non-negative")
+            raise _measurement_uncertainty_refusal(
+                "uncertainty components must be non-negative",
+                subject="components",
+                source=_BUDGET_SOURCE,
+            )
         total += value * value
     return Quantity(magnitude=total**0.5, unit=ref_unit)
 
@@ -88,13 +129,21 @@ def expanded_uncertainty(
     uncertainty in the units of ``combined_standard_uncertainty``.
     """
     if not isinstance(combined_standard_uncertainty, Quantity):
-        raise ValueError(
+        raise _measurement_uncertainty_refusal(
             f"combined_standard_uncertainty must be a quantity; "
-            f"got {combined_standard_uncertainty!r}"
+            f"got {combined_standard_uncertainty!r}",
+            subject="combined_standard_uncertainty",
+            source=_BUDGET_SOURCE,
         )
     uc = combined_standard_uncertainty.to(combined_standard_uncertainty.unit).magnitude
     if uc < 0:
-        raise ValueError("combined_standard_uncertainty must be non-negative")
+        raise _measurement_uncertainty_refusal(
+            "combined_standard_uncertainty must be non-negative",
+            subject="combined_standard_uncertainty",
+            source=_BUDGET_SOURCE,
+        )
     if coverage_factor <= 0:
-        raise ValueError("coverage_factor must be positive")
+        raise _measurement_uncertainty_refusal(
+            "coverage_factor must be positive", subject="coverage_factor", source=_COVERAGE_SOURCE
+        )
     return Quantity(magnitude=coverage_factor * uc, unit=combined_standard_uncertainty.unit)
