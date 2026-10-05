@@ -4969,3 +4969,53 @@ def test_an_ordinary_mistake_at_the_shell_gets_its_own_remedy(tmp_path):
         assert expected in remedy, (arguments, remedy)
         assert not remedy.startswith(("Correct the", "Resolve the")), (arguments, remedy)
         assert ";" not in remedy
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_a_reader_that_stops_early_is_a_broken_pipe_not_a_verdict(output_format):
+    """`anvilate check ... | head` closes stdout mid-write. That printed a traceback and
+    exited 1 — "a check failed" — in JSON, and "internal error" in text. It exits 141, the
+    shell's 128 + SIGPIPE, saying nothing more on stderr than the run already had to."""
+    from anvilate.cli import EXIT_BROKEN_PIPE
+
+    specs = [str(path) for path in sorted((_REPO / "examples").glob("*.spec.yaml"))] * 8
+    process = subprocess.Popen(
+        [sys.executable, "-m", "anvilate.cli", "check", *specs, "--show-work"]
+        + ["--format", output_format],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=_REPO,
+        env={**os.environ, "PYTHONPATH": str(_REPO / "src")},
+    )
+    assert process.stdout is not None and process.stderr is not None
+    process.stdout.read(10)
+    process.stdout.close()
+    stderr = process.stderr.read().decode()
+    process.stderr.close()
+    assert process.wait(timeout=300) == EXIT_BROKEN_PIPE == 141, stderr
+    assert "Traceback" not in stderr and "internal error" not in stderr, stderr
+
+
+def test_the_exit_code_table_is_every_exit_code_the_cli_defines():
+    """The table in docs/headless-cli.md is the interface a CI job reads, held against the
+    `EXIT_*` constants in both directions: a code the CLI can return that the page does not
+    explain, and a row for a code the CLI no longer has."""
+    import anvilate.cli as cli
+
+    page = (_REPO / "docs" / "headless-cli.md").read_text(encoding="utf-8")
+    start = page.index("| Code | Meaning |")
+    documented = set()
+    for line in page[start:].splitlines()[2:]:
+        if not line.startswith("|"):
+            break
+        documented.add(int(line.strip("|").split("|")[0]))
+    defined = {
+        value
+        for name, value in vars(cli).items()
+        if name.startswith("EXIT_") and isinstance(value, int)
+    }
+    assert len(defined) >= 9, defined
+    assert documented == defined, (
+        f"documented but not defined: {sorted(documented - defined)}; "
+        f"defined but not documented: {sorted(defined - documented)}"
+    )

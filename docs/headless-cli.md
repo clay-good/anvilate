@@ -387,6 +387,7 @@ than collapsing to pass/fail:
 | 5 | Anvilate itself failed unexpectedly; retry once, then report the diagnostic as a bug |
 | 130 | the run was cancelled (Ctrl-C). Its own outcome, never a verdict: stderr says how far it got, `--format json` writes `outcome: "cancelled"` with what it completed, and nothing is reported as a result |
 | 6 | every check ran and met its limit, and one is inside a caution band its document declared, such as a keepout's clearance margin — **not a pass**, and not a failure |
+| 141 | whoever was reading the output stopped before it was all written (`anvilate check … \| head`): 128 + SIGPIPE, the code `cat` and `grep` give in the same place. Not a verdict; run again without the early reader to get one |
 
 ### The JSON says what the text says
 

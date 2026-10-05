@@ -65,6 +65,7 @@ import contextlib
 import difflib
 import io
 import json
+import os
 import re
 import shutil
 import sys
@@ -99,6 +100,10 @@ EXIT_WARNING = 6
 # The user stopped the run: 128 + SIGINT, the shell's own convention. Not a verdict, a
 # refusal or a defect, and reported as none of them.
 EXIT_CANCELLED = 130
+# Whoever was reading stdout stopped (`anvilate check ... | head`): 128 + SIGPIPE, what `cat`
+# and `grep` report in the same place. A verdict cut off mid-write is none of the verdicts,
+# and before this it surfaced as 1, "a check failed", or as an internal error.
+EXIT_BROKEN_PIPE = 141
 
 
 #: How long a command may go quiet on a terminal before a person cannot tell a slow tool from
@@ -676,6 +681,8 @@ def run(
                 file=out,
             )
         return EXIT_CANCELLED
+    except BrokenPipeError:
+        return EXIT_BROKEN_PIPE
     except Exception as failure:
         print(
             f"anvilate {args.command}: internal error: {type(failure).__name__}: {failure}",
@@ -3311,8 +3318,12 @@ def main() -> None:
     out = _for_the_terminal(sys.stdout, json_requested)
     try:
         code = run(stdout=out)
-    finally:
         out.flush()
+    except BrokenPipeError:
+        # Nothing more can reach the reader, and the interpreter's own flush at exit would
+        # raise again and print a traceback, so stdout is pointed at the null device.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        code = EXIT_BROKEN_PIPE
     raise SystemExit(code)
 
 
