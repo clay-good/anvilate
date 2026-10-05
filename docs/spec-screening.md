@@ -133,7 +133,8 @@ refusal, naming the field, so the answer is as specific as a parse error would h
 whose first argument is a typed element is reachable by that element's name in snake case —
 `LiftingLug` is `lifting_lug` — so a pack that ships a new element registers it by existing.
 `anvilate.screening.element_registry()` is the list, and a gate holds it against the packs in
-both directions.
+both directions. It is read-only: the registry is built once and every caller holds the same
+mapping, so a caller that wants a variant copies it (`{**element_registry(), ...}`).
 
 ### A document can name a whole structure
 

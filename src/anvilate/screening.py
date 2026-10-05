@@ -56,6 +56,7 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from functools import cache
 from math import sqrt
+from types import MappingProxyType
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -270,6 +271,8 @@ def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scor
     what the packs give it: :class:`Structure`, under the tag ``structure``, which dispatches
     each member back through this same registry. It is registered here rather than in a pack
     because it belongs to no discipline — a structure's members can come from any of them.
+
+    The mapping is read-only: it is cached, so every caller holds the same one.
     """
     from . import packs
 
@@ -294,7 +297,9 @@ def element_registry() -> Mapping[str, tuple[type[BaseModel], Callable[..., Scor
                 )
             found[tag] = (annotation, screen)
     found[_tag(Structure.__name__)] = (Structure, screen_structure_element)
-    return found
+    # Read-only, because the cache hands every caller this same object: a `pop` on a
+    # plain dict would unregister the element for the rest of the process.
+    return MappingProxyType(found)
 
 
 @cache

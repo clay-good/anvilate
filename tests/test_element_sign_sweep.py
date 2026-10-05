@@ -134,9 +134,8 @@ def test_the_sweep_sees_a_screen_that_discards_the_sign(monkeypatch):
             required_safety_factor=required_safety_factor,
         )
 
-    registry = element_registry()
-    model, _screen = registry["base_plate"]
-    monkeypatch.setitem(registry, "base_plate", (model, by_magnitude))
+    model, _screen = element_registry()["base_plate"]
+    registry = {**element_registry(), "base_plate": (model, by_magnitude)}
     monkeypatch.setattr(sys.modules[__name__], "element_registry", lambda: registry)
     discarded = [field for _label, field, a, b in _flips() if _verdicts(a) == _verdicts(b)]
     assert "base_plate.axial_load" in discarded

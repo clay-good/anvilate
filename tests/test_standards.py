@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -2592,3 +2593,80 @@ def test_an_extension_nested_past_the_reader_is_a_value_error():
 
     with pytest.raises(ValueError, match="nests deeper"):
         default_materials_db().extended("a: " + "[" * 100_000)
+
+
+def _zero_argument_cached_functions():  # type: ignore[no-untyped-def]
+    """Every ``@cache``/``@lru_cache`` function in the package that takes no arguments,
+    found from the source rather than listed: these hand every caller the same object."""
+    import ast
+    import importlib
+
+    from conftest import library_sources
+
+    src = Path(__file__).resolve().parent.parent / "src"
+    found = {}
+    for path, tree in library_sources():
+        module = ".".join(path.relative_to(src).with_suffix("").parts).removesuffix(".__init__")
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef) or node.args.args or node.args.kwonlyargs:
+                continue
+            names = {
+                ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in node.decorator_list
+            }
+            if names & {"cache", "lru_cache", "functools.cache", "functools.lru_cache"}:
+                found[f"{module}.{node.name}"] = getattr(importlib.import_module(module), node.name)
+    return found
+
+
+def _mutable_paths(value, path="result", seen=None):  # type: ignore[no-untyped-def]
+    """Where a caller holding ``value`` could change it in place: a dict, list, set or
+    bytearray anywhere inside, or a pydantic model that is not frozen."""
+    import pydantic
+
+    seen = set() if seen is None else seen
+    if id(value) in seen or isinstance(value, (str, bytes, int, float, type)):
+        return []
+    seen.add(id(value))
+    if isinstance(value, (dict, list, set, bytearray)):
+        return [f"{path}: {type(value).__name__}"]
+    found = []
+    if isinstance(value, pydantic.BaseModel):
+        if not type(value).model_config.get("frozen"):
+            found.append(f"{path}: unfrozen {type(value).__name__}")
+        for name in type(value).model_fields:
+            found += _mutable_paths(getattr(value, name), f"{path}.{name}", seen)
+    elif isinstance(value, Mapping):
+        for key, item in value.items():
+            found += _mutable_paths(item, f"{path}[{key!r}]", seen)
+    elif isinstance(value, (tuple, frozenset)):
+        for index, item in enumerate(value):
+            found += _mutable_paths(item, f"{path}[{index}]", seen)
+    return found
+
+
+def test_a_cached_result_cannot_be_changed_by_the_caller_holding_it():
+    """A cached loader gives every caller the same object, so one caller's ``pop`` would
+    be every later caller's answer: `element_registry()` returned a plain dict, and
+    popping a tag from it unregistered that element for the rest of the process."""
+    cached = _zero_argument_cached_functions()
+    assert "anvilate.screening.element_registry" in cached
+    assert "anvilate.standards.materials.default_materials_db" in cached
+    assert len(cached) >= 15, f"found only {sorted(cached)}"
+    changeable = {name: paths for name, f in cached.items() if (paths := _mutable_paths(f()))}
+    assert not changeable, f"cached results a caller can change in place: {changeable}"
+
+
+def test_the_mutability_walk_finds_a_dict_inside_a_frozen_model():
+    """The adversary: the walk must reach past a frozen model and a read-only mapping."""
+    from types import MappingProxyType
+
+    import pydantic
+
+    class Holder(pydantic.BaseModel):
+        model_config = pydantic.ConfigDict(frozen=True)
+        rows: tuple[object, ...]
+
+    assert _mutable_paths(MappingProxyType({"a": Holder(rows=({"x": 1},))})) == [
+        "result['a'].rows[0]: dict"
+    ]
+    assert _mutable_paths(MappingProxyType({"a": Holder(rows=(1,))})) == []

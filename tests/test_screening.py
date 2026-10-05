@@ -2013,15 +2013,15 @@ def test_a_screen_that_is_simply_broken_still_raises(monkeypatch):
     catching everything: a TypeError out of a pack screen is this library's bug, not the
     document's, and reporting it as a tri-state result would file our own defect under
     'not evaluated' on the user's card."""
-    from anvilate.screening import element_registry
+    from anvilate import screening
 
-    registry = element_registry()
-    model, _screen = registry["lifting_lug"]
+    model, _screen = screening.element_registry()["lifting_lug"]
 
     def broken(element, **keywords):
         raise TypeError("screen_lifting_lug() got an unexpected keyword argument")
 
-    monkeypatch.setitem(registry, "lifting_lug", (model, broken))
+    registry = {**screening.element_registry(), "lifting_lug": (model, broken)}
+    monkeypatch.setattr(screening, "element_registry", lambda: registry)
     with pytest.raises(TypeError, match="unexpected keyword argument"):
         screen_spec(_lug_spec())
 
