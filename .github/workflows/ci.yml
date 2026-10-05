@@ -50,10 +50,27 @@ jobs:
           python-version: "3.11"
       - name: Install
         run: pip install -e ".[dev]" lxml
+      # qifstandards.org has answered the runner with a 200 that is not the zip (2026-10-05),
+      # while serving the real file elsewhere. The package is pinned by digest and cached,
+      # so the host is asked only on a cache miss, and a wrong body says what it was.
+      - name: Restore the QIF 3.0 schema package
+        uses: actions/cache@v4
+        with:
+          path: qif.zip
+          key: qif-3.0-2018-86cd30daf5d690814026ca39a4f0fcf3af6d147ada941916e6181b9bc81fd0d9
       - name: Fetch the QIF 3.0 schema package
         run: |
-          curl -sSfL -o qif.zip \
-            https://qifstandards.org/wp-content/uploads/2014/08/QIF3.0-2018-ANSI.zip
+          sha=86cd30daf5d690814026ca39a4f0fcf3af6d147ada941916e6181b9bc81fd0d9
+          url=https://qifstandards.org/wp-content/uploads/2014/08/QIF3.0-2018-ANSI.zip
+          if ! echo "$sha  qif.zip" | sha256sum -c --status 2>/dev/null; then
+            curl -sSfL --retry 3 --retry-all-errors -A "Mozilla/5.0 (anvilate CI)" \
+              -o qif.zip "$url"
+          fi
+          if ! echo "$sha  qif.zip" | sha256sum -c --status; then
+            echo "$url did not serve the pinned package; it sent:"
+            file qif.zip; ls -l qif.zip; head -c 400 qif.zip; echo
+            exit 1
+          fi
           unzip -q qif.zip -d qif
           # The published QIFDocument.xsd imports xmldsig from w3.org over the network; the
           # package bundles a local copy, and the schema itself documents this substitution.

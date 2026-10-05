@@ -281,4 +281,6 @@ either skipped**, because a job that goes green on a check that never ran is the
 pass in a different costume. It runs weekly and on demand rather than on every push: it
 depends on two external hosts, and a flaky download should not block a pull request that has
 nothing to do with either format. A schema republished upstream shows up there as a failure
-rather than as a surprise in somebody's quality software.
+rather than as a surprise in somebody's quality software. The QIF package is pinned by its
+SHA-256 and cached between runs, because its host has answered the runner with a page that
+was not the package; a body that does not match the pin fails the job and prints what it was.
