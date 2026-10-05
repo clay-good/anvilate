@@ -39,6 +39,7 @@ tolerance, and a convergence tolerance is not a bound on wall time.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from collections.abc import Mapping
@@ -1836,8 +1837,17 @@ def main() -> None:
     Nothing to configure: the surface is the published catalog, the transport is stdin and
     stdout, and there is no state to lose, so a client that restarts the process is in
     exactly the position it was in before.
+
+    A client that stops reading stdout has gone, as surely as one that closes stdin, so the
+    broken pipe ends the server the way end of input does: quietly, with status 0. It used
+    to print a traceback into the client's log and exit 120. Stdout is pointed at the null
+    device first, or the interpreter's own flush at exit raises the same error again.
     """
-    serve_stdio()
+    try:
+        serve_stdio()
+        sys.stdout.flush()
+    except BrokenPipeError:
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised as a subprocess in the tests
