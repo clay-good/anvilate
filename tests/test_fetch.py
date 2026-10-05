@@ -363,3 +363,48 @@ def test_a_copy_cannot_backdate_provenance_to_something_that_is_not_a_date():
     )
     with pytest.raises(ValueError, match="ISO date"):
         provenance.model_copy(update={"retrieved": "yesterday"})
+
+
+@pytest.mark.parametrize("interrupted_write", [1, 2])
+def test_a_fetch_interrupted_while_caching_leaves_nothing_that_reads_as_cached(
+    tmp_path, monkeypatch, interrupted_write
+):
+    """The payload and its sidecar were written in place, one after the other. A Ctrl-C
+    between them, or inside the payload, left a cache that refused every later read until
+    somebody deleted files by hand. Each is staged and renamed, sidecar first, so the
+    payload's presence means the record is whole: an interruption reads as not fetched."""
+    import os
+
+    from anvilate import fetch as module
+
+    real_replace, calls = os.replace, []
+
+    def interrupting_replace(source, destination):  # type: ignore[no-untyped-def]
+        calls.append(destination)
+        if len(calls) == interrupted_write:
+            raise KeyboardInterrupt
+        real_replace(source, destination)
+
+    monkeypatch.setattr(module.os, "replace", interrupting_replace)
+    with pytest.raises(KeyboardInterrupt):
+        fetch_dataset(
+            _recipe(),
+            retrieved="2026-10-05",
+            consent=True,
+            cache_dir=tmp_path,
+            opener=lambda url: _PAYLOAD,
+        )
+    monkeypatch.setattr(module.os, "replace", real_replace)
+
+    assert cached_dataset(_recipe(), cache_dir=tmp_path) is None
+    path, provenance = fetch_dataset(
+        _recipe(),
+        retrieved="2026-10-05",
+        consent=True,
+        cache_dir=tmp_path,
+        opener=lambda url: _PAYLOAD,
+    )
+    assert path.read_bytes() == _PAYLOAD and provenance.retrieved == "2026-10-05"
+    root = module.cache_root(tmp_path)
+    files = sorted(p for p in tmp_path.rglob("*") if p.is_file())
+    assert files == sorted([path, module._provenance_path(_recipe(), root)]), files

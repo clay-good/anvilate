@@ -341,6 +341,11 @@ because an evidence bundle's digest has to rebuild identically. A payload whose 
 sidecar is missing is refused too; data whose origin the cache cannot state is data nothing
 should cite.
 
+A fetch stopped partway through caching cannot leave such a cache behind: the sidecar and
+then the payload are each written to a temporary file and renamed, and the payload is what
+marks a record as fetched. An interrupted fetch reads as not fetched, and the next one
+starts over.
+
 These raised refusals are also structured. `ConsentRequired.remedies` names the dataset
 download, says to obtain explicit consent, and identifies the user reviewing the publisher
 URL and licence as the authority. `IntegrityError.remedies` distinguishes a bad download

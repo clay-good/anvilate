@@ -32,6 +32,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -377,11 +378,26 @@ def fetch_dataset(
         retrieved=retrieved,
     )
     root.mkdir(parents=True, exist_ok=True)
-    _payload_path(recipe, root).write_bytes(payload)
-    _provenance_path(recipe, root).write_text(
-        json.dumps(provenance.model_dump(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    # Sidecar first, payload last, each staged and renamed: the payload's presence is what
+    # `cached_dataset` reads as "fetched", so a run stopped anywhere in here leaves either a
+    # whole record or one that reads as not fetched. Written in place, a Ctrl-C between the
+    # two left a cache that refused every later read until somebody deleted files by hand.
+    sidecar = json.dumps(provenance.model_dump(), indent=2, sort_keys=True) + "\n"
+    _write_atomically(_provenance_path(recipe, root), sidecar.encode("utf-8"))
+    _write_atomically(_payload_path(recipe, root), payload)
     return _payload_path(recipe, root), provenance
+
+
+def _write_atomically(path: Path, data: bytes) -> None:
+    """``data`` at ``path`` whole or not at all: staged beside it, then renamed."""
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as scratch:
+        staged = Path(scratch.name)
+    try:
+        staged.write_bytes(data)
+        os.replace(staged, path)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
 
 
 def _https_get(url: str) -> bytes:  # pragma: no cover - exercised by the scheduled job
