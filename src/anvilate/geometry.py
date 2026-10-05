@@ -25,7 +25,7 @@ from threading import Lock
 from types import MappingProxyType
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, FiniteFloat, model_validator
+from pydantic import ConfigDict, Field, FiniteFloat, model_validator
 
 from ._models import FrozenMap, Named, Provenance, StatableModel
 from .derivation import DerivationAbsence, Underived
@@ -165,6 +165,11 @@ class _ExchangeGeometryError(GeometryError):
 
 class GeometrySummary(StatableModel):
     """The serializable identity and kernel checks for one built solid."""
+
+    # Both names read, because both get written: the wire spells `volumeMm3` (the MCP
+    # surface dumps by alias), and a plain `model_dump()` spells `volume_mm3`, which this
+    # model refused — so `model_validate_json(s.model_dump_json())` raised.
+    model_config = ConfigDict(populate_by_name=True)
 
     name: Named
     pattern: Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1"]

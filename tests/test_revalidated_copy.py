@@ -725,3 +725,27 @@ def test_a_model_that_is_not_frozen_stays_unhashable():
     spec = load_spec_yaml((examples / "padeye.spec.yaml").read_text(encoding="utf-8"))
     with pytest.raises(TypeError, match="unhashable type: 'DesignSpec'"):
         hash(spec)
+
+
+def test_a_geometry_summary_reads_back_its_own_default_dump():
+    """`GeometrySummary` writes ``volumeMm3`` on the wire and ``volume_mm3`` from a plain
+    ``model_dump()``, and read only the first: ``model_validate_json(s.model_dump_json())``
+    raised on the obvious call. It accepts both names now, as `Attestation` and
+    `BundleDocument` already did. Values are off the defaults so a dropped field shows."""
+    from anvilate.geometry import GeometrySummary
+
+    summary = GeometrySummary.model_validate(
+        {
+            "name": "access-cover",
+            "pattern": "cover_plate/1",
+            "valid": True,
+            "volumeMm3": 1_800_000.0,
+            "dimensionsMm": {"length": 150.0, "width": 120.0},
+            "faceTags": ["top", "bottom"],
+        }
+    )
+    assert GeometrySummary.model_validate(summary.model_dump()) == summary
+    assert GeometrySummary.model_validate_json(summary.model_dump_json()) == summary
+    wire = summary.model_dump(mode="json", by_alias=True)
+    assert GeometrySummary.model_validate(wire) == summary
+    assert set(wire) >= {"volumeMm3", "dimensionsMm", "faceTags"}
