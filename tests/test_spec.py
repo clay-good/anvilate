@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -2120,3 +2121,63 @@ def test_an_ordinary_mistake_is_told_a_value_that_validates(line, written, remed
     value = re.search(r" as (?:a list, )?`([^`]*)`", remedy).group(1)
     head, tail = line.rsplit(written, 1)
     load_spec_yaml("\n".join([*others, "name: bracket-01", head + value + tail]))
+
+
+def _example_specs():  # type: ignore[no-untyped-def]
+    from anvilate.spec import load_spec_yaml
+
+    examples = Path(__file__).resolve().parent.parent / "examples"
+    return {
+        path.name: load_spec_yaml(path.read_text(encoding="utf-8"))
+        for path in sorted(examples.glob("*.spec.yaml"))
+    }
+
+
+def test_a_spec_survives_pickling_so_a_sweep_can_fan_out_over_processes():
+    """`multiprocessing` pickles what it hands a worker, and every `DesignSpec` refused:
+    `Provenanced[UnitSystem]` is parametrized inside a class body, where pydantic does not
+    register it anywhere pickle can look it up by name."""
+    import pickle
+
+    specs = _example_specs()
+    assert len(specs) >= 6, f"found only {sorted(specs)}"
+    for name, spec in specs.items():
+        assert pickle.loads(pickle.dumps(spec)) == spec, name
+
+
+def test_every_provenanced_parametrization_pickles_as_itself():
+    """The registration must not hand pickle a different class under the same name:
+    `Provenanced[Mass]` and a future `Provenanced[Length]` both display as
+    ``Provenanced[Annotated[Quantity, AfterValidator]]``."""
+    import pickle
+
+    from anvilate.spec.ir import Length, Mass
+    from anvilate.spec.provenance import Provenanced
+    from anvilate.units import Quantity
+
+    one, other = Provenanced[Mass], Provenanced[Length]
+    assert one.__qualname__ != other.__qualname__
+    for cls in (one, other):
+        assert pickle.loads(pickle.dumps(cls)) is cls
+    value = other.stated(Quantity.parse("3 mm"))
+    assert type(pickle.loads(pickle.dumps(value))) is other
+
+
+def test_a_pickled_spec_loads_in_a_freshly_spawned_process():
+    """A spawned worker imports nothing until it unpickles: the classes must be findable
+    from a cold interpreter, not only from the one that built them."""
+    import pickle
+    import subprocess
+    import sys
+
+    spec = next(iter(_example_specs().values()))
+    code = "import pickle, sys; spec = pickle.load(sys.stdin.buffer); print(spec.units.value)"
+    done = subprocess.run(
+        [sys.executable, "-c", code],
+        input=pickle.dumps(spec),
+        capture_output=True,
+        check=False,
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent.parent / "src")},
+    )
+    assert done.returncode == 0, done.stderr.decode()
+    assert done.stdout.decode().strip() == str(spec.units.value)

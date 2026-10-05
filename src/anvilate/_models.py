@@ -20,6 +20,7 @@ to every model in the library.
 
 from __future__ import annotations
 
+import copyreg
 import difflib
 import json
 import re
@@ -400,9 +401,25 @@ _K = TypeVar("_K")
 _V = TypeVar("_V")
 
 #: The shared empty mapping, for a ``FrozenMap`` field's ``default_factory``. A literal
-#: ``{}`` default cannot be used: pydantic deep-copies defaults and a ``mappingproxy`` does
-#: not pickle. It is safe to share because nothing can write to it.
+#: ``{}`` default cannot be used: pydantic deep-copies defaults. It is safe to share because
+#: nothing can write to it.
 EMPTY_MAP: Mapping[Any, Any] = MappingProxyType({})
+
+
+def _mapping_proxy(contents: dict[Any, Any]) -> MappingProxyType[Any, Any]:
+    """The constructor pickle names; the type itself is ``builtins.mappingproxy``, which
+    no module exports."""
+    return MappingProxyType(contents)
+
+
+def _reduce_mapping_proxy(proxy: MappingProxyType[Any, Any]) -> tuple[Any, ...]:
+    return _mapping_proxy, (dict(proxy),)
+
+
+# A ``mappingproxy`` does not pickle, and every ``FrozenMap`` field holds one, so a spec or
+# a pack element could not be handed to a ``multiprocessing`` worker. Registered here, a
+# proxy pickles (and deep-copies) as a new read-only proxy over a copy of its contents.
+copyreg.pickle(MappingProxyType, _reduce_mapping_proxy)
 
 #: A mapping field on a frozen model that the frozen model actually owns.
 #:

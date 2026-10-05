@@ -8,6 +8,7 @@ engineer stated and which the tool assumed.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any, Generic, TypeVar
@@ -65,6 +66,26 @@ class Provenanced(StatableModel, Generic[T]):
     value: T
     origin: Origin
     rationale: str | None = None
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        """Make each parametrization findable by name, so a spec can be pickled.
+
+        pickle stores a class as its module and qualified name. pydantic registers a
+        parametrized generic there only when it is written at module scope, and the IR
+        writes ``Provenanced[UnitSystem]`` inside a class body, so every `DesignSpec`
+        refused to pickle and `multiprocessing` could not hand one to a worker. Two
+        parametrizations can display the same name (``Provenanced[Mass]`` and
+        ``Provenanced[Length]`` both read ``Annotated[Quantity, AfterValidator]``), so a
+        taken name gets a numbered suffix rather than pointing pickle at the wrong class.
+        """
+        super().__pydantic_init_subclass__(**kwargs)
+        namespace = sys.modules[cls.__module__].__dict__
+        name, number = cls.__qualname__, 1
+        while namespace.setdefault(name, cls) is not cls:
+            number += 1
+            name = f"{cls.__qualname__}#{number}"
+        cls.__qualname__ = name
 
     @model_validator(mode="before")
     @classmethod

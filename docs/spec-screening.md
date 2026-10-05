@@ -357,6 +357,25 @@ worst silence of the lot. A standing corpus of documents that are valid per the 
 hostile to the screen is run at the library, the CLI and the MCP surface, and asserts each
 comes back with a card that does not pass.
 
+### Screening many documents at once
+
+A spec, a pack element and a scorecard all pickle, so a sweep can hand them to worker
+processes:
+
+```python
+from multiprocessing import get_context
+
+with get_context("spawn").Pool() as pool:
+    cards = pool.map(screen_spec, specs)
+```
+
+Until 2026-10-05 every `DesignSpec` refused, on two counts: its provenanced fields are a
+pydantic generic parametrized inside a class body, which pickle cannot find by name, and its
+read-only mappings are a `mappingproxy`, which does not pickle at all. Both are registered
+now, and an unpickled mapping is still read-only. The tests round-trip every example spec
+and every element in the parameter corpus, and load a pickled spec in a freshly spawned
+interpreter.
+
 ## References resolve, and the answer is a verdict
 
 A spec names its material and its standard components as *identifiers* — `AA-6061-T6`,

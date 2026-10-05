@@ -21,6 +21,7 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 
+import pytest
 from pydantic import ValidationError
 
 from anvilate.screening import element_registry
@@ -275,3 +276,22 @@ def test_every_optional_variant_is_a_valid_document_of_its_element():
     for label, variant in variants.items():
         assert label.startswith(variant["element_type"] + "/"), label
         registry[variant["element_type"]][0].model_validate(variant["element_params"])
+
+
+def test_every_element_in_the_corpus_survives_pickling_and_stays_read_only():
+    """A pack element is what a sweep hands a worker. Its ``FrozenMap`` fields hold a
+    ``mappingproxy``, which did not pickle; registered, it must come back read-only."""
+    import pickle
+    from types import MappingProxyType
+
+    registry = element_registry()
+    elements = [
+        registry[element_type][0].model_validate(document)
+        for _label, element_type, document in _corpus()
+    ]
+    assert len(elements) >= len(registry) - 1, "the corpus no longer covers the registry"
+    for element in elements:
+        assert pickle.loads(pickle.dumps(element)) == element, type(element).__name__
+    copied = pickle.loads(pickle.dumps(MappingProxyType({"a": 1})))
+    with pytest.raises(TypeError):
+        copied["a"] = 2  # type: ignore[index]
