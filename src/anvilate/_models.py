@@ -396,6 +396,30 @@ class RevalidatedModel(BaseModel):
             return copied
         return type(self).model_validate(dict(copied.__dict__))
 
+    def __hash__(self) -> int:
+        """A frozen model's hash, reading a ``FrozenMap`` field by its contents.
+
+        pydantic hashes a frozen model by its field values, and a ``FrozenMap`` value is a
+        ``mappingproxy``, which has no hash. So every frozen model carrying one — even with
+        the empty default — raised ``TypeError`` from ``hash()``, while advertising one: a
+        `TimberBeam` could not key a cache or sit in a set. pydantic keeps a hash a base
+        class defines, so this one serves every frozen subclass; a model that is not frozen
+        stays unhashable, as it was.
+        """
+        if not type(self).model_config.get("frozen"):
+            raise TypeError(f"unhashable type: {type(self).__name__!r}")
+        values = self.__dict__
+        return hash(tuple(_hashable(values.get(name)) for name in type(self).model_fields))
+
+
+def _hashable(value: Any) -> Any:
+    """``value`` with every read-only mapping in it read as its items, which hash."""
+    if isinstance(value, MappingProxyType):
+        return frozenset((key, _hashable(item)) for key, item in value.items())
+    if isinstance(value, tuple):
+        return tuple(_hashable(item) for item in value)
+    return value
+
 
 _K = TypeVar("_K")
 _V = TypeVar("_V")

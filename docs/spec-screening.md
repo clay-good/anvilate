@@ -376,6 +376,11 @@ now, and an unpickled mapping is still read-only. The tests round-trip every exa
 and every element in the parameter corpus, and load a pickled spec in a freshly spawned
 interpreter.
 
+A pack element is frozen, and it hashes, so a sweep that meets the same element twice can
+memoize the screen with `functools.cache`. Every frozen model holding a read-only mapping
+used to raise from `hash()`, even with the mapping left empty. A spec is not frozen and
+stays unhashable, because a cache keyed on it would be keyed on a value that can change.
+
 ## References resolve, and the answer is a verdict
 
 A spec names its material and its standard components as *identifiers* — `AA-6061-T6`,

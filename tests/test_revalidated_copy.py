@@ -691,3 +691,37 @@ def test_a_frozen_structure_cannot_gain_or_lose_members_after_it_is_built():
     # And the invariant the in-place clear used to walk through is still enforced.
     with pytest.raises(ValidationError):
         Structure(members=[])
+
+
+@pytest.mark.parametrize(
+    ("model", "field"),
+    [
+        (model, field)
+        for model, field in _frozen_models_with_a_mutable_container_field()
+        if model.__module__ != "anvilate.mcp"
+    ],
+)
+def test_a_frozen_model_holding_a_frozen_mapping_still_hashes(model, field):
+    """pydantic hashes a frozen model by its values, and a `mappingproxy` has no hash, so
+    every one of these raised from ``hash()`` — even holding the empty default. Equal
+    contents must hash equal, whatever order the mapping was written in."""
+    from types import MappingProxyType
+
+    one = model.model_construct(**{field: MappingProxyType({"a": 1, "b": (2, 3)})})
+    other = model.model_construct(**{field: MappingProxyType({"b": (2, 3), "a": 1})})
+    assert one == other
+    assert hash(one) == hash(other)
+    assert len({one, other}) == 1
+
+
+def test_a_model_that_is_not_frozen_stays_unhashable():
+    """The hash is the frozen model's; a mutable one hashing would key a cache on a value
+    that can change underneath it."""
+    from pathlib import Path
+
+    from anvilate.spec import load_spec_yaml
+
+    examples = Path(__file__).resolve().parent.parent / "examples"
+    spec = load_spec_yaml((examples / "padeye.spec.yaml").read_text(encoding="utf-8"))
+    with pytest.raises(TypeError, match="unhashable type: 'DesignSpec'"):
+        hash(spec)
