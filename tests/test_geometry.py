@@ -1433,9 +1433,7 @@ def test_a_timber_beam_builds_as_its_dressed_section_over_its_span():
     assert set(built.faces) == {"top", "bottom", "north", "south", "east", "west"}
 
 
-def test_a_step_export_stopped_before_its_stamp_leaves_no_file_at_the_target(
-    tmp_path, monkeypatch
-):
+def test_a_step_export_stopped_before_its_stamp_leaves_no_file_at_the_target(tmp_path, monkeypatch):
     """The kernel writes an unstamped STEP and the stamp is applied after. Written in place,
     a run stopped between the two left a file with no authorization header or watermark at
     the path asked for. Staged and renamed, the target is untouched: a file already there
