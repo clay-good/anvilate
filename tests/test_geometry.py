@@ -1431,3 +1431,31 @@ def test_a_timber_beam_builds_as_its_dressed_section_over_its_span():
     assert bounds.max.Z - bounds.min.Z == pytest.approx(234.95)
     assert built.shape.volume == pytest.approx(38.1 * 234.95 * 3657.6, rel=1e-9)
     assert set(built.faces) == {"top", "bottom", "north", "south", "east", "west"}
+
+
+def test_a_step_export_stopped_before_its_stamp_leaves_no_file_at_the_target(
+    tmp_path, monkeypatch
+):
+    """The kernel writes an unstamped STEP and the stamp is applied after. Written in place,
+    a run stopped between the two left a file with no authorization header or watermark at
+    the path asked for. Staged and renamed, the target is untouched: a file already there
+    survives, and no `.partial` is left beside it."""
+    from anvilate import geometry
+
+    def interrupted(path):  # type: ignore[no-untyped-def]
+        assert "FILE_DESCRIPTION" in path.read_text(encoding="utf-8")
+        raise KeyboardInterrupt
+
+    previous = tmp_path / "base.step"
+    previous.write_text("the previous release\n", encoding="utf-8")
+    monkeypatch.setattr(geometry, "verify_step_integrity", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        write_step(build_base_plate(_plate()), previous, authorization=_STEP_AUTH)
+    assert previous.read_text(encoding="utf-8") == "the previous release\n"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["base.step"]
+
+    fresh = tmp_path / "fresh.step"
+    with pytest.raises(KeyboardInterrupt):
+        write_step(build_base_plate(_plate()), fresh, authorization=_STEP_AUTH)
+    assert not fresh.exists()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["base.step"]

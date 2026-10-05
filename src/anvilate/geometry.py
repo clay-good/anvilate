@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -3155,62 +3156,64 @@ def write_step(
             subject=f"the STEP schema {schema!r}",
             source="the supported AP242 and AP214 export schemas",
         )
-    _write_step_shape(built, path, schema=schema, tolerances=tuple(tolerances))
+    # Every step happens on a file beside the target and the finished one is renamed in:
+    # the kernel writes an unstamped STEP first, and written in place, a run stopped
+    # before the stamp left a file with no authorization header or watermark at the
+    # path the user asked for, looking complete (interaction-quality 7.2).
+    staging = path.with_name(f".{path.name}.partial")
     try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError as failure:
-        path.unlink(missing_ok=True)
-        raise _ExchangeGeometryError(
-            "STEP writer produced a non-UTF-8 file; refusing to release it",
-            action="regenerate",
-            subject=f"the STEP output {path}",
-            source="the UTF-8 STEP post-processing contract",
-        ) from failure
-    expected_schema = _AP242_SCHEMA if schema == "ap242" else _AP214_SCHEMA
-    if expected_schema not in text:
-        path.unlink(missing_ok=True)
-        raise _ExchangeGeometryError(
-            f"STEP writer did not declare {schema.upper()}; refusing to release it",
-            action="regenerate",
-            subject=f"the schema declaration in STEP output {path}",
-            source=f"the requested {schema.upper()} export schema",
+        _write_step_shape(built, staging, schema=schema, tolerances=tuple(tolerances))
+        try:
+            text = staging.read_text(encoding="utf-8")
+        except UnicodeDecodeError as failure:
+            raise _ExchangeGeometryError(
+                "STEP writer produced a non-UTF-8 file; refusing to release it",
+                action="regenerate",
+                subject=f"the STEP output {path}",
+                source="the UTF-8 STEP post-processing contract",
+            ) from failure
+        expected_schema = _AP242_SCHEMA if schema == "ap242" else _AP214_SCHEMA
+        if expected_schema not in text:
+            raise _ExchangeGeometryError(
+                f"STEP writer did not declare {schema.upper()}; refusing to release it",
+                action="regenerate",
+                subject=f"the schema declaration in STEP output {path}",
+                source=f"the requested {schema.upper()} export schema",
+            )
+        descriptions = [
+            "Open CASCADE Model",
+            _GVP_RECOMMENDED_PRACTICE,
+            *(f"{key}={value}" for key, value in authorization.metadata()),
+        ]
+        product_name = _step_string(built.name)
+        text, products_changed = re.subn(
+            r"PRODUCT\('(?:[^']|'')*'\s*,\s*'(?:[^']|'')*'\s*,",
+            lambda _match: f"PRODUCT('{product_name}','{product_name}',",
+            text,
+            count=1,
         )
-    descriptions = [
-        "Open CASCADE Model",
-        _GVP_RECOMMENDED_PRACTICE,
-        *(f"{key}={value}" for key, value in authorization.metadata()),
-    ]
-    product_name = _step_string(built.name)
-    text, products_changed = re.subn(
-        r"PRODUCT\('(?:[^']|'')*'\s*,\s*'(?:[^']|'')*'\s*,",
-        lambda _match: f"PRODUCT('{product_name}','{product_name}',",
-        text,
-        count=1,
-    )
-    header = (
-        "FILE_DESCRIPTION(("
-        + ",".join(f"'{_step_string(value)}'" for value in descriptions)
-        + "),'2;1');"
-    )
-    text, descriptions_changed = re.subn(r"FILE_DESCRIPTION\(.*?\);", header, text, count=1)
-    filename = f"FILE_NAME('{_step_string(built.name)}','2000-01-01T00:00:00',"
-    text, filename_changed = re.subn(
-        r"FILE_NAME\('[^']*','[^']*',", lambda _match: filename, text, count=1
-    )
-    if products_changed != 1 or descriptions_changed != 1 or filename_changed != 1:
-        path.unlink(missing_ok=True)
-        raise _ExchangeGeometryError(
-            "STEP writer produced an unrecognized header; refusing an unstamped file",
-            action="regenerate",
-            subject=f"the product, description, and filename header in {path}",
-            source="the deterministic STEP identification and authorization metadata contract",
+        header = (
+            "FILE_DESCRIPTION(("
+            + ",".join(f"'{_step_string(value)}'" for value in descriptions)
+            + "),'2;1');"
         )
-    path.write_text(text, encoding="utf-8")
-    try:
-        verify_step_integrity(path)
-    except Exception:
-        path.unlink(missing_ok=True)
-        raise
+        text, descriptions_changed = re.subn(r"FILE_DESCRIPTION\(.*?\);", header, text, count=1)
+        filename = f"FILE_NAME('{_step_string(built.name)}','2000-01-01T00:00:00',"
+        text, filename_changed = re.subn(
+            r"FILE_NAME\('[^']*','[^']*',", lambda _match: filename, text, count=1
+        )
+        if products_changed != 1 or descriptions_changed != 1 or filename_changed != 1:
+            raise _ExchangeGeometryError(
+                "STEP writer produced an unrecognized header; refusing an unstamped file",
+                action="regenerate",
+                subject=f"the product, description, and filename header in {path}",
+                source="the deterministic STEP identification and authorization metadata contract",
+            )
+        staging.write_text(text, encoding="utf-8")
+        verify_step_integrity(staging)
+        os.replace(staging, path)
+    finally:
+        staging.unlink(missing_ok=True)
     return path
 
 

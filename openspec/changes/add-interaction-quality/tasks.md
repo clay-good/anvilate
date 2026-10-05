@@ -339,9 +339,11 @@
 
 - [x] 7.1 A long operation piped to a file writes clean stdout and progress to stderr —
       stdout is byte-identical watched or piped (tests/test_cli.py)
-- [x] 7.2 Ctrl-C during export leaves no partial artifact presented as complete — DXF writes
-      go to a hidden sibling renamed on completion, and the STEP writer removes its file on
-      a KeyboardInterrupt as well as on an error
+- [x] 7.2 Ctrl-C during export leaves no partial artifact presented as complete — DXF, 3MF
+      and STEP writes go to a hidden sibling renamed on completion. Until 2026-10-05 the STEP
+      half covered only the kernel's own write: the authorization stamp was applied to the
+      target afterwards, so a run stopped between the two left an unstamped file where the
+      finished one belongs. The whole STEP pipeline now runs on the sibling
 - [x] 7.3 Every refusal in the suite carries a remedy with a resolvable subject
       — progress: in the analysis package, every literal remedy subject (1,117 of them) names a
       parameter or public model field of its module, held by
