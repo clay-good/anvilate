@@ -6246,3 +6246,18 @@ def test_a_key_error_carrying_a_sentence_is_read_without_its_repr_quotes():
     assert _reason(KeyError("scorecard")) == "'scorecard'"
     assert _reason(ValueError("plain")) == "plain"
     assert _reason(KeyError(1, 2)) == "(1, 2)"
+
+
+@pytest.mark.parametrize(
+    "wrap", [lambda n: "[" * n + "]" * n, lambda n: '{"a":' * n + "1" + "}" * n]
+)
+def test_the_json_nesting_limit_is_the_same_on_every_interpreter(wrap):
+    """Up to 3.13 the standard reader's recursion refused a document near 1,000 levels; 3.14's
+    does not recurse and parsed 100,000. The limit depended on the interpreter, so it is
+    stated: `MAX_JSON_DEPTH` levels read, one more is refused, whatever Python runs this."""
+    from anvilate._models import MAX_JSON_DEPTH, NestingError, parse_json
+
+    assert parse_json(wrap(MAX_JSON_DEPTH)) is not None
+    for deeper in (MAX_JSON_DEPTH + 1, 100_000):
+        with pytest.raises(NestingError, match="nests deeper"):
+            parse_json(wrap(deeper))

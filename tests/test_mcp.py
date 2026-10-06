@@ -2212,6 +2212,7 @@ def test_a_line_nested_past_the_parser_is_a_parse_error_and_the_loop_goes_on():
 
     stream = io.StringIO(
         "[" * 100_000
+        + "]" * 100_000
         + "\n"
         + _json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
         + "\n"
@@ -2284,13 +2285,16 @@ def test_successful_protocol_responses_declare_their_result_type(method):
 def test_a_client_that_stops_reading_ends_the_server_quietly(tmp_path):
     """A client that closes the server's stdout has gone, like one that closes stdin. The
     server printed a BrokenPipeError traceback into the client's log and exited 120; it now
-    ends the way end of input does. Enough requests are queued to overrun the pipe buffer."""
+    ends the way end of input does. The read end is closed before the server starts, so its
+    first response meets a closed pipe rather than racing a reader."""
+    import os
     import subprocess
     import sys
     from pathlib import Path
 
     request = {
         "jsonrpc": "2.0",
+        "id": 1,
         "method": "initialize",
         "params": {
             "protocolVersion": "2025-06-18",
@@ -2298,24 +2302,23 @@ def test_a_client_that_stops_reading_ends_the_server_quietly(tmp_path):
             "clientInfo": {"name": "early-exit", "version": "0"},
         },
     }
-    lines = "".join(json.dumps({**request, "id": n}) + "\n" for n in range(1, 401))
-    (tmp_path / "requests.jsonl").write_text(lines, encoding="utf-8")
-    with (tmp_path / "requests.jsonl").open("rb") as requests:
-        process = subprocess.Popen(  # noqa: S603 - our own module, fixed argv, no shell
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    try:
+        completed = subprocess.run(  # noqa: S603 - our own module, fixed argv, no shell
             [sys.executable, "-m", "anvilate.mcp"],
-            stdin=requests,
-            stdout=subprocess.PIPE,
+            input=(json.dumps(request) + "\n").encode(),
+            stdout=write_end,
             stderr=subprocess.PIPE,
             env={
                 "PYTHONPATH": str(Path(__file__).resolve().parent.parent / "src"),
                 "PATH": "/usr/bin:/bin",
                 "ANVILATE_SUBJECT_STORE": str(tmp_path / "subjects"),
             },
+            timeout=120,
+            check=False,
         )
-        assert process.stdout is not None and process.stderr is not None
-        process.stdout.read(10)
-        process.stdout.close()
-        stderr = process.stderr.read().decode()
-        process.stderr.close()
-        assert process.wait(timeout=120) == 0, stderr
-    assert stderr == ""
+    finally:
+        os.close(write_end)
+    assert completed.returncode == 0, completed.stderr.decode()
+    assert completed.stderr == b""

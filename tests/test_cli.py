@@ -1187,9 +1187,10 @@ def test_verify_refuses_what_is_not_an_envelope(tmp_path):
     for content, expected in (
         ("not json at all", "not JSON"),
         ('{"payload": "!!!"}', "not a DSSE envelope"),
-        # Nested past the reader's recursion limit: RecursionError, not a JSON error, and it
-        # left this command as an internal error until the parse was routed through one reader.
-        ("[" * 100_000, "nests deeper"),
+        # Nested past the reader's limit: RecursionError, not a JSON error, and it left this
+        # command as an internal error until the parse was routed through one reader. Closed,
+        # so it is well-formed: unclosed, 3.14's reader calls it "Expecting value" instead.
+        ("[" * 100_000 + "]" * 100_000, "nests deeper"),
     ):
         path = tmp_path / "bad.json"
         path.write_text(content, encoding="utf-8")
@@ -4975,24 +4976,30 @@ def test_an_ordinary_mistake_at_the_shell_gets_its_own_remedy(tmp_path):
 def test_a_reader_that_stops_early_is_a_broken_pipe_not_a_verdict(output_format):
     """`anvilate check ... | head` closes stdout mid-write. That printed a traceback and
     exited 1 — "a check failed" — in JSON, and "internal error" in text. It exits 141, the
-    shell's 128 + SIGPIPE, saying nothing more on stderr than the run already had to."""
+    shell's 128 + SIGPIPE, saying nothing more on stderr than the run already had to.
+
+    The reader is gone before the process starts: reading a few bytes and then closing was a
+    race the writer sometimes won outright, since a pipe's buffer can grow past the output."""
     from anvilate.cli import EXIT_BROKEN_PIPE
 
-    specs = [str(path) for path in sorted((_REPO / "examples").glob("*.spec.yaml"))] * 8
-    process = subprocess.Popen(
-        [sys.executable, "-m", "anvilate.cli", "check", *specs, "--show-work"]
-        + ["--format", output_format],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=_REPO,
-        env={**os.environ, "PYTHONPATH": str(_REPO / "src")},
-    )
-    assert process.stdout is not None and process.stderr is not None
-    process.stdout.read(10)
-    process.stdout.close()
-    stderr = process.stderr.read().decode()
-    process.stderr.close()
-    assert process.wait(timeout=300) == EXIT_BROKEN_PIPE == 141, stderr
+    specs = [str(path) for path in sorted((_REPO / "examples").glob("*.spec.yaml"))]
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-m", "anvilate.cli", "check", *specs, "--show-work"]
+            + ["--format", output_format],
+            stdout=write_end,
+            stderr=subprocess.PIPE,
+            cwd=_REPO,
+            env={**os.environ, "PYTHONPATH": str(_REPO / "src")},
+            timeout=300,
+            check=False,
+        )
+    finally:
+        os.close(write_end)
+    stderr = completed.stderr.decode()
+    assert completed.returncode == EXIT_BROKEN_PIPE == 141, stderr
     assert "Traceback" not in stderr and "internal error" not in stderr, stderr
 
 

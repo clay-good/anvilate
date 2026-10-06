@@ -747,12 +747,34 @@ def parse_json(text: str | bytes) -> Any:
     elif isinstance(text, bytes | bytearray):
         text = bytes(text).removeprefix(b"\xef\xbb\xbf")
     try:
-        return json.loads(text)
+        document = json.loads(text)
     except RecursionError:
-        raise NestingError(
-            "the JSON nests deeper than this reader follows; a document that deep is not one "
-            "this library writes or reads"
-        ) from None
+        raise _too_deep() from None
+    # The limit is stated rather than inherited. Up to 3.13 the reader's own recursion
+    # stopped it near 1,000 levels; 3.14's reader does not recurse, so the same document
+    # parsed and the refusal above became one that depended on the interpreter.
+    pending = [(document, 1)]
+    while pending:
+        node, depth = pending.pop()
+        if isinstance(node, dict | list):
+            if depth > MAX_JSON_DEPTH:
+                raise _too_deep()
+            children = node.values() if isinstance(node, dict) else node
+            pending.extend((child, depth + 1) for child in children)
+    return document
+
+
+#: How deep a JSON document may nest, counting the outermost container as 1. Far past any
+#: document this library writes (a Design Spec is about five levels), and well inside what
+#: every supported interpreter's own recursion follows.
+MAX_JSON_DEPTH = 500
+
+
+def _too_deep() -> NestingError:
+    return NestingError(
+        f"the JSON nests deeper than this reader follows ({MAX_JSON_DEPTH} levels); a document "
+        "that deep is not one this library writes or reads"
+    )
 
 
 class NestingError(ValueError, yaml.YAMLError):
