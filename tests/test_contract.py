@@ -6289,6 +6289,7 @@ def test_the_yaml_nesting_limit_is_stated_and_does_not_depend_on_the_caller(wrap
 
     for frames in (0, 400):
         assert from_below(frames, wrap(MAX_YAML_DEPTH)) is not None
-        for deeper in (MAX_YAML_DEPTH + 1, 100_000):
+        # Not 100,000 here: block style indents every level, so that document is ~10 GB.
+        for deeper in (MAX_YAML_DEPTH + 1, 4 * MAX_YAML_DEPTH):
             with pytest.raises(NestingError, match="nests deeper"):
                 from_below(frames, wrap(deeper))
