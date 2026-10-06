@@ -18,7 +18,7 @@ from typing import Any, get_args
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from .._models import _refusal_line
+from .._models import _BoundedLoader, _refusal_line
 from ..refusal import RefusalError, Remedy
 from .ir import SCHEMA_VERSION, DesignSpec
 from .provenance import _BareValue
@@ -252,7 +252,7 @@ class SpecValidationError(RefusalError, ValueError):
         return cls(errors)
 
 
-class _StrictSpecLoader(yaml.SafeLoader):
+class _StrictSpecLoader(_BoundedLoader):
     """``yaml.safe_load`` plus a refusal of documents that do not say what they appear to.
 
     Two things PyYAML reads without complaint, both of which change the design being

@@ -795,12 +795,42 @@ def parse_yaml(text: str) -> Any:
     documents.
     """
     try:
-        return yaml.safe_load(text)
+        return yaml.load(text, Loader=_BoundedLoader)  # noqa: S506 - a SafeLoader subclass
     except RecursionError:
-        raise NestingError(
-            "the YAML nests deeper than this reader follows; a document that deep is not one "
-            "this library writes or reads"
-        ) from None
+        raise _yaml_too_deep() from None
+
+
+#: How deep a YAML document may nest. Stated, because the limit `RecursionError` gave was
+#: whatever recursion was left: about 490 levels at the top of the stack and fewer from
+#: deeper in it, so one document was accepted or refused depending on who called. Composing
+#: costs about two frames a level, so 100 leaves most of the stack to whoever is calling.
+MAX_YAML_DEPTH = 100
+
+
+def _yaml_too_deep() -> NestingError:
+    return NestingError(
+        f"the YAML nests deeper than this reader follows ({MAX_YAML_DEPTH} levels); a "
+        "document that deep is not one this library writes or reads"
+    )
+
+
+class _BoundedLoader(yaml.SafeLoader):
+    """``yaml.SafeLoader`` refusing a document nested past :data:`MAX_YAML_DEPTH`."""
+
+    def __init__(self, stream: Any) -> None:
+        super().__init__(stream)
+        self._depth = 0
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        # Containers are counted, as `parse_json` counts them: the outermost is level 1.
+        container = self.check_event(yaml.SequenceStartEvent, yaml.MappingStartEvent)
+        self._depth += container
+        try:
+            if self._depth > MAX_YAML_DEPTH:
+                raise _yaml_too_deep()
+            return super().compose_node(parent, index)
+        finally:
+            self._depth -= container
 
 
 def _identifier_segments(text: str) -> list[str]:

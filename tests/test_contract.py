@@ -4957,18 +4957,26 @@ def test_no_yaml_document_can_construct_a_python_object():
         for node in parsed_source(src / "_models.py").body
         if isinstance(node, ast.FunctionDef) and node.name == "parse_yaml"
     )
-    assert [ast.unparse(n.func) for n in ast.walk(reader) if isinstance(n, ast.Call)].count(
-        "yaml.safe_load"
-    ) == 1, "parse_yaml is counted as a safe read, and it no longer calls yaml.safe_load"
+    # One load, through the nesting-bounded loader, which the sweep above has already
+    # resolved and held to being a SafeLoader subclass.
+    loads = [
+        ast.unparse(n)
+        for n in ast.walk(reader)
+        if isinstance(n, ast.Call) and ast.unparse(n.func).startswith("yaml.")
+    ]
+    assert loads == ["yaml.load(text, Loader=_BoundedLoader)"], (
+        f"parse_yaml is counted as a safe read, and it now loads with {loads}"
+    )
     assert not unsafe, (
         "these load YAML with a constructing loader, so a document can build arbitrary "
         f"Python objects on the way in: {unsafe}"
     )
 
     # The exemption is narrow and it is named, so a second one has to be argued for here.
-    assert checked_loaders == ["src/anvilate/spec/validate.py with Loader=_StrictSpecLoader"], (
-        checked_loaders
-    )
+    assert checked_loaders == [
+        "src/anvilate/_models.py with Loader=_BoundedLoader",
+        "src/anvilate/spec/validate.py with Loader=_StrictSpecLoader",
+    ], checked_loaders
 
 
 def test_the_spec_loader_refuses_a_document_that_names_a_python_constructor():
@@ -6261,3 +6269,26 @@ def test_the_json_nesting_limit_is_the_same_on_every_interpreter(wrap):
     for deeper in (MAX_JSON_DEPTH + 1, 100_000):
         with pytest.raises(NestingError, match="nests deeper"):
             parse_json(wrap(deeper))
+
+
+@pytest.mark.parametrize(
+    "wrap",
+    [
+        lambda n: "[" * n + "]" * n,
+        lambda n: "".join("  " * i + "a:\n" for i in range(n - 1)) + "  " * (n - 1) + "b: 1\n",
+    ],
+)
+def test_the_yaml_nesting_limit_is_stated_and_does_not_depend_on_the_caller(wrap):
+    """The YAML refusal was `RecursionError`, so its limit was whatever recursion was left:
+    a 300-deep document read at the top of the stack and was refused 400 frames down. It is
+    `MAX_YAML_DEPTH` containers, in flow and block style alike, from any depth of caller."""
+    from anvilate._models import MAX_YAML_DEPTH, NestingError, parse_yaml
+
+    def from_below(frames, text):  # type: ignore[no-untyped-def]
+        return parse_yaml(text) if frames == 0 else from_below(frames - 1, text)
+
+    for frames in (0, 400):
+        assert from_below(frames, wrap(MAX_YAML_DEPTH)) is not None
+        for deeper in (MAX_YAML_DEPTH + 1, 100_000):
+            with pytest.raises(NestingError, match="nests deeper"):
+                from_below(frames, wrap(deeper))

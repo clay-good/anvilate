@@ -2181,3 +2181,16 @@ def test_a_pickled_spec_loads_in_a_freshly_spawned_process():
     )
     assert done.returncode == 0, done.stderr.decode()
     assert done.stdout.decode().strip() == str(spec.units.value)
+
+
+def test_a_spec_nested_past_the_reader_says_so():
+    """The spec loader is its own SafeLoader, and it inherited no stated depth: a document
+    nested a few hundred deep came back as "maximum recursion depth exceeded" inside the
+    validation error. It inherits the bounded loader now, so the reason names the limit."""
+    from anvilate._models import MAX_YAML_DEPTH
+    from anvilate.spec import SpecValidationError, load_spec_yaml
+
+    deep = MAX_YAML_DEPTH + 1
+    with pytest.raises(SpecValidationError, match="nests deeper") as refused:
+        load_spec_yaml("name: x\nnotes: " + "[" * deep + "]" * deep + "\n")
+    assert "recursion" not in str(refused.value)
