@@ -741,6 +741,16 @@ MISSING_REQUIRED_CLIENT_CAPABILITY = -32021
 PROTOCOL_REVISION = "2026-07-28"
 
 
+def _version() -> str:
+    """The installed distribution's version, never ``anvilate.__version__``."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("anvilate")
+    except PackageNotFoundError:  # pragma: no cover - a source tree with nothing installed
+        return "0+not-installed"
+
+
 def stateless_gaps() -> tuple[str, ...]:
     """The operations a server with no memory between calls cannot serve, in catalog order.
 
@@ -1079,9 +1089,16 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
                     "tools": {"listChanged": False},
                     "extensions": {TASKS_EXTENSION: {}},
                 },
-                "serverInfo": {"name": "anvilate", "title": "Anvilate"},
+                # `version` is required of an Implementation, and its absence failed the
+                # official conformance suite's handshake before any other check could run.
+                # The installed distribution's, as `anvilate --version` reports it.
+                "serverInfo": {"name": "anvilate", "title": "Anvilate", "version": _version()},
             },
         }
+    if method == "ping":
+        # A receiver MUST answer ping promptly with an empty result (basic/utilities/ping);
+        # it was answered "unknown method".
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"resultType": "complete"}}
     if method == "tools/list":
         return {
             "jsonrpc": "2.0",

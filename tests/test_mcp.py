@@ -2363,3 +2363,29 @@ def test_a_client_that_stops_reading_ends_the_server_quietly(tmp_path):
         os.close(write_end)
     assert completed.returncode == 0, completed.stderr.decode()
     assert completed.stderr == b""
+
+
+def test_initialize_names_the_server_version_and_ping_is_answered():
+    """Found by the official conformance suite (v0.1.16, over a loopback HTTP shim, since it
+    cannot drive stdio yet): `serverInfo` had no `version`, which an Implementation
+    requires, so the handshake failed before any other check ran; and `ping`, which a
+    receiver MUST answer with an empty result, was "unknown method"."""
+    from importlib.metadata import version
+
+    from anvilate.mcp import handle_request
+
+    init = handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2026-07-28",
+                "capabilities": {},
+                "clientInfo": {"name": "t", "version": "1"},
+            },
+        }
+    )
+    assert init["result"]["serverInfo"]["version"] == version("anvilate")
+    pong = handle_request({"jsonrpc": "2.0", "id": "p", "method": "ping"})
+    assert pong == {"jsonrpc": "2.0", "id": "p", "result": {"resultType": "complete"}}

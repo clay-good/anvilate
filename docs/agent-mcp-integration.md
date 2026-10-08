@@ -456,6 +456,10 @@ and [JSON-RPC Invalid Request rules](https://www.jsonrpc.org/specification#respo
   when present. Booleans, null IDs, and floating-point IDs are refused.
 - **Successful responses declare `resultType`.** Catalog and initialization responses use
   `"complete"`, as do synchronous tool results; dispatched work uses `"task"`.
+- **`ping` is answered, and `serverInfo` names its version.** Both were missing until the
+  official conformance suite was run against the server through a loopback HTTP shim: the
+  handshake failed on `serverInfo.version`, which an Implementation requires, before any
+  other check could run.
 - **Rubbish does not take the stream down.** A line that is not JSON gets a `-32700` with a
   null id and the loop continues. Nor does a well-formed line carrying the wrong shape: a
   property declared as one of the published schemas must arrive as a JSON object, and a

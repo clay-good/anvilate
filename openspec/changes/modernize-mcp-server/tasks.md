@@ -122,7 +122,15 @@
       drives a server over HTTP, and stdio support is open as
       [modelcontextprotocol/conformance#258](https://github.com/modelcontextprotocol/conformance/issues/258).
       This server speaks stdio only, so the run waits on
-      that issue rather than on work here
+      that issue rather than on work here. **Partial run 2026-10-08** (v0.1.16, through a
+      scratch loopback HTTP shim over `handle_request`): it found two defects, both fixed —
+      `serverInfo` had no `version` (the handshake failed before any other check) and
+      `ping` was "unknown method". With the shim echoing the client's revision (the suite
+      predates 2026-07-28), initialize passes. Ping's `resultType` is rejected by the suite's
+      2025 schema, a revision gap. logging, completion, resources and prompts are
+      undeclared capabilities, so -32601 is correct. Open finding: every tool schema
+      `$ref`s `https://anvilate.dev/schemas/...`, which does not resolve, so a validating
+      client cannot compile the tool schemas (tools-list, json-schema-2020-12)
 
 ## 4. Docs
 
