@@ -2563,6 +2563,18 @@ def test_initialize_hands_the_agent_its_rules_and_the_live_catalogue():
         assert f"- {tag}: " in text and all(f"{n}*" in text for n in required), tag
 
 
+def test_the_catalogue_names_every_rolled_section_a_member_may_reference():
+    """`section: IPE 200` resolves to the published profile; an agent not told so computes
+    the properties itself, which are the numbers easiest to get wrong from memory."""
+    from anvilate.mcp import agent_instructions
+    from anvilate.standards.profiles import default_profile_table
+
+    (line,) = [x for x in agent_instructions().splitlines() if x.startswith("Rolled sections")]
+    named = default_profile_table().designations()
+    assert len(named) >= 40 and all(f" {name}," in line or f" {name};" in line for name in named)
+    assert "anvilate fetch aisc-shapes --consent" in line
+
+
 def test_the_catalogue_spells_out_every_closed_set_an_element_field_accepts():
     """`support*` alone leaves the agent to guess `simply_supported` against `simple`.
 

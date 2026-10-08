@@ -835,6 +835,7 @@ def agent_instructions() -> str:
     """
     from .screening import element_registry
     from .standards import default_standards_resolver
+    from .standards.profiles import default_profile_table
 
     resolver = default_standards_resolver()
     lines = [
@@ -842,6 +843,11 @@ def agent_instructions() -> str:
         "",
         "Materials: " + ", ".join(resolver.known_materials()),
         "Components: " + ", ".join(resolver.known_components()),
+        # An agent that does not know a `section` can be named computes one, and a section's
+        # properties are the numbers easiest to get wrong from memory.
+        "Rolled sections (a member's `section` may name one instead of stating its "
+        "properties): " + ", ".join(default_profile_table().designations()) + "; AISC "
+        "W-shapes such as W12x26 once the user has run `anvilate fetch aisc-shapes --consent`.",
         "Element screens (element_type: fields; * marks required):",
     ]
     for tag, (model, _screen) in sorted(element_registry().items()):
