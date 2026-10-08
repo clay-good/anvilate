@@ -93,3 +93,19 @@ def test_a_centring_tolerance_is_an_angle_in_minutes_or_seconds() -> None:
     bare = OpticalElementTolerances(element="L2", optical_surfaces=("S1",))
     assert str(bare) == "L2: no optical tolerances declared"
     assert str(_lens()).startswith("L1: 0/20")
+
+
+def test_an_infinite_grade_is_refused_rather_than_drawn() -> None:
+    """`Field(gt=0)` passes infinity, which printed as "0/inf" on the drawing."""
+    inf = float("inf")
+    with pytest.raises(ValidationError, match="which is not a number"):
+        StressBirefringence(nanometres_per_centimetre=inf)
+    with pytest.raises(ValidationError, match="which is not a number"):
+        SurfaceForm(surface="S1", power_fringes=inf, irregularity_fringes=0.5)
+    with pytest.raises(ValidationError, match="which is not a number"):
+        SurfaceForm(
+            surface="S1",
+            power_fringes=2.0,
+            irregularity_fringes=0.5,
+            rotational_irregularity_fringes=inf,
+        )

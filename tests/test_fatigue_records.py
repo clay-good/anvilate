@@ -409,3 +409,12 @@ def test_the_published_worked_endurance_is_reproduced():
         stress_range=Quantity.parse("250 MPa"), detail_category=Quantity.parse("160 MPa")
     )
     assert cycles == pytest.approx(5.243e5, rel=1e-3)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_specimen_with_a_non_finite_temperature_or_kt_is_refused(bad: float) -> None:
+    """The dimension check passes NaN, and `< 1` passes NaN and infinity."""
+    with pytest.raises(ValidationError, match="temperature must be finite"):
+        _specimen(temperature=_q(bad, "degC"))
+    with pytest.raises(ValidationError, match="stress_concentration_factor must be finite"):
+        _specimen(stress_concentration_factor=bad)

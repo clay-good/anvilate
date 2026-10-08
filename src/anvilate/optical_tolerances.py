@@ -70,6 +70,10 @@ class StressBirefringence(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    # Drawing indications state requirements: `Field(gt=0)` passes infinity, which printed
+    # as "0/inf" on the drawing.
+    states_requirements = True
+
     nanometres_per_centimetre: float = Field(gt=0)
 
     def indication(self) -> str:
@@ -80,6 +84,8 @@ class BubblesAndInclusions(StatableModel):
     """ISO 10110-3: how many bubbles and inclusions, and the grade (edge length in mm)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+    states_requirements = True
 
     count: int = Field(ge=1)
     grade: float = Field(gt=0)
@@ -93,6 +99,8 @@ class Inhomogeneity(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    states_requirements = True
+
     inhomogeneity_class: int = Field(ge=0, le=5)
     striae_class: int = Field(ge=0, le=5)
 
@@ -104,6 +112,8 @@ class SurfaceForm(StatableModel):
     """ISO 10110-5: sagitta (power) and irregularity, in fringes, on one surface."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+    states_requirements = True
 
     surface: Named
     power_fringes: float = Field(ge=0)
@@ -121,6 +131,8 @@ class Centring(StatableModel):
     """ISO 10110-6: the permitted surface tilt of one surface, as an angle."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+    states_requirements = True
 
     surface: Named
     tilt: Quantity
@@ -164,6 +176,8 @@ class SurfaceImperfections(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    states_requirements = True
+
     surface: Named
     convention: ImperfectionConvention
     count: int | None = Field(default=None, ge=1)
@@ -200,6 +214,8 @@ class OpticalElementTolerances(StatableModel):
     """One optical element's tolerances, and the surfaces of it that are optical."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+    states_requirements = True
 
     element: Named
     optical_surfaces: tuple[Named, ...] = Field(min_length=1)

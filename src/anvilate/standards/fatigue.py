@@ -267,6 +267,22 @@ class SpecimenMetadata(RevalidatedModel):
                 subject="stress_ratio",
                 source=_SPECIMEN_SOURCE,
             )
+        # The dimension check above and `< 1` below both pass NaN and infinity.
+        if not isfinite(self.temperature.magnitude):
+            raise _fatigue_record_refusal(
+                f"{self.material}: temperature must be finite; got {self.temperature}",
+                subject="temperature",
+                source=_SPECIMEN_SOURCE,
+            )
+        if self.stress_concentration_factor is not None and not isfinite(
+            self.stress_concentration_factor
+        ):
+            raise _fatigue_record_refusal(
+                f"{self.material}: stress_concentration_factor must be finite; got "
+                f"{self.stress_concentration_factor}",
+                subject="stress_concentration_factor",
+                source=_SPECIMEN_SOURCE,
+            )
         if self.stress_concentration_factor is not None and self.stress_concentration_factor < 1:
             raise _fatigue_record_refusal(
                 f"{self.material}: a stress concentration factor is at least 1; got "
