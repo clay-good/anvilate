@@ -150,6 +150,12 @@ spelling-luck rather than a rule. The rule underneath all of these is one line: 
 parsed magnitude is not the magnitude the document stated, the unit half carried a number
 of its own**, whatever the punctuation was.
 
+The same traps were open everywhere else a quantity is read, a Design Spec included, because
+this pass was the only reader that checked: `Quantity.parse("1 000 mm")` was 0 mm and
+`"−10 mm"` with a typographic minus was +10 mm. The rule now lives in `Quantity.parse`
+itself, which refuses a comma, a tolerance, a non-ASCII dash, space-grouped digits and a
+second number by name, and reads U+2212 as a minus. This pass's own check stays beneath it.
+
 ## Which end of the range it is
 
 A requirement sheet states ceilings and floors, not design values, and the direction is
