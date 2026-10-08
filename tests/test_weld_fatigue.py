@@ -162,9 +162,12 @@ def test_a_check_the_record_cannot_answer_says_which_way_it_declined():
     )
     beyond = _check(80.0, 1e9)
     assert beyond.status is CheckStatus.NOT_EVALUATED
-    assert "outside the 44600 to 3.79e+07 cycles the specimens cover" in beyond.detail
+    assert (
+        "1,000,000,000 cycles is outside the 44,600 to 37,900,000 cycles the specimens cover"
+        in beyond.detail
+    )
     # Each decline names what to declare next, for the needs report to rank.
-    for entry, wanted in ((design, "97.7% survival"), (beyond, "cover 1e+09 cycles")):
+    for entry, wanted in ((design, "97.7% survival"), (beyond, "cover 1,000,000,000 cycles")):
         (need,) = entry.needs
         assert need.declaration == "fatigue_record" and wanted in need.takes
     assert _check(80.0, 2e6).needs == ()

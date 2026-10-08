@@ -574,19 +574,19 @@ class FatigueRecord(RevalidatedModel):
             )
         elif allowable is None:
             unavailable = (
-                f"{cycles:g} cycles is outside the {self.curve.min_cycles:g} to "
-                f"{self.curve.max_cycles:g} cycles the specimens cover, and the curve is not "
-                "extrapolated"
+                f"{cycles:,.0f} cycles is outside the {self.curve.min_cycles:,.0f} to "
+                f"{self.curve.max_cycles:,.0f} cycles the specimens cover, and the curve is "
+                "not extrapolated"
             )
             needs = (
                 Need(
                     declaration="fatigue_record",
-                    takes=f"a fatigue record for the detail whose tests cover {cycles:g} cycles",
+                    takes=f"a fatigue record for the detail whose tests cover {cycles:,.0f} cycles",
                     sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT),
                 ),
             )
         entry = ScorecardEntry.from_safety_factor(
-            f"{self.name} fatigue at {cycles:g} cycles",
+            f"{self.name} fatigue at {cycles:,.0f} cycles",
             computed=None if allowable is None else allowable.to("MPa").magnitude / applied,
             required=required_safety_factor,
             unavailable=unavailable,
