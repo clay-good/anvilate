@@ -187,6 +187,15 @@ class ForceStation(RevalidatedModel):
                 subject="components",
                 source=_FORCES_SOURCE,
             )
+        # An external solver can write NaN for a diverged case; it is refused here, where
+        # the record is read, rather than carried into a demand.
+        for name, value in (("position", self.position), *self.components.items()):
+            if not isfinite(value.magnitude):
+                raise _interop_refusal(
+                    f"station {name} must be a finite number; got {value}",
+                    subject="position" if name == "position" else "components",
+                    source=_FORCES_SOURCE,
+                )
         return self
 
 
@@ -340,9 +349,10 @@ class ExternalSectionProperties(RevalidatedModel):
                     ),
                     source=_SECTION_SOURCE,
                 )
-            if value.magnitude <= 0:
+            # `<= 0` alone let NaN through, and infinity is positive.
+            if not isfinite(value.magnitude) or value.magnitude <= 0:
                 raise _interop_refusal(
-                    f"{self.name}: {label} must be positive; got {value}",
+                    f"{self.name}: {label} must be positive and finite; got {value}",
                     subject=(
                         "area, second_moment, extreme_fibre, second_moment_transverse, and "
                         "torsion_constant"

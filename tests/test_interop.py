@@ -666,3 +666,16 @@ def test_the_interop_page_quotes_the_ratio_the_unit_layer_produces():
     )
     # And the parenthetical is the fourth power of the inch, not a coincidence.
     assert ratio == pytest.approx(25.4**4)
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf"])
+def test_imported_numbers_that_are_not_finite_are_refused(bad: str) -> None:
+    """`<= 0` let a NaN section property through, and infinity is positive; a station took
+    a NaN position or component, which is what a diverged solver case can write."""
+    for field, unit in (("area", "mm**2"), ("second_moment", "mm**4"), ("extreme_fibre", "mm")):
+        with pytest.raises(pydantic.ValidationError, match=f"{field} must be positive and finite"):
+            _section(**{field: _q(f"{bad} {unit}")})
+    with pytest.raises(pydantic.ValidationError, match="station position must be a finite"):
+        ForceStation(position=_q(f"{bad} m"), components={"P": _q("10 kN")})
+    with pytest.raises(pydantic.ValidationError, match="station M3 must be a finite"):
+        ForceStation(position=_q("0 m"), components={"P": _q("10 kN"), "M3": _q(f"{bad} kN*m")})
