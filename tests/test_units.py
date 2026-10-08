@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import math
 import pathlib
+import re
 from typing import Annotated
 
 import pytest
@@ -128,7 +129,7 @@ def test_unit_refusals_carry_structured_remedies_at_every_raise_site():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 26
+    assert len(sites) == 27
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
@@ -1321,3 +1322,48 @@ def test_no_unit_taking_helper_answers_with_pints_own_exception():
         "these answer a bad unit with pint's exception rather than this library's "
         "UnitError:\n  " + "\n  ".join(leaked)
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        # Each of these parsed, to a number nobody wrote, because pint reads juxtaposition
+        # as multiplication and drops what it cannot tokenize.
+        ("1 000 mm", "separates digits with a space"),  # was 0 mm
+        ("1 000 mm", "separates digits with a space"),  # narrow no-break space: 0 mm
+        ("1,5 mm", "with a comma"),  # a decimal comma: was 15 mm
+        ("1,000 mm", "with a comma"),  # 1000 or 1.0, by convention
+        ("10 mm ± 0.1", "carries a tolerance"),  # was 1 mm
+        ("10±0.1 mm", "carries a tolerance"),  # was 1 mm
+        ("45–50 kN", "U+2013 EN DASH"),  # a range: was 2,250 kN
+        ("–10 mm", "U+2013 EN DASH"),  # was +10 mm
+        ("10 × 2 mm", "holds a second number"),  # was 20 mm
+        ("10 mm 2", "holds a second number"),  # was 20 mm
+    ],
+)
+def test_text_that_is_not_one_magnitude_and_one_unit_is_refused(text: str, reason: str) -> None:
+    with pytest.raises(UnitError, match=re.escape(reason)):
+        Quantity.parse(text)
+
+
+def test_the_minus_sign_a_word_processor_writes_is_a_minus_sign() -> None:
+    """U+2212 was dropped, so "−10 mm" parsed as +10 mm."""
+    assert Quantity.parse("−10 mm") == Quantity(magnitude=-10, unit="mm")
+
+
+@pytest.mark.parametrize(
+    ("text", "magnitude", "unit"),
+    [
+        ("10 1/s", 10.0, "1/s"),
+        ("1e-3 1/K", 1e-3, "1/K"),
+        ("0.5 1/(mm**2*s)", 0.5, "1/(mm**2*s)"),
+        ("10 s^-1", 10.0, "1/s"),
+        ("10 mm^4", 10.0, "mm**4"),
+        ("3/4 in", 0.75, "in"),
+        ("10 N·m", 10.0, "N*m"),
+    ],
+)
+def test_the_numbers_a_unit_may_hold_still_parse(text: str, magnitude: float, unit: str) -> None:
+    """Exponents, a fraction, and the "1/" of a reciprocal the library itself writes."""
+    parsed = Quantity.parse(text)
+    assert parsed.to(unit).magnitude == pytest.approx(magnitude, rel=1e-12)

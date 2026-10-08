@@ -304,7 +304,9 @@ def test_the_general_net_catches_any_unit_half_carrying_its_own_number():
     """
     draft = extract_requirements("Load: 45 50 kN\n", document="rfq.txt")
     assert draft.values == ()
-    assert "carries a number of its own" in draft.unparsed[0].reason
+    # `Quantity.parse` now refuses a second number itself, library-wide, before this pass's
+    # own net is reached; the net stays, for whatever spelling the parser lets through.
+    assert "holds a second number" in draft.unparsed[0].reason
 
 
 def test_a_decimal_comma_is_refused_rather_than_read_as_a_thousands_separator():

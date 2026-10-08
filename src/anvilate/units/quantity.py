@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import difflib
 import re
+import unicodedata
 from functools import lru_cache
 from math import isfinite
 from typing import Any
@@ -90,6 +91,57 @@ def _offset_temperature(text: str) -> pint.Quantity | None:
 def _is_angle(quantity: pint.Quantity) -> bool:
     """Whether a dimensionless pint quantity carries an angle unit rather than none."""
     return quantity.units in _ANGLE_UNITS
+
+
+# The leading magnitude of a quantity: a decimal, optionally signed, with an exponent, or a
+# simple fraction ("3/4 in").
+_MAGNITUDE = re.compile(r"\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?:\s*/\s*\d+)?")
+# What a unit may hold a number for: an exponent, and the "1/" of a reciprocal the library
+# itself writes ("10 1/s").
+_EXPONENT = re.compile(r"(?:\*\*|\^)\s*\(?\s*[+-]?\d+(?:\.\d+)?\s*\)?")
+_RECIPROCAL = re.compile(r"^\s*\(?\s*1\s*/")
+# A number not glued to a unit name: `inch_H2O_39F` is one unit, `mm 2` is two tokens.
+_LOOSE_NUMBER = re.compile(r"(?<!\w)\d")
+
+
+def _not_one_quantity(text: str) -> str | None:
+    """Why ``text`` is not one magnitude and one unit, or ``None`` when it is.
+
+    pint reads juxtaposition as multiplication and drops what it cannot tokenize, so every
+    shape below parsed, to a number nobody wrote: "1 000 mm" as 1 × 000 = 0 mm, "1,5 mm"
+    (a decimal comma) as 15 mm, "10 mm ± 0.1" as 1 mm, the range "45–50 kN" as 2,250 kN,
+    and "–10 mm" with an en dash as +10 mm.
+    """
+    if "," in text:
+        return (
+            "writes its magnitude with a comma, which is a thousands separator in one "
+            "convention and the decimal point in another (1,500 is 1500 or 1.5); write the "
+            "number with no separators and a point for the decimal"
+        )
+    if "±" in text:
+        return "carries a tolerance; a quantity is one value, and a tolerance is stated apart"
+    dashes = sorted({c for c in text if c != "-" and unicodedata.category(c) == "Pd"})
+    if dashes:
+        names = ", ".join(f"U+{ord(c):04X} {unicodedata.name(c, '?')}" for c in dashes)
+        return (
+            f"contains {names}, which is neither a minus sign nor part of a unit; a range is "
+            "two quantities, and a negative value is written with '-'"
+        )
+    magnitude = _MAGNITUDE.match(text)
+    if magnitude is None:
+        return None
+    unit = _RECIPROCAL.sub("", _EXPONENT.sub("", text[magnitude.end() :]))
+    if _LOOSE_NUMBER.search(unit) is None:
+        return None
+    # Thousands grouping is three digits a group: "1 000" is that, "45 50" is two numbers.
+    if re.fullmatch(r"\d{1,3}", magnitude.group().strip().lstrip("+-")) and re.match(
+        r"(?:[\s\u00a0\u2009\u202f]+\d{3})+(?!\d)", text[magnitude.end() :]
+    ):
+        return (
+            "separates digits with a space, which reads as multiplication "
+            "(1 000 is 1 × 000 = 0); write the number with no separators"
+        )
+    return "holds a second number; a quantity is one magnitude and one unit"
 
 
 class UnitError(RefusalError, ValueError):
@@ -379,7 +431,17 @@ class Quantity(RevalidatedModel):
           dimensionless"``, which it is there for. An angle states its unit; a ratio does
           not, and that is the line.
         """
-        text = text.strip()
+        # The minus sign a word processor or a PDF writes. pint dropped it, so "−10 mm" was
+        # +10 mm.
+        text = text.strip().replace("\u2212", "-")
+        problem = _not_one_quantity(text)
+        if problem is not None:
+            raise UnitError(
+                f"{text!r} {problem}",
+                action="rewrite",
+                subject=f"the physical quantity {text!r}",
+                source="a single magnitude and unit from the originating document",
+            )
         try:
             float(text)
         except ValueError:
