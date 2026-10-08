@@ -129,7 +129,7 @@ def test_unit_refusals_carry_structured_remedies_at_every_raise_site():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 29
+    assert len(sites) == 30
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
@@ -738,6 +738,38 @@ def test_a_glued_moment_is_refused_naming_the_product_and_the_product_is_a_momen
     # Not products, and not refused: a nanometre, a reciprocal exponent, a range's minus.
     for text in ("3 nm", "2 m**-1", "50 kN*m", "50 N·m", "-10 mm"):
         assert Quantity.parse(text) is not None, text
+
+
+@pytest.mark.parametrize(
+    ("text", "meant"),
+    [
+        ("30 MPa√m", "m**0.5"),  # a fracture toughness, read as 30 MPa·m
+        ("1 N÷m", "'/'"),  # a division, read as a product
+        ("1 N∕m", "'/'"),
+        ("5 ≤m", "remove it"),  # a limit's direction, dropped
+        ("20 ℃", "degC"),
+    ],
+)
+def test_a_character_pint_would_drop_is_refused_by_name(text, meant):
+    """pint drops what it cannot tokenize without a word, so each of these parsed, wrong."""
+    for attempt in (lambda: Quantity.parse(text), lambda: Quantity(magnitude=1.0, unit=text[2:])):
+        with pytest.raises(ValueError) as refused:
+            attempt()
+        assert "would be dropped without a word" in str(refused.value)
+        assert meant in str(refused.value)
+        assert "; " not in str(refused.value).split("[type=")[0], "MCP joins issues with '; '"
+
+
+@pytest.mark.parametrize(
+    ("unit", "powered"),
+    [("mm2", "mm**2"), ("N/mm2", "N/mm**2"), ("m/s2", "m/s**2"), ("kN/m3", "kN/m**3")],
+)
+def test_a_trailing_digit_exponent_is_refused_naming_the_power(unit, powered):
+    with pytest.raises(ValueError, match=re.escape(f"write {powered!r}")):
+        Quantity(magnitude=1.0, unit=unit)
+    with pytest.raises(ValueError, match=re.escape(f"write '250 {powered}'")):
+        Quantity.parse(f"250 {unit}")
+    assert Quantity(magnitude=1.0, unit=powered) is not None
 
 
 def test_the_ordinary_spellings_are_untouched():

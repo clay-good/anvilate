@@ -380,20 +380,75 @@ _GLUED_PRODUCTS = {
 _HYPHENATED = re.compile(r"[A-Za-z]-[A-Za-z]")
 
 
+# What a unit expression is made of. pint drops any other character without a word, so
+# `30 MPa√m` was 30 MPa·m, `1 N÷m` and `1 N∕m` were N·m (a division read as a product),
+# and `≤ 5 mm` was 5 mm. Letters, digits (superscripts included) and spaces, plus:
+_UNIT_PUNCTUATION = frozenset("*/^().-+_·×⋅°%")
+# Keyed by name: several of these have no glyph in the report font, and the PDF gate reads
+# every string constant in the package as something it might draw.
+_UNREAD_REMEDY = {
+    unicodedata.lookup(name): remedy
+    for name, remedy in (
+        ("SQUARE ROOT", "write a root as a power: m**0.5"),
+        ("CUBE ROOT", "write a root as a power: m**(1/3)"),
+        ("FOURTH ROOT", "write a root as a power: m**0.25"),
+        ("DIVISION SIGN", "write a division with '/'"),
+        ("DIVISION SLASH", "write a division with '/'"),
+        ("FRACTION SLASH", "write a division with '/'"),
+        ("DEGREE CELSIUS", "write degC"),
+        ("DEGREE FAHRENHEIT", "write degF"),
+        ("PRIME", "write ft or arcminute"),
+        ("DOUBLE PRIME", "write in or arcsecond"),
+    )
+}
+
+
+def _unread_character(unit: str) -> str | None:
+    """Why ``unit`` holds a character pint would silently drop, or ``None``."""
+    for character in unit:
+        if character.isalnum() or character.isspace() or character in _UNIT_PUNCTUATION:
+            continue
+        name = unicodedata.name(character, f"U+{ord(character):04X}")
+        remedy = _UNREAD_REMEDY.get(character, "remove it or spell the unit out")
+        return (
+            f"unit {unit.strip()!r} contains {character!r} ({name}), which is not read as part "
+            f"of a unit and would be dropped without a word — {remedy}"
+        )
+    return None
+
+
+def _power_hint(text: str) -> str:
+    """`; ... write 'mm**2'` when ``text`` reads once its trailing digits are powers, else "".
+
+    `mm2`, `N/mm2` and `m/s2` are how area, stress and acceleration are typed, and pint
+    knows none of them: "unknown unit" alone left the reader to find the `**`.
+    """
+    powered = re.sub(r"(?<=[A-Za-z])([2-4])\b", r"**\1", text)
+    if powered == text:
+        return ""
+    try:
+        UREG.Quantity(powered)
+    except Exception:
+        return ""
+    return f": a trailing digit is not read as a power — write {powered!r}"
+
+
 def _glued_product(unit: str) -> str | None:
     """Why ``unit`` writes a product of units in a form pint misreads, or ``None``."""
+    if (unread := _unread_character(unit)) is not None:
+        return unread
     unit = unit.strip()
     for token in re.findall(r"[A-Za-z]+", unit):
         if token in _GLUED_PRODUCTS:
             return (
-                f"unit {unit!r} writes {token!r}, which is not read as a product of units; "
+                f"unit {unit!r} writes {token!r}, which is not read as a product of units — "
                 f"write {_GLUED_PRODUCTS[token]!r}"
             )
     if _HYPHENATED.search(unit):
         product = re.sub(r"(?<=[A-Za-z])-(?=[A-Za-z])", "*", unit)
         # `lb` is the pound mass; the pound in a hyphenated moment is the pound-force.
         product = re.sub(r"\blb\b", "lbf", product)
-        return f"unit {unit!r} joins units with '-'; write the product as {product!r}"
+        return f"unit {unit!r} joins units with '-' — write the product as {product!r}"
     return None
 
 
@@ -445,7 +500,7 @@ class Quantity(RevalidatedModel):
             _unit_object(self.unit)
         except Exception as exc:  # pint raises several undefined/parse errors
             raise UnitError(
-                f"unknown unit {self.unit!r}{_nearest_unit(self.unit)}",
+                f"unknown unit {self.unit!r}{_power_hint(self.unit) or _nearest_unit(self.unit)}",
                 action="replace",
                 subject=f"the unit expression {self.unit!r}",
                 source="a valid spelling in the bundled unit registry",
@@ -488,6 +543,13 @@ class Quantity(RevalidatedModel):
         # +10 mm.
         text = text.strip().replace("\u2212", "-")
         problem = _not_one_quantity(text)
+        if problem is not None:
+            raise UnitError(
+                f"{text!r} {problem}",
+                action="rewrite",
+                subject=f"the physical quantity {text!r}",
+                source="a single magnitude and unit from the originating document",
+            )
         magnitude = _MAGNITUDE.match(text)
         glued = _glued_product(text[magnitude.end() :] if magnitude else text)
         if glued is not None:
@@ -496,13 +558,6 @@ class Quantity(RevalidatedModel):
                 action="rewrite",
                 subject=f"the physical quantity {text!r}",
                 source="the product of units it names, written with '*'",
-            )
-        if problem is not None:
-            raise UnitError(
-                f"{text!r} {problem}",
-                action="rewrite",
-                subject=f"the physical quantity {text!r}",
-                source="a single magnitude and unit from the originating document",
             )
         try:
             float(text)
@@ -519,6 +574,13 @@ class Quantity(RevalidatedModel):
             pq = UREG.Quantity(text)
         except Exception as exc:
             offset = _offset_temperature(text)
+            if offset is None and (hint := _power_hint(text)):
+                raise UnitError(
+                    f"could not parse quantity {text!r}{hint}",
+                    action="rewrite",
+                    subject=f"the physical quantity {text!r}",
+                    source="the same unit with its exponent written as '**'",
+                ) from exc
             if offset is None:
                 raise UnitError(
                     f"could not parse quantity {text!r}",
