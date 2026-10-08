@@ -868,6 +868,27 @@ def _print_error(*, command: str, diagnostic: str, out) -> None:
     )
 
 
+def _local_model_runtime() -> dict[str, Any]:
+    # It said "no local intent-compilation model runtime is shipped ... once implemented"
+    # while `OllamaBackend` and `LlamaCppBackend` both shipped. Whether a server is listening
+    # is not checked, and not by oversight: SECURITY.md promises no connection a caller did
+    # not ask for, and a self-check that probes ports on its own is one. So the item says
+    # what ships and what was not looked at, and stays a failure, because it is not verified.
+    return {
+        "name": "local model runtime",
+        "status": "fail",
+        "detail": (
+            "Not checked: the Ollama and llama.cpp adapters ship, and doctor opens no "
+            "connection to look for a server."
+        ),
+        "remedy": (
+            "Start one (`ollama serve`, or llama.cpp's `llama-server`), then pass "
+            "`OllamaBackend(model=...)` or `LlamaCppBackend(model=...)` to "
+            "`anvilate.compilation.compile_intent`."
+        ),
+    }
+
+
 def _doctor(args: argparse.Namespace, *, out) -> int:
     """Report each required runtime capability independently and actionably."""
     from importlib.metadata import PackageNotFoundError, version
@@ -884,15 +905,7 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
                 f"Implement and configure the T3 backend specified in {specs}/validation-gauntlet."
             ),
         },
-        {
-            "name": "local model runtime",
-            "status": "fail",
-            "detail": "No local intent-compilation model runtime is shipped or configured.",
-            "remedy": (
-                f"Configure the local runtime selected by {specs}/intent-compilation once "
-                "implemented."
-            ),
-        },
+        _local_model_runtime(),
     ]
     try:
         from build123d import Box

@@ -2988,6 +2988,24 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
     assert "material" in by_name["database integrity"]["detail"]
 
 
+def test_doctor_says_what_ships_for_the_local_model_and_opens_no_connection(monkeypatch):
+    """It reported "no local runtime is shipped ... once implemented" while `OllamaBackend`
+    and `LlamaCppBackend` both shipped. It must not probe for a server either: SECURITY.md
+    promises no connection a caller did not ask for."""
+    import socket
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("doctor opened a connection")
+
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+    _code, raw, _error = _run("doctor", "--format", "json")
+    (check,) = [c for c in json.loads(raw)["checks"] if c["name"] == "local model runtime"]
+    assert check["status"] == "fail"
+    assert "Ollama and llama.cpp adapters ship" in check["detail"]
+    assert "compile_intent" in check["remedy"] and "once implemented" not in check["remedy"]
+
+
 @pytest.mark.parametrize("command", ["build", "check", "diff", "verify", "export", "interfaces"])
 def test_every_backed_command_explains_its_own_exit_code(command):
     """The program help defers to these, so they have to say something."""

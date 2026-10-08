@@ -332,9 +332,13 @@ result shapes are published at
 geometry kernel, local model runtime, viewport prerequisites, and bundled database
 integrity. Each gets its own pass/fail line, and every failure carries a concrete next
 action. With the `geometry` extra installed, the kernel check builds a valid probe solid and
-reports the build123d and OCCT binding versions. The FEA, local-model, and viewport checks
-remain explicit failures; database integrity is proved by loading the bundled resolver and
-counting its material and component designations. `--format json` emits the same report
+reports the build123d and OCCT binding versions, and the viewport check renders a probe
+image. The FEA check remains an explicit failure, since no solver ships in this release. The
+local-model check says that the Ollama and llama.cpp adapters ship and that it did not look
+for a server: doctor opens no connection, as [SECURITY.md](../SECURITY.md) promises, so the
+item stays unverified and names how to start one. Database
+integrity is proved by loading the bundled resolver and counting its material and component
+designations. `--format json` emits the same report
 under CLI output schema 1.8.0.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
