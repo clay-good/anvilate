@@ -25,8 +25,9 @@ available: an unclassified curve cannot satisfy a design-curve requirement, the 
 answer outside the cycle range its dataset covers — extrapolating a power law two decades
 past the last test point is the kind of number that comes back looking like data.
 
-This module is the schema. It bundles no dataset: the packs that will fill it are
-license-reviewed separately (see ``openspec/changes/expand-open-design-data``).
+This module is the schema. The packs that fill it are license-reviewed separately (see
+``openspec/changes/expand-open-design-data``); the first is
+:mod:`anvilate.standards.weld_fatigue`, welded-joint test points under CC BY 4.0.
 """
 
 from __future__ import annotations
@@ -168,6 +169,10 @@ class DatasetProvenance(RevalidatedModel):
     # How many test points the curve was fitted through, when the dataset says. A curve
     # fitted to six points and one fitted to six hundred are different evidence.
     specimen_count: int | None = None
+    # The paper the tests were first reported in, when the dataset is a compilation. A
+    # CC BY compilation asks that its sources be credited, and the paper is where a reader
+    # finds the specimen drawing and the test set-up the dataset summarises.
+    publication: str | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> DatasetProvenance:

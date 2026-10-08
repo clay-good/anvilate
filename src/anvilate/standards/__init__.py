@@ -142,6 +142,12 @@ from .washers import (
     WasherTable,
     default_washer_table,
 )
+from .weld_fatigue import (
+    UnknownWeldFatigueRecordError,
+    WeldFatigueTable,
+    default_weld_fatigue_records,
+    mean_curve_from_failures,
+)
 
 __all__ = [
     "NDS_APPLICABLE_FACTORS",
@@ -205,6 +211,10 @@ __all__ = [
     "WasherTable",
     "UnknownWasherError",
     "default_washer_table",
+    "default_weld_fatigue_records",
+    "UnknownWeldFatigueRecordError",
+    "WeldFatigueTable",
+    "mean_curve_from_failures",
     "HexNut",
     "HexNutTable",
     "UnknownHexNutError",

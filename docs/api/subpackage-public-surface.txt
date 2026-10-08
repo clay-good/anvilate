@@ -541,3 +541,11 @@ units.temperature.OffsetTemperatureError
 units.temperature.temperature_difference_kelvin
 units.temperature_difference_kelvin
 units.unit_label
+standards.default_weld_fatigue_records
+standards.mean_curve_from_failures
+standards.weld_fatigue.default_weld_fatigue_records
+standards.weld_fatigue.mean_curve_from_failures
+standards.UnknownWeldFatigueRecordError
+standards.WeldFatigueTable
+standards.weld_fatigue.UnknownWeldFatigueRecordError
+standards.weld_fatigue.WeldFatigueTable

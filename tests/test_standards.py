@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -1921,12 +1922,18 @@ def test_every_bundled_dataset_records_a_redistributable_license():
     page = " ".join(
         (Path(__file__).resolve().parent.parent / "docs" / "citations.md").read_text().split()
     )
-    claim = re.search(r"Each of the (\w+) bundled datasets .*? All (\w+) are ([\w.-]+) today", page)
+    claim = re.search(r"Each of the (\w+) bundled datasets", page)
     assert claim is not None, "the bundled-dataset paragraph in docs/citations.md has moved"
-    counted = {"seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20}
+    counted = {"one": 1, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20}
     assert counted[claim.group(1)] == len(datasets)
-    assert claim.group(2) == claim.group(1), "the page counts the datasets twice, differently"
-    assert {str(d["dataset"]["license"]).split()[0] for _n, d in datasets} == {claim.group(3)}
+    # One sentence per licence, "<Count> is/are <SPDX>", each stating how many carry it.
+    licences = Counter(str(d["dataset"]["license"]).split()[0] for _n, d in datasets)
+    stated = {
+        spdx: counted[word.lower()]
+        for word, spdx in re.findall(r"\b([A-Z][a-z]+) (?:is|are) ([A-Z][\w.-]+-[\w.]+)\b", page)
+        if word.lower() in counted
+    }
+    assert stated == dict(licences), (stated, dict(licences))
 
 
 def test_the_license_gate_sees_what_it_claims_to(tmp_path, monkeypatch):
@@ -1949,14 +1956,22 @@ def test_the_license_gate_sees_what_it_claims_to(tmp_path, monkeypatch):
         "rows": {"1": 2.0},
     }
 
-    shipped = len(_bundled_datasets())  # the page states the count; the fake has to match it
+    # The page states the count and the licence breakdown, so the candidate stands in for one
+    # shipped CC0-1.0 dataset and the rest are the real ones.
+    shipped = _bundled_datasets()
+    stand_in = next(
+        index
+        for index, (_name, document) in enumerate(shipped)
+        if str(document["dataset"]["license"]).startswith("CC0-1.0")
+    )
 
     def _run(document: dict) -> None:
         path = tmp_path / "candidate.yaml"
         path.write_text(yaml.safe_dump(document))
+        candidate = ("candidate.yaml", yaml.safe_load(path.read_text()))
         monkeypatch.setattr(
             f"{__name__}._bundled_datasets",
-            lambda: [("candidate.yaml", yaml.safe_load(path.read_text()))] * shipped,
+            lambda: [*shipped[:stand_in], candidate, *shipped[stand_in + 1 :]],
         )
         test_every_bundled_dataset_records_a_redistributable_license()
 

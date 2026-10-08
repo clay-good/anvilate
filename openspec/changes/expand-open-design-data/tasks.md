@@ -17,8 +17,22 @@
       A- and B-basis, from Tables 3.2.3.0(b1) and 3.7.6.0(b1). A screen on one states the basis,
       table and superseded note on every entry; the provenance trail carries the note too
 - [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step
-- [ ] 2.3 CC-licensed fatigue dataset pack(s) with DOI provenance and license records —
-      candidate found and half-anchored 2026-09-24: the FABEST database (42CrMo4+QT, CC BY
+- [x] 2.3 CC-licensed fatigue dataset pack(s) with DOI provenance and license records —
+      shipped 2026-10-08 as `standards/data/weld_fatigue.yaml` + `standards.weld_fatigue`:
+      two campaigns from "A Dataset of Fatigue Properties for Welded Joints" (Deng et al.,
+      figshare 2025, v2, CC BY 4.0, DOI 10.6084/m9.figshare.29254265.v2), copied point for
+      point from its S-N.json (md5 55a9defc400f717147702d6c8a91f0ce) — SM50B cruciform,
+      axial, R = 0, 23 °C air, 20 mm, 38 failures (dataset_id 1868); 6082-T6 FSW butt,
+      axial, R = 0.1, 25 °C air, 3 mm, 19 failures (dataset_id 2022). A campaign was
+      bundled only where the release states temperature (as a number), environment, R and
+      thickness; "ambient" was not read as 20 °C, and a series sharing its metadata with a
+      sibling from the same paper was left out. Each record is a MEAN curve fitted by ASTM
+      E739 least squares (log N on log Δσ) over the tested range only, cites the dataset DOI
+      and the campaign's original paper (`DatasetProvenance.publication`), and declines a
+      design-curve request; the fit is held to `statistics.linear_regression` and to numpy's
+      polyfit values (tests/test_weld_fatigue.py). The FABEST candidate below stays blocked
+      on its missing test temperature and environment. Earlier note: the FABEST database
+      (42CrMo4+QT, CC BY
       4.0, DOI 10.5281/zenodo.20967342, md5 9e116aa634fe72c166e6790469788d37) carries a
       Basquin fit per campaign, N = C·S^-w on stress amplitude. Refitting FAB001 (axial,
       R = -1, turned unnotched bar, 9 broken specimens, 3,169-514,828 cycles) by least squares

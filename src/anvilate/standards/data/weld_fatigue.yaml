@@ -1,0 +1,108 @@
+# Welded-joint fatigue test points (schema: standards-data).
+#
+# Two constant-amplitude S-N campaigns from "A Dataset of Fatigue Properties for Welded
+# Joints" (Deng, Luo, Gong, Liu, Zhang and Wang, figshare, 2025, version 2), which compiles
+# test results from the published literature under CC BY 4.0. Each campaign is one
+# `dataset_id` in that release, copied point for point from its S-N.json (md5
+# 55a9defc400f717147702d6c8a91f0ce) with the test conditions from its parameter.json (md5
+# c6e93be560fefd4653514a24751eb3c5). Every point is a failed specimen: neither campaign
+# records a run-out. Stress is the nominal range, max minus min, in MPa.
+#
+# A campaign is bundled only where the release states everything `SpecimenMetadata`
+# requires, numerically where it is a number: the test temperature, the environment, the
+# stress ratio and the thickness. A temperature recorded as "ambient" was not read as 20 C,
+# and a campaign sharing its metadata with a sibling series from the same paper was left
+# out, since nothing would say which series it is.
+#
+# The points are data. The curve a record carries is fitted from them by
+# `anvilate.standards.weld_fatigue` and is a mean curve, valid over the tested range only.
+dataset:
+  name: anvilate-weld-fatigue
+  version: "0.1.0"
+  source: "A Dataset of Fatigue Properties for Welded Joints (Deng et al., figshare, 2025, v2)"
+  license: "CC-BY-4.0 (credit the dataset's authors and each campaign's original publication)"
+  retrieved: "2026-10-08"
+  doi: "10.6084/m9.figshare.29254265.v2"
+  authors: "Caiyan Deng, Chenyu Luo, Baoming Gong, Yong Liu, Xu Zhang, Shuaikun Wang"
+
+campaigns:
+  SM50B-CRUCIFORM-R0:
+    dataset_id: 1868
+    publication: "Fatigue Strength Improvement by Replacing Welded Joints with Ductile Cast Iron Joints, Tetsu-to-Hagane (2019), doi:10.2355/tetsutohagane.TETSU-2018-158"
+    material: "SM50B steel"
+    joint: "cruciform joint, failing at the weld toe"
+    loading_mode: axial
+    stress_ratio: 0.0
+    temperature: {magnitude: 23.0, unit: degC}
+    environment: "air"
+    thickness: {magnitude: 20.0, unit: mm}
+    stress_concentration_factor: 3.47
+    points:
+      - [59, 10200000]
+      - [59, 34700000]
+      - [59, 37900000]
+      - [60, 23600000]
+      - [60, 27700000]
+      - [60, 31100000]
+      - [79, 3650000]
+      - [79, 5610000]
+      - [80, 3340000]
+      - [80, 9860000]
+      - [81, 19800000]
+      - [100, 1300000]
+      - [100, 1530000]
+      - [100, 2140000]
+      - [100, 2620000]
+      - [118, 1630000]
+      - [119, 987000]
+      - [119, 1220000]
+      - [119, 1440000]
+      - [120, 1300000]
+      - [121, 1090000]
+      - [153, 413000]
+      - [160, 569000]
+      - [166, 331000]
+      - [201, 139000]
+      - [201, 193000]
+      - [201, 213000]
+      - [201, 241000]
+      - [240, 149000]
+      - [241, 95300]
+      - [241, 106000]
+      - [241, 113000]
+      - [281, 68800]
+      - [281, 76000]
+      - [283, 64400]
+      - [284, 80800]
+      - [320, 44600]
+      - [321, 52900]
+  AA6082-T6-FSW-BUTT-R0.1:
+    dataset_id: 2022
+    publication: "Assessment of the fatigue behaviour of friction stir welded joints: Aluminium alloy 6082-T6, Key Engineering Materials 348-349 (2007), doi:10.4028/www.scientific.net/KEM.348-349.209"
+    material: "6082-T6 aluminium alloy"
+    joint: "friction stir welded butt joint, cross-weld specimen, failing at the weld centre"
+    loading_mode: axial
+    stress_ratio: 0.1
+    temperature: {magnitude: 25.0, unit: degC}
+    environment: "air"
+    thickness: {magnitude: 3.0, unit: mm}
+    points:
+      - [88, 218000]
+      - [88, 258000]
+      - [89, 98500]
+      - [89, 274000]
+      - [89, 496000]
+      - [100, 116000]
+      - [101, 350000]
+      - [102, 261000]
+      - [102, 302000]
+      - [102, 695000]
+      - [113, 51700]
+      - [113, 88000]
+      - [113, 100000]
+      - [113, 183000]
+      - [151, 9280]
+      - [152, 6920]
+      - [152, 9940]
+      - [152, 11000]
+      - [152, 12100]

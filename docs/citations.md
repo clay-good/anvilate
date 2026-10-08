@@ -216,15 +216,26 @@ number that looks exactly like data.**
 The dataset half is a license record too: `DatasetProvenance` requires a DOI or a URL,
 because a fatigue curve nobody can retrieve is a number somebody typed.
 
+The first pack is `default_weld_fatigue_records()`: two welded-joint campaigns, an SM50B
+steel cruciform and a 6082-T6 friction-stir butt joint, copied point for point from a
+CC BY 4.0 compilation (doi:10.6084/m9.figshare.29254265.v2). The compilation publishes
+points, not curves, so each record's curve is a **mean** fit (ASTM E739, log N on log Δσ)
+over the cycle range the specimens cover and no further. It answers a mean question and
+declines a design one. Each record credits the dataset and the paper the campaign was first
+reported in, which is what its licence asks.
+
 ## Every bundled table says what it may be redistributed under
 
 A table bundled in the package travels with it, so whatever the data is licensed under, a
-redistributor inherits. Each of the nineteen bundled datasets — the dimension tables, the
-materials seed, the MIL-HDBK-5J allowables pack, the ISO 286 and ISO 2768 tolerance tables, the process-capability
-estimates — declares a name, a version, the source it was read from, an SPDX licence
-identifier, and the date it was retrieved. All nineteen are CC0-1.0 today: the *values*
-are facts, and no source standard is redistributed. MIL-HDBK-5J is itself a US Government
-work approved for public release.
+redistributor inherits. Each of the twenty bundled datasets — the dimension tables, the
+materials seed, the MIL-HDBK-5J allowables pack, the welded-joint fatigue pack, the ISO 286
+and ISO 2768 tolerance tables, the process-capability estimates — declares a name, a
+version, the source it was read from, an SPDX licence identifier, and the date it was
+retrieved. Nineteen are CC0-1.0: the *values* are facts, and no source standard is
+redistributed. MIL-HDBK-5J is itself a US Government work approved for public release.
+One is CC-BY-4.0: the welded-joint fatigue pack, whose test points come from a CC BY
+compilation. Its one condition is credit, and every record it yields carries the dataset's
+DOI and the paper each campaign was first reported in.
 
 A gate in the suite reads every one of them and fails the build on a licence that is not
 redistributable inside an MIT package, a retrieval date that is not a date, or a missing
@@ -263,6 +274,7 @@ build rather than going stale in a document.
 | `standards/data/metric_thread.yaml` | ISO 261 / ISO 724 metric threads | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/nema_frames.yaml` | NEMA ICS 16 stepper frame mounting dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/pipe_schedules.yaml` | ASME B36.10M welded and seamless wrought steel pipe dimensions | 0.1.0 | CC0-1.0 | 2026-08-17 |
+| `standards/data/weld_fatigue.yaml` | A Dataset of Fatigue Properties for Welded Joints (Deng et al., figshare, 2025, v2) | 0.1.0 | CC-BY-4.0 | 2026-10-08 |
 | `standards/data/washers.yaml` | ISO 7089 plain washer dimensions (normal series, 200 HV) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `tolerance/data/iso2768_angular.yaml` | ISO 2768-1 general tolerances (angular dimensions) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `tolerance/data/iso2768_linear.yaml` | ISO 2768-1 general tolerances (linear dimensions) | 0.1.0 | CC0-1.0 | 2026-07-08 |
