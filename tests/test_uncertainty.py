@@ -320,3 +320,24 @@ def test_a_distribution_mapping_whose_values_are_not_distributions_is_refused():
         samples=64,
     )
     assert result.mean == pytest.approx(2.0, abs=0.1)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+@pytest.mark.parametrize(
+    ("build", "field"),
+    [
+        (lambda v: Normal(mean=v, std=1.0), "mean"),
+        (lambda v: Normal(mean=30.0, std=v), "std"),
+        (lambda v: Uniform(low=v, high=40.0), "low"),
+        (lambda v: Uniform(low=20.0, high=v), "high"),
+        (lambda v: Symmetric(nominal=v, half_width=3.0), "nominal"),
+        (lambda v: Symmetric(nominal=30.0, half_width=v), "half_width"),
+        (lambda v: Symmetric(nominal=30.0, half_width=3.0, sigma_level=v), "sigma_level"),
+    ],
+)
+def test_a_distribution_with_a_non_finite_parameter_is_refused(build, field, bad) -> None:
+    """An infinite sigma_level read a ±3 half-width as zero scatter, and `sample_margin`
+    reported a 0% shortfall; the rest were refused only after sampling, as "the response
+    returned a non-finite value", naming no input."""
+    with pytest.raises(ValidationError, match=f"{field} must be a finite number"):
+        build(bad)

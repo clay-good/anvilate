@@ -47,6 +47,20 @@ def _uncertainty_refusal(message: str, *, subject: str, source: str) -> _Uncerta
     )
 
 
+def _require_finite(model: RevalidatedModel, *names: str) -> None:
+    # A declared distribution is an input, so its parameters are numbers. `sample_margin`
+    # refused most non-finite ones only after sampling, blaming "the response"; an infinite
+    # sigma_level got through it entirely, as zero scatter and a 0% shortfall.
+    for name in names:
+        value = getattr(model, name)
+        if not isfinite(value):
+            raise _uncertainty_refusal(
+                f"{name} must be a finite number; got {value}",
+                subject=name,
+                source=_SCATTER_SOURCE,
+            )
+
+
 __all__ = [
     "Normal",
     "Uniform",
@@ -74,6 +88,7 @@ class Normal(RevalidatedModel):
 
     @model_validator(mode="after")
     def _non_negative_std(self) -> Normal:
+        _require_finite(self, "mean", "std")
         if self.std < 0:
             raise _uncertainty_refusal(
                 f"std must be non-negative; got {self.std}", subject="std", source=_SCATTER_SOURCE
@@ -94,6 +109,7 @@ class Uniform(RevalidatedModel):
 
     @model_validator(mode="after")
     def _ordered(self) -> Uniform:
+        _require_finite(self, "low", "high")
         if self.low > self.high:
             raise _uncertainty_refusal(
                 f"low ({self.low}) must not exceed high ({self.high})",
@@ -133,6 +149,7 @@ class Symmetric(RevalidatedModel):
 
     @model_validator(mode="after")
     def _well_formed(self) -> Symmetric:
+        _require_finite(self, "nominal", "half_width", "sigma_level")
         if self.half_width < 0:
             raise _uncertainty_refusal(
                 f"half_width must be non-negative; got {self.half_width}",
