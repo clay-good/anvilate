@@ -13,7 +13,7 @@ from __future__ import annotations
 from functools import cache
 from typing import Annotated
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, model_validator
 
 from .._models import Named, RevalidatedModel, _near_identifiers, parse_yaml
 from ..refusal import RefusalError, Remedy
@@ -90,6 +90,34 @@ class Material(_Base):
     endurance_limit: Strength | None = None
 
     _OPTIONAL = ("endurance_limit",)
+
+    @model_validator(mode="after")
+    def _physical(self) -> Material:
+        # Every bundled record already satisfies these; an extension file did not have to,
+        # and a negative yield strength or a Poisson ratio of 0.7 loaded without a word.
+        for name in ("elastic_modulus", "density", "yield_strength", "ultimate_strength"):
+            prop = getattr(self, name)
+            if not prop.quantity.magnitude > 0:
+                raise _materials_refusal(
+                    f"material {self.id!r}: {name} must be positive; got {prop.quantity}",
+                    subject=name,
+                    source=f"the published value cited to {prop.citation.source}",
+                )
+        if self.endurance_limit is not None and not self.endurance_limit.quantity.magnitude > 0:
+            raise _materials_refusal(
+                f"material {self.id!r}: endurance_limit must be positive; got "
+                f"{self.endurance_limit.quantity}",
+                subject="endurance_limit",
+                source=f"the published value cited to {self.endurance_limit.citation.source}",
+            )
+        if not -1 < self.poisson_ratio.value <= 0.5:
+            raise _materials_refusal(
+                f"material {self.id!r}: poisson_ratio must lie in (-1, 0.5] for an isotropic "
+                f"material; got {self.poisson_ratio.value}",
+                subject="poisson_ratio",
+                source=f"the published value cited to {self.poisson_ratio.citation.source}",
+            )
+        return self
 
     def require(self, prop: str) -> QuantityProperty | ScalarProperty:
         """Return a property or raise :class:`MaterialPropertyUnavailable`.

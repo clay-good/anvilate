@@ -11,6 +11,7 @@ property's dimension at validation time.
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isfinite
 
 from pydantic import AfterValidator, ConfigDict, model_validator
 
@@ -120,11 +121,33 @@ class PropertyCitation(_Base):
         return self
 
 
+def _published_number(value: float, field: str, citation: PropertyCitation) -> None:
+    # A cited value is a number somebody published. A team's extension file accepted `.nan`
+    # and `.inf` here, and the first screen to read one failed far from the file, as the
+    # ValidationError of a model the author never wrote.
+    if not isfinite(value):
+        raise _CitationInputError(
+            f"a property {field} must be a finite number; got {value} (cited to {citation.source})",
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject=field,
+                    source="the published value the citation names",
+                ),
+            ),
+        )
+
+
 class QuantityProperty(_Base):
     """A dimensional property: a :class:`Quantity` plus its citation."""
 
     quantity: Quantity
     citation: PropertyCitation
+
+    @model_validator(mode="after")
+    def _a_number(self) -> QuantityProperty:
+        _published_number(self.quantity.magnitude, "quantity", self.citation)
+        return self
 
 
 class ScalarProperty(_Base):
@@ -132,6 +155,11 @@ class ScalarProperty(_Base):
 
     value: float
     citation: PropertyCitation
+
+    @model_validator(mode="after")
+    def _a_number(self) -> ScalarProperty:
+        _published_number(self.value, "value", self.citation)
+        return self
 
 
 def dimensioned(expected: str, name: str) -> AfterValidator:

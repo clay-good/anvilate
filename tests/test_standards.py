@@ -374,6 +374,36 @@ materials:
 """
 
 
+@pytest.mark.parametrize(
+    ("original", "replacement", "reason"),
+    [
+        ("magnitude: 300, unit: MPa", "magnitude: .nan, unit: MPa", "must be a finite number"),
+        ("magnitude: 300, unit: MPa", "magnitude: .inf, unit: MPa", "must be a finite number"),
+        ("value: 0.33", "value: .nan", "must be a finite number"),
+        ("magnitude: 300, unit: MPa", "magnitude: -300, unit: MPa", "yield_strength must be"),
+        ("magnitude: 69, unit: GPa", "magnitude: 0, unit: GPa", "elastic_modulus must be"),
+        ("value: 0.33", "value: 0.7", "poisson_ratio must lie in (-1, 0.5]"),
+        (
+            "    ultimate_strength:",
+            "    endurance_limit:\n      quantity: {magnitude: -90, unit: MPa}\n"
+            '      citation: {source: "internal cert", condition: "R = -1"}\n'
+            "    ultimate_strength:",
+            "endurance_limit must be positive",
+        ),
+    ],
+)
+def test_an_extension_record_that_is_not_a_physical_material_is_refused(
+    db: MaterialsDatabase, original: str, replacement: str, reason: str
+) -> None:
+    """A team's file accepted `.nan`, `.inf`, a negative yield strength and a Poisson ratio
+    of 0.7 without a word; the first screen to read an infinite strength failed far from
+    the file, as the ValidationError of a model its author never wrote."""
+    text = _EXTENSION_YAML.replace(original, replacement, 1)
+    assert text != _EXTENSION_YAML
+    with pytest.raises(ValueError, match=re.escape(reason)):
+        db.extended(text)
+
+
 def test_team_local_extension_record_referenced_like_bundled(db: MaterialsDatabase) -> None:
     # Scenario: company part library — a team adds a local record, referenced
     # like any bundled material, but marked as a team-local (non-bundled) record.
