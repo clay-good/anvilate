@@ -151,7 +151,9 @@ def default_weld_fatigue_records() -> WeldFatigueTable:
             ),
             provenance=DatasetProvenance(
                 dataset=dataset["source"],
-                version=dataset["version"],
+                # The compilation's own release, not this pack's version: the curve is
+                # traceable to release 2 of the dataset whatever this file is numbered.
+                version=dataset["release"],
                 license=dataset["license"],
                 retrieved=dataset["retrieved"],
                 doi=dataset["doi"],

@@ -42,6 +42,9 @@ from .._models import Provenance, RevalidatedModel, cited
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 
+if TYPE_CHECKING:
+    from ..scorecard import ScorecardEntry
+
 _DATASET_SOURCE = "the fatigue dataset's citation: publisher, version, license, and DOI or URL"
 _SPECIMEN_SOURCE = "the fatigue test report's specimen and test-condition description"
 _CURVE_SOURCE = "the dataset's published S-N curve fit (slopes, reference points, cutoff)"
@@ -509,6 +512,137 @@ class FatigueRecord(RevalidatedModel):
         if not self.curve.meets_survival(required_survival):
             return None
         return self.curve.stress_range_at(cycles)
+
+    def check(
+        self,
+        *,
+        stress_range: Quantity,
+        cycles: float,
+        required_survival: CurveSurvival,
+        required_safety_factor: float,
+    ) -> ScorecardEntry:
+        """A scorecard entry for ``stress_range`` applied for ``cycles`` against this record.
+
+        The safety factor is on stress range: the curve's allowable at the target life over
+        the applied range. The entry cites the dataset and says the curve is test-data
+        backed and through how many specimens, so a reader can tell it from a value
+        estimated by a method. Where the record declines, it is ``NOT_EVALUATED`` and says
+        which way: a curve less conservative than ``required_survival`` (a mean curve asked
+        a design question), or a life outside the cycles the specimens cover.
+        """
+        from ..derivation import Derivation, SymbolValue
+        from ..scorecard import Need, ScorecardEntry, ValueSource
+
+        if not stress_range.has_dimension("[pressure]"):
+            raise _fatigue_record_refusal(
+                f"stress_range must be a stress; got {stress_range}",
+                subject="stress_range",
+                source="the applied nominal stress range at the detail",
+            )
+        applied = stress_range.to("MPa").magnitude
+        if not isfinite(applied) or applied <= 0:
+            raise _fatigue_record_refusal(
+                f"stress_range must be positive and finite; got {stress_range}",
+                subject="stress_range",
+                source="the applied nominal stress range at the detail",
+            )
+        if not isfinite(cycles) or cycles <= 0:
+            raise _fatigue_record_refusal(
+                f"cycles must be positive and finite; got {cycles}",
+                subject="cycles",
+                source="the design life in cycles",
+            )
+        allowable = self.allowable_stress_range(cycles=cycles, required_survival=required_survival)
+        unavailable = None
+        needs: tuple[Need, ...] = ()
+        if not self.curve.meets_survival(required_survival):
+            unavailable = (
+                f"the curve is a {self.curve.survival.value} curve and the check requires "
+                f"{required_survival.value}"
+            )
+            if self.curve.survival is CurveSurvival.MEAN:
+                unavailable += "; a mean curve answers no design question"
+            needs = (
+                Need(
+                    declaration="fatigue_record",
+                    takes=(
+                        f"a fatigue record for the detail drawn at {required_survival.value} "
+                        "or more conservatively"
+                    ),
+                    sources=(ValueSource.DATABASE, ValueSource.STANDARD),
+                ),
+            )
+        elif allowable is None:
+            unavailable = (
+                f"{cycles:g} cycles is outside the {self.curve.min_cycles:g} to "
+                f"{self.curve.max_cycles:g} cycles the specimens cover, and the curve is not "
+                "extrapolated"
+            )
+            needs = (
+                Need(
+                    declaration="fatigue_record",
+                    takes=f"a fatigue record for the detail whose tests cover {cycles:g} cycles",
+                    sources=(ValueSource.DATABASE, ValueSource.MEASUREMENT),
+                ),
+            )
+        entry = ScorecardEntry.from_safety_factor(
+            f"{self.name} fatigue at {cycles:g} cycles",
+            computed=None if allowable is None else allowable.to("MPa").magnitude / applied,
+            required=required_safety_factor,
+            unavailable=unavailable,
+            needs=needs,
+        )
+        provenance = self.provenance
+        count = provenance.specimen_count
+        conditions = [self.specimen.material, self.specimen.environment]
+        if self.specimen.stress_ratio is not None:
+            conditions.append(f"R = {self.specimen.stress_ratio:g}")
+        backed = f"test-data-backed {self.curve.survival.value} curve"
+        if count:
+            backed += f" through {count} specimens"
+        backed += f" ({', '.join(conditions)})"
+        where = provenance.doi and f"doi:{provenance.doi}" or provenance.url
+        reference = f"{provenance.dataset}, version {provenance.version}, {where}" + (
+            f"; first reported in {provenance.publication}" if provenance.publication else ""
+        )
+        update: dict[str, object] = {"detail": f"{entry.detail}; {backed}", "reference": reference}
+        if allowable is not None:
+            # The branch the target life falls on, written out: the allowable is the curve
+            # read at N, and the factor is that allowable over the applied range.
+            segment = next(seg for seg in self.curve.segments if cycles <= seg.max_cycles)
+            update["derivation"] = Derivation(
+                symbolic="n = Δσ_ref · (N_ref / N) ^ (1 / m) / Δσ",
+                inputs=(
+                    SymbolValue(
+                        symbol="Δσ_ref",
+                        description="the curve's stress range at its reference life",
+                        value=segment.reference_stress_range,
+                    ),
+                    SymbolValue(
+                        symbol="N_ref",
+                        description="the curve's reference life, in cycles",
+                        value=segment.reference_cycles,
+                    ),
+                    SymbolValue(symbol="N", description="the design life, in cycles", value=cycles),
+                    SymbolValue(
+                        symbol="m",
+                        description="the S-N exponent of the branch",
+                        value=segment.slope,
+                    ),
+                    SymbolValue(
+                        symbol="Δσ",
+                        description="the applied nominal stress range",
+                        value=stress_range,
+                    ),
+                ),
+                result=SymbolValue(
+                    symbol="n",
+                    description="safety factor on stress range",
+                    value=allowable.to("MPa").magnitude / applied,
+                ),
+                citation=reference,
+            )
+        return entry.model_copy(update=update)
 
 
 # EN 1993-1-9's standardized nominal-stress curve, as a record's worth of curve. The

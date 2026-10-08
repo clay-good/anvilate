@@ -19,7 +19,8 @@
 dataset:
   name: anvilate-weld-fatigue
   version: "0.1.0"
-  source: "A Dataset of Fatigue Properties for Welded Joints (Deng et al., figshare, 2025, v2)"
+  source: "A Dataset of Fatigue Properties for Welded Joints (Deng et al., figshare, 2025)"
+  release: "2"
   license: "CC-BY-4.0 (credit the dataset's authors and each campaign's original publication)"
   retrieved: "2026-10-08"
   doi: "10.6084/m9.figshare.29254265.v2"

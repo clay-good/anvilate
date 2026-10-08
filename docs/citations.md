@@ -224,6 +224,13 @@ over the cycle range the specimens cover and no further. It answers a mean quest
 declines a design one. Each record credits the dataset and the paper the campaign was first
 reported in, which is what its licence asks.
 
+`record.check(stress_range=..., cycles=..., required_survival=..., required_safety_factor=...)`
+turns a record into a scorecard entry. The safety factor is on stress range, the entry's
+`reference` cites the dataset release and the paper, and its detail says the curve is
+test-data-backed and through how many specimens, so it reads differently from a value a method
+estimated. A design-survival requirement on a mean curve, or a life outside the tested range,
+is `not_evaluated` with the reason, never an extrapolation.
+
 ## Every bundled table says what it may be redistributed under
 
 A table bundled in the package travels with it, so whatever the data is licensed under, a
@@ -274,7 +281,7 @@ build rather than going stale in a document.
 | `standards/data/metric_thread.yaml` | ISO 261 / ISO 724 metric threads | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/nema_frames.yaml` | NEMA ICS 16 stepper frame mounting dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/pipe_schedules.yaml` | ASME B36.10M welded and seamless wrought steel pipe dimensions | 0.1.0 | CC0-1.0 | 2026-08-17 |
-| `standards/data/weld_fatigue.yaml` | A Dataset of Fatigue Properties for Welded Joints (Deng et al., figshare, 2025, v2) | 0.1.0 | CC-BY-4.0 | 2026-10-08 |
+| `standards/data/weld_fatigue.yaml` | A Dataset of Fatigue Properties for Welded Joints (Deng et al., figshare, 2025) | 0.1.0 | CC-BY-4.0 | 2026-10-08 |
 | `standards/data/washers.yaml` | ISO 7089 plain washer dimensions (normal series, 200 HV) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `tolerance/data/iso2768_angular.yaml` | ISO 2768-1 general tolerances (angular dimensions) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `tolerance/data/iso2768_linear.yaml` | ISO 2768-1 general tolerances (linear dimensions) | 0.1.0 | CC0-1.0 | 2026-07-08 |

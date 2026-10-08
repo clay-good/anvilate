@@ -88,3 +88,78 @@ def test_the_fit_needs_more_than_one_stress_level():
     """Every point at one stress range has no slope to fit."""
     with pytest.raises(ValueError, match="two or more stress ranges"):
         mean_curve_from_failures(((100.0, 1e5), (100.0, 2e5)))
+
+
+def _check(stress: float, cycles: float, survival=CurveSurvival.MEAN):  # type: ignore[no-untyped-def]
+    from anvilate.units import Quantity
+
+    record = default_weld_fatigue_records()["SM50B-CRUCIFORM-R0"]
+    return record.check(
+        stress_range=Quantity(magnitude=stress, unit="MPa"),
+        cycles=cycles,
+        required_survival=survival,
+        required_safety_factor=1.0,
+    )
+
+
+def test_a_check_against_a_record_cites_the_dataset_and_says_it_is_test_backed():
+    """standards-data: a check consuming ingested data cites the dataset and distinguishes a
+    test-data-backed curve from an estimated one."""
+    from anvilate.scorecard import CheckStatus
+
+    record = default_weld_fatigue_records()["SM50B-CRUCIFORM-R0"]
+    allowable = record.allowable_stress_range(cycles=2e6, required_survival=CurveSurvival.MEAN)
+    passing = _check(80.0, 2e6)
+    assert passing.status is CheckStatus.PASS
+    assert passing.safety_factor == pytest.approx(allowable.to("MPa").magnitude / 80.0)
+    assert "test-data-backed mean curve through 38 specimens (SM50B steel, air, R = 0)" in (
+        passing.detail
+    )
+    assert passing.reference == (
+        "A Dataset of Fatigue Properties for Welded Joints (Deng et al., figshare, 2025), "
+        "version 2, doi:10.6084/m9.figshare.29254265.v2; first reported in "
+        + record.provenance.publication
+    )
+    assert "estimated" not in passing.detail
+    # The worked line reproduces the factor from its own symbols.
+    values = {item.symbol: item.value for item in passing.derivation.inputs}
+    reread = (
+        values["Δσ_ref"].to("MPa").magnitude
+        * (values["N_ref"] / values["N"]) ** (1 / values["m"])
+        / values["Δσ"].to("MPa").magnitude
+    )
+    assert passing.derivation.result.value == pytest.approx(reread, rel=1e-12)
+    assert passing.derivation.result.value == pytest.approx(passing.safety_factor, rel=1e-12)
+    assert _check(150.0, 2e6).status is CheckStatus.FAIL
+
+
+def test_a_check_the_record_cannot_answer_says_which_way_it_declined():
+    from anvilate.scorecard import CheckStatus
+
+    design = _check(80.0, 2e6, CurveSurvival.P97_7)
+    assert design.status is CheckStatus.NOT_EVALUATED
+    assert "requires 97.7% survival" in design.detail and "mean curve answers no design" in (
+        design.detail
+    )
+    beyond = _check(80.0, 1e9)
+    assert beyond.status is CheckStatus.NOT_EVALUATED
+    assert "outside the 44600 to 3.79e+07 cycles the specimens cover" in beyond.detail
+    # Each decline names what to declare next, for the needs report to rank.
+    for entry, wanted in ((design, "97.7% survival"), (beyond, "cover 1e+09 cycles")):
+        (need,) = entry.needs
+        assert need.declaration == "fatigue_record" and wanted in need.takes
+    assert _check(80.0, 2e6).needs == ()
+
+
+@pytest.mark.parametrize(
+    ("stress", "cycles", "reason"),
+    [
+        (float("nan"), 2e6, "stress_range must be positive and finite"),
+        (-80.0, 2e6, "stress_range must be positive and finite"),
+        (80.0, float("nan"), "cycles must be positive and finite"),
+        (80.0, 0.0, "cycles must be positive and finite"),
+    ],
+)
+def test_a_check_refuses_an_applied_range_or_life_that_is_not_one(stress, cycles, reason):
+    with pytest.raises(ValueError, match=reason):
+        _check(stress, cycles)
