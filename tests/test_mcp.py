@@ -551,6 +551,49 @@ def test_compile_spec_returns_the_remedies_the_cli_refusal_reads(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("field", "written", "remedy"),
+    [
+        # Certain: the written name is shorthand for exactly one record.
+        ("material", "ASTM A36", "write `material.ref` as `ASTM-A36`"),
+        ("component", "ISO 4762 M8", "write `interfaces.0.ref` as `ISO4762-M8`"),
+        ("component", "NEMA 23", "write `interfaces.0.ref` as `NEMA23`"),
+        # Not certain, so not an instruction. Edit distance ranked ISO4762-M12 first for an
+        # M8 bolt with its property class, and ISO2338-20 for a 6 mm dowel 20 mm long; `M8`
+        # is shorthand for a bolt, a nut and a cap screw; `7075` names no temper.
+        ("component", "ISO4762-M8-12.9", None),
+        ("component", "ISO2338-6x20", None),
+        ("component", "M8", None),
+        ("component", "16005", None),
+        ("material", "7075", None),
+    ],
+)
+def test_a_remedy_names_a_record_only_when_the_name_is_certainly_that_record(
+    field, written, remedy
+):
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).resolve().parent.parent
+    document = yaml.safe_load((root / "examples" / "base_plate.spec.yaml").read_text())
+    if field == "material":
+        document["material"] = {"ref": written}
+    else:
+        document["interfaces"] = [{"tag": "mount", "type": "standard_component", "ref": written}]
+    content = _call("compile_spec", {"document": document})["result"]["structuredContent"]
+    assert content["errors"][0].startswith(
+        ("material.ref: unknown material", "interfaces.0.ref: unknown component")
+    ), content
+    remedies = content.get("remedies", [])
+    if remedy is None:
+        assert not any("as `" in each for each in remedies), remedies
+    else:
+        assert remedy in remedies
+    if written == "ISO4762-M8-12.9":
+        assert "did you mean ISO4762-M8," in content["errors"][0]
+
+
+@pytest.mark.parametrize(
     ("change", "error", "remedy"),
     [
         (

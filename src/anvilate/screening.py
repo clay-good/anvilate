@@ -66,6 +66,7 @@ from ._models import (
     FrozenMap,
     ItemCollection,
     RevalidatedModel,
+    _is_shorthand_for,
     _names_a_variant_of,
     _near_identifiers,
     _near_materials,
@@ -1561,6 +1562,17 @@ def _near_misses(ref: str, known: list[str], near=_near_identifiers) -> str:
     return f"nothing among the {len(known)} known identifiers is close to it."
 
 
+def _sole_shorthand(written: str, offered: list[str], known: list[str]) -> str | None:
+    """The one record ``written`` is shorthand for, if it is offered, else None.
+
+    A remedy is an instruction an agent will follow, so it names a record only when the
+    match is certain: an edit-distance neighbour can be another size, and `M8` is shorthand
+    for a bolt, a nut and a cap screw alike.
+    """
+    matches = [candidate for candidate in known if _is_shorthand_for(written, candidate)]
+    return matches[0] if len(matches) == 1 and matches[0] in offered else None
+
+
 def _element_material(spec: DesignSpec) -> str | None:
     """The material an element's own records state, for one that carries them, or None.
 
@@ -1611,8 +1623,8 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
                 f"unknown material {ref!r} — {_near_misses(ref, known, _near_materials)}",
             )
         )
-        if near := _near_materials(ref, known):
-            remedies.append(f"write `material.ref` as `{near[0]}`")
+        if meant := _sole_shorthand(ref, _near_materials(ref, known), known):
+            remedies.append(f"write `material.ref` as `{meant}`")
     for index, interface in enumerate(spec.interfaces):
         if interface.type == "standard_component" and not resolver.has_component(interface.ref):
             known = resolver.known_components()
@@ -1622,8 +1634,10 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
                     f"unknown component {interface.ref!r} — {_near_misses(interface.ref, known)}",
                 )
             )
-            if near := _near_identifiers(interface.ref, known):
-                remedies.append(f"write `interfaces.{index}.ref` as `{near[0]}`")
+            if meant := _sole_shorthand(
+                interface.ref, _near_identifiers(interface.ref, known), known
+            ):
+                remedies.append(f"write `interfaces.{index}.ref` as `{meant}`")
     if spec.element_type is None:
         return problems, remedies
     registry = element_registry()
@@ -1672,8 +1686,8 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
                 f"unknown material {value!r} — {_near_misses(value, known, _near_materials)}",
             )
         )
-        if near := _near_materials(value, known):
-            remedies.append(f"write `element_params.{name}` as `{near[0]}`")
+        if meant := _sole_shorthand(value, _near_materials(value, known), known):
+            remedies.append(f"write `element_params.{name}` as `{meant}`")
     return problems, remedies
 
 

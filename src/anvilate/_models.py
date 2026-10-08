@@ -858,6 +858,25 @@ def _identifier_segments(text: str) -> list[str]:
     return [part for part in re.split(r"[^0-9a-z]+", text.lower()) if part]
 
 
+def _is_shorthand_for(written: str, candidate: str) -> bool:
+    """Whether ``candidate``'s segments contain all of ``written``'s as one run.
+
+    `A36` is shorthand for `ASTM-A36` and `304` for `SS-304`: the record the person meant,
+    with its prefix left off. Only this is safe to turn into a remedy. An edit-distance
+    match is not: `ISO4762-M8-12.9` is closest by spelling to `ISO4762-M12`, a different
+    bolt, and `ISO2338-6x20` to `ISO2338-20`, a dowel of the wrong diameter.
+    """
+    wanted = "".join(_identifier_segments(written))
+    parts = _identifier_segments(candidate)
+    # Joined, so `ISO 4762 M8` and `NEMA 23` match as written; whole segments only, so `A3`
+    # is not shorthand for `ASTM-A36`.
+    return bool(wanted) and any(
+        "".join(parts[i:j]) == wanted
+        for i in range(len(parts))
+        for j in range(i + 1, len(parts) + 1)
+    )
+
+
 def _near_identifiers(written: str, known: Iterable[str], n: int = 3) -> list[str]:
     """Up to ``n`` of ``known`` that ``written`` nearly names, the likeliest first.
 
@@ -868,18 +887,16 @@ def _near_identifiers(written: str, known: Iterable[str], n: int = 3) -> list[st
     comes first, shortest first.
     """
     known = list(known)
-    wanted = _identifier_segments(written)
-    runs = []
-    if wanted:
-        for candidate in known:
-            parts = _identifier_segments(candidate)
-            if any(
-                parts[i : i + len(wanted)] == wanted for i in range(len(parts) - len(wanted) + 1)
-            ):
-                runs.append(candidate)
+    runs = [candidate for candidate in known if _is_shorthand_for(written, candidate)]
     runs.sort(key=lambda candidate: (len(candidate), candidate))
-    close = [c for c in difflib.get_close_matches(written, known, n=n) if c not in runs]
-    return (runs + close)[:n]
+    # Then a record the written name contains whole: `ISO4762-M8-12.9` names ISO4762-M8 with
+    # a property class added, and edit distance ranked ISO4762-M12 ahead of it.
+    within = sorted(
+        (c for c in known if c not in runs and _is_shorthand_for(c, written)),
+        key=lambda candidate: (-len(candidate), candidate),
+    )
+    close = [c for c in difflib.get_close_matches(written, known, n=n) if c not in runs + within]
+    return (runs + within + close)[:n]
 
 
 def _names_a_variant_of(written: str, candidate: str) -> bool:
