@@ -16,7 +16,12 @@
       database: 2024-T3 sheet, 2024-T351 plate, 7075-T6 sheet and 7075-T651 plate, each at
       A- and B-basis, from Tables 3.2.3.0(b1) and 3.7.6.0(b1). A screen on one states the basis,
       table and superseded note on every entry; the provenance trail carries the note too
-- [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step
+- [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step —
+      BLOCKED on the format, not the fetch: `anvilate.fetch` already does consented,
+      digest-pinned downloads, but MatNavi's fatigue sheets sit behind a per-user
+      registration, and no sample of their export is available without one. An importer
+      written without a real file to parse would be a parser of a guessed format. Ship it
+      when a registered user supplies one export, with its terms of use, to pin against
 - [x] 2.3 CC-licensed fatigue dataset pack(s) with DOI provenance and license records —
       shipped 2026-10-08 as `standards/data/weld_fatigue.yaml` + `standards.weld_fatigue`:
       two campaigns from "A Dataset of Fatigue Properties for Welded Joints" (Deng et al.,
@@ -30,7 +35,11 @@
       E739 least squares (log N on log Δσ) over the tested range only, cites the dataset DOI
       and the campaign's original paper (`DatasetProvenance.publication`), and declines a
       design-curve request; the fit is held to `statistics.linear_regression` and to numpy's
-      polyfit values (tests/test_weld_fatigue.py). The FABEST candidate below stays blocked
+      polyfit values (tests/test_weld_fatigue.py). Consumer (b4f1fcc4):
+      `FatigueRecord.check(...)` cites the dataset and says "test-data-backed ... curve
+      through N specimens". The spec's "replaces an estimate" scenario has no estimate to
+      replace yet: no material-keyed fatigue screen with an FKM-estimated curve exists, so
+      that half waits on one. The FABEST candidate below stays blocked
       on its missing test temperature and environment. Earlier note: the FABEST database
       (42CrMo4+QT, CC BY
       4.0, DOI 10.5281/zenodo.20967342, md5 9e116aa634fe72c166e6790469788d37) carries a
