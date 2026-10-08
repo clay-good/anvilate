@@ -320,8 +320,14 @@ profile to the published tabulations' own area and second moments: IPE to 0.1%, 
 `section` source with the dataset's citation. A name the table does not hold is refused with
 the profiles it nearly named, and any other section is declared by its properties.
 
-AISC W-shapes use the same named-section path without redistributing AISC's workbook. The
-caller first records the user's consent and retrieval date:
+AISC W-shapes use the same named-section path without redistributing AISC's workbook. You
+consent to the download once, from the shell:
+
+```bash
+anvilate fetch aisc-shapes --consent
+```
+
+or from Python, stating the retrieval date yourself:
 
 ```python
 from anvilate.standards import fetch_aisc_profile_table
@@ -329,7 +335,7 @@ from anvilate.standards import fetch_aisc_profile_table
 fetch_aisc_profile_table(retrieved="2026-09-27", consent=True)
 ```
 
-That call downloads the publisher's AISC Shapes Database v16.0 workbook, verifies its
+Either one downloads the publisher's AISC Shapes Database v16.0 workbook, verifies its
 pinned SHA-256 digest, and stores the workbook and provenance sidecar in the local Anvilate
 data cache. A spec can then write `section: W12x26`; later runs resolve it offline from the
 verified cache. Anvilate reads the depth, flange width, web thickness, flange thickness and

@@ -1,8 +1,8 @@
 # `anvilate` on the command line
 
 All four commands `headless-automation` names are backed; `verify` from
-`evidence-attestation`, mating-STEP inspection from `input-ingestion`, and the environment
-self-check `doctor` are backed too. Geometry is pattern-limited: `base_plate`,
+`evidence-attestation`, mating-STEP inspection from `input-ingestion`, the environment
+self-check `doctor`, and consented dataset download `fetch` are backed too. Geometry is pattern-limited: `base_plate`,
 `cover_plate`, `transmission_shaft` and `timber_beam` build today, and an element whose audited pattern
 has not shipped exits 4 naming that gap.
 
@@ -15,6 +15,7 @@ has not shipped exits 4 naming that gap.
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
+| `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -322,8 +323,8 @@ stderr at all.
 one object per spec with its path, its name and its whole scorecard. A list whatever the
 count, because a shape that changes with the number of arguments is a shape every caller has
 to branch on, and the branch is wrong the first time a directory happens to hold exactly one
-spec. Every JSON-producing command also carries `schema` and `schema_version`; all seven
-result shapes are published at
+spec. Every JSON-producing command also carries `schema` and `schema_version`; every
+result shape is published at
 [`cli-output.schema.json`](api/schemas/cli-output.schema.json).
 
 ### Check the environment before debugging a design
@@ -340,6 +341,25 @@ runs no language model of its own: your agent is the model. Database
 integrity is proved by loading the bundled resolver and counting its material and component
 designations. `--format json` emits the same report
 under CLI output schema 1.8.0.
+
+### Download a dataset Anvilate may read but not ship
+
+Some reference data is free to download and not free to redistribute, such as AISC's
+shapes workbook. Anvilate never bundles it and never downloads it on its own. `anvilate
+fetch` is where you agree to download it:
+
+```bash
+anvilate fetch                          # list each dataset, its licence and whether it is cached
+anvilate fetch aisc-shapes              # say what would be downloaded, download nothing, exit 3
+anvilate fetch aisc-shapes --consent    # download, verify the SHA-256, cache with provenance
+```
+
+The download goes to `$ANVILATE_DATA_HOME` (default `~/.cache/anvilate/datasets`) with a
+sidecar recording the source, URL, licence and today's date. Every later read is offline
+and re-verifies the digest. A payload whose digest is not the published one is refused and
+nothing is cached (exit 1). A refusal that needs a dataset, such as `section: W12x26`
+without the AISC workbook, names this command. Agents cannot consent over MCP: the
+download is your decision, so an agent should ask you to run it.
 
 `anvilate --version` reports what is **installed**, not `anvilate.__version__`. A script
 asking a tool its version is asking what it is running, and a module constant answers what

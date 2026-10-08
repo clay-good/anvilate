@@ -66,7 +66,13 @@ _NONDETERMINISM = re.compile(
 _TASK_METADATA_NONDETERMINISM = {
     # The time-left estimate on a terminal's progress line: elapsed durations, printed to
     # stderr only when a person is watching, and never written into any output or artifact.
-    "cli.py": ("time.monotonic()",),
+    "cli.py": (
+        "time.monotonic()",
+        # `anvilate fetch` records the day a dataset was downloaded in the cache's
+        # provenance sidecar. It is written once, at the download, and every later read
+        # (and every bundle citing it) uses that stored date, so no output varies by rerun.
+        "date.today()",
+    ),
     "_mcp_tasks.py": (
         "datetime.now(UTC)",
         "secrets.token_hex(32)",

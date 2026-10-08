@@ -3009,6 +3009,136 @@ def test_doctor_checks_the_mcp_server_and_opens_no_connection(monkeypatch):
     assert fea["status"] == "fail" and not fea["remedy"].startswith("Implement")
 
 
+def _fake_recipe(payload: bytes):
+    from anvilate.fetch import DatasetRecipe
+
+    return DatasetRecipe(
+        name="fake-shapes.xlsx",
+        url="https://publisher.example/fake-shapes.xlsx",
+        sha256=hashlib.sha256(payload).hexdigest(),
+        license="LicenseRef-Fake",
+        source="A fake section table",
+    )
+
+
+def test_fetch_lists_every_dataset_and_its_cache_state(tmp_path, monkeypatch):
+    from pydantic import TypeAdapter
+
+    from anvilate._cli_output import CliOutput
+
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    code, raw, err = _run("fetch", "--format", "json")
+    assert code == EXIT_OK and err == ""
+    payload = json.loads(raw)
+    TypeAdapter(CliOutput).validate_python(payload)
+    assert payload["cache"] == str(tmp_path)
+    states = {row["dataset"]: row["state"] for row in payload["datasets"]}
+    assert states == {"aisc-shapes": "not_fetched", "muse-index": "not_fetched"}
+    code, text, _ = _run("fetch")
+    assert code == EXIT_OK and "aisc-shapes: not fetched" in text and "LicenseRef-AISC" in text
+
+
+def test_fetch_without_consent_downloads_nothing_and_names_the_command(tmp_path, monkeypatch):
+    import anvilate.fetch
+
+    def no_network(url):
+        raise AssertionError(f"fetched {url} without consent")
+
+    monkeypatch.setattr(anvilate.fetch, "_https_get", no_network)
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    code, raw, err = _run("fetch", "aisc-shapes", "--format", "json")
+    assert code == EXIT_BAD_REQUEST
+    assert "cloud.aisc.org" in err and "never shipped" in err
+    assert json.loads(raw)["remedy"] == "Run `anvilate fetch aisc-shapes --consent` to agree."
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_fetch_with_consent_verifies_caches_and_is_offline_after(tmp_path, monkeypatch):
+    from pydantic import TypeAdapter
+
+    import anvilate.cli
+    import anvilate.fetch
+    from anvilate._cli_output import CliOutput
+
+    calls = []
+
+    def transport(url):
+        calls.append(url)
+        return b"section table bytes"
+
+    monkeypatch.setattr(anvilate.fetch, "_https_get", transport)
+    monkeypatch.setattr(
+        anvilate.cli, "_dataset_recipe", lambda _name: _fake_recipe(b"section table bytes")
+    )
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+
+    code, raw, err = _run("fetch", "aisc-shapes", "--consent", "--format", "json")
+    assert code == EXIT_OK and err == ""
+    payload = json.loads(raw)
+    TypeAdapter(CliOutput).validate_python(payload)
+    assert payload["fetched"] is True and calls == ["https://publisher.example/fake-shapes.xlsx"]
+    assert Path(payload["path"]).read_bytes() == b"section table bytes"
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", payload["provenance"]["retrieved"])
+    assert "not redistributable" in payload["attribution"]
+
+    code, text, _ = _run("fetch", "aisc-shapes", "--consent")
+    assert code == EXIT_OK and "already cached" in text and len(calls) == 1
+
+
+def test_fetch_refuses_a_payload_that_is_not_the_published_one(tmp_path, monkeypatch):
+    import anvilate.cli
+    import anvilate.fetch
+
+    monkeypatch.setattr(anvilate.fetch, "_https_get", lambda _url: b"a different file")
+    monkeypatch.setattr(anvilate.cli, "_dataset_recipe", lambda _name: _fake_recipe(b"expected"))
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    code, _raw, err = _run("fetch", "aisc-shapes", "--consent")
+    assert code == EXIT_FAILED and "anvilate fetch: aisc-shapes:" in err
+    assert list(tmp_path.glob("fake-shapes*")) == []
+
+
+def test_every_dataset_recipe_in_the_package_can_be_fetched_from_the_shell():
+    """A recipe with no `anvilate fetch` name is data a user can only consent to in Python."""
+    import ast
+
+    from anvilate.cli import _DATASETS, _dataset_recipe
+    from conftest import parsed_source
+
+    package = Path(__file__).resolve().parents[1] / "src" / "anvilate"
+    declared = set()
+    for path in package.rglob("*.py"):
+        module = "anvilate." + ".".join(path.relative_to(package).with_suffix("").parts)
+        for node in parsed_source(path).body:
+            if (
+                isinstance(node, ast.Assign)
+                and isinstance(node.value, ast.Call)
+                and getattr(node.value.func, "id", None) == "DatasetRecipe"
+            ):
+                declared |= {(module, target.id) for target in node.targets}
+    assert len(declared) >= 2
+    assert declared == set(_DATASETS.values())
+    for name in _DATASETS:
+        assert _dataset_recipe(name).sha256
+
+
+def test_an_unfetched_aisc_shape_names_a_command_the_user_can_run(tmp_path, monkeypatch):
+    import anvilate.fetch
+    from anvilate.standards.profiles import AiscProfileDataRequired, resolve_profile
+
+    def no_network(url):
+        raise AssertionError(f"the test reached the network for {url}")
+
+    monkeypatch.setattr(anvilate.fetch, "_https_get", no_network)
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    with pytest.raises(AiscProfileDataRequired) as refused:
+        resolve_profile("W12x26")
+    command = re.search(r"`(anvilate fetch [^`]+)`", str(refused.value)).group(1)
+    assert command == "anvilate fetch aisc-shapes --consent"
+    # The consent is the user's to give, so the test parses the command and withholds it.
+    code, _out, err = _run(*command.split()[1:-1])
+    assert code == EXIT_BAD_REQUEST and "aisc-shapes is not cached" in err
+
+
 @pytest.mark.parametrize("command", ["build", "check", "diff", "verify", "export", "interfaces"])
 def test_every_backed_command_explains_its_own_exit_code(command):
     """The program help defers to these, so they have to say something."""
@@ -3424,7 +3554,7 @@ def test_the_module_says_how_many_of_its_commands_are_backed():
         if isinstance(action, argparse._SubParsersAction)
     )
     backed = sorted(set(commands) - set(cli._UNBUILT))
-    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
+    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
 
     claimed = re.search(r"\*\*(\w+) of the (\w+) are backed today\*\*", cli.__doc__)
     assert claimed is not None, "the module no longer says how many commands are backed"

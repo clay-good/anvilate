@@ -167,7 +167,7 @@ class UnknownProfileError(KeyError):
     ) -> None:
         self.designation = designation
         self.suggestions = suggestions
-        hint = f"; did you mean {', '.join(suggestions)}?" if suggestions else ""
+        hint = f"; did you mean {', '.join(suggestions)}?" if suggestions else "."
         super().__init__(
             detail
             or (
@@ -426,7 +426,8 @@ def resolve_profile(designation: str, *, cache_dir: str | Path | None = None) ->
     if table is None:
         raise AiscProfileDataRequired(
             f"AISC W-shape {designation!r} needs the non-redistributable AISC Shapes "
-            "Database v16.0. Fetch it once with `fetch_aisc_profile_table(retrieved=..., "
-            "consent=True)`, or declare the section properties from a local source."
+            "Database v16.0. Fetch it once with `anvilate fetch aisc-shapes --consent` (in "
+            "Python, `fetch_aisc_profile_table(retrieved=..., consent=True)`), or declare the "
+            "section properties from a local source."
         )
     return table.get(designation)

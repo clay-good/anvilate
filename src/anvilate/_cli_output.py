@@ -16,6 +16,7 @@ from ._models import FrozenMap, Named, RevalidatedModel
 from .attestation import SignatureState
 from .bundle import BundleDocument
 from .failure_modes import DiscoveryStage
+from .fetch import FetchProvenance
 from .geometry import (
     ConfirmedCylindricalMate,
     ConfirmedPlanarContact,
@@ -33,10 +34,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.54.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.55.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.54.0"]
-SchemaVersion = Literal["1.54.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.55.0"]
+SchemaVersion = Literal["1.55.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -347,6 +348,39 @@ class DoctorOutput(_WireModel):
     checks: tuple[DoctorCheck, ...]
 
 
+class FetchDataset(_WireModel):
+    """One dataset `anvilate fetch` can download, and the state of its local cache."""
+
+    dataset: Named
+    state: Literal["cached", "not_fetched", "unreadable"]
+    retrieved: str | None
+    problem: str | None
+    source: Named
+    license: Named
+    url: Named
+    sha256: Named
+    redistributable: bool
+
+
+class FetchListingOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["fetch"]
+    cache: Named
+    datasets: tuple[FetchDataset, ...]
+
+
+class FetchedOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["fetch"]
+    dataset: Named
+    fetched: bool
+    path: Named
+    attribution: Named
+    provenance: FetchProvenance
+
+
 class InterfacesOutput(_WireModel):
     schema_: SchemaId = Field(alias="schema")
     schema_version: SchemaVersion
@@ -377,6 +411,8 @@ CliOutput = (
     | ErrorOutput
     | CancelledOutput
     | DoctorOutput
+    | FetchListingOutput
+    | FetchedOutput
     | InterfacesOutput
 )
 

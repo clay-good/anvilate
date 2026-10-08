@@ -6,8 +6,9 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Six of the six are backed today**; a seventh command, ``verify``, comes from the
-attestation capability. ``doctor`` reports which optional runtimes are present.
+**Seven of the seven are backed today**; an eighth command, ``verify``, comes from the
+attestation capability. ``doctor`` reports which optional runtimes are present, and
+``fetch`` is where a user consents to downloading a dataset Anvilate may not ship.
 ``build`` now produces STEP for audited ``base_plate``, ``cover_plate``, and
 ``transmission_shaft`` patterns. Other element types are refused by name rather than sent
 through an unreviewed generic generator.
@@ -247,6 +248,7 @@ _COMMAND_EXAMPLES = {
     "diff": "anvilate diff before.yaml after.yaml --format json",
     "build": "anvilate build part.yaml --output part.step",
     "doctor": "anvilate doctor --format json",
+    "fetch": "anvilate fetch aisc-shapes --consent",
     "interfaces": "anvilate interfaces mating.step --format json",
 }
 
@@ -562,6 +564,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render the report"
     )
 
+    fetch = commands.add_parser(
+        "fetch",
+        help="download a dataset Anvilate may read but not ship, once, with your consent",
+        description="With no dataset, list the datasets Anvilate can fetch and whether each "
+        "is cached. With one, download it from its publisher, verify its SHA-256, and cache it "
+        "with its source, licence and today's date; every later read is offline. Nothing is "
+        "downloaded without --consent: without it the command says what it would fetch and "
+        "exits 3. Exit 0 means the dataset is cached and verified; a download or "
+        "verification failure exits 1.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['fetch']}",
+    )
+    fetch.add_argument("dataset", nargs="?", choices=sorted(_DATASETS), help="the dataset to fetch")
+    fetch.add_argument(
+        "--consent",
+        action="store_true",
+        help="you agree to download it from the publisher named in the listing",
+    )
+    fetch.add_argument(
+        "--format", choices=("text", "json"), default="text", help="how to render the result"
+    )
+
     build = commands.add_parser(
         "build",
         help="build an audited Design Spec geometry pattern as STEP or 3MF",
@@ -686,6 +709,8 @@ def run(
             code = _diff(args, out=command_out, err=command_err)
         elif args.command == "doctor":
             code = _doctor(args, out=command_out)
+        elif args.command == "fetch":
+            code = _fetch(args, out=command_out, err=command_err)
         else:
             code = _check(args, out=command_out, err=command_err)
     except (KeyboardInterrupt, _Cancelled) as stopped:
@@ -1029,6 +1054,124 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
             if check["remedy"]:
                 print(f"        fix: {check['remedy']}", file=out)
     return EXIT_OK if status == "pass" else EXIT_FAILED
+
+
+# The datasets `anvilate fetch` names, each a recipe the library already uses. A test
+# requires every `DatasetRecipe` in the package to be listed, so a new one cannot ship with
+# no way for a user to consent to it outside Python.
+_DATASETS = {
+    "aisc-shapes": ("anvilate.standards.profiles", "AISC_SHAPES_V16"),
+    "muse-index": ("anvilate.specbench", "MUSE_CASE_INDEX"),
+}
+
+
+def _dataset_recipe(name: str):
+    from importlib import import_module
+
+    module, attribute = _DATASETS[name]
+    return getattr(import_module(module), attribute)
+
+
+def _fetch(args: argparse.Namespace, *, out, err) -> int:
+    """``fetch``: the user-facing consent the standards-data fetch-on-first-use rule asks for.
+
+    The library cannot ask a person, so :func:`anvilate.fetch.fetch_dataset` takes consent
+    as an argument. Until this command, a refusal for an unfetched AISC shape told a shell
+    or MCP user to call that function from Python. The date recorded is today's: the CLI
+    is the caller the library leaves the clock to.
+    """
+    from datetime import date
+
+    from .fetch import (
+        ConsentRequired,
+        IntegrityError,
+        attribution,
+        cache_root,
+        cached_dataset,
+        fetch_dataset,
+    )
+
+    if args.dataset is None:
+        rows = []
+        for name in sorted(_DATASETS):
+            recipe = _dataset_recipe(name)
+            try:
+                found = cached_dataset(recipe)
+            except IntegrityError as unreadable:
+                state, retrieved, problem = "unreadable", None, str(unreadable)
+            else:
+                state = "not_fetched" if found is None else "cached"
+                retrieved = None if found is None else found[1].retrieved
+                problem = None
+            rows.append(
+                {
+                    "dataset": name,
+                    "state": state,
+                    "retrieved": retrieved,
+                    "problem": problem,
+                    "source": recipe.source,
+                    "license": recipe.license,
+                    "url": recipe.url,
+                    "sha256": recipe.sha256,
+                    "redistributable": recipe.redistributable,
+                }
+            )
+        if args.format == "json":
+            document = machine_document("fetch", {"cache": str(cache_root()), "datasets": rows})
+            print(json.dumps(document, indent=2, sort_keys=True), file=out)
+        else:
+            print(f"datasets (cache: {cache_root()})", file=out)
+            for row in rows:
+                print(f"  {row['dataset']}: {row['state'].replace('_', ' ')}", file=out)
+                print(f"    {row['source']}, {row['license']}", file=out)
+                print(f"    {row['url']}", file=out)
+                if row["problem"]:
+                    print(f"    problem: {row['problem']}", file=out)
+        return EXIT_OK
+
+    recipe = _dataset_recipe(args.dataset)
+    try:
+        already = cached_dataset(recipe) is not None
+        path, provenance = fetch_dataset(
+            recipe, retrieved=date.today().isoformat(), consent=args.consent
+        )
+    except ConsentRequired:
+        shipping = "" if recipe.redistributable else "; it is kept on this machine, never shipped"
+        print(
+            f"anvilate fetch: {args.dataset} is not cached. It would be downloaded from "
+            f"{recipe.url} ({recipe.source}, {recipe.license}{shipping}). Nothing is "
+            "downloaded without your agreement",
+            file=err,
+        )
+        _state_remedies((f"run `anvilate fetch {args.dataset} --consent` to agree",))
+        return EXIT_BAD_REQUEST
+    except IntegrityError as failure:
+        print(f"anvilate fetch: {args.dataset}: {failure}", file=err)
+        return EXIT_FAILED
+    except OSError as failure:
+        print(
+            f"anvilate fetch: could not download {args.dataset} from {recipe.url} "
+            f"({failure}); nothing was cached",
+            file=err,
+        )
+        return EXIT_FAILED
+    if args.format == "json":
+        document = machine_document(
+            "fetch",
+            {
+                "dataset": args.dataset,
+                "fetched": not already,
+                "path": str(path),
+                "attribution": attribution(provenance),
+                "provenance": provenance.model_dump(mode="json"),
+            },
+        )
+        print(json.dumps(document, indent=2, sort_keys=True), file=out)
+    else:
+        verb = "already cached" if already else "fetched and verified"
+        print(f"{args.dataset}: {verb} at {path}", file=out)
+        print(f"  {attribution(provenance)}", file=out)
+    return EXIT_OK
 
 
 def _diff(args: argparse.Namespace, *, out, err) -> int:
