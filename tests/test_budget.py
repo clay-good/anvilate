@@ -620,3 +620,25 @@ def test_the_page_three_rule_figures_are_what_the_rules_produce() -> None:
         CheckStatus.FAIL,
     )
     assert "fail, pass, fail" in page
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_budget_built_in_python_refuses_a_non_finite_limit_or_term(bad: float) -> None:
+    """A Design Spec already refused these. Built directly, an infinite limit evaluated to
+    PASS and a NaN one to "fail", which is a verdict on a requirement that has no number."""
+    with pytest.raises(ValidationError, match="limit"):
+        _budget(CombinationRule.WORST_CASE, _term("a", 30.0), limit=bad)
+    with pytest.raises(ValidationError, match="value"):
+        _term("a", bad)
+
+
+def test_a_check_that_measured_infinity_leaves_its_term_unresolved() -> None:
+    """Binding a non-finite measurement would refuse the whole budget mid-screen; the term
+    says which check had no number instead, and the budget is not evaluated."""
+    bound = _bound_budget().bind(
+        Scorecard(entries=(_checked("mount tilt", float("inf")), _checked("bench tilt", 30.0)))
+    )
+    (mount,) = [term for term in bound.contributors if term.name == "mount"]
+    assert mount.value is None
+    assert mount.unresolved == "check 'mount tilt' measured inf µrad, which a budget cannot sum"
+    assert bound.evaluate().status is CheckStatus.NOT_EVALUATED

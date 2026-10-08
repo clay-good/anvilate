@@ -140,6 +140,10 @@ class Contributor(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    # A budget is a requirement, so its numbers are finite, as a Design Spec's already were:
+    # built in Python, an infinite limit evaluated to PASS and a NaN one to "fail".
+    states_requirements = True
+
     name: Named
     value: Quantity | None
     source: Provenance
@@ -212,6 +216,8 @@ class Budget(StatableModel):
     """An allocated limit on one quantity, and the terms that spend it."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+    states_requirements = True
 
     name: Named
     quantity: Named
@@ -476,7 +482,12 @@ def _read_check(card: Scorecard, check: str) -> tuple[Quantity | None, str | Non
         return None, f"check '{check}' was not evaluated: {entry.detail}"
     if entry.comparison is None:
         return None, f"check '{check}' carries no measured quantity to bind"
-    return entry.comparison.measured, None
+    measured = entry.comparison.measured
+    if not isfinite(measured.magnitude):
+        # A term is a requirement's input and has to be finite; binding this one would
+        # refuse the whole budget mid-screen rather than say which term had no number.
+        return None, f"check '{check}' measured {measured}, which a budget cannot sum"
+    return measured, None
 
 
 def _groups(contributors: tuple[Contributor, ...]) -> dict[str, list[Contributor]]:
