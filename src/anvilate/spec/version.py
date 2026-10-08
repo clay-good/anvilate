@@ -8,6 +8,7 @@ refused rather than silently misread.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 
 from ..refusal import RefusalError, Remedy
@@ -43,6 +44,37 @@ class UnsupportedSchemaVersion(RefusalError, ValueError):
                 ),
             ),
         )
+
+
+_VERSION = re.compile(r"\d+(\.\d+)*")
+
+
+def _require_version_text(declared: object) -> str:
+    """``declared`` as dotted digits, or a refusal saying what is wrong with it.
+
+    Unquoted, ``anvilate_spec: 1.18`` is a YAML float, and ``1.10`` is the float ``1.1``: the
+    version is changed by the time it arrives, so it is refused with the quoting that keeps
+    it, not coerced. Both shapes used to reach ``int()`` — a float as an internal
+    ``AttributeError``, and a malformed string as "invalid literal for int() with base 10".
+    """
+    if not isinstance(declared, str):
+        unquoted = (
+            ". Unquoted, YAML reads 1.10 as 1.1"
+            if isinstance(declared, int | float) and not isinstance(declared, bool)
+            else ""
+        )
+        raise UnsupportedSchemaVersion(
+            f"anvilate_spec must be a quoted version string; got {declared!r}{unquoted}, "
+            f'so write it as anvilate_spec: "{SCHEMA_VERSION}"',
+            declared=repr(declared),
+        )
+    if not _VERSION.fullmatch(declared):
+        raise UnsupportedSchemaVersion(
+            f"anvilate_spec must be a version of dotted numbers such as {SCHEMA_VERSION}; "
+            f"got {declared!r}",
+            declared=repr(declared),
+        )
+    return declared
 
 
 def _major(version: str) -> int:
@@ -101,7 +133,7 @@ def migrate_to_current(data: dict) -> dict:
     # own question. `test_the_versionless_default_is_only_safe_while_nothing_migrates` is the
     # tripwire, and it fails on the first registered migration rather than after the first
     # document is misread.
-    declared = data.get("anvilate_spec", SCHEMA_VERSION)
+    declared = _require_version_text(data.get("anvilate_spec", SCHEMA_VERSION))
     if _major(declared) != _major(SCHEMA_VERSION):
         raise UnsupportedSchemaVersion(
             f"spec declares schema {declared}; this release supports major "

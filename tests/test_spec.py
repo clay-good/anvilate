@@ -567,6 +567,30 @@ def test_a_minor_version_later_than_this_release_is_refused():
     assert parse_spec(data).anvilate_spec == SCHEMA_VERSION
 
 
+@pytest.mark.parametrize(
+    ("declared", "reason"),
+    [
+        (1.18, "must be a quoted version string; got 1.18. Unquoted, YAML reads 1.10 as 1.1"),
+        (1, "must be a quoted version string; got 1. Unquoted"),
+        (None, "must be a quoted version string; got None, so write it"),
+        ("banana", "must be a version of dotted numbers"),
+        ("", "must be a version of dotted numbers"),
+        ("1.18.0 ", "must be a version of dotted numbers"),
+    ],
+)
+def test_a_version_that_is_not_dotted_numbers_is_refused_in_words(declared, reason):
+    """``anvilate_spec: 1.18`` unquoted is a YAML float, and it reached ``version.split``
+    as an internal AttributeError; a malformed string reached ``int()`` and was refused
+    as "invalid literal for int() with base 10". Coercing the float is not the fix,
+    because YAML has already turned 1.10 into 1.1 by the time it arrives."""
+    data = dump_and_load_dict(golden_bracket())
+    data["anvilate_spec"] = declared
+    with pytest.raises(UnsupportedSchemaVersion, match=re.escape(reason)) as refused:
+        parse_spec(data)
+    assert "int()" not in str(refused.value)
+    assert f'anvilate_spec: "{SCHEMA_VERSION}"' in str(refused.value) or isinstance(declared, str)
+
+
 # --- JSON Schema surface ---
 
 

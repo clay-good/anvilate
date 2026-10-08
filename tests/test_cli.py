@@ -1901,6 +1901,19 @@ def test_interfaces_checks_a_confirmed_planar_contact_against_a_cited_minimum_ar
     assert "minimum contact area must be an area" in err
 
 
+def test_an_unquoted_schema_version_is_a_bad_request_not_an_internal_error(tmp_path):
+    """``anvilate_spec: 1.18`` is the ordinary way to forget the quotes, and it exited 5."""
+    text = (_REPO / "examples" / "timber_joist.spec.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "joist.spec.yaml"
+    path.write_text(re.sub(r'^anvilate_spec: ".*"$', "anvilate_spec: 1.18", text, flags=re.M))
+
+    code, out, err = _run("check", str(path))
+
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "anvilate_spec must be a quoted version string" in err
+    assert "internal error" not in err
+
+
 def test_interfaces_refuses_non_finite_limits_in_words(tmp_path):
     """`nan`, `inf`, or `1e400` (which overflows to inf) parses as a quantity, and each check
     let it through to its result model, whose finite field refused it as a pydantic dump
