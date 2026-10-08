@@ -2876,7 +2876,7 @@ def test_a_material_that_qualifies_a_grade_is_not_offered_the_unqualified_one(wr
             "params": {"name": "compile_spec", "arguments": {"document": document}},
         }
     )["result"]["structuredContent"]
-    assert f"{withheld} is a different grade, so it is not offered" in answer["errors"][0]
+    assert f"qualifies the grade of {withheld}" in answer["errors"][0]
     assert not any(withheld in remedy for remedy in answer.get("remedies", []))
 
 

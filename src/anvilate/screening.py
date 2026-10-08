@@ -1553,8 +1553,10 @@ def _near_misses(ref: str, known: list[str], near=_near_identifiers) -> str:
     variants = [c for c in _near_identifiers(ref, known) if _names_a_variant_of(ref, c)]
     if near is _near_materials and variants:
         return (
-            f"{', '.join(variants)} is a different grade, so it is not offered; add {ref!r} "
-            "as a team extension material record with its own cited properties."
+            f"it qualifies the grade of {', '.join(variants)}, and a qualified grade can be a "
+            "different material (316L is not 316), so none is offered. If it is the same "
+            f"material, write that identifier; otherwise add {ref!r} as a team extension "
+            "material record with its own cited properties."
         )
     return f"nothing among the {len(known)} known identifiers is close to it."
 
