@@ -2236,6 +2236,29 @@ def test_a_line_nested_past_the_parser_is_a_parse_error_and_the_loop_goes_on():
     assert second["id"] == 2 and "tools" in second["result"]
 
 
+def test_a_document_declaring_a_key_twice_is_refused_over_mcp_as_at_the_shell():
+    """`json.loads` keeps the last of two equal names, so `compile_spec` screened a document
+    declaring `constraints` twice against the second copy while `anvilate check` refused
+    the same file naming both lines."""
+    import json as _json
+
+    document = _json.dumps({"name": "x", "constraints": {}})
+    twice = document.replace('"constraints"', '"constraints": {"a": 1}, "constraints"', 1)
+    request = (
+        '{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": '
+        '{"name": "compile_spec", "arguments": {"document": ' + twice + "}}}"
+    )
+    stream = io.StringIO(
+        request + "\n" + _json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/list"}) + "\n"
+    )
+    sink = io.StringIO()
+    serve_stdio(stream, sink)
+    first, second = (_json.loads(line) for line in sink.getvalue().strip().splitlines())
+    assert first["error"]["code"] == -32700
+    assert "'constraints' is declared twice" in first["error"]["message"]
+    assert second["id"] == 4 and "tools" in second["result"]
+
+
 @pytest.mark.parametrize("method", [None, 1, True, [], {}, ["tools/list"]])
 def test_invalid_method_types_are_invalid_requests_and_do_not_stop_stdio(method):
     message = {"jsonrpc": "2.0", "id": 41, "method": method}

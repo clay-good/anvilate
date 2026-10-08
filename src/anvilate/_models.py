@@ -747,7 +747,7 @@ def parse_json(text: str | bytes) -> Any:
     elif isinstance(text, bytes | bytearray):
         text = bytes(text).removeprefix(b"\xef\xbb\xbf")
     try:
-        document = json.loads(text)
+        document = json.loads(text, object_pairs_hook=_unique_members)
     except RecursionError:
         raise _too_deep() from None
     # The limit is stated rather than inherited. Up to 3.13 the reader's own recursion
@@ -762,6 +762,27 @@ def parse_json(text: str | bytes) -> Any:
             children = node.values() if isinstance(node, dict) else node
             pending.extend((child, depth + 1) for child in children)
     return document
+
+
+class DuplicateKeyError(ValueError):
+    """A JSON object naming one member twice."""
+
+
+def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    # `json.loads` keeps the last of two equal names, so a document declaring `constraints`
+    # twice was screened against the second over MCP while the CLI's YAML reader refused
+    # the same file. RFC 8259 §4 says names SHOULD be unique; a reader may refuse one that
+    # is not, and the earlier declaration is in nothing downstream.
+    members: dict[str, Any] = {}
+    for name, value in pairs:
+        if name in members:
+            raise DuplicateKeyError(
+                f"the key {name!r} is declared twice in one object, and a reader keeping "
+                "either copy discards the other, so the document does not say what it "
+                "appears to"
+            )
+        members[name] = value
+    return members
 
 
 #: How deep a JSON document may nest, counting the outermost container as 1. Far past any
