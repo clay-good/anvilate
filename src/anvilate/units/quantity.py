@@ -351,6 +351,52 @@ _CASE_TRAPS_REMEDY = {
 }
 
 
+# A product of units written glued together, the way a moment is written on a drawing. pint
+# does not read any of them as the product: `Nm` is number·metre and `kNm` kilo-number·metre
+# (both [length]/[mass]), `ftlb` is femto-troy-pounds (a mass), and the rest are undefined.
+# A moment field refused `50 kNm` as "not a [force]·[length] quantity", which reads as the
+# library being wrong about what a kilonewton-metre is. Each is refused naming the product.
+_GLUED_PRODUCTS = {
+    "Nm": "N*m",
+    "kNm": "kN*m",
+    "MNm": "MN*m",
+    "Nmm": "N*mm",
+    "kNmm": "kN*mm",
+    "ftlb": "ft*lbf",
+    "ftlbf": "ft*lbf",
+    "lbft": "lbf*ft",
+    "lbfft": "lbf*ft",
+    "inlb": "in*lbf",
+    "inlbf": "in*lbf",
+    "lbin": "lbf*in",
+    "lbfin": "lbf*in",
+    "kipft": "kip*ft",
+    "ftkip": "ft*kip",
+    "kipin": "kip*in",
+    "inkip": "in*kip",
+}
+# `kN-m` and `ft-lb` are the same product with a hyphen, and pint answered them with a bare
+# TypeError. A hyphen between two letters is never a unit's own spelling.
+_HYPHENATED = re.compile(r"[A-Za-z]-[A-Za-z]")
+
+
+def _glued_product(unit: str) -> str | None:
+    """Why ``unit`` writes a product of units in a form pint misreads, or ``None``."""
+    unit = unit.strip()
+    for token in re.findall(r"[A-Za-z]+", unit):
+        if token in _GLUED_PRODUCTS:
+            return (
+                f"unit {unit!r} writes {token!r}, which is not read as a product of units; "
+                f"write {_GLUED_PRODUCTS[token]!r}"
+            )
+    if _HYPHENATED.search(unit):
+        product = re.sub(r"(?<=[A-Za-z])-(?=[A-Za-z])", "*", unit)
+        # `lb` is the pound mass; the pound in a hyphenated moment is the pound-force.
+        product = re.sub(r"\blb\b", "lbf", product)
+        return f"unit {unit!r} joins units with '-'; write the product as {product!r}"
+    return None
+
+
 @lru_cache(maxsize=1)
 def _unit_names() -> tuple[str, ...]:
     """Every unit name the registry defines, for a near-miss suggestion."""
@@ -388,6 +434,13 @@ class Quantity(RevalidatedModel):
 
     @model_validator(mode="after")
     def _validate_unit(self) -> Quantity:
+        if (glued := _glued_product(self.unit)) is not None:
+            raise UnitError(
+                glued,
+                action="rewrite",
+                subject=f"the unit expression {self.unit!r}",
+                source="the product of units it names, written with '*'",
+            )
         try:
             _unit_object(self.unit)
         except Exception as exc:  # pint raises several undefined/parse errors
@@ -435,6 +488,15 @@ class Quantity(RevalidatedModel):
         # +10 mm.
         text = text.strip().replace("\u2212", "-")
         problem = _not_one_quantity(text)
+        magnitude = _MAGNITUDE.match(text)
+        glued = _glued_product(text[magnitude.end() :] if magnitude else text)
+        if glued is not None:
+            raise UnitError(
+                f"{text!r}: {glued}",
+                action="rewrite",
+                subject=f"the physical quantity {text!r}",
+                source="the product of units it names, written with '*'",
+            )
         if problem is not None:
             raise UnitError(
                 f"{text!r} {problem}",

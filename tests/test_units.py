@@ -129,7 +129,7 @@ def test_unit_refusals_carry_structured_remedies_at_every_raise_site():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 27
+    assert len(sites) == 29
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
@@ -708,6 +708,36 @@ def test_the_remedy_the_refusal_names_is_arithmetic_it_can_check(trap):
     assert stated is not None, f"the refusal no longer names a conversion: {refusal.value}"
     factor, unit = float(stated.group(1)), stated.group(2)
     assert UREG.Quantity(1.0, trap).to(unit).magnitude == pytest.approx(factor, rel=1e-12)
+
+
+def test_a_glued_moment_is_refused_naming_the_product_and_the_product_is_a_moment():
+    """`50 kNm` is how a drawing writes a moment, and pint reads `kNm` as kilo-number·metre.
+
+    A probe table, not a list of names: each entry must really be misread (undefined, or
+    not [force]·[length]), and the product each refusal names must parse as a moment.
+    """
+    from anvilate.units import UREG
+    from anvilate.units.quantity import _GLUED_PRODUCTS
+
+    moment = UREG.get_dimensionality("[force] * [length]")
+    for glued, product in _GLUED_PRODUCTS.items():
+        try:
+            misread = UREG.Unit(glued).dimensionality != moment
+        except Exception:
+            misread = True
+        assert misread, f"pint reads {glued!r} as a moment now; it no longer needs refusing"
+        assert UREG.Unit(product).dimensionality == moment, product
+        with pytest.raises(ValueError, match=re.escape(f"write {product!r}")):
+            Quantity(magnitude=50.0, unit=glued)
+        with pytest.raises(ValueError, match=re.escape(f"write {product!r}")):
+            Quantity.parse(f"50 {glued}")
+    for hyphenated, product in (("kN-m", "kN*m"), ("ft-lb", "ft*lbf"), ("kip-ft", "kip*ft")):
+        with pytest.raises(ValueError, match=re.escape(f"write the product as {product!r}")):
+            Quantity.parse(f"12 {hyphenated}")
+        assert UREG.Unit(product).dimensionality == moment
+    # Not products, and not refused: a nanometre, a reciprocal exponent, a range's minus.
+    for text in ("3 nm", "2 m**-1", "50 kN*m", "50 N·m", "-10 mm"):
+        assert Quantity.parse(text) is not None, text
 
 
 def test_the_ordinary_spellings_are_untouched():

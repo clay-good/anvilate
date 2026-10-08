@@ -805,7 +805,8 @@ Writing a spec:
 - acceptance.tiers lists only what was asked for; a request to check or screen is
   ["T1_analytical"].
 - A quantity is {"magnitude": number, "unit": "symbol"} in the units the user used, e.g.
-  {"magnitude": 50, "unit": "kN"}."""
+  {"magnitude": 50, "unit": "kN"}. Write a product of units with "*": a moment is
+  {"magnitude": 50, "unit": "kN*m"}, never "kNm" or "kN-m"."""
 
 
 def _closed_values(annotation: Any) -> tuple[str, ...]:
