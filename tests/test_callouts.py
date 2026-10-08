@@ -282,6 +282,18 @@ def test_a_backwards_thickness_range_is_refused():
         _coating(minimum_thickness=_q(13, "um"), maximum_thickness=_q(5, "um"))
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_non_finite_thickness_or_roughness_is_refused(bad):
+    """NaN fails `< 0` and the ordering check alike, so a coating of "nan–13 µm" was
+    accepted, and infinity is positive, so it passed as a roughness."""
+    with pytest.raises(ValidationError, match="minimum_thickness must be finite"):
+        _coating(minimum_thickness=_q(bad, "um"))
+    with pytest.raises(ValidationError, match="maximum_thickness must be finite"):
+        _coating(maximum_thickness=_q(bad, "um"))
+    with pytest.raises(ValidationError, match="roughness must be finite"):
+        _finish(roughness=_q(bad, "um"))
+
+
 def test_a_coating_must_name_its_specification():
     with pytest.raises(ValidationError, match="must name its specification"):
         _coating(specification="  ")

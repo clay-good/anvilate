@@ -42,7 +42,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from enum import StrEnum
-from math import radians, sin
+from math import isfinite, radians, sin
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -263,6 +263,13 @@ class SurfaceFinish(_Callout):
                 subject="roughness",
                 source=_DRAWING_SOURCE,
             )
+        # `<= 0` is False for NaN, and infinity is positive, so both passed as a roughness.
+        if not isfinite(self.roughness.magnitude):
+            raise _callouts_refusal(
+                f"roughness must be finite; got {self.roughness}",
+                subject="roughness",
+                source=_DRAWING_SOURCE,
+            )
         if self.roughness.to("um").magnitude <= 0:
             raise _callouts_refusal(
                 f"roughness must be positive; got {self.roughness}",
@@ -305,6 +312,14 @@ class Coating(_Callout):
             if not value.has_dimension("[length]"):
                 raise _callouts_refusal(
                     f"{field} must be a [length] quantity; got {value.dimensionality} ({value})",
+                    subject=field,
+                    source=_callouts_input_source(field),
+                )
+            # NaN fails both this comparison and the ordering one below, so a NaN or an
+            # infinite thickness rendered as "nan–10 µm" and was accepted.
+            if not isfinite(value.magnitude):
+                raise _callouts_refusal(
+                    f"{field} must be finite; got {value}",
                     subject=field,
                     source=_callouts_input_source(field),
                 )
