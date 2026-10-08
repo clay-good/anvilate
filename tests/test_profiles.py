@@ -171,7 +171,8 @@ def test_a_near_spelling_of_a_profile_the_table_does_not_hold_is_not_read_as_one
 def test_a_name_the_table_does_not_hold_is_refused_with_what_it_nearly_named():
     with pytest.raises(UnknownProfileError) as refused:
         default_profile_table().get("IPE 210")
-    assert "IPE 220" in refused.value.suggestions
+    # The sizes either side, not the most similar strings (IPE 270 and IPE 240 came first).
+    assert refused.value.suggestions == ["IPE 200", "IPE 220"]
     assert "declared by its properties" in str(refused.value)
     with pytest.raises(UnknownProfileError):
         default_profile_table().get("W12x26")
@@ -262,13 +263,30 @@ def test_an_aisc_fetch_verifies_caches_and_computes_the_section_from_geometry(
     assert again.get("W12X26").section() == section
 
 
+def test_an_absent_w_shape_suggests_the_weights_either_side_at_its_depth(tmp_path, monkeypatch):
+    from anvilate.standards import profiles
+
+    payload = _test_aisc_workbook()
+    monkeypatch.setattr(profiles, "AISC_SHAPES_V16", _test_aisc_recipe(payload))
+    fetched = fetch_aisc_profile_table(
+        retrieved="2026-09-27", consent=True, cache_dir=tmp_path, opener=lambda _url: payload
+    )
+    shape = fetched.get("W12X26")
+    names = ("W12X22", "W12X26", "W12X30", "W14X26", "W10X26")
+    table = profiles.AiscProfileTable(dict.fromkeys(names, shape), fetched.provenance)
+    with pytest.raises(UnknownProfileError) as refused:
+        table.get("W12x27")
+    assert refused.value.suggestions == ["W12X26", "W12X30"]
+    assert "did you mean W12X26, W12X30?" in str(refused.value)
+
+
 def test_a_w_shape_is_not_guessed_before_the_workbook_is_fetched(tmp_path, monkeypatch):
     monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
     assert cached_aisc_profile_table() is None
     card = _card("W12x26")
     refusal = next(entry for entry in card.entries if "W12x26" in entry.detail)
     assert refusal.status.value == "not_evaluated"
-    assert "Fetch it once" in refusal.detail
+    assert "anvilate fetch aisc-shapes --consent" in refusal.detail
     assert not list(tmp_path.iterdir())
 
 

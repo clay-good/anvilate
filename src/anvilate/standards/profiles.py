@@ -177,6 +177,28 @@ class UnknownProfileError(KeyError):
         )
 
 
+def _neighbours(key: str, held: list[str], pattern: str) -> list[str]:
+    """The held sizes either side of ``key`` in its own series, or ``[]``.
+
+    ``pattern`` splits a designation into its series and the number that orders it (the
+    depth of an IPE, the weight of a W12). For a well-formed name the table does not hold,
+    these are what an engineer meant: `IPE 210` nearly names IPE 200 and IPE 220, while
+    string similarity offered IPE 270 and IPE 240 ahead of either.
+    """
+    wanted = re.fullmatch(pattern, key)
+    if wanted is None:
+        return []
+    series, size = wanted.group(1), float(wanted.group(2))
+    sizes = sorted(
+        (float(match.group(2)), name)
+        for name in held
+        if (match := re.fullmatch(pattern, name)) is not None and match.group(1) == series
+    )
+    below = [name for number, name in sizes if number < size][-1:]
+    above = [name for number, name in sizes if number > size][:1]
+    return below + above
+
+
 def _profile_key(designation: str) -> tuple[str, int]:
     series, _, size = designation.partition(" ")
     return (series, int(size) if size.isdigit() else 0)
@@ -204,8 +226,10 @@ class ProfileTable:
         if key is not None and key in self._profiles:
             return self._profiles[key]
         probe = key or designation.strip()[:32].upper()
+        nearest = _neighbours(probe, list(self._profiles), r"(IPE|HEA) (\d+)")
         raise UnknownProfileError(
-            designation, difflib.get_close_matches(probe, self._profiles, n=3, cutoff=0.6)
+            designation,
+            nearest or difflib.get_close_matches(probe, self._profiles, n=3, cutoff=0.6),
         )
 
     def __len__(self) -> int:
@@ -231,7 +255,9 @@ class AiscProfileTable:
         if key is not None and key in self._profiles:
             return self._profiles[key]
         probe = key or designation.strip()[:32].upper()
-        suggestions = difflib.get_close_matches(probe, self._profiles, n=3, cutoff=0.6)
+        suggestions = _neighbours(
+            probe, list(self._profiles), r"(W[\d.]+)X([\d.]+)"
+        ) or difflib.get_close_matches(probe, self._profiles, n=3, cutoff=0.6)
         hint = f"; did you mean {', '.join(suggestions)}?" if suggestions else ""
         raise UnknownProfileError(
             designation,
