@@ -18,7 +18,7 @@ from typing import Any, get_args
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from .._models import _BoundedLoader, _refusal_line
+from .._models import _BoundedLoader, _refusal_line, _yaml_too_deep
 from ..refusal import RefusalError, Remedy
 from .ir import SCHEMA_VERSION, DesignSpec
 from .provenance import _BareValue
@@ -399,6 +399,22 @@ def parse_spec(data: dict) -> DesignSpec:
         raise SpecValidationError._from_pydantic(exc) from exc
 
 
+def strict_yaml(text: str) -> Any:
+    """``yaml.safe_load`` with :class:`_StrictSpecLoader`'s refusals: a key declared twice,
+    and a number that is not read in base ten, each raised with its position.
+
+    Shared with every reader of a document a person writes by hand. A team's materials,
+    components or bearings extension went through the plain reader, so ``magnitude: 0300``
+    loaded a yield strength of 192 MPa and a ``quantity:`` written twice kept the second.
+    """
+    try:
+        # `yaml.load` with an explicit SafeLoader subclass, which is `safe_load` plus the
+        # duplicate-key refusal; nothing here can construct an arbitrary Python object.
+        return yaml.load(text, Loader=_StrictSpecLoader)
+    except RecursionError:
+        raise _yaml_too_deep() from None
+
+
 def load_spec_yaml(text: str) -> DesignSpec:
     """Load and validate a spec from a YAML (or JSON) document.
 
@@ -416,9 +432,7 @@ def load_spec_yaml(text: str) -> DesignSpec:
     and the answer to it is a sentence with a line number in it.
     """
     try:
-        # `yaml.load` with an explicit SafeLoader subclass, which is `safe_load` plus the
-        # duplicate-key refusal; nothing here can construct an arbitrary Python object.
-        data = yaml.load(text, Loader=_StrictSpecLoader)
+        data = strict_yaml(text)
     except Exception as failure:
         # `except Exception`, not `yaml.YAMLError`, and measuring is what settled it. Over 21
         # malformed documents `safe_load` answers with `YAMLError` twenty times and, for

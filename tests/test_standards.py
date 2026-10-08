@@ -377,9 +377,11 @@ materials:
 @pytest.mark.parametrize(
     ("original", "replacement", "reason"),
     [
-        ("magnitude: 300, unit: MPa", "magnitude: .nan, unit: MPa", "must be a finite number"),
-        ("magnitude: 300, unit: MPa", "magnitude: .inf, unit: MPa", "must be a finite number"),
-        ("value: 0.33", "value: .nan", "must be a finite number"),
+        # Refused when the file is read now, by the reader a spec uses; the record's own
+        # finite check stays beneath it for a record built in Python.
+        ("magnitude: 300, unit: MPa", "magnitude: .nan, unit: MPa", "a finite number"),
+        ("magnitude: 300, unit: MPa", "magnitude: .inf, unit: MPa", "a finite number"),
+        ("value: 0.33", "value: .nan", "a finite number"),
         ("magnitude: 300, unit: MPa", "magnitude: -300, unit: MPa", "yield_strength must be"),
         ("magnitude: 69, unit: GPa", "magnitude: 0, unit: GPa", "elastic_modulus must be"),
         ("value: 0.33", "value: 0.7", "poisson_ratio must lie in (-1, 0.5]"),
@@ -398,9 +400,11 @@ def test_an_extension_record_that_is_not_a_physical_material_is_refused(
     """A team's file accepted `.nan`, `.inf`, a negative yield strength and a Poisson ratio
     of 0.7 without a word; the first screen to read an infinite strength failed far from
     the file, as the ValidationError of a model its author never wrote."""
+    import yaml
+
     text = _EXTENSION_YAML.replace(original, replacement, 1)
     assert text != _EXTENSION_YAML
-    with pytest.raises(ValueError, match=re.escape(reason)):
+    with pytest.raises((ValueError, yaml.YAMLError), match=re.escape(reason)):
         db.extended(text)
 
 
@@ -2700,3 +2704,41 @@ def test_the_mutability_walk_finds_a_dict_inside_a_frozen_model():
         "result['a'].rows[0]: dict"
     ]
     assert _mutable_paths(MappingProxyType({"a": Holder(rows=(1,))})) == []
+
+
+def test_a_team_extension_is_read_as_strictly_as_a_spec(db, cdb, bearings) -> None:
+    """A team's file is written by hand and went through the plain reader: `magnitude: 0300`
+    loaded a 192 MPa yield strength, `bore: 022` an 18 mm bore, and a key declared twice kept
+    whichever came second. A spec refuses all three; an extension now does too."""
+    import yaml
+
+    octal_yield = _EXTENSION_YAML.replace("magnitude: 300, unit: MPa", "magnitude: 0300, unit: MPa")
+    twice = _COMPONENT_EXTENSION_YAML.replace(
+        "      quantity: {magnitude: 50.0, unit: mm}\n",
+        "      quantity: {magnitude: 50.0, unit: mm}\n      quantity: {magnitude: 5.0, unit: mm}\n",
+    )
+    octal_bore = _BEARING_EXTENSION_YAML.replace("bore: 22", "bore: 022")
+    for extend, text, reason in (
+        (db.extended, octal_yield, "'0300' is read as 192"),
+        (cdb.extended, twice, "the key 'quantity' was already declared"),
+        (bearings.extended, octal_bore, "'022' is read as 18"),
+    ):
+        with pytest.raises(yaml.MarkedYAMLError, match=re.escape(reason)):
+            extend(text)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_property_record_built_in_python_refuses_a_value_that_is_not_a_number(bad) -> None:
+    """The reader refuses `.nan` in a file; a record built directly never meets the reader."""
+    from pydantic import ValidationError
+
+    from anvilate.standards.records import PropertyCitation, QuantityProperty, ScalarProperty
+    from anvilate.units import Quantity
+
+    citation = PropertyCitation(
+        source="lab report 7", condition="RT", license="team-local", retrieved="2026-10-07"
+    )
+    with pytest.raises(ValidationError, match="quantity must be a finite number"):
+        QuantityProperty(quantity=Quantity(magnitude=bad, unit="MPa"), citation=citation)
+    with pytest.raises(ValidationError, match="value must be a finite number"):
+        ScalarProperty(value=bad, citation=citation)

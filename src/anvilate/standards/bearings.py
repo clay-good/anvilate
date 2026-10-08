@@ -122,7 +122,14 @@ def _load_bearings(text: str, *, bundled: bool = True) -> dict[str, Bearing]:
     """Parse a bearing YAML document. ``bundled`` tags the records' origin (a
     bundled dataset vs a user/team extension), so reports can distinguish
     company-local records."""
-    doc = parse_yaml(text)
+    if bundled:
+        doc = parse_yaml(text)
+    else:
+        # A team's file is written by hand, so it is read as a spec is: a key declared twice
+        # and a number not in base ten (`0300` is octal 192) are refused, not resolved.
+        from ..spec.validate import strict_yaml
+
+        doc = strict_yaml(text)
     dataset = doc.get("dataset", {})
 
     def _prop(value_mm: float, kind: str) -> dict:

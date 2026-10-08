@@ -234,7 +234,14 @@ def _load_records(text: str, *, bundled: bool) -> dict[str, Material]:
     omits them, so a data file states shared provenance once. ``bundled`` tags the
     records' origin (a bundled dataset vs a user/team extension).
     """
-    doc = parse_yaml(text)
+    if bundled:
+        doc = parse_yaml(text)
+    else:
+        # A team's file is written by hand, so it is read as a spec is: a key declared twice
+        # and a number not in base ten (`0300` is octal 192) are refused, not resolved.
+        from ..spec.validate import strict_yaml
+
+        doc = strict_yaml(text)
     dataset = doc.get("dataset", {})
     fallback = {
         "license": dataset.get("license"),
