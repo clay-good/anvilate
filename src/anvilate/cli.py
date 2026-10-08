@@ -2205,7 +2205,7 @@ def _qif(results, *, worst, fmt: str, out, err) -> int:
             # shell — this command has no override, deliberately. So the refusal keeps the
             # part that says what is unmet and gains the part a caller here can act on.
             print(
-                f"anvilate export --artifact qif: {path}: {refused}\n"
+                f"anvilate export --artifact qif: {path}: {refused.unmet}.\n"
                 f"anvilate export has no override: exporting past a failing card is a "
                 f"deliberate act by somebody who has read it. "
                 f"`--artifact evidence-bundle` is served whatever the verdict and carries "
@@ -2276,7 +2276,7 @@ def _dxf(results, *, worst, fmt: str, out, err) -> int:
             authorization = authorize_export(sections.scorecard)
         except ExportRefused as refused:
             print(
-                f"anvilate export --artifact dxf: {path}: {refused}\n"
+                f"anvilate export --artifact dxf: {path}: {refused.unmet}.\n"
                 f"anvilate export has no override: exporting past a failing card is a "
                 f"deliberate act by somebody who has read it. "
                 f"`--artifact evidence-bundle` is served whatever the verdict and carries "
@@ -2664,18 +2664,25 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     from .screening import screen_spec
 
     card = screen_spec(spec)
+    # Both refusals below are worded for a caller holding the library ("override=True"), so
+    # this surface states them in its own flag: a shell user cannot pass a keyword argument.
     try:
         authorization = authorize_export(card, override=args.unvalidated)
     except ExportRefused as refused:
         print(
-            f"anvilate build: {refused}\n"
+            f"anvilate build: {refused.unmet}.\n"
             "Pass --unvalidated only after reviewing the scorecard; the STEP will be "
             "watermarked and is not released for fabrication.",
             file=err,
         )
         return EXIT_CODES[card.status]
-    except ValueError as failure:
-        print(f"anvilate build: {failure}. Remove --unvalidated.", file=err)
+    except ValueError:
+        print(
+            "anvilate build: --unvalidated was given for a part whose acceptance checks "
+            "pass, so there is nothing to override. An override that is a no-op means the "
+            "caller expected a failing card and did not get one. Remove --unvalidated.",
+            file=err,
+        )
         return EXIT_BAD_REQUEST
 
     step_schema: Literal["ap242", "ap214"] = "ap214" if args.ap214 else "ap242"

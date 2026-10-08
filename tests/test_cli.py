@@ -602,6 +602,7 @@ def test_a_card_that_does_not_pass_gets_no_qif_and_is_told_what_to_do(spec_file)
     assert "export is gated on the acceptance checks passing" in err
     assert "T1 analytical" in err, "the refusal does not name what is unmet"
     assert "--artifact evidence-bundle" in err, "the refusal names no remedy at this surface"
+    assert "override=True" not in err, "the refusal offers the shell a keyword argument"
 
 
 def test_the_qif_json_format_carries_the_document_and_its_digest(tmp_path):
@@ -657,6 +658,7 @@ def test_a_card_that_does_not_pass_gets_no_dxf(spec_file):
     code, out, error = _run("export", "--artifact", "dxf", str(spec_file))
     assert code == EXIT_NOT_EVALUATED and out == ""
     assert "export is gated" in error and "--artifact evidence-bundle" in error
+    assert "override=True" not in error, "the refusal offers the shell a keyword argument"
 
 
 def test_dxf_names_the_missing_optional_export_runtime(monkeypatch):
@@ -2579,6 +2581,22 @@ def test_build_withholds_step_until_the_card_passes_or_override_is_explicit(tmp_
 
     assert code == EXIT_NOT_EVALUATED and text == "" and not output.exists()
     assert "export is gated" in error and "--unvalidated" in error
+    assert "override=True" not in error, "the refusal offers the shell a keyword argument"
+
+
+def test_build_refuses_unvalidated_on_a_passing_card_in_its_own_flag(tmp_path):
+    """The library refuses ``override=True`` on a passing card, and says so in those words.
+    A shell user typed ``--unvalidated``, and is told about the flag they typed."""
+    pytest.importorskip("build123d")
+    spec = Path(__file__).resolve().parents[1] / "examples/transmission_shaft.spec.yaml"
+    output = tmp_path / "shaft.step"
+
+    code, text, error = _run("build", str(spec), "--output", str(output), "--unvalidated")
+
+    assert code == EXIT_BAD_REQUEST and text == "" and not output.exists()
+    assert "--unvalidated was given for a part whose acceptance checks pass" in error
+    assert "Remove --unvalidated" in error
+    assert "override=True" not in error, "the refusal offers the shell a keyword argument"
 
 
 def test_build_json_carries_geometry_identity_and_digest(tmp_path):

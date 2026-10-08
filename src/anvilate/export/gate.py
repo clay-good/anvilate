@@ -87,8 +87,12 @@ class ExportRefused(RefusalError):
     def __init__(self, blocking: tuple[str, ...]) -> None:
         self.blocking = blocking
         named = ", ".join(blocking) if blocking else "no checks were run at all"
+        # What is unmet, without the remedy: `override=True` is a remedy for a caller
+        # holding the library, and a surface with its own remedy (the CLI's `--unvalidated`,
+        # or none) states that one after this instead.
+        self.unmet = f"export is gated on the acceptance checks passing, and these did not: {named}"
         super().__init__(
-            f"export is gated on the acceptance checks passing, and these did not: {named}. "
+            f"{self.unmet}. "
             f"Pass override=True to export anyway; the file will be watermarked as "
             f"unvalidated",
             remedies=(
