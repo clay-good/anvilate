@@ -108,6 +108,12 @@ tells them apart: one that *says* `anvilate_spec` and will not parse is somebody
 spec, and it is a bad request naming the file. A malformed YAML file that claims nothing is
 still just a stray file and is still skipped.
 
+**Every refused spec is named in one run, not the first.** The sweep used to stop at the first
+broken file it met, alphabetically, so a branch with three broken parts took three runs to
+learn about them. Now every candidate that cannot be read, decoded or parsed, and every found
+spec that fails to load, is reported before the run exits 3, and a refused run still prints no
+card. `diff` names both of its files the same way.
+
 A file you **name** that will not parse is a bad request with the position in it —
 `line 8, column 1: the document is not valid YAML — found character '\t' that cannot start
 any token`. It used to be a stack trace through PyYAML and exit 1, the code that means a

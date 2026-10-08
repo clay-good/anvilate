@@ -1914,6 +1914,38 @@ def test_an_unquoted_schema_version_is_a_bad_request_not_an_internal_error(tmp_p
     assert "internal error" not in err
 
 
+def test_a_sweep_reports_every_refused_spec_not_the_first(tmp_path):
+    """A repository sweep stopped at the first broken spec it met, alphabetically, so a
+    branch with three broken parts took three runs to learn about them; `diff` did the same
+    with its two. Each is now named in one run, and a refused run still prints no result."""
+    good = (_REPO / "examples" / "padeye.spec.yaml").read_text(encoding="utf-8")
+    joist = (_REPO / "examples" / "timber_joist.spec.yaml").read_text(encoding="utf-8")
+    (tmp_path / "a_unparsable.spec.yaml").write_text(
+        'anvilate_spec: "1.18.0"\nname: [unclosed\n', encoding="utf-8"
+    )
+    (tmp_path / "b_unquoted.spec.yaml").write_text(
+        re.sub(r"^anvilate_spec: .*$", "anvilate_spec: 1.18", joist, flags=re.M), encoding="utf-8"
+    )
+    (tmp_path / "c_banana.spec.yaml").write_text(
+        re.sub(r"^anvilate_spec: .*$", 'anvilate_spec: "banana"', joist, flags=re.M),
+        encoding="utf-8",
+    )
+    (tmp_path / "d_good.spec.yaml").write_text(good, encoding="utf-8")
+
+    for command in ("check", "export"):
+        code, out, err = _run(command, str(tmp_path))
+        assert code == EXIT_BAD_REQUEST and out == "", command
+        for name in ("a_unparsable", "b_unquoted", "c_banana"):
+            assert f"{name}.spec.yaml" in err, (command, name, err)
+        assert "d_good" not in err
+
+    code, out, err = _run(
+        "diff", str(tmp_path / "b_unquoted.spec.yaml"), str(tmp_path / "c_banana.spec.yaml")
+    )
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "b_unquoted.spec.yaml" in err and "c_banana.spec.yaml" in err
+
+
 def test_terminal_controls_in_a_document_are_shown_not_obeyed(tmp_path):
     """A spec's name went to the terminal verbatim: ESC [2J cleared the screen of whoever
     ran `check` on it, OSC 0 retitled their window, and U+202E reversed the line after it.
@@ -3517,9 +3549,13 @@ def test_a_malformed_spec_in_a_searched_directory_is_not_quietly_skipped(tmp_pat
     code, out, err = _run("check", str(tmp_path))
     assert code == EXIT_BAD_REQUEST, "a broken spec in the sweep did not stop the run"
     assert "broken.yaml: names anvilate_spec and is not valid YAML" in err
-    assert "not a Design Spec, skipped" not in err.split("broken.yaml")[-1], (
-        "the broken spec is still being described as some other YAML file"
-    )
+    # The sweep now goes on past it, so the stray file after it is still reported as one;
+    # what must not happen is the broken spec itself being described that way.
+    assert not [
+        line for line in err.splitlines() if "broken.yaml" in line and "not a Design Spec" in line
+    ], "the broken spec is still being described as some other YAML file"
+    assert "notes.yaml: not a Design Spec, skipped" in err
+    assert out == "", "a refused sweep printed a card"
 
 
 def test_a_key_declared_twice_stops_the_run_rather_than_screening_the_last_one(tmp_path):
@@ -4813,8 +4849,10 @@ def test_every_command_that_sweeps_specs_reports_progress_through_one_helper():
             loop
             for loop in ast.walk(node)
             if isinstance(loop, ast.For)
-            and "paths" in {n.id for n in ast.walk(loop.iter) if isinstance(n, ast.Name)}
-            and node.name not in {"_resolve", "_candidates"}
+            and {"paths", "loaded"} & {n.id for n in ast.walk(loop.iter) if isinstance(n, ast.Name)}
+            # Discovery and loading are fast passes over the paths, and `diff` screens exactly
+            # the two files it was named; the sweep is the screening of a resolved set.
+            and node.name not in {"_resolve", "_candidates", "_load_all", "_diff"}
         ]
         for loop in loops:
             sweeping += 1

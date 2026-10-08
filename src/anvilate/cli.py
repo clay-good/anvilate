@@ -1012,11 +1012,11 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
     """
     from .screening import screen_spec
 
+    loaded = _load_all([args.before, args.after], err=err, command="diff")
+    if isinstance(loaded, int):
+        return loaded
     cards, names = [], []
-    for path in (args.before, args.after):
-        spec = _load(path, err=err, command="diff", named=True)
-        if isinstance(spec, int):
-            return spec
+    for _path, spec in loaded:
         cards.append(screen_spec(spec))
         names.append(spec)
 
@@ -2375,16 +2375,17 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
     # The same path handling `check` has, for the same reason: `headless-automation` asks
     # CI to publish evidence bundles for a repository, and a command taking one file at a
     # time makes that a shell loop in a script nothing type-checks.
-    paths = _resolve(args.spec, err=err, command="export")
-    if isinstance(paths, int):
-        return paths
+    resolved = _resolve(args.spec, err=err, command="export")
+    if isinstance(resolved, int):
+        return resolved
+    paths, refused = resolved
+    loaded = _load_all(paths, err=err, command="export")
+    if isinstance(loaded, int) or refused:
+        return EXIT_BAD_REQUEST
     results = []
-    for index, path in enumerate(paths, start=1):
+    for index, (path, spec) in enumerate(loaded, start=1):
         if len(paths) > 1:
             _progress(err, f"assembling the bundle for {path}", done=index, total=len(paths))
-        spec = _load(path, err=err, command="export")
-        if isinstance(spec, int):
-            return spec
         # The spec goes in the bundle, not only through it. `artifact-export`'s scenario is
         # a reviewer holding only this document and re-running the analysis, and until the
         # spec was carried they were holding verdicts with no inputs behind them.
@@ -2638,6 +2639,19 @@ def _load(path: Path, *, err, command: str, named: bool = False):
         return EXIT_BAD_REQUEST
 
 
+def _load_all(paths: list[Path], *, err, command: str) -> list[tuple[Path, Any]] | int:
+    """Every spec at ``paths``, or the exit code once each one refused has said why."""
+    loaded: list[tuple[Path, Any]] = []
+    refused: int | None = None
+    for path in paths:
+        spec = _load(path, err=err, command=command, named=len(paths) > 1)
+        if isinstance(spec, int):
+            refused = spec if refused is None else refused
+            continue
+        loaded.append((path, spec))
+    return loaded if refused is None else refused
+
+
 def _build(args: argparse.Namespace, *, out, err) -> int:
     """Build one supported Design Spec pattern and write a valid STEP solid."""
     import hashlib
@@ -2873,15 +2887,22 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     """
     from .screening import screen_spec
 
-    paths = _resolve(args.spec, err=err)
-    if isinstance(paths, int):
-        return paths
+    resolved = _resolve(args.spec, err=err)
+    if isinstance(resolved, int):
+        return resolved
+    paths, refused = resolved
 
     # Progress on stderr, and only for a person watching: a directory of specs can take
     # long enough to look hung, and stdout must stay the result alone so it still pipes.
+    # Every document is loaded before any is screened, so each one refused is reported in
+    # this run rather than the first one alone, and a refused run prints no cards.
+    loaded = _load_all(paths, err=err, command="check")
+    if isinstance(loaded, int) or refused:
+        return EXIT_BAD_REQUEST
+
     results = []
     durations: list[float] = []
-    for index, path in enumerate(paths, start=1):
+    for index, (path, spec) in enumerate(loaded, start=1):
         started = time.monotonic()
         if len(paths) > 1:
             _progress(
@@ -2891,9 +2912,6 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                 total=len(paths),
             )
         try:
-            spec = _load(path, err=err, command="check", named=len(paths) > 1)
-            if isinstance(spec, int):
-                return spec
             results.append((path, spec, screen_spec(spec)))
             durations.append(time.monotonic() - started)
         except KeyboardInterrupt:
@@ -2992,7 +3010,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     )
 
 
-def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | int:
+def _resolve(paths: list[Path], *, err, command: str = "check") -> tuple[list[Path], bool] | int:
     """The spec documents behind the arguments, in a stable order.
 
     A directory is searched; a file named on the command line is taken at its word. The
@@ -3000,10 +3018,16 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
     other YAML file and is skipped — reported, never silently — while one the caller *named*
     is an error, because they said it was a spec and it is not. :func:`_is_a_spec` is what
     that recognition rests on, and it used to be the ``anvilate_spec`` key alone.
+
+    Returns the specs found and whether any candidate was refused, so the caller can report
+    the documents that fail to load in the same run before it refuses.
     """
     import yaml
 
     found: list[Path] = []
+    # Every refused candidate is reported before the run refuses, not the first: a sweep
+    # that stopped at one left the others to surface one rerun at a time.
+    refused = False
     for path in paths:
         if path.is_dir():
             candidates = _candidates(path, err=err, command=command)
@@ -3025,7 +3049,8 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
                         f"({failure.strerror or failure}), so it was not screened",
                         file=err,
                     )
-                    return EXIT_BAD_REQUEST
+                    refused = True
+                    continue
                 except UnicodeDecodeError:
                     # A candidate that is not UTF-8 text gets the same treatment as one that
                     # will not parse, and for the same reason: whether it is somebody's spec
@@ -3040,7 +3065,8 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
                             f"not valid UTF-8 text, so it was not screened",
                             file=err,
                         )
-                        return EXIT_BAD_REQUEST
+                        refused = True
+                        continue
                     text = ""
                 try:
                     document = parse_yaml(text)
@@ -3059,7 +3085,8 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
                             f"not valid YAML, so it was not screened",
                             file=err,
                         )
-                        return EXIT_BAD_REQUEST
+                        refused = True
+                        continue
                     document = None
                 if isinstance(document, dict) and _is_a_spec(document):
                     found.append(candidate)
@@ -3070,13 +3097,13 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> list[Path] | 
                     )
             continue
         found.append(path)
-    if not found:
+    if not found and not refused:
         print(
             f"anvilate {command}: no Design Spec found in " + ", ".join(str(p) for p in paths),
             file=err,
         )
         return EXIT_BAD_REQUEST
-    return found
+    return found, refused
 
 
 def _render(
