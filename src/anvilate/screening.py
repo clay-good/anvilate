@@ -1570,8 +1570,9 @@ def _element_material(spec: DesignSpec) -> str | None:
 
 def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
     """What a screen of ``spec`` would refuse before computing anything, as refusal lines
-    and remedies: an unknown material or standard component, an element type no pack
-    screens, and element parameters the element's own model refuses.
+    and remedies: an unknown material (the document's or an element's) or standard
+    component, an element type no pack screens, and element parameters the element's own
+    model refuses.
 
     For MCP's `compile_spec`, whose description promises it resolves references and reports
     every refusal. It returned no errors for `material: {ref: A36}`, `element_type:
@@ -1642,6 +1643,24 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
                 # The element's remedy names its field from inside the element; the document
                 # spells it from the top.
                 remedies.append(remedy.replace("`", "`element_params.", 1) if location else remedy)
+        return problems, remedies
+    # An element's `*material` fields are database ids, resolved by the screen as
+    # `material.ref` is above. Unchecked here, `plate_material: A36` compiled clean.
+    for name in model.model_fields:
+        value = spec.element_params.get(name)
+        if not name.endswith("material") or not isinstance(value, str):
+            continue
+        if resolver.has_material(value):
+            continue
+        known = resolver.known_materials()
+        problems.append(
+            _refusal_line(
+                f"element_params.{name}",
+                f"unknown material {value!r} — {_near_misses(value, known)}",
+            )
+        )
+        if near := _near_identifiers(value, known):
+            remedies.append(f"write `element_params.{name}` as `{near[0]}`")
     return problems, remedies
 
 

@@ -568,6 +568,12 @@ def test_compile_spec_returns_the_remedies_the_cli_refusal_reads(tmp_path):
             "element_params.hole_dia: Extra inputs are not permitted",
             "remove `element_params.hole_dia`, which a BasePlate does not have",
         ),
+        (
+            # A database id inside the element compiled clean and the screen refused it.
+            lambda d: d["element_params"].update(plate_material="A36"),
+            "element_params.plate_material: unknown material 'A36' — did you mean ASTM-A36?",
+            "write `element_params.plate_material` as `ASTM-A36`",
+        ),
     ],
 )
 def test_compile_spec_reports_what_the_screen_would_refuse(change, error, remedy):
