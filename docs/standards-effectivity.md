@@ -185,15 +185,28 @@ citation with no edition. An entry is `renumbered`, `revised`, `terminology` or
 not revised. A clause with no entry gets "no difference is registered", which is a statement
 about the registry and never that the editions agree.
 
+Pass `evaluate=` (a function from an edition to the check's result) and the comparison
+carries both results beside the clauses and the citation. For §F6 on a slender flange:
+
+```text
+AISC 360-16 §F6 evaluates under AISC 360-16: 38.3333 kN*m; under AISC 360-22: 38.8889 kN*m.
+AISC 360-16 §F6 → AISC 360-22 §F6: revised. Minor-axis flexure: in F6.2(c), the 0.69
+multiplier in Equation F6-4 is 0.70. [AISC, Comparison ..., p. 9]
+```
+
+The change is not cosmetic: at λ = λ_rf the noncompact branch gives 0.7·F_y·S_y, so 0.70
+makes the slender branch meet it where 0.69 left a 1.4% step.
+
 ## What is deliberately not here
 
 - **No jurisdiction table.** The proposal allows an advisory offline mapping; shipping one
   means shipping a staleness-dated claim about the law in every US jurisdiction, and an
   advisory answer to a legal question is the kind of thing that gets quoted as an
   authoritative one.
-- **No side-by-side results.** The registry says what changed between editions; it does
-  not evaluate a check under both, because every AISC check here implements 360-16 only. A
-  second result needs the 2022 provisions implemented, not described.
+- **Side-by-side results for one check only.** The registry says what changed for every
+  cited clause, but a second *result* needs the second edition implemented, not described.
+  One check is: `aisc_minor_axis_flexural_strength(..., edition="22")`, whose only listed
+  difference is F6-4's multiplier. The rest implement 360-16.
 
 ## Reading a citation is linear in what it reads
 

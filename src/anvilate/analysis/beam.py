@@ -1422,6 +1422,7 @@ def aisc_minor_axis_flexural_strength(
     elastic_modulus: Quantity,
     plastic_section_modulus: Quantity,
     elastic_section_modulus: Quantity,
+    edition: str = "16",
 ) -> Quantity:
     """The AISC 360 §F6 minor-axis flexural strength of an I-shape or channel.
 
@@ -1435,7 +1436,20 @@ def aisc_minor_axis_flexural_strength(
     λ_rf = 1.0·√(E/F_y). ``flange_width`` b_f, ``flange_thickness`` t_f,
     ``yield_strength`` F_y, ``elastic_modulus`` E, ``plastic_section_modulus`` Z_y, and
     ``elastic_section_modulus`` S_y are all about the minor axis. Returns M_n in kN·m.
+
+    ``edition`` is the AISC 360 edition, ``"16"`` or ``"22"``. The one difference AISC's
+    comparison of the two lists for §F6 is Equation F6-4's multiplier, 0.69 in 2016 and 0.70
+    in 2022 (``standards.edition_differences``). At λ = λ_rf the noncompact branch gives
+    0.7·F_y·S_y, so 0.70 makes the two branches meet, where 0.69 left a 1.4% step.
     """
+    edition = {"2016": "16", "2022": "22"}.get(edition, edition)
+    if edition not in _F6_4_MULTIPLIER:
+        raise _beam_refusal(
+            f"edition must be one of {sorted(_F6_4_MULTIPLIER)} (AISC 360-16 or 360-22, "
+            f"also written 2016 or 2022); got {edition!r}",
+            subject="edition",
+            source="the AISC 360 edition the design basis pins",
+        )
     require_finite(plastic_section_modulus, name="plastic_section_modulus")
     _require(flange_width, "[length]", "flange_width")
     _require(flange_thickness, "[length]", "flange_thickness")
@@ -1492,8 +1506,12 @@ def aisc_minor_axis_flexural_strength(
     elif lam <= lambda_rf:
         m_n = m_p - (m_p - 0.7 * fy * sy) * (lam - lambda_pf) / (lambda_rf - lambda_pf)
     else:
-        m_n = 0.69 * e / lam**2 * sy
+        m_n = _F6_4_MULTIPLIER[edition] * e / lam**2 * sy
     return Quantity(magnitude=m_n / 1.0e6, unit="kN*m")
+
+
+# AISC 360 Equation F6-4's multiplier by edition: AISC's 360-22 to 360-16 comparison, p. 9.
+_F6_4_MULTIPLIER = {"16": 0.69, "22": 0.70}
 
 
 def aisc_round_hss_shear_strength(

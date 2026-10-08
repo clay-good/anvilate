@@ -16,8 +16,7 @@
       numbers, covering every clause the library cites under 360-16 (gated in
       tests/test_edition_differences.py). `compare_editions` reports the successor clause,
       the change and the citation, states "no difference is registered" for anything
-      unlisted, and refuses an editionless citation. Side-by-side *results* wait on a
-      second implemented edition: every AISC check here is 360-16, so 3.4 stays open
+      unlisted, and refuses an editionless citation; see 3.4 for side-by-side results
 - [ ] 2.4 Optional offline jurisdiction mapping — DECLINED: shipping one means shipping a
       staleness-dated claim about the law in every jurisdiction, and an advisory answer to a
       legal question is the kind of thing that gets quoted as an authoritative one
@@ -27,9 +26,11 @@
 - [x] 3.1 Editionless citation fails registration (CI-enforced across all checks)
 - [x] 3.2 Mixed-edition bundle blocked without waiver, allowed with it
 - [x] 3.3 Superseded label renders without changing the verdict
-- [ ] 3.4 Edition comparison reports both results — the comparison reports both clause
-      references and the registry citation; a second *result* needs a check implemented
-      under a second edition, which none is
+- [x] 3.4 Edition comparison reports both results — `compare_editions(..., evaluate=)`
+      carries the result under each edition beside both clause references and the registry
+      citation. One check is implemented under both: AISC 360 §F6 minor-axis flexure
+      (`edition="16"|"22"`, F6-4's 0.69 → 0.70), tested in tests/test_edition_differences.py;
+      the other AISC checks implement 360-16 and report the registry text alone
 
 ## 4. Docs & examples
 

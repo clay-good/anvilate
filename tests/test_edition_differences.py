@@ -78,3 +78,41 @@ def test_unchanged_is_claimed_only_with_a_page_behind_it():
     for entry in entries:
         assert 1 <= entry.page <= 37, entry
         assert entry.summary.strip() and _COMPARISON in entry.source
+
+
+def _minor_axis(edition: str):  # type: ignore[no-untyped-def]
+    from anvilate.analysis import aisc_minor_axis_flexural_strength
+    from anvilate.units import Quantity
+
+    # A slender flange: b_f/(2 t_f) = 30 against λ_rf = √(200000/345) = 24.1.
+    return aisc_minor_axis_flexural_strength(
+        flange_width=Quantity.parse("300 mm"),
+        flange_thickness=Quantity.parse("5 mm"),
+        yield_strength=Quantity.parse("345 MPa"),
+        elastic_modulus=Quantity.parse("200 GPa"),
+        plastic_section_modulus=Quantity.parse("400000 mm^3"),
+        elastic_section_modulus=Quantity.parse("250000 mm^3"),
+        edition=edition,
+    )
+
+
+def test_a_check_implemented_under_both_editions_reports_both_results():
+    """effectivity 3.4: both results, both clause references, and the registry citation.
+    F6-4's multiplier is 0.69 in 360-16 and 0.70 in 360-22, so a slender flange's M_n moves
+    by exactly 0.70/0.69, M_n = F_cr·S_y = 0.69·E/λ²·S_y = 0.69 · 200000 / 900 · 250000."""
+    sixteen, twenty_two = _minor_axis("16"), _minor_axis("22")
+    assert sixteen.to("kN*m").magnitude == pytest.approx(0.69 * 200000 / 900 * 250000 / 1e6)
+    assert twenty_two.magnitude / sixteen.magnitude == pytest.approx(0.70 / 0.69, rel=1e-12)
+    assert _minor_axis("2022") == twenty_two
+
+    comparison = compare_editions("AISC 360-16 §F6", "22", evaluate=_minor_axis)
+    assert comparison.results == (("AISC 360-16", sixteen), ("AISC 360-22", twenty_two))
+    statement = str(comparison)
+    assert statement.startswith("AISC 360-16 §F6 evaluates under AISC 360-16: 38.3333")
+    assert "under AISC 360-22: 38.8889" in statement
+    assert "AISC 360-16 §F6 → AISC 360-22 §F6: revised" in statement and "p. 9" in statement
+
+
+def test_an_edition_the_check_does_not_implement_is_refused():
+    with pytest.raises(ValueError, match="edition must be one of"):
+        _minor_axis("10")

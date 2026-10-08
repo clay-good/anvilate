@@ -15,6 +15,7 @@ comparison document itself supports it.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from enum import StrEnum
 from functools import cache
 from importlib.resources import files
@@ -24,6 +25,7 @@ from pydantic import ConfigDict
 
 from .._models import Provenance, RevalidatedModel, _near_identifiers, cited, parse_yaml
 from ..refusal import RefusalError, Remedy
+from ..units import Quantity
 from .effectivity import Citation, parse_citation
 
 __all__ = [
@@ -154,28 +156,42 @@ class EditionComparison(RevalidatedModel):
     citation: Provenance
     to_edition: str
     difference: EditionDifference | None
+    # The check evaluated under each edition, when the caller can: (edition, result) pairs,
+    # the cited edition first.
+    results: tuple[tuple[str, Quantity], ...] = ()
 
     @property
     def statement(self) -> str:
         if self.difference is not None:
-            return str(self.difference)
-        # Not "the editions agree": nothing here has compared them.
-        return (
-            f"no difference is registered between {self.citation} and edition "
-            f"{self.to_edition}; that is a statement about this registry, not that the "
-            "editions agree"
-        )
+            said = str(self.difference)
+        else:
+            # Not "the editions agree": nothing here has compared them.
+            said = (
+                f"no difference is registered between {self.citation} and edition "
+                f"{self.to_edition}; that is a statement about this registry, not that the "
+                "editions agree"
+            )
+        if not self.results:
+            return said
+        side_by_side = "; ".join(f"under {edition}: {value}" for edition, value in self.results)
+        return f"{self.citation} evaluates {side_by_side}. {said}"
 
     def __str__(self) -> str:
         return self.statement
 
 
-def compare_editions(citation: str | Citation, to_edition: str) -> EditionComparison:
+def compare_editions(
+    citation: str | Citation,
+    to_edition: str,
+    *,
+    evaluate: Callable[[str], Quantity] | None = None,
+) -> EditionComparison:
     """What became of ``citation``'s clause in ``to_edition``, or that nothing is registered.
 
     ``citation`` must name its edition: "AISC 360 §J3.6" is bolt strength in one edition
     and bolt spacing in the next, so a comparison from it would be a comparison from a
-    guess.
+    guess. ``evaluate``, given an edition, returns the check's result under it; with it the
+    comparison carries both results beside the differing clauses and the registry citation.
     """
     parsed = citation if isinstance(citation, Citation) else parse_citation(citation)
     if parsed is None:
@@ -190,8 +206,17 @@ def compare_editions(citation: str | Citation, to_edition: str) -> EditionCompar
                 ),
             ),
         )
+    results = (
+        ()
+        if evaluate is None
+        else tuple(
+            (f"{parsed.standard}{parsed.separator}{edition}", evaluate(edition))
+            for edition in (parsed.edition, to_edition)
+        )
+    )
     return EditionComparison(
         citation=str(parsed),
         to_edition=to_edition,
         difference=default_edition_differences().find(parsed, to_edition),
+        results=results,
     )
