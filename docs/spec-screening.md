@@ -415,7 +415,10 @@ The exception remains a `ValueError` for compatibility.
 
 A team whose alloy is not one of the bundled records passes their own resolver —
 `screen_spec(spec, resolver=...)`, built from `MaterialsDatabase.extended` — rather than
-losing the check. One entry per standard-component interface, named by its tag; a spec that
+losing the check. An extension record is held to what a material is: every cited value finite,
+the modulus, density, yield, ultimate and endurance limit positive, and the Poisson ratio in
+(-1, 0.5], so a `.nan` or `.inf` in a team's file is refused when the file is read rather than
+by the first screen to use it. One entry per standard-component interface, named by its tag; a spec that
 declares none gets no interface entry, because nothing to resolve is not a check that ran.
 
 ## What is not screened
