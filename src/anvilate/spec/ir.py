@@ -1122,12 +1122,13 @@ class AcceptanceCriteria(_Base):
 # the profile_supplied origin a bound profile's values carry, and 1.14.0 constraint_topology,
 # how the part is located, 1.15.0 keepouts, the volumes it must leave empty, 1.16.0 a
 # keepout's offset from its anchor face, 1.17.0 assembly, how the build goes together, and
-# 1.18.0 carbon, the embodied-carbon inputs and their budget.
+# 1.18.0 carbon, the embodied-carbon inputs and their budget. 1.19.0 changes no field:
+# the schema's identifier became a URN (urn:anvilate:schema:design-spec:1.19.0).
 # All
 # additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.18.0"
+SCHEMA_VERSION = "1.19.0"
 
 
 class DesignSpec(_Base):

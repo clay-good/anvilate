@@ -4,7 +4,7 @@ The MCP 2026-07-28 revision takes full JSON Schema 2020-12 for tool input and ou
 schemas, which means Anvilate's published contracts can *be* the tool contract rather than
 a paraphrase of it. That is the whole reason this module is small: a tool that consumes a
 spec does not describe a spec, it ``$ref``s
-``https://anvilate.dev/schemas/design-spec/<version>.json``, and a tool that returns a
+``urn:anvilate:schema:design-spec:<version>``, and a tool that returns a
 scorecard ``$ref``s the scorecard schema at its version. Two enforcement points — the tool
 contract an agent reads and the structured-output constraint a compiler is decoded under —
 resolve to one artifact, so they cannot drift apart.
@@ -46,6 +46,8 @@ import sys
 from collections.abc import Mapping
 from copy import deepcopy
 from enum import StrEnum
+from functools import cache
+from types import MappingProxyType
 from typing import Any, TextIO
 
 from pydantic import ConfigDict, Field, model_validator
@@ -148,7 +150,7 @@ REQUIRED_OPERATIONS = frozenset(
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.18.0.json"
+_SPEC_REF = "urn:anvilate:schema:design-spec:1.19.0"
 # 1.6.0 adds a counterbore locator kind and its required through diameter.
 # 1.5.0 adds an optional concentric circular locator: a confirmed pilot bore or boss with
 # its diameter and axial extent. Existing interface contracts remain valid unchanged.
@@ -176,7 +178,7 @@ _SPEC_REF = "https://anvilate.dev/schemas/design-spec/1.18.0.json"
 # property, and neither release closes `additionalProperties` — so an old client keeps
 # working; it simply cannot see whether a check is owed a derivation.
 # 1.12.0 adds the optional stable `check_id` that document-driven module checks receive.
-_SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.12.0.json"
+_SCORECARD_REF = "urn:anvilate:schema:scorecard:1.13.0"
 # The evidence bundle, published so `export_artifact` can describe what it returns. It could
 # not before: the tool declared its entire output as `{"type": "object"}`, because
 # `contracts.py` generated a spec schema and a scorecard schema and no third one. A literal
@@ -192,10 +194,10 @@ _SCORECARD_REF = "https://anvilate.dev/schemas/scorecard/1.12.0.json"
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
-_BUNDLE_REF = "https://anvilate.dev/schemas/evidence-bundle/1.24.0.json"
-_GEOMETRY_REF = "https://anvilate.dev/schemas/geometry-summary/1.2.0.json"
-_VIEWPORT_REF = "https://anvilate.dev/schemas/viewport-image/1.0.0.json"
-_MEASUREMENT_REF = "https://anvilate.dev/schemas/geometry-measurement/1.0.0.json"
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.25.0"
+_GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.3.0"
+_VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.1.0"
+_MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session
@@ -342,8 +344,8 @@ class ToolDefinition(RevalidatedModel):
             "name": self.name,
             "title": self.title,
             "description": self.description,
-            "inputSchema": deepcopy(self.input_schema),
-            "outputSchema": deepcopy(self.output_schema),
+            "inputSchema": _with_embedded(self.input_schema),
+            "outputSchema": _with_embedded(self.output_schema),
             "_meta": {
                 "dev.anvilate/dispatch": self.dispatch.value,
                 "dev.anvilate/cost": self.cost.value,
@@ -353,6 +355,42 @@ class ToolDefinition(RevalidatedModel):
                 "dev.anvilate/subject": self.subject,
             },
         }
+
+
+@cache
+def _published_by_id() -> Mapping[str, str]:
+    from .contracts import schema_artifacts
+
+    # Cached, so immutable all the way down: each schema is held as its JSON text, and an
+    # embedding parses its own copy.
+    return MappingProxyType(
+        {schema["$id"]: json.dumps(schema) for schema in schema_artifacts().values()}
+    )
+
+
+def _with_embedded(schema: dict[str, Any]) -> dict[str, Any]:
+    """``schema`` with every published schema it references embedded under ``$defs``.
+
+    A reference is a URN, a name and not a location, and nothing serves it: Anvilate is a
+    local tool. Embedded with its ``$id``, a referenced schema resolves inside the tool
+    definition (JSON Schema 2020-12 resolves an embedded ``$id``), so a client validating
+    arguments needs nothing but the definition it was handed. They used to be
+    ``https://anvilate.dev/...`` URLs, a domain that does not exist, and the official
+    conformance suite could not compile a single tool schema.
+    """
+    wired = deepcopy(schema)
+    published = _published_by_id()
+    embedded: dict[str, Any] = {}
+    pending = sorted(_refs(schema))
+    while pending:
+        ref = pending.pop()
+        if ref in embedded or ref not in published:
+            continue
+        embedded[ref] = parse_json(published[ref])
+        pending.extend(sorted(_refs(embedded[ref]) - set(embedded)))
+    if embedded:
+        wired.setdefault("$defs", {}).update(embedded)
+    return wired
 
 
 def _catalog() -> tuple[ToolDefinition, ...]:

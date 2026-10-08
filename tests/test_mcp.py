@@ -83,7 +83,7 @@ def test_a_moved_schema_version_fails_the_gate(monkeypatch):
     import anvilate.mcp as mcp
 
     moved = dict(spec_json_schema())
-    moved["$id"] = "https://anvilate.dev/schemas/design-spec/9.9.9.json"
+    moved["$id"] = "urn:anvilate:schema:design-spec:9.9.9"
     monkeypatch.setattr(mcp, "spec_json_schema", lambda: moved)
     issues = mcp.catalog_issues()
     assert any("9.9.9" in issue for issue in issues), issues
@@ -2389,3 +2389,54 @@ def test_initialize_names_the_server_version_and_ping_is_answered():
     assert init["result"]["serverInfo"]["version"] == version("anvilate")
     pong = handle_request({"jsonrpc": "2.0", "id": "p", "method": "ping"})
     assert pong == {"jsonrpc": "2.0", "id": "p", "result": {"resultType": "complete"}}
+
+
+def test_every_tool_schema_compiles_offline_from_its_own_definition():
+    """headless-automation: the MCP server is local software. Every `$ref` in a tool's
+    input or output schema resolves to a schema embedded in that definition; they used to
+    point at https://anvilate.dev/..., a domain that does not exist, and no validating
+    client (the official conformance suite's included) could compile one."""
+    referencing = pytest.importorskip("referencing")
+    from referencing.jsonschema import DRAFT202012
+
+    from anvilate.mcp import wire_definitions
+
+    def refs(node):  # type: ignore[no-untyped-def]
+        if isinstance(node, dict):
+            if isinstance(node.get("$ref"), str):
+                yield node["$ref"]
+            for value in node.values():
+                yield from refs(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from refs(value)
+
+    for tool in wire_definitions():
+        for label in ("inputSchema", "outputSchema"):
+            schema = tool[label]
+            # A registry holding nothing but this definition, its embedded `$id`s crawled.
+            registry = (
+                referencing.Registry()
+                .with_resource("urn:test:tool", DRAFT202012.create_resource(schema))
+                .crawl()
+            )
+            resolver = registry.resolver(base_uri="urn:test:tool")
+            for ref in sorted(set(refs(schema))):
+                assert not ref.startswith("http"), (tool["name"], label, ref)
+                if ref.startswith("#"):
+                    continue
+                resolver.lookup(ref)  # raises Unresolvable for a reference nothing embeds
+
+
+def test_no_published_identifier_is_a_location():
+    """Every schema `$id` is a URN, and so is every `$ref` between published schemas."""
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "docs" / "api" / "schemas"
+    current = [p for p in root.rglob("*.json") if "released" not in p.parts]
+    assert len(current) >= 40, len(current)
+    for path in current:
+        text = path.read_text(encoding="utf-8")
+        assert json.loads(text)["$id"].startswith("urn:anvilate:schema:"), path
+        assert "anvilate.dev" not in text, path

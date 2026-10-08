@@ -24,7 +24,7 @@ verify_attestation(envelope, artifacts={"lug.dxf": dxf_bytes}, signer=signer)
 
 An [in-toto Statement v1](https://github.com/in-toto/attestation) whose **subjects** are
 the produced artifacts by SHA-256, and whose **predicate** —
-`https://anvilate.dev/attestation/screening/v1`, versioned in the URI so a breaking change
+`urn:anvilate:attestation:screening:v1`, versioned in the URN so a breaking change
 takes a new one — carries six things:
 
 | Field | What it is |

@@ -65,8 +65,8 @@ Drift is the obvious failure: a model changes, the artifact does not, and the sc
 describes a document nobody produces. That half is a byte-for-byte comparison.
 
 The other half is invisible from outside. **A contract whose content changes while its
-version stays put is a silent breaking change**: a client pinned to `1.1.0` fetches a
-different document under the same identifier and has no way to know.
+version stays put is a silent breaking change**: a client pinned to `1.1.0` validates
+against a different document under the same identifier and has no way to know.
 
 The first attempt at that half did not work, and the way it failed is worth keeping. It
 compared the checked-in artifact against a freshly generated one — which is *already* the
@@ -96,7 +96,7 @@ addressed by the same tag a document writes, so a client can validate what it is
 send without the Spec IR having to know what a lifting lug is.
 
 ```
-https://anvilate.dev/schemas/elements/lifting_lug/1.0.0.json
+urn:anvilate:schema:elements:lifting_lug:1.3.0
 ```
 
 They are generated from the same registry the screen resolves through, so an element that
@@ -402,7 +402,7 @@ command-specific content:
 
 ```json
 {
-  "schema": "https://anvilate.dev/schemas/cli-output/1.3.0.json",
+  "schema": "urn:anvilate:schema:cli-output:1.3.0",
   "schema_version": "1.3.0",
   "command": "check"
 }

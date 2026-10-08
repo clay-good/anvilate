@@ -190,8 +190,8 @@ def test_the_statement_is_an_in_toto_statement_v1():
 
 def test_the_predicate_type_is_versioned_in_its_uri():
     # A breaking predicate change takes a new URI rather than redefining documents
-    # already signed under this one.
-    assert re.search(r"/v\d+$", PREDICATE_TYPE)
+    # already signed under this one. A URN, so it names the predicate without a location.
+    assert re.fullmatch(r"urn:anvilate:attestation:screening:v\d+", PREDICATE_TYPE)
 
 
 def test_identical_inputs_reproduce_the_identical_digest_across_processes():
@@ -273,7 +273,10 @@ def test_a_changed_spec_changes_the_digest():
 # And again, from e44d2b82..., when `ScorecardEntry.applied_factors` shipped — the factors a
 # check applied inside its capacity, which the margin ledger itemizes. The conservatism a
 # verdict relies on is part of what the document says.
-_GOLDEN_DIGEST = "c0c4f1fd70dc10c994aa379b2452b592d1de476e799306e1c142dceadeb7c3a5"
+# And again, from c0c4f1fd..., when identifiers became URNs: the predicate type, the schema
+# `$id`s and the versions the bundle names moved off `https://anvilate.dev/...`, a domain
+# that never existed. The identifier a document carries is part of what it says.
+_GOLDEN_DIGEST = "4605d17bcc056aba782f0e4f9d58350dadbeaf913e32a7917de38c72b0767c64"
 
 
 def test_the_fixture_bundle_hashes_to_its_pinned_digest():

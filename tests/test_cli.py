@@ -3304,7 +3304,7 @@ _MALFORMED_ENVELOPES = {
                     {
                         "_type": "https://in-toto.io/Statement/v1",
                         "subject": ["padeye.dxf", "padeye.step"],
-                        "predicateType": "https://anvilate.dev/evidence-bundle/v1",
+                        "predicateType": "urn:example:some-other-predicate:v1",
                         "predicate": {},
                     }
                 ).encode()
@@ -3320,7 +3320,7 @@ _MALFORMED_ENVELOPES = {
                     {
                         "_type": "https://in-toto.io/Statement/v1",
                         "subject": [],
-                        "predicateType": "https://anvilate.dev/evidence-bundle/v1",
+                        "predicateType": "urn:example:some-other-predicate:v1",
                         "predicate": [],
                     }
                 ).encode()
@@ -4282,7 +4282,7 @@ def test_the_human_rendering_shows_everything_the_verdict_is_computed_from():
     baseline = VerificationReport(
         bundle_digest="a" * 64,
         signature_state=SignatureState.SYMMETRIC_VERIFIED,
-        predicate_type="https://anvilate.dev/attestation/screening/v1",
+        predicate_type="urn:anvilate:attestation:screening:v1",
         checked_subjects=("scorecard.json",),
     )
     rendered = _render_verification(baseline, {})

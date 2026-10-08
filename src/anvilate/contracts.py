@@ -97,10 +97,18 @@ __all__ = [
 # is the reason these artifacts exist in this form rather than as an ad-hoc dump.
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
-_BASE_ID = "https://anvilate.dev/schemas"
+# A URN, not a URL. There is no domain behind these names and there will not be one:
+# Anvilate is a local tool downloaded from its repository. An `https://` identifier invites
+# a client to fetch it, and whoever registered that domain would answer; a URN names the
+# document without saying where to get it, and every consumer here has it embedded.
+_BASE_ID = "urn:anvilate:schema"
 
 # Where a version's content is frozen once and never regenerated. See `freeze_release`.
 RELEASED_DIRECTORY = "released"
+
+# Every schema moved one minor version on 2026-10-08 when identifiers stopped being
+# `https://anvilate.dev/...` URLs, a domain that never existed, and became URNs. A frozen
+# version's content never changes, and the `$id` is content.
 
 # The Spec IR carries its own version already — it is the number a spec file states in its
 # `anvilate_spec` field — so the published artifact uses it rather than inventing a second
@@ -110,50 +118,50 @@ SPEC_SCHEMA_VERSION = SCHEMA_VERSION
 # The scorecard had no versioned contract before it had a published one. Bump this when the
 # generated schema changes; the gate in tests/test_contracts.py refuses a changed schema
 # under an unchanged version and says so by name.
-SCORECARD_SCHEMA_VERSION = "1.12.0"
+SCORECARD_SCHEMA_VERSION = "1.13.0"
 
 # The evidence bundle, which the `export_artifact` MCP tool serves and `anvilate export`
 # prints. It had no contract at all: the tool published its entire output as
 # `{"type": "object"}`, so the one thing it exists to hand a client was the one thing its
 # schema said nothing about. Same rule as the two above — bump on a change to the generated
 # document, and the gate refuses a changed schema under an unchanged version.
-BUNDLE_SCHEMA_VERSION = "1.24.0"
+BUNDLE_SCHEMA_VERSION = "1.25.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
-GEOMETRY_SCHEMA_VERSION = "1.2.0"
+GEOMETRY_SCHEMA_VERSION = "1.3.0"
 
 # Planar faces and through-hole patterns measured from imported mating STEP solids.
-INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.14.0"
+INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.15.0"
 
 # One measured candidate accepted by a named person as an InterfaceContract.
-CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.4.0"
+CONFIRMED_INTERFACE_SCHEMA_VERSION = "1.5.0"
 
 # One measured planar contact accepted by a named person without an invented hole pattern.
-CONFIRMED_CONTACT_SCHEMA_VERSION = "1.0.0"
+CONFIRMED_CONTACT_SCHEMA_VERSION = "1.1.0"
 
 # One measured cylindrical mate accepted by a named person without a fit verdict.
-CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION = "1.0.0"
+CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION = "1.1.0"
 
 # One measured planar gap accepted by a named person without an allowable clearance.
-CONFIRMED_PLANAR_GAP_SCHEMA_VERSION = "1.0.0"
+CONFIRMED_PLANAR_GAP_SCHEMA_VERSION = "1.1.0"
 
 # One confirmed planar gap checked against a caller-supplied cited band.
-PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION = "1.0.0"
+PLANAR_GAP_CLEARANCE_CHECK_SCHEMA_VERSION = "1.1.0"
 
 # One confirmed planar contact checked against a caller-supplied cited minimum area.
-PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION = "1.0.0"
+PLANAR_CONTACT_AREA_CHECK_SCHEMA_VERSION = "1.1.0"
 
 # One confirmed cylindrical mate checked against an explicit ISO 286 fit.
-CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION = "1.0.0"
+CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION = "1.1.0"
 
 # One confirmed cylindrical mate checked against a caller-supplied cited minimum engagement.
-CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION = "1.0.0"
+CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION = "1.1.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
-VIEWPORT_SCHEMA_VERSION = "1.0.0"
+VIEWPORT_SCHEMA_VERSION = "1.1.0"
 
 # A scalar read directly from a built B-Rep by ``measure_geometry``.
-MEASUREMENT_SCHEMA_VERSION = "1.0.0"
+MEASUREMENT_SCHEMA_VERSION = "1.1.0"
 
 
 def _artifact(
@@ -175,7 +183,7 @@ def _artifact(
     schema = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
     return {
         "$schema": JSON_SCHEMA_DIALECT,
-        "$id": f"{_BASE_ID}/{name}/{version}.json",
+        "$id": f"{_BASE_ID}:{name.replace('/', ':')}:{version}",
         "title": schema.pop("title", name),
         # Both are popped, not just the title. `**schema` re-introduced whatever pydantic
         # put there, so the curated sentence was dead code and consumers received the
@@ -438,7 +446,7 @@ ELEMENTS_DIRECTORY = "elements"
 # The version an element publishes at the day it first ships. A pack ships an element by
 # existing -- the registry is derived from the packs -- so a new element must not require an
 # edit here to be publishable, and this is what it gets until somebody bumps it.
-ELEMENT_SCHEMA_INITIAL_VERSION = "1.0.0"
+ELEMENT_SCHEMA_INITIAL_VERSION = "1.1.0"
 
 # Elements whose schema has moved since, keyed by the same tag a document writes. Add an
 # entry to bump one element; every other element's `$id` is untouched by that edit. An entry
@@ -470,37 +478,37 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # model field, published in each schema as something a document could write, and a
     # document that wrote it was accepted and then ignored — the guard read the class's
     # own value. It is a class attribute now, and a document naming it is refused.
-    "base_plate": "1.2.0",
-    "beam_column_member": "1.3.0",
-    "beam_member": "1.3.0",
-    "bolted_connection": "1.2.0",
-    "column_member": "1.3.0",
-    "concrete_bearing": "1.2.0",
-    "cover_plate": "1.2.0",
-    "driven_pile": "1.2.0",
-    "feeder": "1.2.0",
-    "gusset_plate": "1.2.0",
-    "helical_compression_spring": "1.1.0",
-    "infinite_slope": "1.2.0",
-    "lifting_lug": "1.2.0",
-    "lighting_installation": "1.2.0",
-    "masonry_wall": "1.2.0",
-    "pipe_run": "1.2.0",
-    "pump_duty": "1.2.0",
-    "retaining_wall": "1.2.0",
-    "rolling_bearing": "1.1.0",
-    "shaft_key": "1.1.0",
-    "shallow_footing": "1.2.0",
-    "shear_plate": "1.2.0",
-    "spur_gear_mesh": "1.1.0",
-    "structure": "1.1.0",
-    "tension_member": "1.2.0",
+    "base_plate": "1.3.0",
+    "beam_column_member": "1.4.0",
+    "beam_member": "1.4.0",
+    "bolted_connection": "1.3.0",
+    "column_member": "1.4.0",
+    "concrete_bearing": "1.3.0",
+    "cover_plate": "1.3.0",
+    "driven_pile": "1.3.0",
+    "feeder": "1.3.0",
+    "gusset_plate": "1.3.0",
+    "helical_compression_spring": "1.2.0",
+    "infinite_slope": "1.3.0",
+    "lifting_lug": "1.3.0",
+    "lighting_installation": "1.3.0",
+    "masonry_wall": "1.3.0",
+    "pipe_run": "1.3.0",
+    "pump_duty": "1.3.0",
+    "retaining_wall": "1.3.0",
+    "rolling_bearing": "1.2.0",
+    "shaft_key": "1.2.0",
+    "shallow_footing": "1.3.0",
+    "shear_plate": "1.3.0",
+    "spur_gear_mesh": "1.2.0",
+    "structure": "1.2.0",
+    "tension_member": "1.3.0",
     # 1.1.0 adds the support bearing check's optional fields.
-    "timber_beam": "1.1.0",
-    "transmission_shaft": "1.1.0",
-    "ventilation_zone": "1.2.0",
-    "welded_connection": "1.2.0",
-    "worker_noise_exposure": "1.2.0",
+    "timber_beam": "1.2.0",
+    "transmission_shaft": "1.2.0",
+    "ventilation_zone": "1.3.0",
+    "welded_connection": "1.3.0",
+    "worker_noise_exposure": "1.3.0",
 }
 
 
@@ -710,7 +718,7 @@ def schema_issues(schema: dict[str, Any]) -> list[str]:
     version = schema.get("x-anvilate-version")
     if not isinstance(identifier, str) or not identifier.startswith(_BASE_ID):
         issues.append(f"the schema has no anvilate $id; got {identifier!r}")
-    elif not isinstance(version, str) or f"/{version}.json" not in identifier:
+    elif not isinstance(version, str) or not identifier.endswith(f":{version}"):
         issues.append(f"$id {identifier!r} does not carry the stated version {version!r}")
 
     definitions = set(schema.get("$defs", {}))

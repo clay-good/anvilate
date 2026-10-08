@@ -128,9 +128,12 @@
       `ping` was "unknown method". With the shim echoing the client's revision (the suite
       predates 2026-07-28), initialize passes. Ping's `resultType` is rejected by the suite's
       2025 schema, a revision gap. logging, completion, resources and prompts are
-      undeclared capabilities, so -32601 is correct. Open finding: every tool schema
-      `$ref`s `https://anvilate.dev/schemas/...`, which does not resolve, so a validating
-      client cannot compile the tool schemas (tools-list, json-schema-2020-12)
+      undeclared capabilities, so -32601 is correct. The third finding is fixed too: every
+      tool schema `$ref`d `https://anvilate.dev/...`, a domain that never existed (Anvilate
+      is local software), so no validating client could compile them. Identifiers are now
+      `urn:anvilate:...` names, every schema moved one minor version, and each tool
+      definition embeds the schemas it references (headless-automation, "The MCP server is
+      local software, not a hosted service")
 
 ## 4. Docs
 

@@ -143,7 +143,10 @@ _PREDICATE_REQUIRED_KEYS = (
 #: Keys `to_json_dict` writes only sometimes. Read, but not required.
 _PREDICATE_OPTIONAL_KEYS = ("sections",)
 
-PREDICATE_TYPE = "https://anvilate.dev/attestation/screening/v1"
+PREDICATE_TYPE = "urn:anvilate:attestation:screening:v1"
+# The same predicate under the name it carried before identifiers became URNs. No domain
+# ever stood behind it; an envelope signed under it is still this predicate, so it verifies.
+_LEGACY_PREDICATE_TYPE = "https://anvilate.dev/attestation/screening/v1"
 
 # The DSSE payloadType for an in-toto statement. Part of the signed pre-authentication
 # encoding, so it is not cosmetic: changing it invalidates every signature.
@@ -1265,7 +1268,7 @@ def verify_attestation(
             f"payload type is {attestation.payload_type!r}, which this verifier does not "
             f"read (it understands {DSSE_PAYLOAD_TYPE!r})"
         )
-    if predicate_type != PREDICATE_TYPE:
+    if predicate_type not in (PREDICATE_TYPE, _LEGACY_PREDICATE_TYPE):
         problems.append(
             f"predicate type is {predicate_type!r}, which this verifier does not know "
             f"(it understands {PREDICATE_TYPE!r})"

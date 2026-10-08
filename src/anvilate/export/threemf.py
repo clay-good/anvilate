@@ -56,7 +56,7 @@ __all__ = ["THREEMF_STANDARD", "render_mesh_3mf"]
 THREEMF_STANDARD = "ISO/IEC 25422:2025"
 
 _CORE = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
-_ANVILATE = "https://anvilate.dev/3mf"
+_ANVILATE = "urn:anvilate:3mf"
 _MODEL_PART = "3D/3dmodel.model"
 # A fixed timestamp for every zip member, so identical content is identical bytes. 1980 is
 # the earliest date a zip header can hold.

@@ -330,7 +330,7 @@ def test_an_element_schema_describes_the_fields_its_own_screen_requires():
         model = registry[tag][0]
         required = {name for name, field in model.model_fields.items() if field.is_required()}
         assert set(schema.get("required", ())) == required, tag
-        assert schema["$id"].endswith(".json") and f"/{tag}/" in schema["$id"], tag
+        assert f":elements:{tag}:" in schema["$id"] and schema["$id"].startswith("urn:"), tag
 
 
 def test_the_lifting_lug_schema_accepts_the_document_the_docs_page_shows():
@@ -381,7 +381,7 @@ def test_bumping_one_element_moves_only_that_element(monkeypatch):
 
     assert set(before) == set(after)
     assert after[bumped] != before[bumped], f"bumping {bumped} changed nothing"
-    assert f"/{bumped}/2.0.0.json" in after[bumped]
+    assert f":{bumped}:2.0.0" in after[bumped]
     moved = {tag for tag in before if before[tag] != after[tag]}
     assert moved == {bumped}, f"bumping {bumped} also re-issued {sorted(moved - {bumped})}"
 

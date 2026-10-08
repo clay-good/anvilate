@@ -408,7 +408,7 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "https://anvilate.dev/schemas/cli-output/1.8.0.json",
+{"schema": "urn:anvilate:schema:cli-output:1.8.0",
  "schema_version": "1.8.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
@@ -841,7 +841,7 @@ anvilate verify attestation.json \
 PASS  attested=False
   signature   symmetric_verified
   bundle      46802dedaa2fe2a7ac0e3628221fb482b08da7f5d7b996a0ccfd8de975f3cf63
-  predicate   https://anvilate.dev/attestation/screening/v1
+  predicate   urn:anvilate:attestation:screening:v1
   checked     scorecard.json, lug.dxf
   unchecked   none
   produced by anvilate 0.0.1

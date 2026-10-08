@@ -86,6 +86,29 @@ reconnecting client loses nothing.
 - **WHEN** the Spec IR schema version changes
 - **THEN** the MCP tool contracts and the structured-output constraints used for LLM compilation both derive from the same schema artifact, so they cannot drift apart
 
+### Requirement: The MCP server is local software, not a hosted service
+
+Anvilate SHALL be a tool a user downloads and runs on their own machine. The MCP server SHALL
+run as a local process over stdio, started by the user's own client, and there SHALL be no
+hosted Anvilate service, domain, or remote endpoint that any surface depends on. Every
+identifier Anvilate publishes (schema `$id`s, the CLI output `schema` field, the attestation
+predicate type) SHALL be a URN (`urn:anvilate:...`) that names a document without locating
+one, so nothing invites a client to fetch it and no third party can answer for it. Each MCP
+tool definition SHALL embed every published schema it references, so a client validating a
+tool's input or output needs nothing beyond the definition it was handed.
+
+#### Scenario: A validating client resolves every schema offline
+
+- **WHEN** a client compiles a tool's input or output schema from `tools/list`
+- **THEN** every `$ref` resolves to a schema embedded in that definition, with no network
+  access
+
+#### Scenario: No identifier is a location
+
+- **WHEN** any published schema, CLI output document, or attestation is inspected
+- **THEN** its identifiers are `urn:anvilate:` names, and none is an `http` or `https` URL
+  on an Anvilate domain
+
 ### Requirement: Artifact provenance hashing
 
 Every build SHALL record a provenance graph — input spec hash, database versions, toolchain versions, generated-code hash, artifact hashes — embedded in the evidence bundle so any artifact can be traced to its exact inputs.

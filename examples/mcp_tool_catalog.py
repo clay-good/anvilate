@@ -71,7 +71,7 @@ def main() -> None:
         # Against the published constant, not a literal: the claim is that the tool surface
         # references the scorecard contract this build publishes, and a version written here
         # by hand stops being that claim the day the contract moves.
-        == f"https://anvilate.dev/schemas/scorecard/{SCORECARD_SCHEMA_VERSION}.json"
+        == f"urn:anvilate:schema:scorecard:{SCORECARD_SCHEMA_VERSION}"
     )
     assert validation["_meta"]["dev.anvilate/dispatch"] == "synchronous"
 
