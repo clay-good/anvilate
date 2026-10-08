@@ -340,7 +340,7 @@ the schemas it references, so an agent can use it offline; it opens no connectio
 runs no language model of its own: your agent is the model. Database
 integrity is proved by loading the bundled resolver and counting its material and component
 designations. `--format json` emits the same report
-under CLI output schema 1.8.0.
+under the published CLI output schema.
 
 ### Download a dataset Anvilate may read but not ship
 
@@ -428,8 +428,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.8.0",
- "schema_version": "1.8.0", "command": "check", "status": "fail",
+{"schema": "urn:anvilate:schema:cli-output:1.55.0",
+ "schema_version": "1.55.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -907,7 +907,7 @@ PASS  STEP integrity received.step
 It reads the CAx-IF v4.6 part-level properties, independently imports the solid, and compares
 the imported volume, total surface area, and centroid at the published industry example
 thresholds. A missing or altered property exits 1 and names the mismatch. `--format json`
-returns the same verdict and values under CLI output schema 1.8.0. The envelope-only
+returns the same verdict and values under the published CLI output schema. The envelope-only
 `--artifact` and `--hmac-key-file` options are refused for STEP rather than ignored.
 
 For attestation envelopes, three things this command will not do are the reasons it exists:
@@ -1067,7 +1067,7 @@ that the kernel produced one valid positive-volume solid, and tags `top`, `botto
 `south`, `east`, and `west` for boxes or `top`, `bottom`, `perimeter`, and optional `bore`
 for round covers. The text result reports the volume and digest. `--format json`
 adds the declared dimensions, all semantic tags, and `authorization` as `validated` or
-`unvalidated` under the CLI output 1.8.0 contract.
+`unvalidated` under the published CLI output contract.
 
 An `--output` ending in `.3mf` writes the same solid as a 3MF mesh instead: tessellated,
 welded, held to the solid's volume, and written as the ISO/IEC 25422 core with the standard,
