@@ -3112,6 +3112,12 @@ def test_fetch_refuses_a_payload_that_is_not_the_published_one(tmp_path, monkeyp
     assert list(tmp_path.glob("fake-shapes*")) == []
 
 
+def test_fetch_consent_without_a_dataset_is_refused_not_ignored(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    code, _out, err = _run("fetch", "--consent")
+    assert code == EXIT_BAD_REQUEST and "aisc-shapes" in err and "none was named" in err
+
+
 def test_fetch_lists_a_cache_it_cannot_vouch_for_as_unreadable(tmp_path, monkeypatch):
     """A payload with no provenance sidecar is not "cached": nothing can say what it is."""
     monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))

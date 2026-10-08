@@ -1110,6 +1110,14 @@ def _fetch(args: argparse.Namespace, *, out, err) -> int:
         fetch_dataset,
     )
 
+    if args.dataset is None and args.consent:
+        print(
+            "anvilate fetch: --consent agrees to one named download, and none was named. "
+            f"Choose one of {', '.join(sorted(_DATASETS))}",
+            file=err,
+        )
+        _state_remedies(("run `anvilate fetch` to see each dataset, then name one",))
+        return EXIT_BAD_REQUEST
     if args.dataset is None:
         rows = []
         for name in sorted(_DATASETS):
