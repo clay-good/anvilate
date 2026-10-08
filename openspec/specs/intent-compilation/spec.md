@@ -65,19 +65,19 @@ The compiler SHALL accept, in addition to prose: pasted dimension tables, STEP f
 - **WHEN** the user drops a STEP file of a mating part
 - **THEN** the file is routed to deterministic interface detection and detected candidates are offered back for confirmation, without the file contents passing through the LLM
 
-### Requirement: LLM backend independence
+### Requirement: The user's agent is the model
 
-The compiler SHALL run against a local model (Ollama/llama.cpp-served) or a user-supplied cloud API key interchangeably; the Spec IR contract MUST NOT change with the backend, and no cloud call SHALL occur unless the user has explicitly configured a cloud backend.
+Anvilate SHALL ship no language model, run no inference, and hold no API key. Prose is turned into a Design Spec by the user's own agent (any MCP client) driving Anvilate's local MCP server: the agent writes the candidate document, and `compile_spec` validates it through the same front door every spec passes, returning each refusal with its remedy. The server SHALL give the agent, in its `initialize` instructions, the identifiers that exist (materials, components, element screens and their required fields) and the rules for stating a requirement, generated from the live databases. The Spec IR contract MUST NOT depend on which agent or model wrote the document.
 
-#### Scenario: Air-gapped compilation
+#### Scenario: Any agent, same contract
 
-- **WHEN** Anvilate runs in air-gapped mode with a local model
-- **THEN** intent compilation completes with zero network calls
+- **WHEN** two different MCP agents write a spec for the same request
+- **THEN** both documents are validated and screened by the same deterministic code, and neither agent's model is called by Anvilate
 
-#### Scenario: Backend swap
+#### Scenario: The agent is told what exists
 
-- **WHEN** the user switches the configured model backend
-- **THEN** previously saved specs remain valid and recompilation produces schema-identical spec structures
+- **WHEN** an MCP client initializes the server
+- **THEN** the instructions list every bundled material and component identifier and every element screen with its required fields, so the agent copies identifiers rather than recalling them
 
 ### Requirement: Spec card confirmation before build
 

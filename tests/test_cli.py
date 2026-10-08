@@ -2975,7 +2975,7 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
     assert set(by_name) == {
         "FEA solver",
         "geometry kernel",
-        "local model runtime",
+        "MCP server",
         "viewport prerequisites",
         "database integrity",
     }
@@ -2989,10 +2989,10 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
     assert "material" in by_name["database integrity"]["detail"]
 
 
-def test_doctor_says_what_ships_for_the_local_model_and_opens_no_connection(monkeypatch):
-    """It reported "no local runtime is shipped ... once implemented" while `OllamaBackend`
-    and `LlamaCppBackend` both shipped. It must not probe for a server either: SECURITY.md
-    promises no connection a caller did not ask for."""
+def test_doctor_checks_the_mcp_server_and_opens_no_connection(monkeypatch):
+    """Anvilate's model is the user's own agent over MCP, so the server is the runtime doctor
+    checks: the catalog builds and every tool schema carries what it references. It opens no
+    connection doing so (SECURITY.md)."""
     import socket
 
     def refuse(*_args, **_kwargs):
@@ -3001,10 +3001,10 @@ def test_doctor_says_what_ships_for_the_local_model_and_opens_no_connection(monk
     monkeypatch.setattr(socket.socket, "connect", refuse)
     monkeypatch.setattr(socket, "create_connection", refuse)
     _code, raw, _error = _run("doctor", "--format", "json")
-    (check,) = [c for c in json.loads(raw)["checks"] if c["name"] == "local model runtime"]
-    assert check["status"] == "fail"
-    assert "Ollama and llama.cpp adapters ship" in check["detail"]
-    assert "compile_intent" in check["remedy"] and "once implemented" not in check["remedy"]
+    checks = {c["name"]: c for c in json.loads(raw)["checks"]}
+    assert "local model runtime" not in checks
+    assert checks["MCP server"]["status"] == "pass"
+    assert "every schema they reference is embedded" in checks["MCP server"]["detail"]
     (fea,) = [c for c in json.loads(raw)["checks"] if c["name"] == "FEA solver"]
     assert fea["status"] == "fail" and not fea["remedy"].startswith("Implement")
 

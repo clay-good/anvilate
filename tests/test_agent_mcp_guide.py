@@ -30,7 +30,7 @@ _TEXT = _PAGE.read_text(encoding="utf-8")
 # ```py renders identically to ```python and was silently skipped by a sibling gate once,
 # so the languages this file knows are named and anything else fails rather than passing
 # unexecuted. `bash` is here because the connect section shows a command, not a claim.
-_KNOWN_FENCES = {"python", "text", "bash"}
+_KNOWN_FENCES = {"python", "text", "bash", "json"}
 _FENCE = re.compile(r"^```(\w*)\n(.*?)^```", re.MULTILINE | re.DOTALL)
 
 
@@ -58,6 +58,17 @@ def _examples() -> list[tuple[str, str]]:
 def test_every_code_fence_is_one_this_file_knows():
     unknown = sorted({language for language, _ in _fences()} - _KNOWN_FENCES)
     assert not unknown, f"the guide uses fences this file does not handle: {unknown}"
+
+
+def test_every_json_client_configuration_parses_and_names_the_local_server():
+    """The client set-up snippets are copied into a config file as they stand."""
+    import json
+
+    configurations = [body for language, body in _fences() if language == "json"]
+    assert configurations, "the guide no longer shows a client configuration"
+    for body in configurations:
+        server = json.loads(body)["mcpServers"]["anvilate"]
+        assert server["command"].endswith("anvilate-mcp") and "url" not in server
 
 
 def test_the_extractor_finds_the_examples_that_are_there():

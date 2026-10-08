@@ -33,39 +33,16 @@ the backend and model as its concrete subject and points to both the schema and
 `provenance.validation_errors`. Both remain `ValueError` subclasses for existing callers;
 their messages are unchanged.
 
-The local adapters are `OllamaBackend` and `LlamaCppBackend`. They accept only explicitly
-configured loopback origins, defaulting to `http://127.0.0.1:11434` and
-`http://127.0.0.1:8080`, and use the standard-library HTTP client rather than an SDK.
-Constructing either makes no request. The unconstrained pass omits the structured-output
-field. The packaging pass sends the exact schema in Ollama's `format` or llama.cpp's
-`response_format`, disables streaming, and validates the returned JSON through the same
-Anvilate front door. Malformed model content consumes the ordinary bounded retry budget.
-Service and transport failures remain errors rather than being misreported as low-quality
-model output.
+Anvilate ships no model and calls none. The language model is your own agent (Claude Code,
+Claude Desktop, Cursor or any MCP client), driving Anvilate's local MCP server: the agent
+writes the spec, `compile_spec` validates it and names every refusal, and `run_validation`
+screens it. The server's `initialize` result carries `instructions` for the agent, generated
+from the live databases: the exact material, component and element identifiers, and the rules
+a real model got wrong when it had only the schema (a stated minimum safety factor written
+into `max_safety_factor`, "ASTM A36" for `ASTM-A36`, a load dropped, no element named).
 
-```python
-from anvilate.compilation import OllamaBackend, compile_intent
-
-backend = OllamaBackend(model="qwen3:8b")
-result = compile_intent("A CNC-machined A36 lifting lug for a 50 kN load.", backend)
-print(result.spec)
-print(result.provenance.configuration)
-```
-
-For a `llama-server` listening on its default port, only the backend changes:
-
-```python
-from anvilate.compilation import LlamaCppBackend, compile_intent
-
-backend = LlamaCppBackend(model="qwen3-8b.gguf")
-result = compile_intent("A CNC-machined A36 lifting lug for a 50 kN load.", backend)
-```
-
-Tests replace the transport and run the complete two-pass compile with the socket layer
-closed. That proves neither adapter has import-time or construction-time network behavior
-and lets an embedded local runtime remain genuinely air-gapped. Each default transport uses
-its loopback HTTP origin only when compilation is invoked. An explicitly configured cloud
-adapter is still unbuilt; no cloud call is initiated anywhere in this path.
+The scoring below grades any candidate spec against a reference, whoever wrote it, so an
+agent's output is measured the same way a compiler's was.
 
 The measurement came first on purpose: a compiler shipped against a metric that hides the
 wrong-but-valid failure would look like it was improving as it got worse.

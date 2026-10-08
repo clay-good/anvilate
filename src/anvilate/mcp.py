@@ -779,6 +779,63 @@ MISSING_REQUIRED_CLIENT_CAPABILITY = -32021
 PROTOCOL_REVISION = "2026-07-28"
 
 
+# What an agent has to be told besides the schemas, found by running a real model through the
+# compiler (qwen2.5:14b, 2026-10-08) before the local adapters were removed. Handed only the
+# schema, it wrote a stated minimum safety factor into `max_safety_factor`, dropped the load,
+# spelled the material "ASTM A36" where the database says ASTM-A36, invented a hole pattern,
+# asked for every validation tier, and named no element, so nothing would have screened. The
+# schema says what is legal; these say what a request means and which identifiers exist.
+_AGENT_RULES = """Anvilate is a local, deterministic engineering checker. You write the Design Spec;
+Anvilate validates it and screens it. Workflow: compile_spec (validate a document and read its
+remedies) -> run_validation (screen it; returns the scorecard and a subject handle) ->
+read_scorecard or export_artifact with that handle. Fix what a refusal names and call
+again; never report a check that did not run.
+
+Writing a spec:
+- Write only what the user stated. Leave optional fields you were not told about out: no
+  invented interfaces, dimensions, exports or loads. Ask the user for a missing load,
+  material or interface rather than guessing it.
+- A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0, "origin":
+  "user_stated"}); constraints.max_safety_factor is only an explicit upper limit.
+- Copy identifiers exactly from the catalogue below: material.ref and element material fields
+  from Materials, interfaces[].ref from Components.
+- To screen a part, set element_type to one of the element screens below and put its fields in
+  element_params, every required one included.
+- acceptance.tiers lists only what was asked for; a request to check or screen is
+  ["T1_analytical"].
+- A quantity is {"magnitude": number, "unit": "symbol"} in the units the user used, e.g.
+  {"magnitude": 50, "unit": "kN"}."""
+
+
+@cache
+def agent_instructions() -> str:
+    """The rules and the live catalogue an agent writes specs against.
+
+    Sent as the initialize result's ``instructions``, which a client adds to the model's
+    context. Generated from the resolver and the element registry, never hand-written, so it
+    cannot name a material the database lacks or a field a screen does not read.
+    """
+    from .screening import element_registry
+    from .standards import default_standards_resolver
+
+    resolver = default_standards_resolver()
+    lines = [
+        _AGENT_RULES,
+        "",
+        "Materials: " + ", ".join(resolver.known_materials()),
+        "Components: " + ", ".join(resolver.known_components()),
+        "Element screens (element_type: fields; * marks required):",
+    ]
+    for tag, (model, _screen) in sorted(element_registry().items()):
+        summary = (model.__doc__ or "").strip().split("\n")[0].rstrip(".")
+        fields = ", ".join(
+            f"{name}{'*' if field.is_required() else ''}"
+            for name, field in model.model_fields.items()
+        )
+        lines.append(f"- {tag}: {summary}. Fields: {fields}")
+    return "\n".join(lines)
+
+
 def _version() -> str:
     """The installed distribution's version, never ``anvilate.__version__``."""
     from importlib.metadata import PackageNotFoundError, version
@@ -1131,6 +1188,7 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
                 # official conformance suite's handshake before any other check could run.
                 # The installed distribution's, as `anvilate --version` reports it.
                 "serverInfo": {"name": "anvilate", "title": "Anvilate", "version": _version()},
+                "instructions": agent_instructions(),
             },
         }
     if method == "ping":

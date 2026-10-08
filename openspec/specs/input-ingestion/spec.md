@@ -56,14 +56,14 @@ Raster drawing and drawing-figure extraction (dimension callouts, GD&T), when sh
 - **WHEN** the user drops a scanned part drawing
 - **THEN** extracted dimensions render as overlays on the drawing for visual verification and individual confirmation
 
-### Requirement: Binary inputs never reach cloud models by default
+### Requirement: Inputs never leave the machine
 
-Imported CAD payloads and documents SHALL be processed locally; no binary input content may be transmitted to a cloud LLM unless the user explicitly enables it per source.
+Imported CAD payloads and documents SHALL be processed locally by deterministic code, and no input content SHALL be transmitted off the machine; a local model sees only text derived from them.
 
-#### Scenario: Cloud backend with local files
+#### Scenario: Proprietary files stay local
 
-- **WHEN** a user with a cloud LLM configured drops a proprietary STEP file
-- **THEN** the file is processed by local deterministic code and its geometry is never uploaded unless the user opts in for that file
+- **WHEN** a user drops a proprietary STEP file
+- **THEN** it is processed by local deterministic code, and nothing derived from it leaves the machine
 
 ### Requirement: Calibrated measurements as input sources
 

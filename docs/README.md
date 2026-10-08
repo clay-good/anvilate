@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Fifty-nine pages, arranged by what you are trying to do. The [README](../README.md) is the
+Sixty pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -16,6 +16,7 @@ You have a part and you want a verdict.
 | [Calculation reports](calculation-reports.md) | The submittal a reviewer reads: formula, substitution, result, clause. |
 | [Values and units](units-and-quantities.md) | What a `Quantity` is, and the arithmetic it refuses so a value is never computed in one unit and read in another. |
 | [What a citation means](citations.md) | What a clause reference does and does not claim, and where every bundled number came from. |
+| [Design decisions](design-decisions.md) | Why Anvilate is fully local and MCP-only: your agent is the model, nothing is hosted, no API keys. |
 
 ## Screening by discipline
 
@@ -81,7 +82,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Publishing the MCP server](mcp-registry-release.md) | Version, publish, authenticate, and retry the official registry release. |
 | [The agent skill](agent-skill.md) | What correct use looks like, bound to the library by CI. |
 | [The published contracts](published-contracts.md) | Spec IR and scorecard as JSON Schema 2020-12. |
-| [Agent-driving evals](agent-driving-evals.md) | Whether a given local model can drive this, measured. |
+| [Agent-driving evals](agent-driving-evals.md) | Whether a given MCP agent can drive this, measured. |
 | [A valid spec can still be the wrong spec](valid-is-not-correct.md) | Why schema validity is not correctness. |
 
 ## Contributing

@@ -50,12 +50,15 @@
       Also pinned: an omitted field counts against correctness, an unparseable candidate
       scores zero fields rather than no fields, and a task nobody attempted is an error
       rather than an omission
-- [ ] 3.3 Schema field-name change triggers the evaluation gate in CI — the corpus half is
-      now live: `task_set_issues()` makes a stale Spec IR or pack-element field fail CI and
-      adversary tests prove both directions. The model-independent runner is now live too,
-      retaining all attempts and attributing the task set, backend, model, pass shape, schema,
-      and retry budget. This remains open because real model outputs and their correctness
-      delta have not been measured; executable infrastructure is not an evaluation result
+- [ ] 3.3 Schema field-name change triggers the evaluation gate in CI — DECLINED 2026-10-08:
+      Anvilate no longer runs a model. The project is MCP-only: the user's own agent writes
+      specs and Anvilate validates and screens them, so in-process constrained decoding has
+      no runtime to measure, and the local Ollama and llama.cpp adapters were removed. The
+      corpus gate (`task_set_issues`) still fails CI on a stale field, and the scoring still
+      grades any candidate spec. One real run first (qwen2.5:14b, two-pass, schema only)
+      produced a wrong-but-valid lifting lug: minimum safety factor written as maximum, load
+      dropped, "ASTM A36" for ASTM-A36, no element. Those findings became the MCP server's
+      `instructions` to agents
 
 ## 4. Docs
 

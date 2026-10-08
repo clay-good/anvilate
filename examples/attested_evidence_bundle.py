@@ -91,9 +91,9 @@ DISCLOSURE = AIDisclosure(
     participated=True,
     events=(
         AIEvent(
-            stage="intent compilation",
-            model="qwen2.5-coder:14b",
-            backend="ollama (local)",
+            stage="spec authoring",
+            model="the engineer's own MCP agent",
+            backend="anvilate MCP server (local stdio)",
             confirmed_by="A. Engineer, P.E.",
         ),
     ),

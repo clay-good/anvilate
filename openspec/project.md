@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Anvilate (*anvil* + *validate*) is a local-first, open-source design agent for mechanical engineers: plain-English part descriptions compile into a typed Design Spec, which drives a deterministic parametric-geometry and physics-validation pipeline. Nothing leaves the tool without evidence. Outputs: STEP AP242, DXF/2D drawings, STL/3MF, URDF, the generating Python source, and a reproducible validation evidence bundle.
+Anvilate (*anvil* + *validate*) is a fully local, open-source design checker for mechanical engineers: the user's own AI agent turns a plain-English part description into a typed Design Spec over Anvilate's local MCP server, and that spec drives a deterministic parametric-geometry and physics-validation pipeline. Nothing leaves the tool without evidence. Outputs: STEP AP242, DXF/2D drawings, STL/3MF, URDF, the generating Python source, and a reproducible validation evidence bundle.
 
-The durable product is the Design Spec IR, the deterministic pipeline, and the verification harness — the LLM is a replaceable component.
+The durable product is the Design Spec IR, the deterministic pipeline, and the verification harness. Anvilate runs no language model: the model is whichever agent the user already has. See [docs/design-decisions.md](../docs/design-decisions.md).
 
 ## Tech Stack
 
@@ -28,7 +28,7 @@ The durable product is the Design Spec IR, the deterministic pipeline, and the v
 | Units & quantities | Pint or forallpeople | BSD / Apache-2.0 | Dual SI / US-customary layer; kip, ksi, kip·ft first-class (forallpeople's `structural` environment was built for exactly this) |
 | Steel sections (structural pack) | sectionproperties + eurocodepy profile data + AISC shapes DB via fetch-on-first-use | MIT / MIT / no-redistribution | Store geometry, compute properties at build time; never redistribute the AISC XLSX |
 | Structural frame checks (reference) | Pynite | MIT | Reference implementation for T1-class structural checks where useful |
-| LLM runtime (local) | Ollama / llama.cpp | MIT | Air-gapped mode. Ollama `:cloud`-suffixed models route to a paid remote service — air-gapped mode must refuse them (spec'd in sandbox-security) |
+| Language model | None in Anvilate: the user's own MCP agent | — | Anvilate is a local, deterministic checker driven over its stdio MCP server; it holds no API key and runs no inference |
 | LLM structure | PydanticAI 2.x (stable since mid-2026) or equivalent (instructor, outlines) | MIT | Forces valid Spec IR / edit patches; outlines' FSM token masking is the fallback for small local models |
 | Viewer | three.js + tessellated B-Rep streaming (three-cad-viewer / ocp-vscode lineage) | MIT | Edges, section, exploded views, stress overlay |
 | Backend/API | Python 3.11+, FastAPI, WebSocket iteration streaming | MIT | |
@@ -85,17 +85,17 @@ The durable product is the Design Spec IR, the deterministic pipeline, and the v
 
 ## Important Constraints
 
-- **Local-first is non-negotiable.** Full functionality on a laptop with a local model; zero network calls in air-gapped mode; cloud LLMs are opt-in with keys in the OS keychain.
+- **Fully local, MCP only, is non-negotiable** ([design decisions](../docs/design-decisions.md) D1-D3). Anvilate is downloaded and runs on the user's machine; nothing is hosted, and no identifier is a URL on any domain (they are `urn:anvilate:...`). Anvilate runs no language model and holds no API key: no bring-your-own-key cloud models, no local model runtime. The user's own MCP agent writes specs; Anvilate validates and screens them. The only network code is consented, digest-pinned dataset download, and it never runs on its own.
 - **No silent green.** A check that could not run shows "not evaluated," never pass. A non-converged FEA result can never show a green check.
 - **Export gating.** Unvalidated exports require an explicit override and are watermarked in file metadata.
 - **License boundary.** Anvilate code is MIT; GPL tools are subprocess-isolated with file interchange. MIT carries no patent grant — patent-sensitive contributions get flagged in review.
 - **Standards data licensing.** Dimension *data* with provenance only; standard documents are never redistributed. Known tripwires: NAFEMS benchmark publications (reimplement from public reproductions, never redistribute), Fusion 360 Gallery and Text2CAD datasets (non-commercial licenses — excluded from the repo), FKM guideline text (paywalled; use pyLife's Apache-2.0 implementation), AISC shapes database (free download but AISC-copyrighted compilation — fetch-on-first-use to the user's machine, never bundle; store geometry facts and compute section properties instead where possible).
 - **STEP PMI path.** OCCT/XCAF is the only open route to AP242 semantic PMI and validation properties; the writer must explicitly select the AP242 schema (the AP214 default silently drops GD&T), and build123d/CadQuery exporters don't do this — a dedicated export layer over OCP/XCAF is required, conformance-checked against NIST MBE PMI test models.
-- **Performance targets** (mid-range 8-core laptop, local 8B model): prose→spec < 15 s; spec→first solid < 10 s; T0–T2 < 5 s; T3 FEA per load case (bracket-class, converged) < 60 s; full converged golden path < 5 min.
+- **Performance targets** (mid-range 8-core laptop): spec→first solid < 10 s; T0–T2 < 5 s; T3 FEA per load case (bracket-class, converged) < 60 s; full converged golden path < 5 min.
 
 ## External Dependencies
 
-- **Ollama / llama.cpp** for local model serving; BYO API keys for Anthropic/OpenAI/Google models (opt-in).
+- **The user's MCP client** (Claude Code, Claude Desktop, Cursor, or any other) supplies the language model; Anvilate depends on no model runtime and no API key.
 - **Gmsh, CalculiX** binaries bundled in Docker image / fetched as wheels where available; versions pinned per release and recorded in every evidence bundle.
 - **ODA File Converter** (optional, user-installed) for DWG output.
 - **BOLTS / bd_warehouse** data ingested at build time with provenance tags.

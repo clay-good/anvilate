@@ -115,6 +115,28 @@ handles and the server provides no operation that lists them.
 
 ## Connecting
 
+Anvilate's MCP server is a local process your agent starts over stdio. Nothing is hosted and
+there is no URL: your agent's model writes the specs, and Anvilate validates and screens them
+on your machine. Point your client at the `anvilate-mcp` executable from the environment you
+installed into (`which anvilate-mcp` prints its path).
+
+Claude Code:
+
+```bash
+claude mcp add anvilate -- /path/to/anvilate/.venv/bin/anvilate-mcp
+```
+
+Claude Desktop (`claude_desktop_config.json`) or Cursor (`.cursor/mcp.json`), the same shape:
+
+```json
+{"mcpServers": {"anvilate": {"command": "/path/to/anvilate/.venv/bin/anvilate-mcp"}}}
+```
+
+The server's `initialize` reply carries `instructions` your client hands the model: the
+workflow, the rules for stating a requirement, and every material, component and element
+identifier that exists, generated from the bundled databases so the model copies identifiers
+rather than recalling them.
+
 ```bash
 anvilate-mcp
 ```
@@ -152,7 +174,9 @@ compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.19.0"}
 **Read the `$ref`, not the property name.** A tool that consumes a spec or returns a
 scorecard points at the published contract at its version rather than paraphrasing it, so
 the schema you constrain your model's output with and the schema the server validates
-against are one document. Fetch it once, pin the version, and you are done.
+against are one document. It is not fetched: the identifier is a URN, a name and not a
+location, and every tool definition embeds the schemas it references under `$defs`, so a
+client resolves them offline.
 
 ## Step one: compile the document
 

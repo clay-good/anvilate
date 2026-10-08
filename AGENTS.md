@@ -16,6 +16,16 @@ For the MCP setup, ensure `openlore mcp` is configured as an MCP server.
 See https://github.com/clay-good/OpenLore for details.
 <!-- END OPENLORE -->
 
+## Design constraints (do not reopen)
+
+Anvilate is **fully local and MCP-only**. It is downloaded from GitHub and runs on the user's
+machine; nothing is hosted, and no identifier is a URL on any domain (`urn:anvilate:...`).
+Anvilate runs **no language model**: no bring-your-own-key cloud models, no Ollama or
+llama.cpp, no API keys. The user's own MCP agent writes the spec; Anvilate validates and
+screens it. Do not add a model adapter, a hosted endpoint, telemetry, or an `https://`
+identifier. The reasons and the tests that hold each rule are in
+[docs/design-decisions.md](docs/design-decisions.md).
+
 ## Using Anvilate correctly
 
 Anvilate turns a described part into a **scorecard**: one typed result per check, each

@@ -554,7 +554,7 @@ def _build_parser() -> argparse.ArgumentParser:
     doctor = commands.add_parser(
         "doctor",
         help="check which Anvilate runtime capabilities are ready",
-        description="Check solvers, geometry, the local model runtime, viewport support, "
+        description="Check solvers, geometry, the MCP server, viewport support, "
         "and bundled database integrity independently. Exit 0 only when every item passes.",
         epilog=f"Example: {_COMMAND_EXAMPLES['doctor']}",
     )
@@ -868,25 +868,47 @@ def _print_error(*, command: str, diagnostic: str, out) -> None:
     )
 
 
-def _local_model_runtime() -> dict[str, Any]:
-    # It said "no local intent-compilation model runtime is shipped ... once implemented"
-    # while `OllamaBackend` and `LlamaCppBackend` both shipped. Whether a server is listening
-    # is not checked, and not by oversight: SECURITY.md promises no connection a caller did
-    # not ask for, and a self-check that probes ports on its own is one. So the item says
-    # what ships and what was not looked at, and stays a failure, because it is not verified.
+def _mcp_server() -> dict[str, Any]:
+    """Whether the MCP server's tool catalog builds and every tool schema stands alone.
+
+    Anvilate's language model is the user's own agent, driving it over MCP, so the server is
+    the runtime that matters. Checked in-process: building the catalog and resolving its
+    schemas opens no connection.
+    """
+    from .mcp import catalog_issues, wire_definitions
+
+    issues = catalog_issues()
+    unresolved = [
+        f"{tool['name']}.{label} -> {ref}"
+        for tool in wire_definitions()
+        for label in ("inputSchema", "outputSchema")
+        for ref in _external_refs(tool[label])
+    ]
+    if issues or unresolved:
+        return {
+            "name": "MCP server",
+            "status": "fail",
+            "detail": "; ".join([*issues, *unresolved])[:500],
+            "remedy": "Reinstall Anvilate; a catalog that does not build is a packaging defect.",
+        }
+    count = len(wire_definitions())
     return {
-        "name": "local model runtime",
-        "status": "fail",
+        "name": "MCP server",
+        "status": "pass",
         "detail": (
-            "Not checked: the Ollama and llama.cpp adapters ship, and doctor opens no "
-            "connection to look for a server."
+            f"{count} tools build and every schema they reference is embedded; start it with "
+            "`anvilate-mcp` from your agent's MCP configuration."
         ),
-        "remedy": (
-            "Start one (`ollama serve`, or llama.cpp's `llama-server`), then pass "
-            "`OllamaBackend(model=...)` or `LlamaCppBackend(model=...)` to "
-            "`anvilate.compilation.compile_intent`."
-        ),
+        "remedy": None,
     }
+
+
+def _external_refs(schema: dict[str, Any]) -> list[str]:
+    """``$ref``s in ``schema`` that its own ``$defs`` do not carry."""
+    from .mcp import _refs
+
+    embedded = set((schema.get("$defs") or {}).keys())
+    return sorted(ref for ref in _refs(schema) if not ref.startswith("#") and ref not in embedded)
 
 
 def _doctor(args: argparse.Namespace, *, out) -> int:
@@ -909,7 +931,7 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
                 "check here runs."
             ),
         },
-        _local_model_runtime(),
+        _mcp_server(),
     ]
     try:
         from build123d import Box

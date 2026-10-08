@@ -52,4 +52,7 @@
       **What is missing is the measurement, and no code here can supply it**: running the
       funnel needs an agent, and this package initiates no sampling and ships no model. The
       corpus and the scoring are what a harness outside it consumes. An unmeasured delta is
-      still not published as one.
+      still not published as one. Since 2026-10-08 the project is MCP-only, so the agent is
+      the user's own MCP client, and the server now also sends `instructions` (rules and the
+      live catalogue) on initialize; the measurement is a run of that client with and
+      without the skill

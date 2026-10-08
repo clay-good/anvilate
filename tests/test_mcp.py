@@ -2440,3 +2440,25 @@ def test_no_published_identifier_is_a_location():
         text = path.read_text(encoding="utf-8")
         assert json.loads(text)["$id"].startswith("urn:anvilate:schema:"), path
         assert "anvilate.dev" not in text, path
+
+
+def test_initialize_hands_the_agent_its_rules_and_the_live_catalogue():
+    """The agent is Anvilate's language model. A real model given only the schema wrote a
+    stated minimum safety factor into max_safety_factor, spelled ASTM-A36 "ASTM A36" and named
+    no element; the instructions say what a request means and list identifiers that exist."""
+    from anvilate.mcp import agent_instructions, handle_request
+    from anvilate.screening import element_registry
+    from anvilate.standards import default_standards_resolver
+
+    init = handle_request(
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"capabilities": {}}}
+    )
+    text = init["result"]["instructions"]
+    assert text == agent_instructions()
+    assert "constraints.min_safety_factor" in text and "max_safety_factor is only" in text
+    resolver = default_standards_resolver()
+    for material in resolver.known_materials():
+        assert material in text
+    for tag, (model, _screen) in element_registry().items():
+        required = [n for n, f in model.model_fields.items() if f.is_required()]
+        assert f"- {tag}: " in text and all(f"{n}*" in text for n in required), tag

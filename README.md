@@ -19,6 +19,16 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[geometry,export,pdf]"  # geometry adds B-Rep/STEP; export adds DXF; pdf reads requirement sheets
 ```
 
+## Use it from your AI agent
+
+Anvilate has no language model of its own. Your agent (Claude Code, Claude Desktop, Cursor, or any MCP client) is the model: it turns your description into a spec, and Anvilate validates and screens it locally over stdio. There is no account, no API key and nothing hosted.
+
+```bash
+claude mcp add anvilate -- "$(which anvilate-mcp)"
+```
+
+Then ask in plain English, for example *"Check an ASTM A36 lifting lug, 80 mm wide, 12 mm thick with a 25 mm pin hole, for a 50 kN load and a safety factor of 2."* The agent writes the spec, Anvilate returns a scorecard where every check cites its source, and a check that could not run says so. Other clients and the full loop are in [agent integration](docs/agent-mcp-integration.md).
+
 ## Try it
 
 Run any of the worked examples. Each is self-contained, needs no network, and prints its result: a scorecard for the screening examples, the computed values for the analysis ones.
@@ -117,7 +127,7 @@ Units are first-class — mix `kip`, `ksi`, `in`, `mm` and `MPa` freely.
 ## What's inside
 
 - **Screening packs** for structural steel, cold-formed steel, aluminum, concrete, masonry, timber, geotechnical, hydraulics, pressure vessels, process piping, lifting devices, machinery, and building services — each check naming the clause it came from.
-- **An analytical library** (237 closed-form modules and 1,883 public symbols, each dimension-checked and tested; 7,282 tests), with machine-readable repairs now spanning units, tolerances, manufacturing quality, geometry, casting, casting gating, centrifugal casting, injection molding, sheet-metal bending and drawing, wire drawing, shear spinning, thermoforming, extrusion, forging, rolling, conventional machining, broaching, drilling, grinding, EDM, electrochemical machining, laser cutting, weld design, arc-welding heat input, resistance welding, electroplating, shot peening, wear, corrosion and asset integrity, Hall–Petch strengthening, creep and rupture life, elastic constants, axial response, stress combination and concentration, reinforced- and prestressed-concrete response, masonry allowable-stress design, timber member, record, and stability design, aluminum member and weld-affected design, cold-formed-steel effective-width and Direct Strength Method checks, structural load combinations, steel compactness, elastic foundations, riveted joints, O-ring glands, lifting mechanics, work-energy, impact and friction mechanics, power transmission, living hinges, ball screws, centrifugal governors, mechanism kinematics, fundamental motion, gravitation, radioactivity, and radiation shielding, electromechanical sensors, surface engineering, fluid storage, HVAC duct and fan sizing, compressible flow, gas compression, combustion, chemical equilibria, geometric, wave, and instrument optics, quantum photonics, shaft torsion, springs, and shared branch-selector inputs; every analysis module now raises its refusals with a structured remedy naming the parameter to correct, and [a ledger](docs/api/raised-refusals-without-remedies.txt) counts the core refusals still waiting for one.
+- **An analytical library** (237 closed-form modules and 1,883 public symbols, each dimension-checked and tested; 7,274 tests), with machine-readable repairs now spanning units, tolerances, manufacturing quality, geometry, casting, casting gating, centrifugal casting, injection molding, sheet-metal bending and drawing, wire drawing, shear spinning, thermoforming, extrusion, forging, rolling, conventional machining, broaching, drilling, grinding, EDM, electrochemical machining, laser cutting, weld design, arc-welding heat input, resistance welding, electroplating, shot peening, wear, corrosion and asset integrity, Hall–Petch strengthening, creep and rupture life, elastic constants, axial response, stress combination and concentration, reinforced- and prestressed-concrete response, masonry allowable-stress design, timber member, record, and stability design, aluminum member and weld-affected design, cold-formed-steel effective-width and Direct Strength Method checks, structural load combinations, steel compactness, elastic foundations, riveted joints, O-ring glands, lifting mechanics, work-energy, impact and friction mechanics, power transmission, living hinges, ball screws, centrifugal governors, mechanism kinematics, fundamental motion, gravitation, radioactivity, and radiation shielding, electromechanical sensors, surface engineering, fluid storage, HVAC duct and fan sizing, compressible flow, gas compression, combustion, chemical equilibria, geometric, wave, and instrument optics, quantum photonics, shaft torsion, springs, and shared branch-selector inputs; every analysis module now raises its refusals with a structured remedy naming the parameter to correct, and [a ledger](docs/api/raised-refusals-without-remedies.txt) counts the core refusals still waiting for one.
 - **Reports and exports:** calculation reports (text, HTML, PDF), DXF, STEP, 3MF and QIF — written only when the checks pass, or stamped `UNVALIDATED`, with machine-readable repairs when geometry cannot be released.
 - **A command line** — `anvilate check`, `build`, `export`, `verify`, `interfaces`, `diff`, `doctor`, with field-specific repairs for invalid specs. See [the CLI guide](docs/headless-cli.md).
 - **An MCP server** exposing the pipeline's eight operations to an agent over stdio, with durable task results, worker-failure reporting, and abandoned-task recovery. Malformed requests receive protocol errors without stopping the stream. Each release publishes its pinned `uvx` install command to the official registry. See [agent integration](docs/agent-mcp-integration.md) and the [release procedure](docs/mcp-registry-release.md).
@@ -127,11 +137,12 @@ Units are first-class — mix `kip`, `ksi`, `in`, `mm` and `MPa` freely.
 
 - [Quickstart](docs/quickstart.md) — install, screen a lifting lug, and read a cited verdict in under ten minutes.
 - [Documentation index](docs/README.md) — every guide, arranged by task.
+- [Design decisions](docs/design-decisions.md) — why Anvilate is fully local and MCP-only, with no model of its own.
 - [Adding a check](docs/contributing-analysis.md) and [CONTRIBUTING.md](CONTRIBUTING.md) — for contributors.
 
 ## Where this is going
 
-The goal is a plain-English request that compiles into the same validated scorecard *and* a parametric solid you can open in CATIA, SolidWorks, or NX. The LLM only writes the spec and proposes edits; the geometry and validation stay deterministic and run identically without any AI. Nothing unvalidated leaves the tool. The design reference is [`openspec/specs/`](openspec/specs/).
+The goal is a plain-English request that compiles into the same validated scorecard *and* a parametric solid you can open in CATIA, SolidWorks, or NX. Your own agent writes the spec and proposes edits over MCP; the geometry and validation stay deterministic, run locally, and run identically without any AI. Nothing unvalidated leaves the tool. The design reference is [`openspec/specs/`](openspec/specs/).
 
 ## Security
 

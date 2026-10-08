@@ -29,19 +29,14 @@ In air-gapped mode, the entire pipeline — compilation with a local model, geom
 - **WHEN** the air-gapped test suite runs the golden-path build under a network monitor
 - **THEN** zero outbound connection attempts are observed, and any attempt fails the build
 
-### Requirement: Cloud LLM usage is minimal and explicit
+### Requirement: No cloud model is used
 
-BYO cloud API keys SHALL be stored in the OS keychain (never plaintext config); cloud requests SHALL contain spec text and structured pipeline context only — never binary CAD payloads from imported files unless the user explicitly enables it per source; and the UI SHALL indicate when a cloud call is about to occur.
+Anvilate SHALL use only a model served on the user's machine at a loopback address; it SHALL hold no API keys, offer no cloud backend, and send no spec text, file content or pipeline context off the machine. A model endpoint that is not loopback SHALL be refused before any request is made.
 
-#### Scenario: Key storage
+#### Scenario: Remote endpoint refused
 
-- **WHEN** a user configures a cloud API key
-- **THEN** it is stored via the OS keychain and absent from all config files and logs
-
-#### Scenario: Payload boundary
-
-- **WHEN** the intent compiler calls a cloud model for a spec involving an imported STEP file
-- **THEN** the request contains the derived interface description, not the STEP file contents
+- **WHEN** a model backend is configured with a non-loopback endpoint
+- **THEN** Anvilate refuses it at configuration, before any request, and names a loopback origin to use instead
 
 ### Requirement: Solver subprocess isolation
 

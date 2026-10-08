@@ -329,14 +329,14 @@ result shapes are published at
 ### Check the environment before debugging a design
 
 `anvilate doctor` checks the five runtime areas the onboarding contract names: FEA solver,
-geometry kernel, local model runtime, viewport prerequisites, and bundled database
+geometry kernel, MCP server, viewport prerequisites, and bundled database
 integrity. Each gets its own pass/fail line, and every failure carries a concrete next
 action. With the `geometry` extra installed, the kernel check builds a valid probe solid and
 reports the build123d and OCCT binding versions, and the viewport check renders a probe
 image. The FEA check remains an explicit failure, since no solver ships in this release. The
-local-model check says that the Ollama and llama.cpp adapters ship and that it did not look
-for a server: doctor opens no connection, as [SECURITY.md](../SECURITY.md) promises, so the
-item stays unverified and names how to start one. Database
+MCP server check builds the tool catalog in-process and confirms every tool schema carries
+the schemas it references, so an agent can use it offline; it opens no connection. Anvilate
+runs no language model of its own: your agent is the model. Database
 integrity is proved by loading the bundled resolver and counting its material and component
 designations. `--format json` emits the same report
 under CLI output schema 1.8.0.
