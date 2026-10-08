@@ -2753,7 +2753,12 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate build: {failure}", file=err)
         return EXIT_BAD_REQUEST
     except OSError as failure:
-        print(f"anvilate build: {failure}", file=err)
+        # Named by the file the user asked for: the error's own filename is the hidden
+        # staging file beside it, a path they never typed and will not find.
+        print(
+            f"anvilate build: could not write {args.output} ({failure.strerror or failure})",
+            file=err,
+        )
         return EXIT_BAD_REQUEST
 
     result = {

@@ -2688,6 +2688,27 @@ def test_build_withholds_step_until_the_card_passes_or_override_is_explicit(tmp_
     assert "override=True" not in error, "the refusal offers the shell a keyword argument"
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0, reason="permissions do not bind root"
+)
+@pytest.mark.parametrize("suffix", [".step", ".3mf"])
+def test_build_into_an_unwritable_directory_names_the_file_asked_for(tmp_path, suffix):
+    """The OS error named the hidden staging file beside the target, a path nobody typed."""
+    pytest.importorskip("build123d")
+    spec = Path(__file__).resolve().parents[1] / "examples/transmission_shaft.spec.yaml"
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o555)
+    output = locked / f"shaft{suffix}"
+    try:
+        code, out, err = _run("build", str(spec), "--output", str(output))
+    finally:
+        locked.chmod(0o755)
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert f"could not write {output} (Permission denied)" in err
+    assert ".partial" not in err
+
+
 def test_build_refuses_unvalidated_on_a_passing_card_in_its_own_flag(tmp_path):
     """The library refuses ``override=True`` on a passing card, and says so in those words.
     A shell user typed ``--unvalidated``, and is told about the flag they typed."""
