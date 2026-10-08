@@ -3004,6 +3004,8 @@ def test_doctor_says_what_ships_for_the_local_model_and_opens_no_connection(monk
     assert check["status"] == "fail"
     assert "Ollama and llama.cpp adapters ship" in check["detail"]
     assert "compile_intent" in check["remedy"] and "once implemented" not in check["remedy"]
+    (fea,) = [c for c in json.loads(raw)["checks"] if c["name"] == "FEA solver"]
+    assert fea["status"] == "fail" and not fea["remedy"].startswith("Implement")
 
 
 @pytest.mark.parametrize("command", ["build", "check", "diff", "verify", "export", "interfaces"])

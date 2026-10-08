@@ -901,8 +901,12 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
             "name": "FEA solver",
             "status": "fail",
             "detail": "No FEA solver backend is shipped or configured in this release.",
+            # "Implement and configure the T3 backend" was a task for whoever builds the
+            # library, offered to whoever runs it. Nothing a user does makes T3 available.
             "remedy": (
-                f"Implement and configure the T3 backend specified in {specs}/validation-gauntlet."
+                "None in this release: T3 FEA is specified in "
+                f"{specs}/validation-gauntlet and not built, so screen at T1, which every "
+                "check here runs."
             ),
         },
         _local_model_runtime(),
