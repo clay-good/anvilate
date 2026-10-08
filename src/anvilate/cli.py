@@ -2582,6 +2582,7 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
     """``export``, for the artifacts a spec file alone can produce."""
     from .bundle import BundleSections, combinations_for
     from .screening import carbon_estimate_for
+    from .standards.datasets import bundled_datasets
 
     if args.artifact in _UNBUILT_ARTIFACTS:
         print(
@@ -2625,6 +2626,7 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
                     combinations=combinations_for(spec),
                     # The estimate the card's carbon entry judged, from the same function.
                     carbon=carbon_estimate_for(spec),
+                    datasets=bundled_datasets(),
                 ),
             )
         )

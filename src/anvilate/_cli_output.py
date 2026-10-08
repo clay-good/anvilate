@@ -34,10 +34,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.55.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.56.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.55.0"]
-SchemaVersion = Literal["1.55.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.56.0"]
+SchemaVersion = Literal["1.56.0"]
 
 
 class _WireModel(RevalidatedModel):

@@ -194,7 +194,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.13.0"
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.25.0"
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.26.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.3.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.1.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
@@ -1776,6 +1776,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     from .scorecard import Scorecard
     from .screening import carbon_estimate_for
     from .spec import parse_spec
+    from .standards.datasets import bundled_datasets
 
     artifact = arguments["format"]
     if artifact in _UNBUILT_ARTIFACTS:
@@ -1810,6 +1811,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
             citations=provenance_for(spec),
             combinations=combinations_for(spec),
             carbon=carbon_estimate_for(spec),
+            datasets=bundled_datasets(),
         ).to_document_dict()
     except (ValueError, TypeError, KeyError) as unreadable:
         # A handle that resolves to a record this build cannot read is the same fact as one

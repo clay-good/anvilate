@@ -1,0 +1,50 @@
+{
+  "bearings.yaml": {
+    "0.1.0": "1b9b84ebecc62dc2f5062f0f106ad72301d3df4c2ada982b3e4e53be03513cda"
+  },
+  "cap_screws.yaml": {
+    "0.1.0": "3095a114fc9b3f2eef4c6c28e1a28079134745631bb070f672028bba428ac63f"
+  },
+  "dowel_pins.yaml": {
+    "0.1.0": "e271894e53be5c51f8e069ecc23013458ac1bce7db11a94ca8bb2d47d239c526"
+  },
+  "edition_differences.yaml": {
+    "0.1.0": "a23a1e5542057dd9e971b00cef5151960305e7d57dae3ef088602bc21ca49472"
+  },
+  "en_profiles.yaml": {
+    "0.1.0": "96f4a89de7080770621e65395c5d244a42681e9fdc2dadba89ab53db167771d5"
+  },
+  "extrusions.yaml": {
+    "0.1.0": "2529fc21369611d932d992526dc9670ec1b6bb54832e9ace58123213c88d9e92"
+  },
+  "hex_bolts.yaml": {
+    "0.1.0": "9b3b3f10f33cd7f5be2d57e6a90caed015d924776f66137628fcc5c43381197b"
+  },
+  "hex_nuts.yaml": {
+    "0.1.0": "33adc20da6ee2900e49ba36a97379def3c940e822218b02f3ec4c4cb01bfb5da"
+  },
+  "materials.yaml": {
+    "0.1.0": "92e4364770db5e27ea1d025eac3275310823a77c0bd63e15b58e8626141ba8fe"
+  },
+  "metric_clearance.yaml": {
+    "0.1.0": "53bd4da5d4782ef86bbf7c533c603a2ee23b022cd8f680630c23b5ceb0ac043d"
+  },
+  "metric_thread.yaml": {
+    "0.1.0": "9320a7e91c6b138056768624177bf42fad8ddbed7030e26c34ae272f6f428b83"
+  },
+  "mil_hdbk_5j.yaml": {
+    "0.1.0": "5cd7ddc86bd25c9c43438d5d8bb295b2492c07cf41950069fca5033dc995ad06"
+  },
+  "nema_frames.yaml": {
+    "0.1.0": "2317b4c14d6ed0a4759157ecaf72532f8a46decaae98dc321324151e9932e361"
+  },
+  "pipe_schedules.yaml": {
+    "0.1.0": "52c1800a27292bfced72afc9419169120c3cac6210e8255311c9a15e8df9788f"
+  },
+  "washers.yaml": {
+    "0.1.0": "8001d8365a7732cbc99bd62b4b3b9e663b2735bdee6f7303047e811b44fe63ed"
+  },
+  "weld_fatigue.yaml": {
+    "0.1.0": "03553069207a80f1c8e73a1e6a13b69cf0475f6d0ede55a092eaaef717a8e79b"
+  }
+}

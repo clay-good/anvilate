@@ -75,6 +75,7 @@ from .report.document import SCREENING_DISCLAIMER
 from .review import ReviewerDossier
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .spec import DesignSpec, dump_spec_yaml
+from .standards.datasets import DatasetVersion
 from .standards.effectivity import DesignBasis, design_basis_scorecard
 from .units import Quantity, UnitSystem
 from .verification import VerificationPlan
@@ -252,6 +253,9 @@ class BundleDocument(BaseModel):
     # Absent unless the part carries an embodied-carbon estimate. Each contribution names its
     # factor's source, so a factor read from a product's EPD says which declaration it is.
     carbon: EmbodiedCarbonEstimate | None = None
+    # Absent unless the bundle records them. The bundled tables the run could read, each
+    # pinned by version and digest, so a data change is a visible provenance change.
+    datasets: tuple[DatasetVersion, ...] | None = None
 
 
 def _check_block(entry: ScorecardEntry, *, system: UnitSystem | None) -> tuple[str, ...]:
@@ -368,6 +372,10 @@ class BundleSections(RevalidatedModel):
     # signed digest must not move because a bundle carries one. Its contributions keep each
     # factor's source, which is how the bundle records which factor came from which EPD.
     carbon: EmbodiedCarbonEstimate | None = None
+    # The bundled tables this build reads, each pinned by version and the digest of its
+    # bytes (`anvilate.standards.datasets`). Out of the roll-up on the same terms as `spec`:
+    # it says which data the run could read, and a signed digest must not move for it.
+    datasets: tuple[DatasetVersion, ...] = ()
 
     @model_validator(mode="after")
     def _an_order_of_checks_the_card_carries(self) -> BundleSections:
@@ -716,10 +724,17 @@ class BundleSections(RevalidatedModel):
                 *self.callout_checks_block(),
                 *self.citations_block(),
                 *self.carbon_block(),
+                *self.datasets_block(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
         )
+
+    def datasets_block(self) -> tuple[str, ...]:
+        """The bundled tables pinned by version and digest; nothing when none are recorded."""
+        if not self.datasets:
+            return ()
+        return ("datasets:", *(f"  {pin}" for pin in self.datasets))
 
     def carbon_block(self) -> tuple[str, ...]:
         """The embodied-carbon estimate, each line with the factor it used; nothing otherwise.
@@ -877,6 +892,8 @@ class BundleSections(RevalidatedModel):
             document["evaluationOrder"] = list(self.evaluation_order)
         if self.carbon is not None:
             document["carbon"] = self.carbon.model_dump(mode="json")
+        if self.datasets:
+            document["datasets"] = [pin.model_dump(mode="json") for pin in self.datasets]
         return document
 
     def to_json_dict(self) -> dict[str, object]:

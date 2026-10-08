@@ -35,6 +35,7 @@ from .components import (
     UnknownComponentError,
     default_components_db,
 )
+from .datasets import DatasetVersion, bundled_datasets
 from .dowels import (
     DowelPin,
     DowelPinTable,
@@ -159,6 +160,8 @@ from .weld_fatigue import (
 )
 
 __all__ = [
+    "DatasetVersion",
+    "bundled_datasets",
     "EditionChange",
     "EditionComparison",
     "EditionDifference",

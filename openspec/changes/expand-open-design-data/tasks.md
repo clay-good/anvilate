@@ -64,8 +64,15 @@
 
 ## 3. Dataset publication
 
-- [ ] 3.1 Standalone dataset repo/schema, versioning, contribution process
-- [ ] 3.2 Anvilate consumes by pinned version; provenance records the pin
+- [x] 3.1 Dataset schema, versioning, contribution process — in this repository, not a
+      separate one (the user's decision 2026-10-08: one product). Every table under
+      `standards/data` carries a `dataset` header (name, version, license, retrieved);
+      docs/datasets.md is the schema and contribution process; `tests/dataset_versions.json`
+      makes a version mean fixed bytes; tests/test_datasets.py reads every table with PyYAML
+      alone in an isolated interpreter
+- [x] 3.2 Provenance records the pin — `standards.datasets.bundled_datasets()`; every
+      evidence bundle (CLI export and MCP export_artifact) lists each table's name, version,
+      file and SHA-256 under `datasets` (evidence-bundle schema 1.26.0)
 
 ## 4. Tests & docs
 

@@ -44,9 +44,9 @@ Named structural sections SHALL resolve through per-region importers: license-re
 - **WHEN** a spec references "IPE 200" with no prior fetch
 - **THEN** the bundled open profile data resolves it with its source citation, with zero network calls
 
-### Requirement: Bundled tables published as a standalone dataset
+### Requirement: Bundled tables published as an open dataset in this repository
 
-The bundled dimension and materials tables SHALL be published as a standalone, versioned, citation-tagged open dataset with a documented schema and contribution process, decoupled from Anvilate releases; Anvilate SHALL consume the dataset by pinned version, and third-party consumers SHALL be able to use it without Anvilate.
+The bundled dimension and materials tables SHALL be published as a versioned, citation-tagged open dataset with a documented schema and contribution process, kept in this repository and shipped with the package (Anvilate is one product with no separate data repository); each table SHALL be versioned independently of Anvilate releases, Anvilate SHALL record the version it read, and third-party consumers SHALL be able to use the tables without Anvilate.
 
 #### Scenario: Dataset consumed independently
 

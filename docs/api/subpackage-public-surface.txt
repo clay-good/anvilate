@@ -248,6 +248,7 @@ spec.version.UnsupportedSchemaVersion
 spec.version.migrate_to_current
 standards.AISC_SHAPES_V16
 standards.AllowableBasis
+standards.DatasetVersion
 standards.AiscProfileDataRequired
 standards.AiscProfileTable
 standards.Bearing
@@ -319,6 +320,7 @@ standards.bearings.Bearing
 standards.bearings.BearingTable
 standards.bearings.UnknownBearingError
 standards.bearings.default_bearing_table
+standards.bundled_datasets
 standards.capscrews.CapScrewTable
 standards.capscrews.SocketHeadCapScrew
 standards.capscrews.UnknownCapScrewError
@@ -346,6 +348,8 @@ standards.default_thread_table
 standards.default_washer_table
 standards.design_basis_scorecard
 standards.dimensioned
+standards.datasets.DatasetVersion
+standards.datasets.bundled_datasets
 standards.dowels.DowelPin
 standards.dowels.DowelPinTable
 standards.dowels.UnknownDowelPinError

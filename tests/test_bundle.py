@@ -1183,6 +1183,7 @@ def _every_section() -> BundleSections:
         assumptions=("linear elastic, small deflection",),
         evaluation_order=("net tension", "pin bearing"),
         carbon=_carbon_estimate(),
+        datasets=__import__("anvilate.standards.datasets").standards.datasets.bundled_datasets(),
         citations=(
             SourceRecord(
                 ref="AA-6061-T6",
