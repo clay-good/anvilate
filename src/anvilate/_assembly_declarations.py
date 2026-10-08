@@ -128,6 +128,9 @@ class ToolEnvelope(StatableModel):
     reach: Quantity
     source: Provenance
 
+    # `> 0` refuses NaN but not infinity, and an infinite reach is no tool.
+    states_requirements = True
+
     @model_validator(mode="after")
     def _an_envelope(self) -> ToolEnvelope:
         for label, value in (("body_diameter", self.body_diameter), ("reach", self.reach)):
@@ -164,6 +167,25 @@ class AccessRequirement(StatableModel):
     # The assembly state the tool is used in: access is judged against the parts installed
     # by then, never against the bare part alone.
     performed_in: Named | None = None
+
+    states_requirements = True
+
+    @model_validator(mode="after")
+    def _a_margin(self) -> AccessRequirement:
+        # Checked here, where it is declared: it used to be read only when `keepout()` built
+        # the Keepout, so "5 kg" or "-1 mm" surfaced mid-screen as that model's
+        # ValidationError rather than as this declaration's refusal.
+        if (
+            not self.clearance_margin.has_dimension("[length]")
+            or self.clearance_margin.to("mm").magnitude < 0
+        ):
+            raise _assembly_declaration_refusal(
+                f"'{self.feature}': clearance_margin must be a length that is not negative; "
+                f"got {self.clearance_margin}",
+                subject="clearance_margin",
+                source=_TOOL_SOURCE,
+            )
+        return self
 
     def keepout(self) -> Keepout:
         """The tool's working envelope as a cylinder keepout in front of the face."""
@@ -203,6 +225,10 @@ class SwingRequirement(StatableModel):
     required_arc: Quantity
     source: Provenance
     performed_in: Named | None = None
+
+    # `<= 0` is False for NaN, so a NaN handle hung the swing screen's kernel sweep and a
+    # NaN or infinite height screened to "swings 360° free": PASS.
+    states_requirements = True
 
     @model_validator(mode="after")
     def _a_swing(self) -> SwingRequirement:

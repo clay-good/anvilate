@@ -229,3 +229,55 @@ def test_an_inspectability_summary_with_nothing_to_examine_asks_for_inspections(
     (summary,) = screen_inspectability([], [], [])
     assert summary.status is CheckStatus.NOT_EVALUATED
     assert [need.declaration for need in summary.needs] == ["assembly.inspections"]
+
+
+def _q(text: str):  # type: ignore[no-untyped-def]
+    from anvilate.units import Quantity
+
+    return Quantity.parse(text)
+
+
+@pytest.mark.parametrize("bad", ["nan mm", "inf mm"])
+@pytest.mark.parametrize("field", ["handle_length", "handle_width", "handle_thickness", "height"])
+def test_a_wrench_swing_with_a_non_finite_dimension_is_refused(field: str, bad: str) -> None:
+    """`<= 0` is False for NaN, so a NaN handle reached the swing screen and hung its kernel
+    sweep, and a NaN or infinite height screened to "swings 360° free": PASS."""
+    from anvilate.assembly import SwingRequirement
+
+    declared = {
+        "feature": "M8 nut",
+        "face": "top",
+        "handle_length": _q("80 mm"),
+        "handle_width": _q("10 mm"),
+        "handle_thickness": _q("8 mm"),
+        "height": _q("15 mm"),
+        "required_arc": _q("60 deg"),
+        "source": "the workshop's tool catalogue",
+        field: _q(bad),
+    }
+    with pytest.raises(ValidationError, match=field):
+        SwingRequirement(**declared)
+
+
+def test_a_tool_access_declaration_refuses_what_its_keepout_would() -> None:
+    """An infinite reach passed `> 0`; a clearance margin in kilograms, or negative, was
+    accepted and surfaced later as the generated Keepout's ValidationError, mid-screen."""
+    from anvilate.assembly import AccessRequirement, ToolEnvelope
+
+    def tool(reach: str = "50 mm") -> ToolEnvelope:
+        return ToolEnvelope(
+            tool="13 mm socket", body_diameter=_q("20 mm"), reach=_q(reach), source="catalogue"
+        )
+
+    with pytest.raises(ValidationError, match="reach"):
+        tool("inf mm")
+    for margin in ("5 kg", "-1 mm"):
+        with pytest.raises(ValidationError, match="clearance_margin must be a length"):
+            AccessRequirement(
+                feature="M8 cap screw", face="top", tool=tool(), clearance_margin=_q(margin)
+            )
+    with pytest.raises(ValidationError, match="clearance_margin"):
+        AccessRequirement(
+            feature="M8 cap screw", face="top", tool=tool(), clearance_margin=_q("nan mm")
+        )
+    assert AccessRequirement(feature="M8 cap screw", face="top", tool=tool()).keepout()
