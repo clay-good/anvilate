@@ -295,6 +295,33 @@ def test_step_round_trip_preserves_the_valid_solid(tmp_path):
     assert verify_step_integrity(path) == properties
 
 
+def test_two_builds_of_one_target_do_not_share_a_staging_file(tmp_path, monkeypatch):
+    """Both builds staged on `.base.step.partial`: one finishing while the other was between
+    its kernel write and its stamp deleted the other's staging file, or renamed it into place
+    half-stamped. A second build now runs to completion inside the first one's write."""
+    import anvilate.geometry as geometry
+
+    target = tmp_path / "base.step"
+    built = build_base_plate(_plate())
+    kernel_write = geometry._write_step_shape
+    nested: list[pathlib.Path] = []
+    raced = False
+
+    def write_then_race(shape, staging, **options):
+        nonlocal raced
+        kernel_write(shape, staging, **options)
+        if not raced:
+            raced = True
+            nested.append(write_step(built, target, authorization=_STEP_AUTH))
+
+    monkeypatch.setattr(geometry, "_write_step_shape", write_then_race)
+    path = write_step(built, target, authorization=_STEP_AUTH)
+
+    assert nested == [target] and path == target
+    assert verify_step_integrity(target)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["base.step"]
+
+
 def test_step_integrity_verifier_detects_a_tampered_property(tmp_path):
     path = write_step(build_base_plate(_plate()), tmp_path / "base.step", authorization=_STEP_AUTH)
     text = path.read_text(encoding="utf-8")

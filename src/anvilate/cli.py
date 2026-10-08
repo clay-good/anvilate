@@ -2718,13 +2718,12 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         if as_3mf:
             data = render_3mf(built, authorization=authorization)
             # Written beside the target and renamed into place, so an interrupted run leaves
-            # no partial file presented as complete (interaction-quality 7.2).
-            staging = args.output.with_name(f".{args.output.name}.partial")
-            try:
+            # no partial file presented as complete (interaction-quality 7.2), under a name
+            # unique to this run, so a concurrent build of the same target cannot clobber it.
+            from .export.dxf import _atomic_path
+
+            with _atomic_path(args.output) as staging:
                 staging.write_bytes(data)
-                staging.replace(args.output)
-            finally:
-                staging.unlink(missing_ok=True)
         else:
             # The document's own tolerances, as AP242 semantic PMI: the model the drawing
             # frame and the QIF characteristic render from, so all three carry one value.

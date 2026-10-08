@@ -66,3 +66,16 @@ def test_the_step_writer_removes_its_file_on_an_interrupt_too() -> None:
     assert cleanups, "the STEP writer no longer removes a failed file"
     for handler in cleanups:
         assert isinstance(handler.type, ast.Name) and handler.type.id == "BaseException"
+
+
+def test_no_writer_stages_on_a_fixed_partial_name() -> None:
+    """A fixed `.name.partial` is shared by every concurrent writer of one target, so one
+    run's cleanup deletes another's staging file mid-write (the STEP case is reproduced in
+    tests/test_geometry.py). Staging goes through `_atomic_path`, whose name is unique."""
+    fixed = [
+        f"{path.relative_to(_SRC)}:{number}"
+        for path in sorted(_SRC.rglob("*.py"))
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if "with_name(" in line and ".partial" in line
+    ]
+    assert not fixed, fixed

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -3183,8 +3182,12 @@ def write_step(
     # the kernel writes an unstamped STEP first, and written in place, a run stopped
     # before the stamp left a file with no authorization header or watermark at the
     # path the user asked for, looking complete (interaction-quality 7.2).
-    staging = path.with_name(f".{path.name}.partial")
-    try:
+    # The staging name is unique, as the DXF writer's is: a fixed `.name.partial` was shared by
+    # two builds of one target, and either could rename the other's half-written file into
+    # place or delete it mid-write.
+    from .export.dxf import _atomic_path
+
+    with _atomic_path(path) as staging:
         _write_step_shape(built, staging, schema=schema, tolerances=tuple(tolerances))
         try:
             text = staging.read_text(encoding="utf-8")
@@ -3234,9 +3237,6 @@ def write_step(
             )
         staging.write_text(text, encoding="utf-8")
         verify_step_integrity(staging)
-        os.replace(staging, path)
-    finally:
-        staging.unlink(missing_ok=True)
     return path
 
 
