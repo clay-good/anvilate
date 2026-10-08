@@ -145,6 +145,10 @@ class Applicability(StatableModel):
     minimum: Quantity | None = None
     maximum: Quantity | None = None
 
+    # A NaN end fails every comparison in `covers`, so it excluded nothing: a profile bounded
+    # by one applied everywhere, outside the range its author stated.
+    states_requirements = True
+
     @model_validator(mode="after")
     def _a_bound(self) -> Applicability:
         if self.minimum is None and self.maximum is None:
@@ -179,6 +183,8 @@ class Applicability(StatableModel):
         if value.pint.dimensionality != end.pint.dimensionality:
             return False
         magnitude = value.to(end.unit).magnitude
+        if magnitude != magnitude:  # NaN is inside no range
+            return False
         if self.minimum is not None and magnitude < self.minimum.magnitude:
             return False
         return not (self.maximum is not None and magnitude > self.maximum.to(end.unit).magnitude)
@@ -205,6 +211,10 @@ class SuppliedValue(StatableModel):
     declaration: Named
     value: Quantity | float | str
     overridden: Quantity | float | str | None = None
+
+    # What a profile supplies is a requirement the spec then states, and a spec refuses a
+    # non-finite one; a profile was the way to hand it one anyway.
+    states_requirements = True
 
     @property
     def effective(self) -> Quantity | float | str:

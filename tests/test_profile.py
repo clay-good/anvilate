@@ -360,3 +360,20 @@ def test_the_evidence_bundle_carries_the_profile_behind_the_verdict() -> None:
     assert "the required minimum was supplied by profile SHOP-STRUCT 1.0.0" in document
     assert "origin: profile_supplied" in document
     assert "rationale: profile SHOP-STRUCT 1.0.0" in document
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_profile_bound_or_supplied_value_that_is_not_finite_is_refused(bad: float) -> None:
+    """A NaN end fails every comparison in `covers`, so it excluded nothing: the profile
+    applied everywhere, outside the range its author stated. A supplied value is a
+    requirement the spec then states, and a spec refuses a non-finite one."""
+    with pytest.raises(ValidationError, match="minimum"):
+        Applicability(context="ambient temperature", minimum=_q(bad), maximum=_q(323.15))
+    with pytest.raises(ValidationError, match="value"):
+        SuppliedValue(declaration="wind_speed", value=bad)
+
+
+def test_a_nan_context_value_is_inside_no_range() -> None:
+    bound = Applicability(context="ambient temperature", minimum=_q(253.15), maximum=_q(323.15))
+    assert bound.covers(_q(300.0))
+    assert not bound.covers(_q(float("nan")))
