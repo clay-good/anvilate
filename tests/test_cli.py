@@ -3097,6 +3097,18 @@ def test_fetch_refuses_a_payload_that_is_not_the_published_one(tmp_path, monkeyp
     assert list(tmp_path.glob("fake-shapes*")) == []
 
 
+def test_fetch_lists_a_cache_it_cannot_vouch_for_as_unreadable(tmp_path, monkeypatch):
+    """A payload with no provenance sidecar is not "cached": nothing can say what it is."""
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    (tmp_path / "aisc-shapes-database-v16.0.xlsx").write_bytes(b"not the workbook")
+    code, raw, _err = _run("fetch", "--format", "json")
+    assert code == EXIT_OK
+    (row,) = [r for r in json.loads(raw)["datasets"] if r["dataset"] == "aisc-shapes"]
+    assert row["state"] == "unreadable" and "provenance" in row["problem"]
+    code, text, _err = _run("fetch")
+    assert "aisc-shapes: unreadable" in text and "problem:" in text
+
+
 def test_fetch_names_the_cache_when_the_cache_is_what_failed(tmp_path, monkeypatch):
     """A cache root that is a file failed after the download and was reported as one."""
     import anvilate.cli
