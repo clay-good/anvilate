@@ -295,6 +295,37 @@ def test_step_round_trip_preserves_the_valid_solid(tmp_path):
     assert verify_step_integrity(path) == properties
 
 
+@pytest.mark.parametrize(
+    "name", ["O'Brien shaft", "C:\\X\\E9 shaft", "Ø40 Welle für Pumpe", "line\nbreak", "emoji 😀"]
+)
+def test_a_part_name_survives_the_step_file_exactly(tmp_path, name):
+    """Doubling the apostrophe was the whole encoding: a backslash went out raw, so
+    `C:\\X\\E9` came back from the file as `C:é`; a newline went into the literal and was
+    dropped; non-ASCII went out as raw UTF-8 bytes. Read back by OCCT's own reader."""
+    from OCP.STEPCAFControl import STEPCAFControl_Reader
+    from OCP.TCollection import TCollection_ExtendedString
+    from OCP.TDataStd import TDataStd_Name
+    from OCP.TDF import TDF_LabelSequence
+    from OCP.TDocStd import TDocStd_Document
+    from OCP.XCAFDoc import XCAFDoc_DocumentTool
+
+    spec = _spec(element_type="transmission_shaft", params=_shaft().model_dump())
+    built = build_spec(spec.model_copy(update={"name": name}))
+    path = write_step(built, tmp_path / "s.step", authorization=_STEP_AUTH)
+    assert all(byte <= 0x7E for byte in path.read_bytes()), "a STEP file is basic alphabet"
+
+    document = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+    reader = STEPCAFControl_Reader()
+    reader.SetNameMode(True)
+    reader.ReadFile(str(path))
+    reader.Transfer(document)
+    labels = TDF_LabelSequence()
+    XCAFDoc_DocumentTool.ShapeTool_s(document.Main()).GetFreeShapes(labels)
+    attribute = TDataStd_Name()
+    labels.Value(1).FindAttribute(TDataStd_Name.GetID_s(), attribute)
+    assert attribute.Get().ToExtString() == name
+
+
 def test_two_builds_of_one_target_do_not_share_a_staging_file(tmp_path, monkeypatch):
     """Both builds staged on `.base.step.partial`: one finishing while the other was between
     its kernel write and its stamp deleted the other's staging file, or renamed it into place

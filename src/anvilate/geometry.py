@@ -2807,8 +2807,29 @@ def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:
 
 
 def _step_string(value: str) -> str:
-    """Escape one ISO 10303 string literal payload."""
-    return value.replace("'", "''")
+    """Encode one ISO 10303-21 string literal payload.
+
+    A string literal holds the printable basic alphabet only. Doubling the apostrophe was
+    the whole of it, so a backslash went out raw and a name ``C:\\X\\E9`` was read back as
+    ``C:é``, and a newline put a control character inside the literal, which a conforming
+    reader may refuse the file over. Backslash is the escape introducer and is doubled;
+    anything outside 0x20-0x7E is written as the standard's ``\\X2\\hhhh\\X0\\`` (or
+    ``\\X4\\`` beyond the BMP), which every reader decodes back to the same text.
+    """
+    parts: list[str] = []
+    for char in value:
+        code = ord(char)
+        if char == "'":
+            parts.append("''")
+        elif char == "\\":
+            parts.append("\\\\")
+        elif 0x20 <= code <= 0x7E:
+            parts.append(char)
+        elif code <= 0xFFFF:
+            parts.append(f"\\X2\\{code:04X}\\X0\\")
+        else:
+            parts.append(f"\\X4\\{code:08X}\\X0\\")
+    return "".join(parts)
 
 
 def _semantic_pmi(
