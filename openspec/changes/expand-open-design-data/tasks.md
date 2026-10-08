@@ -28,7 +28,9 @@
       figshare 2025, v2, CC BY 4.0, DOI 10.6084/m9.figshare.29254265.v2), copied point for
       point from its S-N.json (md5 55a9defc400f717147702d6c8a91f0ce) — SM50B cruciform,
       axial, R = 0, 23 °C air, 20 mm, 38 failures (dataset_id 1868); 6082-T6 FSW butt,
-      axial, R = 0.1, 25 °C air, 3 mm, 19 failures (dataset_id 2022). A campaign was
+      axial, R = 0.1, 25 °C air, 3 mm, 19 failures (dataset_id 2022); then 2024-T4 FSW
+      (4636) and aged AM Scalmalloy FSW (3387), with their run-outs kept and unfitted;
+      ultrasonic (~20 kHz) campaigns were excluded. A campaign was
       bundled only where the release states temperature (as a number), environment, R and
       thickness; "ambient" was not read as 20 °C, and a series sharing its metadata with a
       sibling from the same paper was left out. Each record is a MEAN curve fitted by ASTM

@@ -5,14 +5,16 @@
 # test results from the published literature under CC BY 4.0. Each campaign is one
 # `dataset_id` in that release, copied point for point from its S-N.json (md5
 # 55a9defc400f717147702d6c8a91f0ce) with the test conditions from its parameter.json (md5
-# c6e93be560fefd4653514a24751eb3c5). Every point is a failed specimen: neither campaign
-# records a run-out. Stress is the nominal range, max minus min, in MPa.
+# c6e93be560fefd4653514a24751eb3c5). `points` are failed specimens and `runouts` the ones
+# the release flags as run-outs, kept as data and left out of the fit as ASTM E739 does.
+# Stress is the nominal range, max minus min, in MPa.
 #
 # A campaign is bundled only where the release states everything `SpecimenMetadata`
 # requires, numerically where it is a number: the test temperature, the environment, the
 # stress ratio and the thickness. A temperature recorded as "ambient" was not read as 20 C,
 # and a campaign sharing its metadata with a sibling series from the same paper was left
-# out, since nothing would say which series it is.
+# out, since nothing would say which series it is. Ultrasonic tests (around 20 kHz) were
+# left out too: their very-high-cycle points are not one power law.
 #
 # The points are data. The curve a record carries is fitted from them by
 # `anvilate.standards.weld_fatigue` and is a mean curve, valid over the tested range only.
@@ -107,3 +109,63 @@ campaigns:
       - [152, 9940]
       - [152, 11000]
       - [152, 12100]
+  AA2024-T4-FSW-BUTT-R0.1:
+    dataset_id: 4636
+    publication: "Comparative study on fatigue properties between AA2024-T4 friction stir welds and base materials, Materials Science and Engineering A (2006), doi:10.1016/j.msea.2006.07.009"
+    material: "2024-T4 aluminium alloy"
+    joint: "friction stir welded butt joint, transverse flat specimen, failing at the weld root"
+    loading_mode: axial
+    stress_ratio: 0.1
+    temperature: {magnitude: 25.0, unit: degC}
+    environment: "laboratory air"
+    thickness: {magnitude: 4.0, unit: mm}
+    points:
+      - [79, 1809451]
+      - [79, 2540645]
+      - [87, 1524839]
+      - [90, 914763]
+      - [90, 957948]
+      - [90, 1551004]
+      - [95, 625008]
+      - [99, 242512]
+      - [99, 1738045]
+      - [102, 1539502]
+      - [110, 397930]
+      - [110, 736749]
+      - [121, 168672]
+      - [122, 91874]
+      - [124, 512129]
+      - [143, 40459]
+      - [163, 50778]
+    runouts:
+      - [84, 4309517]
+  SCALMALLOY-FSW-BUTT-R0.1:
+    dataset_id: 3387
+    publication: "Microstructures and mechanical properties of friction stir welded additively manufactured Scalmalloy, International Journal of Advanced Manufacturing Technology (2024), doi:10.1007/s00170-024-14237-9"
+    material: "Scalmalloy (Al-Mg-Sc-Zr), additively manufactured, aged 325 C for 4 h"
+    joint: "friction stir welded butt joint, flat specimen, failing in the base material"
+    loading_mode: axial
+    stress_ratio: 0.1
+    temperature: {magnitude: 25.0, unit: degC}
+    environment: "air"
+    thickness: {magnitude: 4.0, unit: mm}
+    points:
+      - [37, 2141060]
+      - [46, 256911]
+      - [47, 396795]
+      - [56, 107783]
+      - [56, 162502]
+      - [57, 144139]
+      - [57, 827791]
+      - [71, 188146]
+      - [73, 66826]
+      - [73, 139336]
+      - [97, 29575]
+      - [97, 50879]
+      - [98, 96458]
+      - [142, 23484]
+      - [206, 4949]
+    runouts:
+      - [37, 10642155]
+      - [46, 11741410]
+      - [55, 11443016]

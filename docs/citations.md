@@ -216,9 +216,11 @@ number that looks exactly like data.**
 The dataset half is a license record too: `DatasetProvenance` requires a DOI or a URL,
 because a fatigue curve nobody can retrieve is a number somebody typed.
 
-The first pack is `default_weld_fatigue_records()`: two welded-joint campaigns, an SM50B
-steel cruciform and a 6082-T6 friction-stir butt joint, copied point for point from a
-CC BY 4.0 compilation (doi:10.6084/m9.figshare.29254265.v2). The compilation publishes
+The first pack is `default_weld_fatigue_records()`: four welded-joint campaigns, an SM50B
+steel cruciform and friction-stir butt joints in 6082-T6, 2024-T4 and additively
+manufactured Scalmalloy, copied point for point from a CC BY 4.0 compilation
+(doi:10.6084/m9.figshare.29254265.v2). Run-outs are kept beside the failures and left out
+of the fit. The compilation publishes
 points, not curves, so each record's curve is a **mean** fit (ASTM E739, log N on log Δσ)
 over the cycle range the specimens cover and no further. It answers a mean question and
 declines a design one. Each record credits the dataset and the paper the campaign was first

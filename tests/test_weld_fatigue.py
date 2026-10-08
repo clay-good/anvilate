@@ -30,9 +30,31 @@ def test_the_pack_is_the_source_release_point_for_point():
     assert {(88, 218000), (151, 9280), (152, 12100)} <= set(stir)
     assert campaigns["SM50B-CRUCIFORM-R0"]["dataset_id"] == 1868
     assert campaigns["AA6082-T6-FSW-BUTT-R0.1"]["dataset_id"] == 2022
+    assert set(campaigns) == set(_POLYFIT)
 
 
-@pytest.mark.parametrize("name", ["SM50B-CRUCIFORM-R0", "AA6082-T6-FSW-BUTT-R0.1"])
+def test_run_outs_are_kept_as_data_and_left_out_of_the_fit():
+    """ASTM E739 fits failures; a run-out is a life the specimen exceeded, not one it had."""
+    campaigns = _campaigns()
+    assert [tuple(p) for p in campaigns["AA2024-T4-FSW-BUTT-R0.1"]["runouts"]] == [(84, 4309517)]
+    assert len(campaigns["SCALMALLOY-FSW-BUTT-R0.1"]["runouts"]) == 3
+    record = default_weld_fatigue_records()["SCALMALLOY-FSW-BUTT-R0.1"]
+    assert record.provenance.specimen_count == len(campaigns["SCALMALLOY-FSW-BUTT-R0.1"]["points"])
+    assert record.curve.max_cycles == max(
+        n for _s, n in campaigns["SCALMALLOY-FSW-BUTT-R0.1"]["points"]
+    )
+
+
+_POLYFIT = {
+    # numpy.polyfit(log10 Δσ, log10 N, 1) over each campaign's failures, when it was bundled.
+    "SM50B-CRUCIFORM-R0": (3.698334, 246.060039),
+    "AA6082-T6-FSW-BUTT-R0.1": (6.481343, 109.421898),
+    "AA2024-T4-FSW-BUTT-R0.1": (5.650596, 139.519599),
+    "SCALMALLOY-FSW-BUTT-R0.1": (2.939566, 77.082244),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_POLYFIT))
 def test_the_curve_is_the_e739_line_through_the_failures(name):
     """Held to a second, independent fit (the standard library's own regression), and to
     the values numpy's polyfit gave for the same points when the pack was built."""
@@ -47,10 +69,7 @@ def test_the_curve_is_the_e739_line_through_the_failures(name):
     got = record.allowable_stress_range(cycles=1e5, required_survival=CurveSurvival.MEAN)
     assert got.to("MPa").magnitude == pytest.approx(expected_at_1e5, rel=1e-12)
 
-    polyfit = {
-        "SM50B-CRUCIFORM-R0": (3.698334, 246.060039),
-        "AA6082-T6-FSW-BUTT-R0.1": (6.481343, 109.421898),
-    }[name]
+    polyfit = _POLYFIT[name]
     assert segment.slope == pytest.approx(polyfit[0], rel=1e-6)
     assert got.to("MPa").magnitude == pytest.approx(polyfit[1], rel=1e-6)
 
