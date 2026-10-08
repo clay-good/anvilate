@@ -1292,6 +1292,18 @@ def test_an_exclusive_bound_is_exclusive():
     )
 
 
+@pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
+def test_a_numeric_argument_that_is_not_finite_is_refused(bad: float) -> None:
+    """Python's JSON reader takes `NaN` and `Infinity`, and overflows `1e999` to infinity.
+    Infinity is "above 0", so `convergence_tol` accepted it: an FEA run every iterate
+    converges on. A JSON number is finite, so the argument is malformed."""
+    error = _call("run_fea_validation", {"spec": {}, "convergence_tol": bad})["error"]
+    assert error["code"] == -32602
+    assert "convergence_tol must be a finite JSON number" in error["message"]
+    error = _call("render_viewport", {"subject": "x", "view": "iso", "width_px": bad})["error"]
+    assert error["code"] == -32602
+
+
 # Every keyword the published schemas use, paired with a value it accepts and every value
 # it must refuse. Naming a keyword in a set is not evidence anything enforces it — `pattern` and
 # `items` both sat in the old known-set unenforced, and the mutation that deleted each

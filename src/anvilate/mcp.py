@@ -39,6 +39,7 @@ tolerance, and a convergence tolerance is not a bound on wall time.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -893,6 +894,12 @@ def _value_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str
         return issues
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return issues
+    # A JSON number is finite (RFC 8259 §6), but Python's reader takes `NaN` and `Infinity`
+    # and overflows `1e999` to infinity. Infinity is "above 0", so `convergence_tol` took it
+    # and asked for an FEA run that every iterate converges on; NaN failed the bound with a
+    # reason that was not the problem.
+    if not math.isfinite(value):
+        return [f"{label} must be a finite JSON number; got {value}"]
     for key, ok, wording in (
         ("minimum", lambda v, b: v >= b, "at least"),
         ("maximum", lambda v, b: v <= b, "at most"),
