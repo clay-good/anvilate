@@ -67,11 +67,11 @@ from ._models import (
     ItemCollection,
     RevalidatedModel,
     _is_shorthand_for,
-    _names_a_variant_of,
     _near_identifiers,
     _near_materials,
     _reason,
     _refusal_line,
+    _withheld_grades,
     rebuilt_quantities,
 )
 from .analysis.embodied_carbon import EmbodiedCarbonEstimate
@@ -1551,14 +1551,8 @@ def _near_misses(ref: str, known: list[str], near=_near_identifiers) -> str:
     close = near(ref, known)
     if close:
         return f"did you mean {', '.join(close)}?"
-    variants = [c for c in _near_identifiers(ref, known) if _names_a_variant_of(ref, c)]
-    if near is _near_materials and variants:
-        return (
-            f"it qualifies the grade of {', '.join(variants)}, and a qualified grade can be a "
-            "different material (316L is not 316), so none is offered. If it is the same "
-            f"material, write that identifier; otherwise add {ref!r} as a team extension "
-            "material record with its own cited properties."
-        )
+    if near is _near_materials and (withheld := _withheld_grades(ref, known)):
+        return withheld
     return f"nothing among the {len(known)} known identifiers is close to it."
 
 

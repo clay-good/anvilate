@@ -2864,6 +2864,8 @@ def test_a_material_that_qualifies_a_grade_is_not_offered_the_unqualified_one(wr
     with pytest.raises(UnknownMaterialError) as refused:
         default_materials_db().get(written)
     assert withheld not in refused.value.suggestions
+    # The screen's refusal explains it as compile_spec does, not "unknown material" alone.
+    assert f"qualifies the grade of {withheld}" in str(refused.value)
 
     shipped = Path(__file__).parents[1] / "examples" / "base_plate.spec.yaml"
     document = yaml.safe_load(shipped.read_text(encoding="utf-8"))

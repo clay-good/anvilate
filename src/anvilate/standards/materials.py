@@ -15,7 +15,7 @@ from typing import Annotated
 
 from pydantic import ConfigDict, model_validator
 
-from .._models import Named, RevalidatedModel, _near_materials, parse_yaml
+from .._models import Named, RevalidatedModel, _near_materials, _withheld_grades, parse_yaml
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
@@ -178,10 +178,11 @@ class Material(_Base):
 class UnknownMaterialError(KeyError):
     """A referenced material ID is not in the database."""
 
-    def __init__(self, material_id: str, suggestions: list[str]) -> None:
+    def __init__(self, material_id: str, suggestions: list[str], withheld: str = "") -> None:
         self.material_id = material_id
         self.suggestions = suggestions
         hint = f"; did you mean {', '.join(suggestions)}?" if suggestions else ""
+        hint = hint or (f" — {withheld}" if withheld else "")
         super().__init__(f"unknown material {material_id!r}{hint}")
 
 
@@ -207,6 +208,7 @@ class MaterialsDatabase:
             raise UnknownMaterialError(
                 material_id,
                 _near_materials(material_id, self._materials),
+                _withheld_grades(material_id, self._materials),
             ) from None
 
     def extension_ids(self) -> list[str]:

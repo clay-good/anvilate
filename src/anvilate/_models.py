@@ -919,6 +919,19 @@ def _names_a_variant_of(written: str, candidate: str) -> bool:
     )
 
 
+def _withheld_grades(written: str, known: Iterable[str]) -> str:
+    """Why no material is offered for ``written`` though one is close, or ``""``."""
+    variants = [c for c in _near_identifiers(written, known) if _names_a_variant_of(written, c)]
+    if not variants:
+        return ""
+    return (
+        f"it qualifies the grade of {', '.join(variants)}, and a qualified grade can be a "
+        "different material (316L is not 316), so none is offered. If it is the same "
+        f"material, write that identifier; otherwise add {written!r} as a team extension "
+        "material record with its own cited properties."
+    )
+
+
 def _near_materials(written: str, known: Iterable[str], n: int = 3) -> list[str]:
     """:func:`_near_identifiers` for materials, never offering a grade ``written`` qualifies."""
     return [c for c in _near_identifiers(written, known, n) if not _names_a_variant_of(written, c)]
