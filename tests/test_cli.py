@@ -1901,6 +1901,44 @@ def test_interfaces_checks_a_confirmed_planar_contact_against_a_cited_minimum_ar
     assert "minimum contact area must be an area" in err
 
 
+def test_interfaces_refuses_non_finite_limits_in_words(tmp_path):
+    """`nan`, `inf`, or `1e400` (which overflows to inf) parses as a quantity, and each check
+    let it through to its result model, whose finite field refused it as a pydantic dump
+    naming `minimum_overlap_area_mm2` and linking errors.pydantic.dev. ISO 286 refused a NaN
+    basic size as exceeding its 500 mm maximum."""
+    pytest.importorskip("build123d")
+
+    def accepted(step, kind, flag):
+        _code, raw, _err = _run("interfaces", str(step), "--format", "json")
+        found = json.loads(raw)["candidates"][kind][0]["id"]
+        return ("interfaces", str(step), flag, found, "--name", "n", "--confirmed-by", "R")
+
+    contact = accepted(
+        _write_four_hole_assembly_step(tmp_path / "c.step", touching=True),
+        "planar_contacts",
+        "--accept-contact",
+    )
+    mate = accepted(
+        _write_cylindrical_mate_step(tmp_path / "m.step"), "cylindrical_mates", "--accept-mate"
+    )
+    gap = accepted(_write_planar_gap_step(tmp_path / "g.step"), "planar_gaps", "--accept-gap")
+    cases = [
+        (contact + ("--min-contact-area", "1e400 mm^2"), "minimum contact area must be finite"),
+        (contact + ("--min-contact-area", "nan mm^2"), "minimum contact area must be finite"),
+        (mate + ("--min-engagement", "inf mm"), "minimum axial engagement must be finite"),
+        (gap + ("--min-gap", "nan mm", "--max-gap", "5 mm"), "gap limits must be finite"),
+        (gap + ("--min-gap", "1 mm", "--max-gap", "inf mm"), "gap limits must be finite"),
+        (mate + ("--fit", "H7/g6", "--basic-size", "nan mm"), "basic size must be a number"),
+    ]
+    for argv, reason in cases:
+        if "--fit" not in argv:
+            argv = argv + ("--requirement", "Drawing A-101")
+        code, out, err = _run(*argv)
+        assert code == EXIT_BAD_REQUEST and out == "", argv
+        assert reason in err, (argv, err)
+        assert "pydantic" not in err and "validation error" not in err, (argv, err)
+
+
 def test_interfaces_reports_and_filters_coaxial_cylindrical_mates(tmp_path):
     step = _write_cylindrical_mate_step(tmp_path / "shaft-in-bore.step")
 

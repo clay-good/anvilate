@@ -11,6 +11,7 @@ deviations) build on this table (see openspec/specs/tolerance-management/).
 
 from __future__ import annotations
 
+from math import isnan
 from typing import Literal
 
 from pydantic import ConfigDict
@@ -126,6 +127,15 @@ def standard_tolerance(nominal: Quantity, grade: int | str) -> StandardTolerance
     it = _parse_grade(grade)
     doc = _table()
     magnitude = nominal.to("mm").magnitude
+    if isnan(magnitude):
+        # NaN fails every comparison below, so it fell through the range table and was
+        # refused as exceeding the 500 mm maximum, which it does not.
+        raise ToleranceRangeError(
+            f"basic size must be a number; got {nominal}",
+            action="replace",
+            subject=f"the ISO 286 basic size {nominal}",
+            source=f"a positive basic size governed by {doc['dataset']['source']}",
+        )
     if magnitude <= 0:
         raise ToleranceRangeError(
             f"basic size must be greater than 0 mm; got {nominal}",

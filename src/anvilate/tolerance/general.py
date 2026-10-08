@@ -10,6 +10,7 @@ drawings and in the evidence bundle. The class bridges to the Spec IR's
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isnan
 
 from pydantic import ConfigDict
 
@@ -204,6 +205,15 @@ def general_tolerance(
     )
     table = _table()
     magnitude = nominal.to("mm").magnitude
+    if isnan(magnitude):
+        # NaN fails every comparison below, so it fell through the range table and was
+        # refused as exceeding the 4000 mm maximum, which it does not.
+        raise ToleranceRangeError(
+            f"general-tolerance nominal must be a number; got {nominal}",
+            action="replace",
+            subject=f"the general-tolerance nominal {nominal}",
+            source=f"a length quantity governed by {table.source}",
+        )
     if magnitude < table.min_nominal_mm:
         raise ToleranceRangeError(
             f"{nominal} is below ISO 2768-1's {table.min_nominal_mm:g} mm minimum; "
@@ -336,6 +346,15 @@ def general_angular_tolerance(
     )
     doc = _angular_table()
     magnitude = shorter_leg.to("mm").magnitude
+    if isnan(magnitude):
+        # Otherwise NaN reaches the open-top refusal at the end, which is unreachable only
+        # for a number.
+        raise ToleranceRangeError(
+            f"shorter leg must be a number; got {shorter_leg}",
+            action="replace",
+            subject=f"the angular-tolerance shorter leg {shorter_leg}",
+            source=f"a positive shorter-leg length governed by {doc['dataset']['source']}",
+        )
     if magnitude <= 0:
         raise ToleranceRangeError(
             f"shorter leg must be greater than 0 mm; got {shorter_leg}",
@@ -355,7 +374,7 @@ def general_angular_tolerance(
                 source=doc["dataset"]["source"],
             )
         low = float(up_to)
-    raise ToleranceRangeError(  # unreachable: open top
+    raise ToleranceRangeError(  # unreachable for a number: open top, NaN refused above
         "no ISO 2768-1 angular range matched",
         action="declare",
         subject=f"an angular tolerance for the {shorter_leg} shorter leg",

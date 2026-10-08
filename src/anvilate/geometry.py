@@ -1693,6 +1693,15 @@ def check_planar_contact_area(
             source=f"an area quantity from requirement {reference!r}",
         )
     minimum_mm2 = minimum_overlap_area.to("mm^2").magnitude
+    if not isfinite(minimum_mm2):
+        # Refused here, in words: past this point it reached the result model's finite
+        # field and came out as a pydantic dump naming `minimum_overlap_area_mm2`.
+        raise GeometryError(
+            f"minimum contact area must be finite; got {minimum_overlap_area}",
+            action="replace",
+            subject=f"the minimum contact area {minimum_overlap_area}",
+            source=f"a finite area from requirement {reference!r}",
+        )
     if minimum_mm2 < 0:
         raise GeometryError(
             "minimum contact area must not be negative",
@@ -1831,6 +1840,13 @@ def check_planar_gap_clearance(
             )
     minimum_mm = minimum_gap.to("mm").magnitude
     maximum_mm = maximum_gap.to("mm").magnitude
+    if not (isfinite(minimum_mm) and isfinite(maximum_mm)):
+        raise GeometryError(
+            f"planar gap limits must be finite; got {minimum_gap} through {maximum_gap}",
+            action="replace",
+            subject=f"the planar gap limits {minimum_gap} through {maximum_gap}",
+            source=f"finite clearance limits from requirement {reference!r}",
+        )
     if minimum_mm < 0 or maximum_mm < 0:
         raise GeometryError(
             "planar gap limits must not be negative",
@@ -1874,6 +1890,13 @@ def check_cylindrical_mate_engagement(
             source=f"a length quantity from requirement {reference!r}",
         )
     minimum_mm = minimum_engagement.to("mm").magnitude
+    if not isfinite(minimum_mm):
+        raise GeometryError(
+            f"minimum axial engagement must be finite; got {minimum_engagement}",
+            action="replace",
+            subject=f"the minimum axial engagement {minimum_engagement}",
+            source=f"a finite engagement from requirement {reference!r}",
+        )
     if minimum_mm < 0:
         raise GeometryError(
             "minimum axial engagement must not be negative",

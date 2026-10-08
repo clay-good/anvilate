@@ -126,6 +126,21 @@ def test_above_maximum_requires_explicit_tolerance() -> None:
         general_tolerance(_mm(5000), "m")
 
 
+def test_a_nan_size_is_refused_as_not_a_number_not_as_out_of_range() -> None:
+    """NaN fails every comparison, so each table walk let it fall through to the refusal
+    at its end: "exceeds the maximum" for two of them, and "no range matched" behind an
+    `# unreachable` comment for the angular table."""
+    nan = _mm(float("nan"))
+    for call in (
+        lambda: general_tolerance(nan, "m"),
+        lambda: general_angular_tolerance(nan, "m"),
+        lambda: standard_tolerance(nan, 7),
+        lambda: fit("H7/g6", nan),
+    ):
+        with pytest.raises(ToleranceRangeError, match="must be a number; got nan mm"):
+            call()
+
+
 def test_non_length_nominal_rejected() -> None:
     with pytest.raises(ToleranceRangeError, match="length"):
         general_tolerance(Quantity(magnitude=5, unit="kg"), "m")
@@ -160,7 +175,7 @@ def test_tolerance_range_refusals_carry_structured_remedies() -> None:
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 18
+    assert len(sites) == 21
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
