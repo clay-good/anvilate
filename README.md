@@ -6,7 +6,7 @@
 
 Anvilate runs the engineering checks you'd otherwise do by hand in a spreadsheet — bending, deflection, buckling, resonance, bolted and welded connections, pressure, tolerance stack-ups — and rolls them into one scorecard that **won't hand you a silent green**. A check it could not run says so; it never counts as a pass. Local-first and open source: no cloud, no LLM, no account.
 
-> **Status: pre-alpha (v0.0.1).** The analytical screening core, the command line, the MCP server, and a few audited 3D patterns (STEP, DXF, 3MF) work today. The natural-language front end, wider geometry catalog, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
+> **Status: pre-alpha (v0.0.1).** The analytical screening core, the command line, the MCP server, and a few audited 3D patterns (STEP, DXF, 3MF) work today. Plain-English requests work through your own MCP agent, which writes the spec. A wider geometry catalog, FEA, and semantic PMI, described under [Where this is going](#where-this-is-going), are still being built.
 
 ## Install
 
