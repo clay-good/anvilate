@@ -135,7 +135,8 @@ Claude Desktop (`claude_desktop_config.json`) or Cursor (`.cursor/mcp.json`), th
 The server's `initialize` reply carries `instructions` your client hands the model: the
 workflow, the rules for stating a requirement, and every material, component and element
 identifier that exists, generated from the bundled databases so the model copies identifiers
-rather than recalling them.
+rather than recalling them. A field that takes one of a fixed set of values is listed with
+them, for example `support*=cantilever|simply_supported|fixed_fixed|fixed_pinned|overhang`.
 
 ```bash
 anvilate-mcp

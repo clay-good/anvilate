@@ -77,7 +77,7 @@ Anvilate SHALL ship no language model, run no inference, and hold no API key. Pr
 #### Scenario: The agent is told what exists
 
 - **WHEN** an MCP client initializes the server
-- **THEN** the instructions list every bundled material and component identifier and every element screen with its required fields, so the agent copies identifiers rather than recalling them
+- **THEN** the instructions list every bundled material and component identifier and every element screen with its required fields and the values each closed-set field accepts, so the agent copies identifiers rather than recalling them
 
 ### Requirement: Spec card confirmation before build
 

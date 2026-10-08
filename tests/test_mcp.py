@@ -2512,3 +2512,42 @@ def test_initialize_hands_the_agent_its_rules_and_the_live_catalogue():
     for tag, (model, _screen) in element_registry().items():
         required = [n for n, f in model.model_fields.items() if f.is_required()]
         assert f"- {tag}: " in text and all(f"{n}*" in text for n in required), tag
+
+
+def test_the_catalogue_spells_out_every_closed_set_an_element_field_accepts():
+    """`support*` alone leaves the agent to guess `simply_supported` against `simple`.
+
+    The expected spellings come from the published element schemas, not from the
+    annotation walk that writes the catalogue, so the two have to agree.
+    """
+    from anvilate.contracts import element_json_schemas
+    from anvilate.mcp import agent_instructions
+
+    lines = {
+        line[2:].split(":", 1)[0]: line
+        for line in agent_instructions().splitlines()
+        if line.startswith("- ")
+    }
+
+    def enums(node, defs):
+        if "$ref" in node:
+            return enums(defs[node["$ref"].rsplit("/", 1)[1]], defs)
+        if "enum" in node:
+            return [str(v) for v in node["enum"]]
+        if "const" in node:
+            return [str(node["const"])]
+        return [
+            v for sub in node.get("anyOf", []) + node.get("allOf", []) for v in enums(sub, defs)
+        ]
+
+    found = 0
+    for tag, schema in element_json_schemas().items():
+        required = set(schema.get("required", ()))
+        for name, node in schema["properties"].items():
+            values = enums(node, schema.get("$defs", {}))
+            if not values:
+                continue
+            found += 1
+            star = "*" if name in required else ""
+            assert f" {name}{star}={'|'.join(values)}" in lines[tag], (tag, name)
+    assert found >= 6, found

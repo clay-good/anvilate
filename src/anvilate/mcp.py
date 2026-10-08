@@ -798,13 +798,30 @@ Writing a spec:
 - A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0, "origin":
   "user_stated"}); constraints.max_safety_factor is only an explicit upper limit.
 - Copy identifiers exactly from the catalogue below: material.ref and element material fields
-  from Materials, interfaces[].ref from Components.
+  from Materials, interfaces[].ref from Components, and a field shown as name=a|b one of
+  the values listed after it.
 - To screen a part, set element_type to one of the element screens below and put its fields in
   element_params, every required one included.
 - acceptance.tiers lists only what was asked for; a request to check or screen is
   ["T1_analytical"].
 - A quantity is {"magnitude": number, "unit": "symbol"} in the units the user used, e.g.
   {"magnitude": 50, "unit": "kN"}."""
+
+
+def _closed_values(annotation: Any) -> tuple[str, ...]:
+    """The spellings a field accepts when it is a closed set (an enum or a Literal), else ().
+
+    A field named without its values is a field the agent fills by guessing the spelling,
+    which is the failure the catalogue exists to prevent for material identifiers.
+    """
+    from enum import Enum
+    from typing import Literal, get_args, get_origin
+
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        return tuple(str(member.value) for member in annotation)
+    if get_origin(annotation) is Literal:
+        return tuple(str(value) for value in get_args(annotation))
+    return tuple(value for arg in get_args(annotation) for value in _closed_values(arg))
 
 
 @cache
@@ -830,6 +847,7 @@ def agent_instructions() -> str:
         summary = (model.__doc__ or "").strip().split("\n")[0].rstrip(".")
         fields = ", ".join(
             f"{name}{'*' if field.is_required() else ''}"
+            + (f"={'|'.join(values)}" if (values := _closed_values(field.annotation)) else "")
             for name, field in model.model_fields.items()
         )
         lines.append(f"- {tag}: {summary}. Fields: {fields}")
