@@ -2839,3 +2839,52 @@ def test_a_material_written_without_its_prefix_is_told_the_identifier(written, m
     # A misspelling still reaches difflib, and nothing is invented for a stranger.
     assert near_identifiers("ASTM-A63", known)[0] == "ASTM-A36"
     assert near_identifiers("PLA", known) == []
+
+
+@pytest.mark.parametrize(
+    ("written", "withheld"),
+    [("316L", "SS-316"), ("304L", "SS-304"), ("Ti-6Al-4V ELI", "Ti-6Al-4V")],
+)
+def test_a_material_that_qualifies_a_grade_is_not_offered_the_unqualified_one(written, withheld):
+    """`316L` is the low-carbon grade, with a lower yield than 316: the remedy "write
+    `material.ref` as `SS-316`" asked an agent to screen the weaker material against the
+    stronger one's allowables. The refusal says why nothing is offered instead."""
+    from pathlib import Path
+
+    import yaml
+
+    from anvilate import mcp
+    from anvilate._models import _near_identifiers, _near_materials
+    from anvilate.standards import default_materials_db
+    from anvilate.standards.materials import UnknownMaterialError
+
+    known = default_materials_db().known_materials()
+    assert withheld in _near_identifiers(written, known)
+    assert withheld not in _near_materials(written, known)
+    with pytest.raises(UnknownMaterialError) as refused:
+        default_materials_db().get(written)
+    assert withheld not in refused.value.suggestions
+
+    shipped = Path(__file__).parents[1] / "examples" / "base_plate.spec.yaml"
+    document = yaml.safe_load(shipped.read_text(encoding="utf-8"))
+    document["material"] = {"ref": written}
+    answer = mcp.handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "compile_spec", "arguments": {"document": document}},
+        }
+    )["result"]["structuredContent"]
+    assert f"{withheld} is a different grade, so it is not offered" in answer["errors"][0]
+    assert not any(withheld in remedy for remedy in answer.get("remedies", []))
+
+
+@pytest.mark.parametrize(
+    ("written", "offered"), [("316", "SS-316"), ("SS304", "SS-304"), ("6061-T6", "AA-6061-T6")]
+)
+def test_a_grade_written_without_a_qualifier_is_still_offered(written, offered):
+    from anvilate._models import _near_materials
+    from anvilate.standards import default_materials_db
+
+    assert _near_materials(written, default_materials_db().known_materials())[0] == offered

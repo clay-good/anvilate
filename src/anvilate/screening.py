@@ -66,7 +66,9 @@ from ._models import (
     FrozenMap,
     ItemCollection,
     RevalidatedModel,
+    _names_a_variant_of,
     _near_identifiers,
+    _near_materials,
     _reason,
     _refusal_line,
     rebuilt_quantities,
@@ -1539,15 +1541,21 @@ def _default_resolver() -> ReferenceResolver:
     return _DEFAULT_RESOLVER
 
 
-def _near_misses(ref: str, known: list[str]) -> str:
+def _near_misses(ref: str, known: list[str], near=_near_identifiers) -> str:
     """The closest identifiers to ``ref``, said the way the retrieval rule requires.
 
     A refusal that only says "unknown" invites the reader to supply a remembered number
     instead, which is the one thing this library is built to stop.
     """
-    close = _near_identifiers(ref, known)
+    close = near(ref, known)
     if close:
         return f"did you mean {', '.join(close)}?"
+    variants = [c for c in _near_identifiers(ref, known) if _names_a_variant_of(ref, c)]
+    if near is _near_materials and variants:
+        return (
+            f"{', '.join(variants)} is a different grade, so it is not offered; add {ref!r} "
+            "as a team extension material record with its own cited properties."
+        )
     return f"nothing among the {len(known)} known identifiers is close to it."
 
 
@@ -1596,9 +1604,12 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
     elif stated is None and not resolver.has_material(ref):
         known = resolver.known_materials()
         problems.append(
-            _refusal_line("material.ref", f"unknown material {ref!r} — {_near_misses(ref, known)}")
+            _refusal_line(
+                "material.ref",
+                f"unknown material {ref!r} — {_near_misses(ref, known, _near_materials)}",
+            )
         )
-        if near := _near_identifiers(ref, known):
+        if near := _near_materials(ref, known):
             remedies.append(f"write `material.ref` as `{near[0]}`")
     for index, interface in enumerate(spec.interfaces):
         if interface.type == "standard_component" and not resolver.has_component(interface.ref):
@@ -1656,10 +1667,10 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
         problems.append(
             _refusal_line(
                 f"element_params.{name}",
-                f"unknown material {value!r} — {_near_misses(value, known)}",
+                f"unknown material {value!r} — {_near_misses(value, known, _near_materials)}",
             )
         )
-        if near := _near_identifiers(value, known):
+        if near := _near_materials(value, known):
             remedies.append(f"write `element_params.{name}` as `{near[0]}`")
     return problems, remedies
 
@@ -1704,7 +1715,7 @@ def _reference_entries(spec: DesignSpec, resolver: ReferenceResolver) -> list[Sc
             status=CheckStatus.FAIL,
             detail=(
                 f"unknown material {spec.material.ref!r} — "
-                f"{_near_misses(spec.material.ref, resolver.known_materials())} "
+                f"{_near_misses(spec.material.ref, resolver.known_materials(), _near_materials)} "
                 f"Every property the screens use is retrieved from this identifier, so "
                 f"nothing downstream can run on it."
             ),

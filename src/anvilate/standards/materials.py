@@ -15,7 +15,7 @@ from typing import Annotated
 
 from pydantic import ConfigDict, model_validator
 
-from .._models import Named, RevalidatedModel, _near_identifiers, parse_yaml
+from .._models import Named, RevalidatedModel, _near_materials, parse_yaml
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
 from .records import PropertyCitation, QuantityProperty, ScalarProperty, dimensioned
@@ -206,7 +206,7 @@ class MaterialsDatabase:
         except KeyError:
             raise UnknownMaterialError(
                 material_id,
-                _near_identifiers(material_id, self._materials),
+                _near_materials(material_id, self._materials),
             ) from None
 
     def extension_ids(self) -> list[str]:

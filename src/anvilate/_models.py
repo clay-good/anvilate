@@ -880,3 +880,28 @@ def _near_identifiers(written: str, known: Iterable[str], n: int = 3) -> list[st
     runs.sort(key=lambda candidate: (len(candidate), candidate))
     close = [c for c in difflib.get_close_matches(written, known, n=n) if c not in runs]
     return (runs + close)[:n]
+
+
+def _names_a_variant_of(written: str, candidate: str) -> bool:
+    """Whether ``written`` states ``candidate``'s grade and then qualifies it further.
+
+    `316L` is not `SS-316` (low carbon, lower yield) and `Ti-6Al-4V ELI` is not `Ti-6Al-4V`
+    (the lower-strength grade): the qualifier after the grade names a different material,
+    so suggesting the record without it invites screening a weaker material against a
+    stronger one's allowables. The grade is the candidate less its alphabetic prefix
+    segments (`ASTM-`, `AA-`, `SS-`).
+    """
+    segments = _identifier_segments(candidate)
+    while segments and segments[0].isalpha():
+        segments = segments[1:]
+    grade = re.findall(r"[a-z]+|[0-9]+", " ".join(segments))
+    tokens = re.findall(r"[a-z]+|[0-9]+", written.lower())
+    return bool(grade) and any(
+        tokens[i : i + len(grade)] == grade and i + len(grade) < len(tokens)
+        for i in range(len(tokens) - len(grade) + 1)
+    )
+
+
+def _near_materials(written: str, known: Iterable[str], n: int = 3) -> list[str]:
+    """:func:`_near_identifiers` for materials, never offering a grade ``written`` qualifies."""
+    return [c for c in _near_identifiers(written, known, n) if not _names_a_variant_of(written, c)]
