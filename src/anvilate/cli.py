@@ -1149,11 +1149,22 @@ def _fetch(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate fetch: {args.dataset}: {failure}", file=err)
         return EXIT_FAILED
     except OSError as failure:
-        print(
-            f"anvilate fetch: could not download {args.dataset} from {recipe.url} "
-            f"({failure}); nothing was cached",
-            file=err,
-        )
+        # A file error names its path; a network error does not. They have different
+        # remedies, and a cache directory that cannot be written was reported as a download
+        # that failed.
+        if getattr(failure, "filename", None):
+            print(
+                f"anvilate fetch: could not write {args.dataset} into the cache at "
+                f"{cache_root()} ({failure.strerror or failure}); nothing was cached. Set "
+                "ANVILATE_DATA_HOME to a writable directory",
+                file=err,
+            )
+        else:
+            print(
+                f"anvilate fetch: could not download {args.dataset} from {recipe.url} "
+                f"({failure}); nothing was cached",
+                file=err,
+            )
         return EXIT_FAILED
     if args.format == "json":
         document = machine_document(

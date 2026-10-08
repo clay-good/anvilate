@@ -3097,6 +3097,30 @@ def test_fetch_refuses_a_payload_that_is_not_the_published_one(tmp_path, monkeyp
     assert list(tmp_path.glob("fake-shapes*")) == []
 
 
+def test_fetch_names_the_cache_when_the_cache_is_what_failed(tmp_path, monkeypatch):
+    """A cache root that is a file failed after the download and was reported as one."""
+    import anvilate.cli
+    import anvilate.fetch
+
+    not_a_directory = tmp_path / "cache"
+    not_a_directory.write_text("", encoding="utf-8")
+    monkeypatch.setattr(anvilate.fetch, "_https_get", lambda _url: b"bytes")
+    monkeypatch.setattr(anvilate.cli, "_dataset_recipe", lambda _name: _fake_recipe(b"bytes"))
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(not_a_directory))
+    code, _out, err = _run("fetch", "aisc-shapes", "--consent")
+    assert code == EXIT_FAILED
+    assert f"into the cache at {not_a_directory}" in err and "ANVILATE_DATA_HOME" in err
+    assert "could not download" not in err
+
+    def unreachable(url):
+        raise OSError(f"no route to {url}")
+
+    monkeypatch.setattr(anvilate.fetch, "_https_get", unreachable)
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path / "fresh"))
+    code, _out, err = _run("fetch", "aisc-shapes", "--consent")
+    assert code == EXIT_FAILED and "could not download aisc-shapes" in err
+
+
 def test_every_dataset_recipe_in_the_package_can_be_fetched_from_the_shell():
     """A recipe with no `anvilate fetch` name is data a user can only consent to in Python."""
     import ast
