@@ -905,8 +905,9 @@ def test_the_derived_readme_figures_are_still_quoted_and_still_underived():
 # because "plain English" is how a description claims a "natural-language front end" and
 # "AP242 PMI" is how it claims "semantic PMI" — neither contains the other, and a gate that
 # looked for the README's own phrasing would have passed the very sentence that prompted it.
+# The natural-language front end left this table on 2026-10-08: it is the user's own MCP
+# agent (design decision D2), and the README says it works today.
 _CLAIMED_BY = {
-    "natural-language front end": ("plain english", "natural language", "natural-language"),
     "wider geometry catalog": ("all geometry", "geometry catalog", "arbitrary solid"),
     "FEA": ("fea", "finite element"),
     "semantic PMI": ("ap242 pmi", "semantic pmi", "semantic step", "step pmi"),
