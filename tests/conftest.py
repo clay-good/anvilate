@@ -115,11 +115,68 @@ def _subject_store_stays_out_of_the_users_cache(tmp_path, monkeypatch):
     """The MCP subject store defaults to the user's cache directory, and a test that publishes
     a handle would write there.
 
-    The dataset cache has the same shape and the fetch tests pass a temporary directory for
-    exactly this reason; an autouse fixture is the version that cannot be forgotten, since a
-    test three files away can publish a subject by calling a tool.
+    The dataset cache has the same shape, and is held here too: a test that resolved
+    `W12x26` read whatever AISC workbook the developer's own machine had fetched. An autouse
+    fixture is the version that cannot be forgotten, since a test three files away can
+    publish a subject by calling a tool.
     """
     monkeypatch.setenv("ANVILATE_SUBJECT_STORE", str(tmp_path / "subjects"))
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path / "datasets"))
+
+
+class NetworkInTest(AssertionError):
+    """A test tried to reach a host other than this machine."""
+
+
+def _is_loopback(host: object) -> bool:
+    import ipaddress
+
+    if host in ("localhost", "", None):
+        return True
+    try:
+        return ipaddress.ip_address(str(host).split("%")[0]).is_loopback
+    except ValueError:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def _no_test_reaches_the_network(monkeypatch):
+    """Every test is offline unless the scheduled job says otherwise.
+
+    A test of `anvilate fetch` ran the command a refusal printed, `--consent` included, and
+    downloaded AISC's workbook: nothing but the golden-path test in test_air_gapped.py held
+    the suite offline. The scheduled job sets ANVILATE_ALLOW_NETWORK for the few tests that
+    exercise the real transport, and those skip without it.
+    """
+    if os.environ.get("ANVILATE_ALLOW_NETWORK"):
+        return
+    import socket
+
+    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
+    real_getaddrinfo = socket.getaddrinfo
+
+    def refuse(where: object) -> NetworkInTest:
+        return NetworkInTest(
+            f"a test tried to reach {where!r}; tests run offline. Inject the transport, or "
+            "gate a real-network test on ANVILATE_ALLOW_NETWORK"
+        )
+
+    def guarded(real):
+        def call(self, address, *args):
+            if self.family == getattr(socket, "AF_UNIX", None) or _is_loopback(address[0]):
+                return real(self, address, *args)
+            raise refuse(address)
+
+        return call
+
+    def getaddrinfo(host, *args, **kwargs):
+        if not _is_loopback(host):
+            raise refuse(host)
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded(real_connect))
+    monkeypatch.setattr(socket.socket, "connect_ex", guarded(real_connect_ex))
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
 
 
 def pytest_configure(config: pytest.Config) -> None:

@@ -35,6 +35,10 @@ ruff check src tests examples && ruff format --check src tests examples && pytes
 npx openspec validate --all --strict
 ```
 
+The suite runs offline: a test that reaches any host but this machine fails, and the
+dataset cache and subject store point at a temporary directory. A test that must use the
+real network skips unless `ANVILATE_ALLOW_NETWORK=1`, which only the scheduled CI job sets.
+
 The OpenSpec validation is a local check rather than a CI one, so it is the step that
 depends on you running it. Behavior changes land as [OpenSpec](openspec/) change proposals
 first: the requirement and its scenarios, then the implementation, then the change is

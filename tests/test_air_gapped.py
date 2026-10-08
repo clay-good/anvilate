@@ -356,3 +356,29 @@ def test_no_module_is_imported_by_a_name_assembled_at_run_time() -> None:
         f"a module is imported by a literal string rather than an import statement: "
         f"{literals}. Every import sweep in this suite reads import nodes."
     )
+
+
+def test_every_test_runs_offline_unless_the_scheduled_job_says_otherwise() -> None:
+    """The conftest guard is real: a URL, an address and a host name are each refused.
+
+    The golden-path block above holds one path; this holds the suite, after a test of
+    `anvilate fetch` downloaded a real workbook. Loopback stays open, since the MCP and
+    task tests talk to local processes.
+    """
+    import os
+    import urllib.request
+
+    if os.environ.get("ANVILATE_ALLOW_NETWORK"):
+        pytest.skip("the scheduled network job lifts the guard on purpose")
+    for attempt in (
+        lambda: urllib.request.urlopen("https://example.com", timeout=1),
+        lambda: socket.create_connection(("93.184.215.14", 443), timeout=1),
+        lambda: socket.getaddrinfo("example.com", 443),
+    ):
+        with pytest.raises(AssertionError, match="tests run offline"):
+            attempt()
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        with socket.create_connection(server.getsockname(), timeout=1):
+            pass
