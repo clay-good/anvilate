@@ -457,6 +457,34 @@ def _glued_product(unit: str) -> str | None:
     return None
 
 
+def _certain_unit_rewrite(unit: str) -> str | None:
+    """The spelling ``unit`` meant when that is certain, else ``None``.
+
+    A glued or hyphenated product and a trailing-digit exponent each have exactly one
+    reading (`kNm` is `kN*m`, `N/mm2` is `N/mm**2`), so a remedy may name it. A dropped
+    character may not: `MPa√m` could be meant several ways.
+    """
+    unit = unit.strip()
+    if _unread_character(unit) is not None:
+        return None
+    rewritten = re.sub(
+        r"[A-Za-z]+",
+        lambda match: _GLUED_PRODUCTS.get(match.group(), match.group()),
+        unit,
+    )
+    rewritten = re.sub(r"(?<=[A-Za-z])-(?=[A-Za-z])", "*", rewritten)
+    if rewritten != unit:
+        rewritten = re.sub(r"\blb\b", "lbf", rewritten)
+    rewritten = re.sub(r"(?<=[A-Za-z])([2-4])\b", r"**\1", rewritten)
+    if rewritten == unit:
+        return None
+    try:
+        UREG.Unit(rewritten)
+    except Exception:
+        return None
+    return rewritten
+
+
 @lru_cache(maxsize=1)
 def _unit_names() -> tuple[str, ...]:
     """Every unit name the registry defines, for a near-miss suggestion."""

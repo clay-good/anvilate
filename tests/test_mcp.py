@@ -551,6 +551,37 @@ def test_compile_spec_returns_the_remedies_the_cli_refusal_reads(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("field", "unit", "remedy"),
+    [
+        (
+            "concrete_strength",
+            "N/mm2",
+            "write `element_params.concrete_strength.unit` as `N/mm**2`",
+        ),
+        ("width", "mm2", None),  # certain spelling, wrong dimension: the remedy still names it
+        ("concrete_strength", "MPa√m", None),  # not certain what was meant: no instruction
+    ],
+)
+def test_a_unit_whose_meaning_is_certain_gets_a_structured_remedy(field, unit, remedy):
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).resolve().parent.parent
+    document = yaml.safe_load((root / "examples" / "base_plate.spec.yaml").read_text())
+    document["element_params"][field] = {"magnitude": 25.0, "unit": unit}
+    content = _call("compile_spec", {"document": document})["result"]["structuredContent"]
+    assert content["errors"][0].startswith(f"element_params.{field}"), content
+    remedies = content.get("remedies", [])
+    if unit == "mm2":
+        assert "write `element_params.width.unit` as `mm**2`" in remedies
+    elif remedy is None:
+        assert not any(".unit` as" in each for each in remedies), remedies
+    else:
+        assert remedy in remedies
+
+
+@pytest.mark.parametrize(
     ("field", "written", "remedy"),
     [
         # Certain: the written name is shorthand for exactly one record.

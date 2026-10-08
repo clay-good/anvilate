@@ -183,6 +183,17 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
             f"write `{path}` as `{{magnitude: {written:g}, unit: ...}}` with the unit the "
             f"{written:g} is in, since a bare number states none"
         )
+    if (
+        kind == "value_error"
+        and isinstance(written, Mapping)
+        and isinstance(written.get("unit"), str)
+        and location
+    ):
+        from ..units.quantity import _certain_unit_rewrite
+
+        meant = _certain_unit_rewrite(written["unit"])
+        if meant is not None:
+            return f"write `{path}.unit` as `{meant}`"
     if kind == "list_type" and isinstance(written, str | int | float) and location:
         return f"write `{path}` as a list, `[{written}]`"
     if kind in ("enum", "literal_error") and isinstance(written, str) and location:
