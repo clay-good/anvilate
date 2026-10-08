@@ -433,8 +433,13 @@ def _power_hint(text: str) -> str:
     return f": a trailing digit is not read as a power — write {powered!r}"
 
 
+@lru_cache(maxsize=8192)
 def _glued_product(unit: str) -> str | None:
-    """Why ``unit`` writes a product of units in a form pint misreads, or ``None``."""
+    """Why ``unit`` writes a product of units in a form pint misreads, or ``None``.
+
+    Cached, like the parse: every Quantity construction runs it, and the answer is a pure
+    function of the spelling. Uncached it made construction 50-100% slower.
+    """
     if (unread := _unread_character(unit)) is not None:
         return unread
     unit = unit.strip()
