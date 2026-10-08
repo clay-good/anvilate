@@ -602,6 +602,34 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# What a terminal acts on rather than shows: C0 and C1 controls other than tab and newline,
+# and the bidirectional overrides. A spec's `name: "pad\x1b[2J\x1b]0;title\x07eye"` cleared
+# the screen and retitled the window of whoever ran `anvilate check` on it, and U+202E
+# reversed the rest of the line. The text formats print document strings verbatim, so the
+# streams show these as escapes instead; the JSON format already escapes them.
+_TERMINAL_CONTROLS = re.compile(
+    r"[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]"
+)
+
+
+def _shown(match: re.Match[str]) -> str:
+    code = ord(match.group())
+    return f"\\x{code:02x}" if code <= 0xFF else f"\\u{code:04x}"
+
+
+class _Visible:
+    """A text stream that writes terminal controls as visible escapes."""
+
+    def __init__(self, stream: TextIO) -> None:
+        self._stream = stream
+
+    def write(self, text: str) -> int:
+        return self._stream.write(_TERMINAL_CONTROLS.sub(_shown, text))
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._stream, name)
+
+
 def run(
     argv: list[str] | None = None,
     *,
@@ -613,8 +641,8 @@ def run(
     Split from :func:`main` so the whole surface is exercised in-process: a CLI tested only
     through a subprocess is a CLI whose branches are mostly unvisited.
     """
-    out = sys.stdout if stdout is None else stdout
-    err = sys.stderr if stderr is None else stderr
+    out: Any = _Visible(sys.stdout if stdout is None else stdout)
+    err: Any = _Visible(sys.stderr if stderr is None else stderr)
     arguments = list(sys.argv[1:] if argv is None else argv)
     json_requested = _wants_json(arguments)
     _STATED_REMEDIES.set(())

@@ -1914,6 +1914,27 @@ def test_an_unquoted_schema_version_is_a_bad_request_not_an_internal_error(tmp_p
     assert "internal error" not in err
 
 
+def test_terminal_controls_in_a_document_are_shown_not_obeyed(tmp_path):
+    """A spec's name went to the terminal verbatim: ESC [2J cleared the screen of whoever
+    ran `check` on it, OSC 0 retitled their window, and U+202E reversed the line after it.
+    The QIF writer already replaced them; the text streams now show them as escapes."""
+    text = (_REPO / "examples" / "padeye.spec.yaml").read_text(encoding="utf-8")
+    hostile = "pad\x1b[2J\x1b]0;title\x07\reye\u202e"
+    path = tmp_path / "padeye.spec.yaml"
+    path.write_text(
+        re.sub(r"^name: .*$", lambda _: f"name: {json.dumps(hostile)}", text, count=1, flags=re.M),
+        encoding="utf-8",
+    )
+
+    code, out, _err = _run("check", str(path))
+
+    assert code == EXIT_OK
+    assert out.startswith("pad\\x1b[2J\\x1b]0;title\\x07\\x0deye\\u202e: PASS")
+    assert not re.search("[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e]", out)
+    # Tab and newline are layout, not controls, and the card still uses both.
+    assert "\n" in out
+
+
 def test_interfaces_refuses_non_finite_limits_in_words(tmp_path):
     """`nan`, `inf`, or `1e400` (which overflows to inf) parses as a quantity, and each check
     let it through to its result model, whose finite field refused it as a pydantic dump
