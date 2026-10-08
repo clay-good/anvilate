@@ -12,6 +12,7 @@ import importlib
 import io
 import json
 import pathlib
+import re
 
 import pytest
 from pydantic import ValidationError
@@ -517,7 +518,12 @@ def test_compile_spec_returns_the_remedies_the_cli_refusal_reads(tmp_path):
     from anvilate.cli import run
 
     root = Path(__file__).resolve().parent.parent
-    text = (root / "examples" / "base_plate.spec.yaml").read_text()
+    text = re.sub(
+        r"^constraints: .*\n",
+        "",
+        (root / "examples" / "base_plate.spec.yaml").read_text(),
+        flags=re.M,
+    )
     text += "constraints: {min_safety_factor: 1.5}\n"
     answer = _call("compile_spec", {"document": yaml.safe_load(text)})
     content = answer["result"]["structuredContent"]

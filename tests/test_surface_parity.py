@@ -203,8 +203,13 @@ def test_dxf_is_local_and_the_remote_surface_names_its_delivery_boundary():
     assert error["code"] == -32000
     assert reason in error["message"]
 
+    # Local DXF is built for a passing card, and gated for one that does not pass.
     code, output, err = _cli(
         "export", "--artifact", "dxf", str(_REPO / "examples" / "base_plate.spec.yaml")
+    )
+    assert code == 0 and err == "" and "SECTION" in output
+    code, output, err = _cli(
+        "export", "--artifact", "dxf", str(_REPO / "examples" / "nema23_bracket.spec.yaml")
     )
     assert code == EXIT_NOT_EVALUATED and output == ""
     assert "export is gated" in err and "built geometry" not in err

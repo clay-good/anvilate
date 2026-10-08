@@ -1031,12 +1031,13 @@ roll-up and cannot be deleted by deleting the checks.
 
 ## Build a STEP solid
 
-Install the optional kernel and build either checked-in geometry spec:
+Install the optional kernel and build either checked-in geometry spec. Both state a safety
+factor and pass their screens, so each builds a validated STEP in one command:
 
 ```bash
 pip install -e ".[geometry]"
-anvilate build examples/base_plate.spec.yaml --output base_plate.step --unvalidated
-anvilate build examples/cover_plate.spec.yaml --output cover_plate.step --unvalidated
+anvilate build examples/base_plate.spec.yaml --output base_plate.step
+anvilate build examples/cover_plate.spec.yaml --output cover_plate.step
 ```
 
 The `base_plate/1` pattern creates a box centered on XY with its bottom at Z=0. The
@@ -1064,10 +1065,11 @@ it retains the same validation properties, watermark, deterministic header, and 
 check.
 
 STEP is a CAD artifact, so building one is validation-gated. A passing scorecard produces a
-`VALIDATED` header. The checked-in geometry examples omit the required safety factor and
-therefore use the explicit `--unvalidated` override above; that file carries `UNVALIDATED`,
-the screening notice, and its blocking checks in `FILE_DESCRIPTION`. Without the flag, a
-failed or unevaluated card writes nothing. AP242 here means exchangeable solid geometry,
+`VALIDATED` header, which is what the checked-in geometry examples above produce. A card
+that fails or cannot be evaluated writes nothing unless `--unvalidated` is given; that file
+carries `UNVALIDATED`, the screening notice, and its blocking checks in `FILE_DESCRIPTION`.
+`--unvalidated` on a card that passes is refused, because an override that overrides
+nothing means the caller expected a different card. AP242 here means exchangeable solid geometry,
 not semantic PMI. The generated timestamp is normalized, so the same geometry and
 authorization produce byte-identical STEP and the same digest.
 

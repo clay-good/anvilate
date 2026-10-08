@@ -14,4 +14,5 @@ element_params:
   plate_material: ASTM-A36
   axial_load: {magnitude: 200.0, unit: kN}
   concrete_strength: {magnitude: 25.0, unit: MPa}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
 acceptance: {tiers: [T1_analytical]}

@@ -12,4 +12,5 @@ element_params:
   material: ASTM-A36
   diameter: {magnitude: 300.0, unit: mm}
   hole_diameter: {magnitude: 80.0, unit: mm}
+constraints: {min_safety_factor: {value: 2.0, origin: user_stated}}
 acceptance: {tiers: [T1_analytical]}

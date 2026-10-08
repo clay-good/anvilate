@@ -2755,12 +2755,13 @@ def test_build_writes_the_circular_cover_plate_example_with_its_bore(tmp_path):
     spec = Path(__file__).resolve().parents[1] / "examples/cover_plate.spec.yaml"
     output = tmp_path / "cover.step"
 
-    code, raw, err = _run(
-        "build", str(spec), "--output", str(output), "--format", "json", "--unvalidated"
-    )
+    # The sample states a safety factor and passes, so it builds validated; `--unvalidated`
+    # on a passing card is refused.
+    code, raw, err = _run("build", str(spec), "--output", str(output), "--format", "json")
     payload = json.loads(raw)
 
     assert code == EXIT_OK and err == ""
+    assert payload["artifact"]["authorization"] == "validated"
     assert payload["artifact"]["pattern"] == "cover_plate/1"
     assert payload["artifact"]["dimensions_mm"] == {
         "diameter": 300,
@@ -5062,7 +5063,13 @@ def test_a_bare_provenanced_value_is_told_the_line_to_write(tmp_path):
     from pathlib import Path
 
     root = Path(__file__).resolve().parent.parent
-    base = (root / "examples" / "base_plate.spec.yaml").read_text()
+    # The sample states its own constraints; these cases write theirs in its place.
+    base = re.sub(
+        r"^constraints: .*\n",
+        "",
+        (root / "examples" / "base_plate.spec.yaml").read_text(),
+        flags=re.M,
+    )
     spec = tmp_path / "part.yaml"
     spec.write_text(base + "constraints: {min_safety_factor: 1.5}\n")
     code, out, _err = _run("check", str(spec), "--format", "json")
@@ -5095,7 +5102,10 @@ def test_a_refusal_in_a_multi_file_run_names_its_file(tmp_path):
     good = tmp_path / "good.yaml"
     good.write_text(base)
     bad = tmp_path / "bad.yaml"
-    bad.write_text(base + "constraints: {min_safety_factor: {value: 1.5, origin: user}}\n")
+    bad.write_text(
+        re.sub(r"^constraints: .*\n", "", base, flags=re.M)
+        + "constraints: {min_safety_factor: {value: 1.5, origin: user}}\n"
+    )
     code, out, _err = _run("check", str(tmp_path), "--format", "json")
     assert code == 3
     refusal = json.loads(out)
@@ -5131,7 +5141,11 @@ def test_an_ordinary_mistake_at_the_shell_gets_its_own_remedy(tmp_path):
         (("check",), "Pass spec"),
         (("check", spec, "--units", "parsecs"), "Remove --units parsecs"),
         (("chek", spec), "Use 'check' rather than 'chek'"),
-        (("export", spec, "--artifact", "qif"), "export `--artifact evidence-bundle`"),
+        # A card that does not pass, which the base plate sample now does.
+        (
+            ("export", str(root / "examples" / "nema23_bracket.spec.yaml"), "--artifact", "qif"),
+            "export `--artifact evidence-bundle`",
+        ),
     ]
     for arguments, expected in cases:
         _code, out, _err = _run(*arguments, "--format", "json")
