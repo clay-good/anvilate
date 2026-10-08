@@ -2989,6 +2989,21 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
     assert "material" in by_name["database integrity"]["detail"]
 
 
+def test_doctor_fails_database_integrity_on_a_cached_dataset_that_no_longer_verifies(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    _code, raw, _error = _run("doctor", "--format", "json")
+    (check,) = [c for c in json.loads(raw)["checks"] if c["name"] == "database integrity"]
+    assert check["status"] == "pass" and "aisc-shapes not fetched" in check["detail"]
+
+    (tmp_path / "aisc-shapes-database-v16.0.xlsx").write_bytes(b"edited after download")
+    _code, raw, _error = _run("doctor", "--format", "json")
+    (check,) = [c for c in json.loads(raw)["checks"] if c["name"] == "database integrity"]
+    assert check["status"] == "fail" and "aisc-shapes unreadable" in check["detail"]
+    assert "anvilate fetch aisc-shapes --consent" in check["remedy"]
+
+
 def test_doctor_checks_the_mcp_server_and_opens_no_connection(monkeypatch):
     """Anvilate's model is the user's own agent over MCP, so the server is the runtime doctor
     checks: the catalog builds and every tool schema carries what it references. It opens no

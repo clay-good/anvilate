@@ -1026,15 +1026,34 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
     resolver = default_standards_resolver()
     material_count = len(resolver.known_materials())
     component_count = len(resolver.known_components())
+    # The fetched datasets are part of the same integrity: a cached AISC workbook that no
+    # longer verifies turns every W-shape check NOT_EVALUATED, and this is where a user looks.
+    from .fetch import IntegrityError, cached_dataset
+
+    fetched, unreadable = [], []
+    for name in sorted(_DATASETS):
+        try:
+            found = cached_dataset(_dataset_recipe(name))
+        except IntegrityError:
+            unreadable.append(name)
+        else:
+            fetched.append(f"{name} {'not fetched' if found is None else 'cached'}")
     checks.append(
         {
             "name": "database integrity",
-            "status": "pass",
+            "status": "fail" if unreadable else "pass",
             "detail": (
                 f"Loaded {material_count} material and {component_count} component designations "
-                "from the bundled standards databases."
+                "from the bundled standards databases. Fetched datasets: "
+                + ", ".join(fetched + [f"{name} unreadable" for name in unreadable])
+                + "."
             ),
-            "remedy": None,
+            "remedy": (
+                "Run `anvilate fetch` to see why, delete the named cache files, and fetch again "
+                + " ".join(f"with `anvilate fetch {name} --consent`." for name in unreadable)
+                if unreadable
+                else None
+            ),
         }
     )
     status = "fail" if any(check["status"] == "fail" for check in checks) else "pass"

@@ -339,7 +339,8 @@ MCP server check builds the tool catalog in-process and confirms every tool sche
 the schemas it references, so an agent can use it offline; it opens no connection. Anvilate
 runs no language model of its own: your agent is the model. Database
 integrity is proved by loading the bundled resolver and counting its material and component
-designations. `--format json` emits the same report
+designations, and by re-verifying every dataset `anvilate fetch` has cached: one that no
+longer matches its published digest fails the item and names the fetch that replaces it. `--format json` emits the same report
 under the published CLI output schema.
 
 ### Download a dataset Anvilate may read but not ship
