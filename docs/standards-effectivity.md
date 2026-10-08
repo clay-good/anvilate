@@ -164,16 +164,36 @@ in kind — the citations contradict each other, so the bundle reads as though e
 came from one book and did not. That is evidence misrepresenting itself, and a roll-up
 saying `PASS` over it would be doing the same thing one level up.
 
+## What became of a clause in the next edition
+
+`compare_editions("AISC 360-16 §J3.6", "22")` answers from a registry of clause-by-clause
+differences, each read off the publisher's own comparison document and citing its page. The
+first entries cover every clause the library cites under AISC 360-16, held there by a gate:
+a new pinned citation fails the build until its entry is written.
+
+```text
+AISC 360-16 §J3.6 → AISC 360-22 §J3.7: renumbered (now §J3.7). Tensile and shear strength
+of bolts moved from J3.6 to J3.7 ... In 2022, J3.6 is maximum spacing and edge distance.
+[AISC, Comparison of ANSI/AISC 360-22 to ANSI/AISC 360-16 ..., p. 19]
+```
+
+That entry is the case for editions in one line: an editionless "AISC 360 §J3.6" is bolt
+strength in one book and bolt spacing in the other, so `compare_editions` refuses a
+citation with no edition. An entry is `renumbered`, `revised`, `terminology` or
+`unchanged`, and `unchanged` appears only where the document supports it: AISC's lists
+"only Sections containing revisions", so an unlisted section is one the publisher says was
+not revised. A clause with no entry gets "no difference is registered", which is a statement
+about the registry and never that the editions agree.
+
 ## What is deliberately not here
 
 - **No jurisdiction table.** The proposal allows an advisory offline mapping; shipping one
   means shipping a staleness-dated claim about the law in every US jurisdiction, and an
   advisory answer to a legal question is the kind of thing that gets quoted as an
   authoritative one.
-- **No edition-difference registry entries.** The mechanism for "this provision changed
-  between editions, here is the result under each" is worth building; populating it needs
-  each difference verified against the publishers' own comparison documents, and an
-  unverified entry would be worse than an empty registry.
+- **No side-by-side results.** The registry says what changed between editions; it does
+  not evaluate a check under both, because every AISC check here implements 360-16 only. A
+  second result needs the 2022 provisions implemented, not described.
 
 ## Reading a citation is linear in what it reads
 

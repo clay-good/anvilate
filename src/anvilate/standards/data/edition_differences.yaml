@@ -1,0 +1,68 @@
+# Edition differences between standards editions (schema: standards-data).
+#
+# One entry per clause this library cites, saying what became of it in the next edition:
+# renumbered, revised, a terminology change only, or unchanged. Every entry was read off
+# the publisher's own comparison document and cites the page it is on. The document is
+# not redistributed: each summary below is a paraphrase of the facts it states.
+#
+# "Unchanged" is a claim, so it is made only where the document makes it. AISC's
+# comparison says on page 1 that "only Sections containing revisions are listed", so a
+# section it does not list is one the publisher says was not revised, and those entries
+# cite that rule beside the chapter they would appear in. A clause with no entry at all is
+# not "unchanged": it is not registered, and `compare_editions` says so.
+dataset:
+  name: anvilate-edition-differences
+  version: "0.1.0"
+  source: "AISC, Comparison of ANSI/AISC 360-22 to ANSI/AISC 360-16 (Desch and Gudhibandi), https://www.aisc.org/media/myzl4doa/2022-to-2016-spec-comparison.pdf"
+  license: "CC0-1.0 (paraphrased facts about clause changes; the comparison document is not redistributed)"
+  retrieved: "2026-10-08"
+
+differences:
+  # --- renumbered ------------------------------------------------------------------------
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J3.6", successor: "§J3.7", change: renumbered, page: 19,
+     summary: "Tensile and shear strength of bolts moved from J3.6 to J3.7 with its text unchanged, but Table J3.2's nominal stresses were revised: Groups A, B and C became Groups 120, 150 and 200, Group 144 was added, and SI values were rounded (54 ksi was 372 MPa and is 370 MPa). In 2022, J3.6 is maximum spacing and edge distance."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J3.7", successor: "§J3.8", change: renumbered, page: 19,
+     summary: "Combined tension and shear in bearing-type connections moved from J3.7 to J3.8 with no changes. In 2022, J3.7 is the tensile and shear strength of bolts."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J3.10", successor: "§J3.11", change: revised, page: 20,
+     summary: "Bearing and tearout strength at bolt holes moved from J3.10 to J3.11 and was revised: the former J3.10(a) and (b) became J3.11a, the former J3.10(c) was removed, and a new J3.11b covers bolts or rods passing completely through an unstiffened box member or HSS. In 2022, J3.10 is combined tension and shear in slip-critical connections."}
+  # --- revised ---------------------------------------------------------------------------
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J2.4", successor: "§J2.4", change: revised, page: 18,
+     summary: "Weld strength: a new Equation J2-4 for fillet welds with a k_ds factor, Equation J2-6a removed, and Table J2.5's PJP groove weld compression cases renamed and one removed."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§D3", successor: "§D3", change: revised, page: 7,
+     summary: "Effective net area: in Table D3.1 the round and rectangular HSS single-gusset cases were combined into Case 5 with a revised shear lag factor, and Case 6 is now rectangular HSS with two side gusset plates, also revised."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§F6", successor: "§F6", change: revised, page: 9,
+     summary: "Minor-axis flexure: in F6.2(c), the 0.69 multiplier in Equation F6-4 is 0.70."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§F7", successor: "§F7", change: revised, page: 9,
+     summary: "Rectangular HSS and box flexure: Equations F7-2 and F7-6 were reformatted to match the I-shape flange local buckling equations, and F7.3's compression flange local buckling limit state was deleted."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J10.2", successor: "§J10.2", change: revised, page: 21,
+     summary: "Web local yielding: the definition of l_b no longer limits the length of bearing at end beam reactions."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J10.3", successor: "§J10.3", change: revised, page: 21,
+     summary: "Web local crippling: Q_f is named the chord-stress interaction parameter, equals 1.0 for channels and box sections, and is referred for other HSS to Section K1.3 instead of Table K3.2."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J10.5", successor: "§J10.5", change: revised, page: 21,
+     summary: "Web compression buckling: Q_f equals 1.0 for channels and box sections, and is referred for other HSS to Section K1.3 instead of Table K3.2."}
+  # --- terminology or wording only -------------------------------------------------------
+  - {standard: AISC 360, from: "16", to: "22", clause: "§E3", successor: "§E3", change: terminology, page: 8,
+     summary: "Throughout Chapter E, critical stress F_cr is renamed nominal stress F_n; E3 is not otherwise listed as revised."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§G2.1", successor: "§G2.1", change: terminology, page: 10,
+     summary: "Shear strength of webs: \"without Tension Field Action\" was removed from the title."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§H1.1", successor: "§H1.1", change: terminology, page: 11,
+     summary: "The definitions of P_r and P_c were revised for clarity, replacing \"required axial strength\" with \"required compressive strength\"."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§B4.3", successor: "§B4.3", change: terminology, page: 5,
+     summary: "Gross and net area: \"hole\" is \"bolt hole\" throughout B4.3b."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§C2", successor: "§C2", change: terminology, page: 6,
+     summary: "C2.1(b) now refers to Appendix 8, Section 8.1, and C2.3(b) names tau_b the stiffness reduction parameter."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§F2", successor: "§F2", change: terminology, page: 9,
+     summary: "Throughout Chapter F, \"limiting slenderness\" is replaced with \"width-to-thickness ratio\"; F2 is not otherwise listed as revised."}
+  # --- not revised, by the document's own listing rule (page 1) ---------------------------
+  - {standard: AISC 360, from: "16", to: "22", clause: "§D2", successor: "§D2", change: unchanged, page: 7,
+     summary: "Not listed among the revised sections of Chapter D."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§H1.2", successor: "§H1.2", change: unchanged, page: 11,
+     summary: "Not listed among the revised sections of Chapter H; only H1.1 and H3 are."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J4.2", successor: "§J4.2", change: unchanged, page: 20,
+     summary: "Not listed among the revised sections of J4; only J4.4 is."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J4.3", successor: "§J4.3", change: unchanged, page: 20,
+     summary: "Not listed among the revised sections of J4; only J4.4 is."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§J8", successor: "§J8", change: unchanged, page: 20,
+     summary: "Not listed among the revised sections of Chapter J; J7 is listed and J8 is not."}
+  - {standard: AISC 360, from: "16", to: "22", clause: "§L3", successor: "§L3", change: unchanged, page: 24,
+     summary: "\"No changes have been made to this chapter.\""}

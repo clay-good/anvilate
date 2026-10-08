@@ -1922,9 +1922,16 @@ def test_every_bundled_dataset_records_a_redistributable_license():
     page = " ".join(
         (Path(__file__).resolve().parent.parent / "docs" / "citations.md").read_text().split()
     )
-    claim = re.search(r"Each of the (\w+) bundled datasets", page)
+    claim = re.search(r"Each of the ([\w-]+) bundled datasets", page)
     assert claim is not None, "the bundled-dataset paragraph in docs/citations.md has moved"
-    counted = {"one": 1, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20}
+    counted = {
+        "one": 1,
+        "seventeen": 17,
+        "eighteen": 18,
+        "nineteen": 19,
+        "twenty": 20,
+        "twenty-one": 21,
+    }
     assert counted[claim.group(1)] == len(datasets)
     # One sentence per licence, "<Count> is/are <SPDX>", each stating how many carry it.
     licences = Counter(str(d["dataset"]["license"]).split()[0] for _n, d in datasets)

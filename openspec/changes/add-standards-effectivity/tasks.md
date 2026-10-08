@@ -10,9 +10,14 @@
 
 - [x] 2.1 Basis resolution per check; unsupported-edition → "not evaluated"
 - [x] 2.2 Bundle-level mixed-edition gate
-- [ ] 2.3 Edition-difference registry + side-by-side evaluation reporting — DEFERRED: the
-      mechanism is worth building, but every entry needs verifying against the publishers'
-      own comparison documents, and an unverified entry is worse than an empty registry
+- [x] 2.3 Edition-difference registry + side-by-side evaluation reporting — the registry
+      shipped 2026-10-08: `standards.edition_differences`, 22 AISC 360-16 → 360-22 entries
+      read off AISC's "Comparison of ANSI/AISC 360-22 to ANSI/AISC 360-16" with page
+      numbers, covering every clause the library cites under 360-16 (gated in
+      tests/test_edition_differences.py). `compare_editions` reports the successor clause,
+      the change and the citation, states "no difference is registered" for anything
+      unlisted, and refuses an editionless citation. Side-by-side *results* wait on a
+      second implemented edition: every AISC check here is 360-16, so 3.4 stays open
 - [ ] 2.4 Optional offline jurisdiction mapping — DECLINED: shipping one means shipping a
       staleness-dated claim about the law in every jurisdiction, and an advisory answer to a
       legal question is the kind of thing that gets quoted as an authoritative one
@@ -22,7 +27,9 @@
 - [x] 3.1 Editionless citation fails registration (CI-enforced across all checks)
 - [x] 3.2 Mixed-edition bundle blocked without waiver, allowed with it
 - [x] 3.3 Superseded label renders without changing the verdict
-- [ ] 3.4 Edition comparison reports both results — follows 2.3
+- [ ] 3.4 Edition comparison reports both results — the comparison reports both clause
+      references and the registry citation; a second *result* needs a check implemented
+      under a second edition, which none is
 
 ## 4. Docs & examples
 

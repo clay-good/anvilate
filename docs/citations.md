@@ -236,11 +236,11 @@ is `not_evaluated` with the reason, never an extrapolation.
 ## Every bundled table says what it may be redistributed under
 
 A table bundled in the package travels with it, so whatever the data is licensed under, a
-redistributor inherits. Each of the twenty bundled datasets — the dimension tables, the
+redistributor inherits. Each of the twenty-one bundled datasets — the dimension tables, the
 materials seed, the MIL-HDBK-5J allowables pack, the welded-joint fatigue pack, the ISO 286
 and ISO 2768 tolerance tables, the process-capability estimates — declares a name, a
 version, the source it was read from, an SPDX licence identifier, and the date it was
-retrieved. Nineteen are CC0-1.0: the *values* are facts, and no source standard is
+retrieved. Twenty are CC0-1.0: the *values* are facts, and no source standard is
 redistributed. MIL-HDBK-5J is itself a US Government work approved for public release.
 One is CC-BY-4.0: the welded-joint fatigue pack, whose test points come from a CC BY
 compilation. Its one condition is credit, and every record it yields carries the dataset's
@@ -273,6 +273,7 @@ build rather than going stale in a document.
 | `standards/data/bearings.yaml` | ISO 15 deep-groove ball bearing boundary dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/cap_screws.yaml` | ISO 4762 (DIN 912) socket-head cap screw head dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/dowel_pins.yaml` | ISO 2338 parallel-pin dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/edition_differences.yaml` | AISC, Comparison of ANSI/AISC 360-22 to ANSI/AISC 360-16 (Desch and Gudhibandi), https://www.aisc.org/media/myzl4doa/2022-to-2016-spec-comparison.pdf | 0.1.0 | CC0-1.0 | 2026-10-08 |
 | `standards/data/en_profiles.yaml` | EN 10365:2017 hot-rolled I and H section dimensions, as tabulated by eurocodeapplied.com (IPE) and prontubeam.com (HEA) | 0.1.0 | CC0-1.0 | 2026-09-19 |
 | `standards/data/extrusions.yaml` | T-slot profile geometry (Bosch Rexroth / Misumi HFS common metric convention) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `standards/data/hex_bolts.yaml` | ISO 4014 / ISO 4017 hexagon-head bolt and screw head dimensions | 0.1.0 | CC0-1.0 | 2026-07-08 |

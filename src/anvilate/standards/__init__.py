@@ -41,6 +41,15 @@ from .dowels import (
     UnknownDowelPinError,
     default_dowel_pin_table,
 )
+from .edition_differences import (
+    EditionChange,
+    EditionComparison,
+    EditionDifference,
+    EditionDifferenceTable,
+    UnknownEditionDifferenceError,
+    compare_editions,
+    default_edition_differences,
+)
 from .effectivity import (
     STANDARDS_BODIES,
     WRITTEN_AGAINST,
@@ -150,6 +159,13 @@ from .weld_fatigue import (
 )
 
 __all__ = [
+    "EditionChange",
+    "EditionComparison",
+    "EditionDifference",
+    "EditionDifferenceTable",
+    "UnknownEditionDifferenceError",
+    "compare_editions",
+    "default_edition_differences",
     "NDS_APPLICABLE_FACTORS",
     "SizeClassification",
     "TimberDesignValue",
