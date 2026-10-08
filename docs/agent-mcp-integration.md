@@ -383,6 +383,12 @@ task-dispatched: run_fea_validation
 ```
 
 - **`-32602` is yours to fix.** The arguments did not match the published `inputSchema`.
+- **A refusal that names `anvilate fetch` is the user's to act on.** Some reference data,
+  such as AISC's W-shapes, may be read but not shipped, so it is downloaded once with the
+  user's consent. No tool fetches it: tell the user what the refusal names and ask them to
+  run `anvilate fetch <dataset> --consent`, or declare the section's properties instead.
+  A material refusal that offers no identifier means none is a safe substitute; ask the
+  user rather than picking the nearest grade.
 - **`-32021`, task capability missing.** `run_fea_validation` can only return a task, and
   the extension forbids that response unless this request declares
   `io.modelcontextprotocol/tasks`. Add it under the request's client-capability metadata;
