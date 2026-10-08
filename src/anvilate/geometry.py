@@ -2530,6 +2530,9 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
             )
         if spec.element_type == "timber_beam":
             return build_timber_beam(TimberBeam(**dict(spec.element_params)))
+    except GeometryUnavailable:
+        # A ValueError too, but the remedy is to install the extra, not to edit the spec.
+        raise
     except ValueError as failure:
         raise GeometryError(
             f"invalid {spec.element_type} element_params: {failure}",

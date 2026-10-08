@@ -17,26 +17,26 @@ All model-generated code SHALL execute in a resource-limited sandbox with no net
 
 ### Requirement: Verified air-gapped mode
 
-In air-gapped mode, the entire pipeline — compilation with a local model, geometry, validation, export — SHALL complete with zero network calls, and this property SHALL be enforced by an automated test in CI that fails on any attempted network access.
+In air-gapped mode, the entire pipeline — spec validation, screening, geometry, validation, export — SHALL complete with zero network calls, and this property SHALL be enforced by an automated test in CI that fails on any attempted network access.
 
-#### Scenario: Cloud-routed model refused
+#### Scenario: The one network path stays shut without consent
 
-- **WHEN** air-gapped mode is enabled and the configured local model runtime would route the selected model to a remote service (e.g., a cloud-hosted model variant served through a local runtime)
-- **THEN** Anvilate refuses the model with a plain-language explanation and offers locally stored models instead
+- **WHEN** a dataset fetch is requested without the user's consent for that dataset
+- **THEN** it is refused before any connection is attempted, and no other code path in the package can open one
 
 #### Scenario: CI network canary
 
 - **WHEN** the air-gapped test suite runs the golden-path build under a network monitor
 - **THEN** zero outbound connection attempts are observed, and any attempt fails the build
 
-### Requirement: No cloud model is used
+### Requirement: No model is called
 
-Anvilate SHALL use only a model served on the user's machine at a loopback address; it SHALL hold no API keys, offer no cloud backend, and send no spec text, file content or pipeline context off the machine. A model endpoint that is not loopback SHALL be refused before any request is made.
+Anvilate SHALL call no language model, local or remote: it SHALL ship no model adapter, hold no API keys, and send no spec text, file content or pipeline context off the machine. The language model is the user's own MCP agent, which sends Anvilate documents; Anvilate never sends the agent's model anything.
 
-#### Scenario: Remote endpoint refused
+#### Scenario: No model client in the package
 
-- **WHEN** a model backend is configured with a non-loopback endpoint
-- **THEN** Anvilate refuses it at configuration, before any request, and names a loopback origin to use instead
+- **WHEN** the package's imports are scanned
+- **THEN** only the consented dataset fetch imports a network client, so no module can reach a model endpoint
 
 ### Requirement: Solver subprocess isolation
 

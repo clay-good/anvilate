@@ -12,8 +12,8 @@ decision not to fix before any public disclosure.
 ## What this tool touches
 
 Anvilate reads engineering documents and writes engineering documents. It runs no
-generated code and opens no network connection unless a caller consents to a dataset fetch
-or explicitly invokes a loopback-only local-model adapter. It is designed to be run against
+generated code and opens no network connection unless a caller consents to a dataset fetch.
+It calls no language model: the user's own MCP agent is the model. It is designed to be run against
 files that arrived from somebody else — an RFQ sheet, a calibration certificate, a QIF
 result.
 

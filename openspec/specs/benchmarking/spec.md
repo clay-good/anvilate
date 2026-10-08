@@ -17,8 +17,8 @@ AnvilateBench SHALL contain at least 100 prompt→validated-part tasks spanning 
 
 #### Scenario: Model evaluation
 
-- **WHEN** a new local model is evaluated monthly against AnvilateBench
-- **THEN** results update the published local-model recommendation with scores per task class
+- **WHEN** a model-plus-client combination is evaluated against AnvilateBench by a harness outside the package
+- **THEN** results are reported per task class against the published task-set version, and Anvilate itself runs no model to produce them
 
 ### Requirement: Solver verification suite
 

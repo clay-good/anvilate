@@ -1563,7 +1563,7 @@ def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
 
 def _built_geometry(handle: str):
     """Resolve and regenerate the exact built geometry named by ``handle``."""
-    from .geometry import build_spec
+    from .geometry import GeometryUnavailable, build_spec
     from .spec import parse_spec
 
     try:
@@ -1571,7 +1571,8 @@ def _built_geometry(handle: str):
         spec = parse_spec(record["spec"])
         expected = GeometrySummary.model_validate(record["geometry"])
         built = build_spec(spec)
-    except UnknownSubject:
+    except (UnknownSubject, GeometryUnavailable):
+        # The record is fine; this install cannot regenerate it. Building again cannot help.
         raise
     except (ValueError, TypeError, KeyError) as unreadable:
         raise UnknownSubject(

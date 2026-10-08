@@ -400,6 +400,10 @@ task-dispatched: run_fea_validation
   question rather than an outage. It is closed: every tool now takes a **subject**, a handle
   returned by an earlier call, and `stateless_gaps()` is empty as a consequence rather than
   as an edit. See [what a subject is](#subjects-a-handle-not-a-memory).
+- **`-32000`, this install has no geometry runtime.** `build_part`, `render_viewport` and
+  `measure_geometry` need the optional `anvilate[geometry]` extra. Without it they say so
+  and name the extra. Your spec is not at fault, so do not edit it; ask the user to install
+  the extra, or carry on with `run_validation`, which needs no geometry.
 - **`-32603`** you should never see. It means a handler produced a result the tool's own
   published `outputSchema` rejects, which is a bug in Anvilate, not in your client.
 

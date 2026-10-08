@@ -70,7 +70,7 @@ from .refusal import RefusalError, Remedy
 from .spec import SCHEMA_VERSION, DesignSpec, SpecValidationError, parse_spec
 from .units import Quantity, UnitError
 
-_BACKEND_SOURCE = "the local model server's configuration: model, loopback endpoint, timeout"
+_BACKEND_SOURCE = "the caller-supplied compilation backend: its name, model and pass support"
 _PROMPT_SOURCE = "the design intent statement for the part being compiled"
 _TASK_SET_SOURCE = "the versioned compilation task-set file and its reference fields"
 _RUN_SOURCE = "the evaluation run record: attempts, provenance, and scored outcomes"

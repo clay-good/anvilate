@@ -29,8 +29,8 @@ On top of the scorecard sit the cross-cutting layers, each of which takes checks
 that already ran and does one more thing with them:
 
 - :mod:`anvilate.agenteval` — versioned agent-driving evidence joined to compilation
-  correctness before a local model can clear the release recommendation gate; completion,
-  iterations and tool-call errors remain separate.
+  correctness before a model-plus-client combination can clear the release
+  recommendation gate; completion, iterations and tool-call errors remain separate.
 - :mod:`anvilate.assembly` — whether the parts can go in at all: an order that respects
   every declared insertion path, or every part in a blocking cycle named.
 - :mod:`anvilate.attestation` — the evidence bundle as a content-addressed,

@@ -1,6 +1,6 @@
 """Scoring an agent driving the tool surface: completion, iterations, and errors stay apart.
 
-The question a user asks about a local model is not "is it good" but **"can it drive this
+The question a user asks about an agent is not "is it good" but **"can it drive this
 reliably"**, and that is only answerable over Anvilate's own tool surface. This module is
 the half of that which can exist before the server does, and it is the half that decides
 whether the answer means anything: the measurement.

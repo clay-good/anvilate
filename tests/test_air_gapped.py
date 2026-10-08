@@ -4,8 +4,8 @@
 completes with **zero network calls**, and the property is held by an automated test that
 fails on any attempted access rather than by anybody's recollection of what the code does.
 Until `anvilate.fetch` shipped there was nothing in the package that could open a socket,
-which made the claim easy and unwatched. The fetch transport and the explicit local-model
-transport are now the two narrow paths that can, so the claim is worth stating and attacking.
+which made the claim easy and unwatched. The fetch transport is now the one narrow path
+that can, so the claim is worth stating and attacking.
 
 Three things are asserted here, and the second is the one that gives the first any value.
 
@@ -24,7 +24,7 @@ Three things are asserted here, and the second is the one that gives the first a
   not phone home and a library nobody has checked.
 
 The last three tests are the ratchet, and they are three because naming clients is not a
-job that finishes. `fetch` and `compilation` are the only modules that import a network
+job that finishes. `fetch` is the only module that imports a network
 client; the package's third-party imports are exactly its declared dependencies, so a client
 nobody thought to blocklist fails anyway; and no import is smuggled past both as a string.
 """

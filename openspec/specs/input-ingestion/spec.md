@@ -58,7 +58,7 @@ Raster drawing and drawing-figure extraction (dimension callouts, GD&T), when sh
 
 ### Requirement: Inputs never leave the machine
 
-Imported CAD payloads and documents SHALL be processed locally by deterministic code, and no input content SHALL be transmitted off the machine; a local model sees only text derived from them.
+Imported CAD payloads and documents SHALL be processed locally by deterministic code, and no input content SHALL be transmitted off the machine by Anvilate. What the user's agent sees is what Anvilate returns to it over MCP: text derived from the file, never the file.
 
 #### Scenario: Proprietary files stay local
 

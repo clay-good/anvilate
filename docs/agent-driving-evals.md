@@ -1,6 +1,6 @@
 # Agent-driving evals
 
-**"Which local model can drive this reliably?" is the question, and only an eval over
+**"Which agent can drive this reliably?" is the question, and only an eval over
 Anvilate's own tool surface answers it.** This page describes the measurement — the part
 that has to be right before any number is published, because a scalar built the obvious way
 rewards a model for giving up.

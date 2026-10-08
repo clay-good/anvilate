@@ -289,6 +289,11 @@ stable while preventing an internal raised refusal from existing with an empty r
   result published today. A per-tool refusal could not express that, and answering
   `-32602` would tell a client its argument was wrong, which invites a retry with a
   different one.
+- **`-32000`, no geometry runtime.** `build_part`, `render_viewport` and
+  `measure_geometry` without the `anvilate[geometry]` extra. Until 2026-10-08 this
+  arrived as `-32602` "invalid element_params" (or, for a handle, "call `build_part`
+  again"), because the missing-extra refusal is a `ValueError` and was re-worded by the
+  handler that catches bad parameters. The CLI's `EXIT_UNBUILT` (4) is the same fact.
 
 `export_artifact` answers with the evidence bundle for the scorecard its handle names, and
 **writes nothing**. That was the open decision — three shapes were considered, and the one

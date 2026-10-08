@@ -33,7 +33,7 @@ Two honesty notes the example prints out loud. The bundled signer is HMAC — sy
 so whoever can verify it could also have produced it. It detects tampering; it does not
 establish authorship, and :attr:`VerificationReport.attested` stays False on it.
 :class:`AttestationSigner` is the seam for a real asymmetric key. And the spec here was
-drafted with a local model, so the bundle carries the disclosure: which model, which
+drafted by the user's agent over MCP, so the bundle carries the disclosure: which model, which
 backend, which stage, and which values a human confirmed.
 
 Run it directly (``python examples/attested_evidence_bundle.py``);

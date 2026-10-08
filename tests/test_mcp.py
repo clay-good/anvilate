@@ -38,7 +38,7 @@ from anvilate.mcp import (
     tool_catalog,
     wire_definitions,
 )
-from anvilate.spec import ValidationTier
+from anvilate.spec import ValidationTier, parse_spec
 from anvilate.store import SUBJECT_PATTERN
 
 
@@ -1056,6 +1056,56 @@ def test_build_part_refuses_a_spec_without_an_audited_pattern():
 
     assert error["code"] == -32000
     assert "<undeclared>" in error["message"] and "supported: base_plate" in error["message"]
+
+
+def test_build_part_without_the_geometry_extra_says_install_not_correct_the_spec(monkeypatch):
+    """A missing optional dependency is the server's fact, not a defect in the spec.
+
+    `build_spec` caught ValueError to word a bad `element_params`, and the "install
+    anvilate[geometry]" refusal is a ValueError too, so it arrived as -32602 with a remedy
+    telling the agent to correct a spec that was already right.
+    """
+    from anvilate import geometry
+
+    def missing_kernel():
+        raise geometry.GeometryUnavailable(
+            "3D geometry needs the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for audited solid construction",
+        )
+
+    monkeypatch.setattr(geometry, "_kernel", missing_kernel)
+    with pytest.raises(geometry.GeometryUnavailable):
+        geometry.build_spec(parse_spec(_base_plate_document()))
+
+    error = _call("build_part", {"spec": _base_plate_document()})["error"]
+    assert error["code"] == -32000
+    assert "install anvilate[geometry]" in error["message"]
+    assert "element_params" not in error["message"]
+
+
+def test_a_handle_this_install_cannot_regenerate_says_install_not_rebuild(monkeypatch):
+    pytest.importorskip("build123d")
+    from anvilate import geometry
+
+    handle = _call("build_part", {"spec": _base_plate_document()})["result"]["structuredContent"][
+        "subject"
+    ]
+
+    def missing_kernel():
+        raise geometry.GeometryUnavailable(
+            "3D geometry needs the optional dependency; install anvilate[geometry]",
+            subject="the geometry runtime for audited solid construction",
+        )
+
+    monkeypatch.setattr(geometry, "_kernel", missing_kernel)
+    for name, arguments in (
+        ("render_viewport", {"subject": handle, "view": "iso"}),
+        ("measure_geometry", {"subject": handle, "query": "hole_diameter"}),
+    ):
+        error = _call(name, arguments)["error"]
+        assert error["code"] == -32000, (name, error)
+        assert "install anvilate[geometry]" in error["message"]
+        assert "build_part again" not in error["message"]
 
 
 def test_compile_spec_round_trips_a_real_document():

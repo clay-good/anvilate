@@ -8,8 +8,6 @@ thing a user cares about falls. These tests pin the vocabulary that makes that v
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from anvilate.compilation import (
@@ -79,34 +77,6 @@ class _Backend:
     def package_spec(self, prompt, *, schema, reasoning, validation_error):
         self.package_calls.append((prompt, schema, reasoning, validation_error))
         return next(self.outputs)
-
-
-class _OllamaTransport:
-    def __init__(self, contents: list[str | bytes]):
-        self.contents = iter(contents)
-        self.calls: list[tuple[str, dict, float]] = []
-
-    def __call__(self, url: str, body: bytes, timeout: float) -> bytes:
-        self.calls.append((url, json.loads(body), timeout))
-        content = next(self.contents)
-        if isinstance(content, bytes):
-            return content
-        return json.dumps({"message": {"role": "assistant", "content": content}}).encode()
-
-
-class _LlamaCppTransport:
-    def __init__(self, contents: list[str | bytes]):
-        self.contents = iter(contents)
-        self.calls: list[tuple[str, dict, float]] = []
-
-    def __call__(self, url: str, body: bytes, timeout: float) -> bytes:
-        self.calls.append((url, json.loads(body), timeout))
-        content = next(self.contents)
-        if isinstance(content, bytes):
-            return content
-        return json.dumps(
-            {"choices": [{"message": {"role": "assistant", "content": content}}]}
-        ).encode()
 
 
 # --- the compiler boundary ---------------------------------------------------------------

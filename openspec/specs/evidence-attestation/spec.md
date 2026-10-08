@@ -56,7 +56,7 @@ The evidence bundle SHALL record, machine-readably, whether and where an LLM par
 
 #### Scenario: Disclosure present and specific
 
-- **WHEN** a spec was compiled from prose by a local model and confirmed by the user
+- **WHEN** a spec was drafted from prose by the user's agent and confirmed by the user
 - **THEN** the bundle records the model identity, the compilation events, and the confirmation, distinguishing LLM-drafted values from user-stated and database-resolved ones
 
 #### Scenario: No AI, says so

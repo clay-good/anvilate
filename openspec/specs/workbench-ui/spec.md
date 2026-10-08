@@ -13,7 +13,7 @@ The UI SHALL present exactly three primary panes — input/spec, live 3D viewpor
 #### Scenario: Golden path on one screen
 
 - **WHEN** a new user describes a bracket, confirms the spec card, watches iterations, and exports
-- **THEN** every step occurred on the core screen in under 5 minutes on a mid-range laptop with a local model
+- **THEN** every step occurred on the core screen in under 5 minutes on a mid-range laptop
 
 ### Requirement: One primary input
 

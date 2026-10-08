@@ -22,7 +22,7 @@ Anvilate SHALL install with a single documented command per supported channel (p
 
 ### Requirement: Environment self-check
 
-Anvilate SHALL provide a self-check command (`anvilate doctor`) that verifies solvers, geometry kernel, local model runtime, viewport prerequisites, and database integrity, reporting each item as pass/fail with a plain-language fix for every failure.
+Anvilate SHALL provide a self-check command (`anvilate doctor`) that verifies solvers, geometry kernel, the MCP server catalog, viewport prerequisites, and database integrity, reporting each item as pass/fail with a plain-language fix for every failure.
 
 #### Scenario: Missing solver diagnosed
 
@@ -31,17 +31,17 @@ Anvilate SHALL provide a self-check command (`anvilate doctor`) that verifies so
 
 ### Requirement: Zero-configuration first run
 
-First launch SHALL require no account, no login, no API key, and no configuration file; if no local model is present, Anvilate SHALL offer a recommended local model with its download size and let the user defer — sample parts and the UI MUST remain explorable before any model is installed.
+First launch SHALL require no account, no login, no API key, no model download, and no configuration file. Anvilate needs no AI to work: sample parts screen and every check runs from a hand-written spec, and adding Anvilate to the user's own MCP agent is the one step that lets that agent write specs.
 
-#### Scenario: Explore before model download
+#### Scenario: Explore with no agent
 
-- **WHEN** a user launches Anvilate for the first time with no model installed
-- **THEN** they can open the sample gallery, build a bundled sample spec, and inspect its validation report, with model download offered but not required
+- **WHEN** a user installs Anvilate and has not configured any agent
+- **THEN** they can check a bundled sample spec and inspect its validation report
 
-#### Scenario: Model offer is informed
+#### Scenario: Agent setup is one entry
 
-- **WHEN** the model download is offered
-- **THEN** the offer states the model name, disk size, and that it runs fully locally, with a one-click accept or defer
+- **WHEN** the user adds Anvilate to their agent
+- **THEN** the setup is one MCP server entry naming the `anvilate-mcp` command, with no key and no model to choose
 
 ### Requirement: Sample part gallery
 
