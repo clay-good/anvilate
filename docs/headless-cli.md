@@ -639,7 +639,9 @@ Rectangles are centered closed polylines on `OUTLINE`. Circular and annular cove
 `OUTLINE` circle and, where present, a concentric circle on `HOLES`. The DXF header carries
 the export authorization metadata. A card that fails or cannot be evaluated produces no
 drawing and points to the evidence bundle; an unsupported geometry pattern exits 4 naming
-the missing audited pattern. Repeated exports of the same built geometry produce identical
+the missing audited pattern. So does a shaft or a timber beam, which builds but has no flat
+cut profile: the refusal names the plate patterns DXF draws and points to `anvilate build`
+for the part as STEP. Repeated exports of the same built geometry produce identical
 bytes and SHA-256 digests. `--format json` carries those exact bytes as UTF-8 text plus the
 digest.
 

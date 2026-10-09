@@ -2842,6 +2842,21 @@ def test_every_drawn_example_builds_to_json_the_schema_accepts(tmp_path, example
     assert json.loads(raw)["artifact"]["pattern"].split("/")[0] in _DRAWN_ELEMENT_TYPES
 
 
+@pytest.mark.parametrize("example", ["transmission_shaft", "timber_joist"])
+def test_dxf_of_a_part_with_no_cut_profile_is_unbuilt_not_an_internal_error(example):
+    """A shaft or a beam has no flat profile to cut. The exporter refused them with an error
+    no surface handled, so the CLI said "internal error" and exited 5."""
+    pytest.importorskip("build123d")
+    pytest.importorskip("ezdxf")
+
+    spec = _REPO / "examples" / f"{example}.spec.yaml"
+    code, out, err = _run("export", str(spec), "--artifact", "dxf")
+
+    assert code == EXIT_UNBUILT and out == "", err
+    assert "internal error" not in err
+    assert "has none; DXF supports 'base_plate/1' and 'cover_plate/1'" in err
+
+
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
     spec = tmp_path / "lug.yaml"
     spec.write_text(_LUG_SPEC, encoding="utf-8")

@@ -232,7 +232,7 @@ def render_geometry_dxf(
     result is returned rather than written so the CLI and MCP surfaces can expose the exact
     same bytes without granting a remote caller filesystem access.
     """
-    from ..geometry import BASE_PLATE_PATTERN, COVER_PLATE_PATTERN
+    from ..geometry import BASE_PLATE_PATTERN, COVER_PLATE_PATTERN, UnsupportedGeometry
 
     if not geometry.is_valid:
         raise _dxf_refusal(
@@ -281,10 +281,15 @@ def render_geometry_dxf(
             doc.layers.add(_HOLE_LAYER, color=1)
             msp.add_circle((0, 0), bore / 2, dxfattribs={"layer": _HOLE_LAYER})
     else:
-        raise _dxf_refusal(
-            f"DXF export does not support geometry pattern {geometry.pattern!r}",
-            subject="geometry",
-            source=_BUILT_PART_SOURCE,
+        # A part with no flat cut profile is a capability not shipped, not a bad input: the
+        # surfaces handle UnsupportedGeometry as one, where a plain refusal reached the CLI
+        # as an internal error.
+        raise UnsupportedGeometry(
+            f"DXF export draws a plate's cut profile, and geometry pattern "
+            f"{geometry.pattern!r} has none; DXF supports {BASE_PLATE_PATTERN!r} and "
+            f"{COVER_PLATE_PATTERN!r}, and `anvilate build` writes this part as STEP",
+            subject=f"the geometry pattern {geometry.pattern!r}",
+            source="the DXF exporter's supported plate patterns",
         )
 
     if keepouts:
