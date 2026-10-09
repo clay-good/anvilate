@@ -66,7 +66,7 @@
       leaving the task working forever. Terminal results survive monitor races.
       `build_part` remains refused because task transport does not manufacture the sandboxed
       geometry generator it still waits on
-- [ ] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — **the parity
+- [x] 2.4 Gate parity tests: sandbox/export gating identical to CLI paths — **the parity
       half is now testable and tested** (`tests/test_surface_parity.py`), because there is
       a CLI: this task was written when there was not, so "identical to CLI paths" named a
       comparison with nothing on the other side. One spec screened over MCP and at the
@@ -91,9 +91,14 @@
       is that gate, every artifact-emitting export entry point now requires an
       `ExportAuthorization`, and `tests/test_export_gate.py` resolves `export_artifact`'s
       `backing` symbol and requires it to take one — so "the MCP surface grants no bypass"
-      is a claim that can fail. The sandbox gate is declared by `build_part`, which names no
-      backing symbol because the operation is unbuilt; a test asserts it stays undischarged,
-      so an implementation cannot land without someone deciding what discharges it.
+      is a claim that can fail. **The sandbox half closed 2026-10-09.** `build_part` is built:
+      both doors reach the audited `geometry.build_spec`, which runs no caller code, so no
+      tool inherits `Gate.SANDBOX` (`test_the_audited_builder_executes_no_caller_code_and_
+      claims_no_sandbox`) and the gate stays declared for a future caller-code tool. Parity
+      is then held by value: `test_build_gates_the_same_part_the_same_way_on_both_surfaces`
+      builds every drawn example through `anvilate build` and `build_part` and requires the
+      same pattern, volume, dimensions and face tags, and the padeye, which has no pattern,
+      refused on both with the same reason.
 
 - [x] 2.5 Recover unfinished tasks after the launching server exits: an OS-held execution
       lock spans launcher, worker startup, and execution. `tasks/get` marks a new task failed

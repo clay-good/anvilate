@@ -136,6 +136,40 @@ def test_build_is_backed_on_both_surfaces():
     assert not {t.name for t in tool_catalog()} & {"diff"}
 
 
+@pytest.mark.parametrize(
+    "example", ["base_plate", "cover_plate", "transmission_shaft", "timber_joist", "padeye"]
+)
+def test_build_gates_the_same_part_the_same_way_on_both_surfaces(example, tmp_path):
+    """modernize-mcp-server 2.4, by value: what one door builds the other builds identically,
+    and what one door refuses the other refuses for the same reason. Neither runs caller
+    code — both reach `geometry.build_spec` — so the parity to hold is the gate's outcome,
+    not a sandbox neither needs."""
+    pytest.importorskip("build123d")
+    import yaml
+
+    from anvilate.cli import EXIT_UNBUILT
+
+    path = _REPO / "examples" / f"{example}.spec.yaml"
+    code, out, err = _cli(
+        "build", str(path), "--output", str(tmp_path / "part.step"), "--format", "json"
+    )
+    response = _mcp("build_part", {"spec": yaml.safe_load(path.read_text(encoding="utf-8"))})
+
+    if code == EXIT_UNBUILT:
+        error = response["error"]
+        assert error["code"] == -32000
+        assert "no audited geometry pattern" in error["message"]
+        assert "no audited geometry pattern" in json.loads(out)["diagnostics"][0]
+        return
+    assert code == 0, err
+    artifact = json.loads(out)["artifact"]
+    geometry = response["result"]["structuredContent"]["geometry"]
+    assert geometry["pattern"] == artifact["pattern"]
+    assert geometry["volumeMm3"] == pytest.approx(artifact["volume_mm3"], rel=1e-12)
+    assert geometry["dimensionsMm"] == pytest.approx(artifact["dimensions_mm"], rel=1e-12)
+    assert sorted(geometry["faceTags"]) == sorted(artifact["face_tags"])
+
+
 def test_export_is_no_longer_a_divergence_and_the_bundles_are_identical():
     """The CLI writes an evidence bundle from a spec file; MCP now returns the same bundle.
 
