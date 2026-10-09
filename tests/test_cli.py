@@ -106,9 +106,37 @@ def _hostile_documents():
     return _adversarial_specs()
 
 
+_PUBLISHED_OUTPUT: list = []
+
+
+def _published_output():
+    """The cli-output schema a client reads, compiled once for the whole module."""
+    if not _PUBLISHED_OUTPUT:
+        import jsonschema
+
+        schema = json.loads(
+            (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+        )
+        _PUBLISHED_OUTPUT.append(jsonschema.Draft202012Validator(schema))
+    return _PUBLISHED_OUTPUT[0]
+
+
 def _run(*argv):
     out, err = io.StringIO(), io.StringIO()
     code = run(list(argv), stdout=out, stderr=err)
+    if "json" in argv and argv[argv.index("json") - 1] == "--format" and out.getvalue():
+        # Every JSON document a test asks for meets the published schema, not only the ones
+        # a test thought to check: `build` printed a timber beam's pattern that the schema
+        # refused, and the five tests checking build JSON all built other patterns.
+        from jsonschema.exceptions import best_match
+
+        # The output is a union, so the top error is "not valid under any"; the best match
+        # names the field inside the branch that came closest.
+        problem = best_match(_published_output().iter_errors(json.loads(out.getvalue())))
+        assert problem is None, (
+            f"{argv[0]} --format json broke cli-output at "
+            f"{'/'.join(map(str, problem.absolute_path))}: {problem.message[:200]}"
+        )
     return code, out.getvalue(), err.getvalue()
 
 
@@ -2793,6 +2821,25 @@ def test_build_writes_a_validated_transmission_shaft_with_import_properties(tmp_
     ]
     properties = verify_step_integrity(output)
     assert properties.volume_mm3 == pytest.approx(3.141592653589793 * 27.5**2 * 600)
+
+
+@pytest.mark.parametrize(
+    "example",
+    ["base_plate", "cover_plate", "transmission_shaft", "timber_joist"],
+)
+def test_every_drawn_example_builds_to_json_the_schema_accepts(tmp_path, example):
+    """Each drawn example through `build --format json`; `_run` holds the document to the
+    published schema. The joist's pattern was the one the schema did not list."""
+    pytest.importorskip("build123d")
+    from anvilate.geometry import _DRAWN_ELEMENT_TYPES
+
+    spec = _REPO / "examples" / f"{example}.spec.yaml"
+    code, raw, err = _run(
+        "build", str(spec), "--output", str(tmp_path / "part.step"), "--format", "json"
+    )
+
+    assert code == EXIT_OK, err
+    assert json.loads(raw)["artifact"]["pattern"].split("/")[0] in _DRAWN_ELEMENT_TYPES
 
 
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
