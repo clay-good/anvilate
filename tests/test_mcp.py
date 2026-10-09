@@ -702,15 +702,11 @@ def test_tool_refusals_carry_structured_issues_and_remedies():
     assert nested["data"]["issues"][0].startswith("spec.name:")
     assert any("name" in remedy for remedy in nested["data"]["remedies"])
 
-    capability = _call("run_fea_validation", {"spec": {}})["error"]
-    assert capability["data"]["requiredCapabilities"]
-    # The message alone is what a client like Claude Code shows the model, so it names the
-    # missing extension and the synchronous alternative itself.
-    assert "io.modelcontextprotocol/tasks" in capability["message"]
-    assert "run_validation" in capability["message"]
-    assert capability["data"]["remedies"] == [
-        "declare the io.modelcontextprotocol/tasks extension in params._meta clientCapabilities"
-    ]
+    # Without the Tasks extension the FEA tool parses the spec itself, so a bad one is
+    # refused the way run_validation refuses it, issues and remedies included.
+    fea = _call("run_fea_validation", {"spec": {}})["error"]
+    assert fea["code"] == -32602
+    assert fea["data"]["issues"] and fea["data"]["remedies"]
 
 
 def test_raised_argument_refusals_keep_typed_remedies_behind_the_same_wire_text():
@@ -750,13 +746,24 @@ def test_a_generic_raised_argument_refusal_also_has_a_concrete_typed_remedy():
     assert remedy.source == "the read_scorecard inputSchema returned by tools/list"
 
 
-def test_the_unbounded_validation_tool_requires_the_tasks_extension():
-    missing_capability = _call("run_fea_validation", {"spec": {}})["error"]
-    assert missing_capability["code"] == -32021
-    assert missing_capability["data"]["requiredCapabilities"] == {
-        "extensions": {"io.modelcontextprotocol/tasks": {}}
-    }
-    # And the refusal follows the declared cost, not a list of names.
+def test_the_unbounded_tool_answers_a_client_without_tasks_in_the_reply():
+    """Claude Code declares no Tasks extension, and refusing it (-32021) left the most
+    common client with no T3 tier (measured 2026-10-09). It gets the task handler's own
+    result synchronously: the same card a task would have completed with."""
+    from anvilate.mcp import _run_fea_validation_task
+
+    document = _spec_document()
+    reply = _call("run_fea_validation", {"spec": document})
+    assert "error" not in reply, reply
+    result = reply["result"]
+    assert result.get("resultType") != "task"
+    assert result["isError"] is False
+    card = result["structuredContent"]["scorecard"]
+    assert card == _run_fea_validation_task({"spec": document})["scorecard"]
+    (t3,) = [entry for entry in card["entries"] if entry["name"] == "T3 FEA"]
+    assert t3["status"] == "not_evaluated"
+    assert "ships no finite-element solver" in t3["detail"]
+    # The synchronous path follows the declared dispatch, not a list of names.
     unbounded = {t.name for t in tool_catalog() if t.dispatch is Dispatch.TASK}
     assert unbounded == {"run_fea_validation"}
 
@@ -1425,11 +1432,10 @@ def test_an_exclusive_bound_is_exclusive():
     error = _call("run_fea_validation", {"spec": {}, "convergence_tol": 0})["error"]
     assert error["code"] == -32602
     assert "above 0" in error["message"]
-    # Above it, argument validation reaches extension negotiation.
-    assert (
-        _call("run_fea_validation", {"spec": {}, "convergence_tol": 1e-6})["error"]["code"]
-        == -32021
-    )
+    # Above it, argument validation passes and the handler parses the (empty) spec.
+    above = _call("run_fea_validation", {"spec": {}, "convergence_tol": 1e-6})["error"]
+    assert above["code"] == -32602
+    assert "above 0" not in above["message"]
 
 
 @pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])

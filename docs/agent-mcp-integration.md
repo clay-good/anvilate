@@ -404,10 +404,11 @@ task-dispatched: run_fea_validation
   run `anvilate fetch <dataset> --consent`, or declare the section's properties instead.
   A material refusal that offers no identifier means none is a safe substitute; ask the
   user rather than picking the nearest grade.
-- **`-32021`, task capability missing.** `run_fea_validation` can only return a task, and
-  the extension forbids that response unless this request declares
-  `io.modelcontextprotocol/tasks`. Add it under the request's client-capability metadata;
-  the error's `requiredCapabilities` gives the exact shape.
+- **`run_fea_validation` answers either way.** Declare `io.modelcontextprotocol/tasks` in
+  the request's client-capability metadata and you get a task handle to poll; declare
+  nothing (Claude Code does not) and the same result comes back in the reply. Until
+  2026-10-09 the second case was refused with `-32021`, which left Claude Code with no
+  T3 tier at all. This release ships no FEA solver, so either way T3 is not evaluated.
 - **`-32000`, that format is not served here.** The narrower version of the same fact, and
   the one place a tool is dispatched while part of what it publishes is not: `export_artifact`
   serves `evidence_bundle` and refuses `dxf` and `qif`. Both local implementations exist:

@@ -858,9 +858,10 @@ _TASK_SET: tuple[AgentTask, ...] = (
         prompt="Run the FEA-class checks on that padeye and tell me when they finish.",
         required_tools=("run_fea_validation",),
         notes=(
-            "Task-dispatched, because the run stops on a convergence tolerance rather than a "
-            "clock. A run that blocks on a synchronous reply has misread the contract it was "
-            "handed; the refusal says so and names the Tasks extension."
+            "A task for a client that declares the Tasks extension, and a synchronous reply "
+            "for one that does not, from the same handler. This release ships no FEA solver, "
+            "so the honest answer is T3 not evaluated with that reason; a run that reports "
+            "converged stresses invented them."
         ),
     ),
 )

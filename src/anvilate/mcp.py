@@ -588,10 +588,12 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Run the FEA-class validation tier",
             description=(
                 "Run the T3 converged finite-element checks. The run stops on a convergence "
-                "tolerance, not on a clock, so the operation is dispatched as a task rather "
-                "than answered in a synchronous reply: progress is reportable, cancellation "
-                "terminates the solver subprocesses, and a cancelled run reports its "
-                "affected checks as not evaluated rather than as passing."
+                "tolerance, not on a clock, so a client that declares the Tasks extension "
+                "gets a task: progress is reportable, cancellation terminates the solver "
+                "subprocesses, and a cancelled run reports its affected checks as not "
+                "evaluated rather than as passing. Any other client gets the same result in "
+                "the reply. This release ships no finite-element solver, so T3 is reported "
+                "not evaluated, with that reason."
             ),
             input_schema=_object_schema(
                 {
@@ -793,7 +795,6 @@ METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 TOOL_UNAVAILABLE = -32000
-MISSING_REQUIRED_CLIENT_CAPABILITY = -32021
 
 PROTOCOL_REVISION = "2026-07-28"
 # The revisions this server can speak, newest first. A client names the one it wants, and
@@ -834,8 +835,8 @@ def _for_revision(response: dict[str, Any] | None, revision: str) -> dict[str, A
     """``response`` as ``revision`` defines a result: no `resultType` before 2026-07-28.
 
     Only a completed result is reshaped. A task result keeps its shape, and an older client
-    never receives one: it cannot declare the Tasks extension, so the task-only tool refuses
-    it first (-32021).
+    never receives one: it cannot declare the Tasks extension, so the task tool answers it
+    synchronously instead.
     """
     if revision >= "2026-07-28" or response is None:
         return response
@@ -1400,26 +1401,21 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
                     "served validation tier"
                 ],
             )
-        if not _client_supports_tasks(params):
-            return _error(
-                request_id,
-                MISSING_REQUIRED_CLIENT_CAPABILITY,
-                # The message is what a model reads: Claude Code 2.1 shows it and nothing
-                # from `data`, and "Missing required client capability" alone sent agents
-                # to report a server fault in the 2026-10-09 measurement.
-                f"Missing required client capability: {tool.name} runs as a task, and this "
-                f"client did not declare the {TASKS_EXTENSION} extension, so it cannot "
-                "start one. The synchronous tiers are run_validation; this tier needs a "
-                "client that supports MCP tasks",
-                requiredCapabilities={"extensions": {TASKS_EXTENSION: {}}},
-                remedies=[
-                    f"declare the {TASKS_EXTENSION} extension in params._meta clientCapabilities"
-                ],
-            )
-        from ._mcp_tasks import launch_task
+        if _client_supports_tasks(params):
+            from ._mcp_tasks import launch_task
 
-        task = launch_task(tool.name, arguments)
-        return {"jsonrpc": "2.0", "id": request_id, "result": {"resultType": "task", **task}}
+            task = launch_task(tool.name, arguments)
+            return {"jsonrpc": "2.0", "id": request_id, "result": {"resultType": "task", **task}}
+        # A client without the Tasks extension gets the answer in the reply instead. Claude
+        # Code 2.1 declares none, and refusing it (-32021, until 2026-10-09) left the most
+        # common client with no T3 tier at all. The handler is the task's own, so the two
+        # paths cannot disagree about a result. It returns at once today because this
+        # release ships no finite-element solver and says T3 was not evaluated; a solver
+        # that lands here must bring a deadline for this path, past which its checks are
+        # reported not evaluated rather than left to hang the call.
+        handler = _TASK_DISPATCH[tool.name]
+    else:
+        handler = None
     if not tool.is_stateless:
         return _error(
             request_id,
@@ -1429,7 +1425,7 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"argument or the server holds a session; the contract does not yet say which",
             remedies=[f"supply the {tool.name} subject through the argument named by tools/list"],
         )
-    handler = _DISPATCH.get(tool.name)
+    handler = handler or _DISPATCH.get(tool.name)
     if handler is None:
         # Naming what each one waits on, because "not implemented" is not an answer a client
         # can act on — the same rule the CLI follows for its unbuilt command. Until the

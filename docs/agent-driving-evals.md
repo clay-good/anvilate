@@ -106,9 +106,11 @@ cruder than the scoring above. The skill costs about $0.40 more over the nine ta
 is the length of the prompt it adds. The error-rate difference is one refusal over two
 denominators, not a difference.
 
-The task neither condition completes is the FEA tier. `run_fea_validation` runs as an MCP
-task and Claude Code declares no tasks extension, so the server refuses it in both
-conditions. Both agents said so rather than inventing a result.
+The task neither condition completes is the FEA tier. `run_fea_validation` ran only as an
+MCP task and Claude Code declares no tasks extension, so the server refused it in both
+conditions. Both agents said so rather than inventing a result. Since that run, a client
+without the extension gets the result in the reply instead (where, with no FEA solver in
+this release, T3 is honestly not evaluated).
 
 ### How the number got here: three runs, four defects
 

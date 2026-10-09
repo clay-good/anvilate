@@ -275,8 +275,9 @@ stable while preventing an internal raised refusal from existing with an empty r
   Until that was enforced, `T3_fea` was accepted on the synchronous tool, and a misspelled
   tier reached the spec parser and came back as `spec.acceptance.tiers.0` — sending a client
   to look at its *document* for a problem in a different argument.
-- **`-32021`, task capability missing.** The client did not declare the Tasks extension on
-  a call whose only valid response is a task handle.
+- **`-32021`, task capability missing.** No longer sent. A client that does not declare
+  the Tasks extension gets `run_fea_validation`'s result in the reply, from the same
+  handler a task runs (2026-10-09; Claude Code declares none).
 - **`-32000`, stateless.** Empty today — every tool names its subject — and kept as the net
   for the next tool that stops declaring one.
 - **`-32000`, not dispatched yet.** Empty today. The census remains in both directions: a

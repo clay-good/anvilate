@@ -51,12 +51,18 @@ reconnecting client loses nothing.
 
 ### Requirement: Long-running validation as tasks
 
-Pipeline operations that exceed interactive latency (FEA-class runs, full converged builds) SHALL be exposed through the MCP Tasks extension: the tool call returns a task handle, progress is reportable, cancellation is honored, and results are retrievable after completion; quick closed-form checks SHALL remain ordinary synchronous calls.
+Pipeline operations that exceed interactive latency (FEA-class runs, full converged builds) SHALL be exposed through the MCP Tasks extension: the tool call returns a task handle, progress is reportable, cancellation is honored, and results are retrievable after completion; quick closed-form checks SHALL remain ordinary synchronous calls. A client that does not declare the Tasks extension SHALL receive the same operation's result synchronously, from the same handler, under a deadline past which the affected checks are reported not evaluated, rather than be refused the tier.
 
 #### Scenario: Agent dispatches and returns
 
 - **WHEN** an agent triggers a converged FEA validation through MCP
 - **THEN** it receives a task handle immediately, can poll progress, and retrieves the typed scorecard when the run completes
+
+#### Scenario: A client without tasks still gets the tier
+
+- **WHEN** a client that declares no Tasks extension calls the FEA validation tool
+- **THEN** it receives the same typed scorecard a task would have completed with, in the reply,
+  rather than a refusal
 
 #### Scenario: Cancellation is clean
 
