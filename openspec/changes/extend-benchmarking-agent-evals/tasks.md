@@ -36,7 +36,11 @@
       reference values as records, and its species and grade resolve the document's
       `material.ref` (`examples/timber_joist.spec.yaml`). That is the prerequisite the
       timber family named; the six timber cases are furniture parts rather than beams, so
-      none compiles yet and the census is unchanged
+      none compiles yet and the census is unchanged.
+      **2026-10-09, the user's decision: leave 1.2 and 1.3 blocked.** Polymer, sheet-metal and
+      furniture cases are outside a structural and mechanical screening tool, so the census
+      (0 of 106, with its reasons) stays the published answer rather than a reason to add
+      materials
 
 ## 2. Agent-driving suite
 
