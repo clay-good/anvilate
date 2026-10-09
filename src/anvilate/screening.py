@@ -337,8 +337,8 @@ def _screen_element(
     registry = element_registry()
     entry = registry.get(tag)
     if entry is None:
-        near = difflib.get_close_matches(tag, sorted(registry), n=1)
-        suggestion = f"; did you mean {near[0]!r}?" if near else ""
+        meant = _element_spelling(tag, sorted(registry))
+        suggestion = f"; did you mean {meant!r}?" if meant else ""
         return [
             ScorecardEntry(
                 name="T1 analytical",
@@ -1556,6 +1556,28 @@ def _near_misses(ref: str, known: list[str], near=_near_identifiers) -> str:
     return f"nothing among the {len(known)} known identifiers is close to it."
 
 
+def _element_spelling(tag: str, names: Sequence[str]) -> str | None:
+    """The one element ``tag`` misspells, or None when it names a different thing.
+
+    An element type is a choice of physics, not a spelling, so a near miss is offered only
+    for a slip that cannot change which element is meant: case, separators, a plural, or a
+    one-letter typo. Difflib's default cutoff read `shaft` as `shaft_key` and
+    `pin_connected_plate` as `cover_plate`, and an agent follows the remedy it is handed
+    (one did, measured 2026-10-09).
+    """
+
+    def key(name: str) -> str:
+        return re.sub(r"[\s_\-]", "", name.lower())
+
+    wanted = key(tag)
+    exact = [n for n in names if key(n) in (wanted, wanted.removesuffix("s"))]
+    if len(exact) == 1:
+        return exact[0]
+    keyed = {key(n): n for n in names}
+    near = difflib.get_close_matches(wanted, list(keyed), n=2, cutoff=0.9)
+    return keyed[near[0]] if len(near) == 1 else None
+
+
 def _sole_shorthand(written: str, offered: list[str], known: list[str]) -> str | None:
     """The one record ``written`` is shorthand for, if it is offered, else None.
 
@@ -1636,16 +1658,23 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
         return problems, remedies
     registry = element_registry()
     if spec.element_type not in registry:
-        near = difflib.get_close_matches(spec.element_type, sorted(registry), n=1)
+        meant = _element_spelling(spec.element_type, sorted(registry))
+        # The names, not just their count: without them an agent holding "padeye" guessed
+        # `lug`, `pad_eye` and `pin_connected_plate` before reaching `lifting_lug`.
         problems.append(
             _refusal_line(
                 "element_type",
                 f"{spec.element_type!r} is not one of the {len(registry)} elements this library "
-                "screens" + (f"; did you mean {near[0]!r}?" if near else ""),
+                "screens"
+                + (
+                    f"; did you mean {meant!r}?"
+                    if meant
+                    else f", which are {', '.join(sorted(registry))}"
+                ),
             )
         )
-        if near:
-            remedies.append(f"write `element_type` as `{near[0]}`")
+        if meant:
+            remedies.append(f"write `element_type` as `{meant}`")
         return problems, remedies
     model = registry[spec.element_type][0]
     try:

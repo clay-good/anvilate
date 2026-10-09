@@ -605,6 +605,33 @@ def test_an_element_type_no_pack_screens_is_named_rather_than_ignored():
     assert "did you mean 'lifting_lug'?" in gap.detail
 
 
+@pytest.mark.parametrize(
+    "written", ["shaft", "pin_connected_plate", "timber_joist", "bolted_joint", "padeye"]
+)
+def test_an_element_type_that_names_another_thing_gets_the_list_not_a_guess(written):
+    """A remedy is an instruction an agent follows. Difflib's default cutoff turned `shaft`
+    into `shaft_key` and `pin_connected_plate` into `cover_plate`; a different element is a
+    different physics, so these get the names to choose from and no remedy."""
+    from anvilate.screening import _compile_findings, element_registry
+
+    problems, remedies = _compile_findings(_lug_spec(element_type=written))
+    (problem,) = [p for p in problems if p.startswith("element_type")]
+    assert "did you mean" not in problem
+    assert ", ".join(sorted(element_registry())) in problem
+    assert not [r for r in remedies if "element_type" in r]
+    card = screen_spec(_lug_spec(element_type=written))
+    gap = next(e for e in card.entries if e.name == "T1 analytical")
+    assert "did you mean" not in gap.detail
+
+
+@pytest.mark.parametrize("written", ["Lifting_Lug", "lifting-lug", "liftinglug", "lifting_lgu"])
+def test_an_element_type_spelling_slip_still_gets_its_remedy(written):
+    from anvilate.screening import _compile_findings
+
+    _, remedies = _compile_findings(_lug_spec(element_type=written))
+    assert "write `element_type` as `lifting_lug`" in remedies
+
+
 def test_element_params_the_pack_refuses_are_reported_as_the_gap_they_are():
     """The cost of a tag-and-map rather than a typed union is that a malformed element is
     caught at screening rather than at parse. It is paid here: the pack model's own refusal
