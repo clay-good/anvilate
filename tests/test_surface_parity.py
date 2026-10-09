@@ -13,7 +13,6 @@ decision somebody has to make.
 
 from __future__ import annotations
 
-import io
 import json
 import re
 import tempfile
@@ -21,9 +20,10 @@ from pathlib import Path
 
 import pytest
 
-from anvilate.cli import EXIT_BAD_REQUEST, EXIT_CODES, run
+from anvilate.cli import EXIT_BAD_REQUEST, EXIT_CODES
 from anvilate.mcp import handle_request, stateless_gaps, tool_catalog
 from anvilate.scorecard import CheckStatus
+from cli_output import run_cli
 
 _REPO = Path(__file__).resolve().parent.parent
 
@@ -46,9 +46,7 @@ def spec_file(tmp_path):
 
 
 def _cli(*argv):
-    out, err = io.StringIO(), io.StringIO()
-    code = run(list(argv), stdout=out, stderr=err)
-    return code, out.getvalue(), err.getvalue()
+    return run_cli(*argv)
 
 
 def _mcp(name: str, arguments: dict):

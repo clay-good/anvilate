@@ -62,18 +62,14 @@ def test_every_table_is_usable_without_anvilate():
 
 def test_both_export_doors_pin_the_datasets_in_the_bundle(tmp_path):
     """The CLI and MCP bundles record every table's version and digest."""
-    import io
 
-    from anvilate.cli import run
     from anvilate.mcp import handle_request
+    from cli_output import run_cli
 
-    out = io.StringIO()
-    run(
-        ["export", str(_REPO / "examples" / "padeye.spec.yaml"), "--format", "json"],
-        stdout=out,
-        stderr=io.StringIO(),
+    _code, out, _err = run_cli(
+        "export", str(_REPO / "examples" / "padeye.spec.yaml"), "--format", "json"
     )
-    exported = json.loads(out.getvalue())
+    exported = json.loads(out)
     bundle = exported["bundles"][0]["bundle"] if "bundles" in exported else exported["bundle"]
     expected = [pin.model_dump(mode="json") for pin in bundled_datasets()]
     assert bundle["datasets"] == expected

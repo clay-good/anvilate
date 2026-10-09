@@ -42,6 +42,7 @@ from anvilate.cli import (
     run,
 )
 from anvilate.scorecard import CheckStatus
+from cli_output import run_cli
 
 _REPO = Path(__file__).resolve().parent.parent
 
@@ -106,38 +107,8 @@ def _hostile_documents():
     return _adversarial_specs()
 
 
-_PUBLISHED_OUTPUT: list = []
-
-
-def _published_output():
-    """The cli-output schema a client reads, compiled once for the whole module."""
-    if not _PUBLISHED_OUTPUT:
-        import jsonschema
-
-        schema = json.loads(
-            (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
-        )
-        _PUBLISHED_OUTPUT.append(jsonschema.Draft202012Validator(schema))
-    return _PUBLISHED_OUTPUT[0]
-
-
 def _run(*argv):
-    out, err = io.StringIO(), io.StringIO()
-    code = run(list(argv), stdout=out, stderr=err)
-    if "json" in argv and argv[argv.index("json") - 1] == "--format" and out.getvalue():
-        # Every JSON document a test asks for meets the published schema, not only the ones
-        # a test thought to check: `build` printed a timber beam's pattern that the schema
-        # refused, and the five tests checking build JSON all built other patterns.
-        from jsonschema.exceptions import best_match
-
-        # The output is a union, so the top error is "not valid under any"; the best match
-        # names the field inside the branch that came closest.
-        problem = best_match(_published_output().iter_errors(json.loads(out.getvalue())))
-        assert problem is None, (
-            f"{argv[0]} --format json broke cli-output at "
-            f"{'/'.join(map(str, problem.absolute_path))}: {problem.message[:200]}"
-        )
-    return code, out.getvalue(), err.getvalue()
+    return run_cli(*argv)
 
 
 def _write_four_hole_step(path: Path, *, locator=None) -> Path:

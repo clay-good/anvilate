@@ -114,6 +114,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Geometry summary 1.4.0 and CLI output 1.57.0: a timber beam's pattern
+
+`timber_beam/1` joins the `pattern` enum of the geometry summary and of a build result's
+`artifact`. The pattern shipped without it: MCP `build_part` returned an internal error on
+every timber beam, and `anvilate build --format json` printed output this schema refused.
+Both now take their pattern type from `anvilate.geometry.GeometryPattern`, and a test holds
+that type equal to the module's pattern constants.
+
 ### Scorecard 1.12.0: module checks have stable ids
 
 `ScorecardEntry.check_id` separates machine identity from the instance-specific name a
@@ -398,7 +406,8 @@ to `main` and on every pull request, rather than skipping the way an opt-in chec
 ## The CLI identifies its contract on the wire
 
 Every completed `--format json` result carries the same three fields before its
-command-specific content:
+command-specific content (shown at 1.3.0, when this section was written;
+`CLI_OUTPUT_SCHEMA_VERSION` is the current one):
 
 ```json
 {
