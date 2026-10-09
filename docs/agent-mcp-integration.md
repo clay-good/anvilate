@@ -148,7 +148,11 @@ real subprocess the way a client does. Everything below calls `handle_request` d
 which is the same function the transport calls, so the examples stay about the protocol
 rather than about pipe plumbing.
 
-Start where any client starts:
+Start where any client starts. The server speaks MCP revisions 2026-07-28, 2025-11-25,
+2025-06-18 and 2025-03-26 and answers in the one the client asks for (Claude Code asks for
+2025-11-25), falling back to 2026-07-28 for a revision it does not know. Before 2026-07-28 a
+result carries no `resultType`; the tools are the same in every revision.
+
 
 ```python
 import json

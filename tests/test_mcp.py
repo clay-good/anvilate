@@ -2521,6 +2521,46 @@ def test_initialize_names_the_server_version_and_ping_is_answered():
     assert pong == {"jsonrpc": "2.0", "id": "p", "result": {"resultType": "complete"}}
 
 
+def test_the_server_answers_in_the_revision_the_client_asked_for():
+    """Claude Code 2.1 asks for 2025-11-25 and refused to connect, "Server's protocol version
+    is not supported: 2026-07-28", while the server answered with its own revision whatever
+    the client named. The README's own setup line did not work."""
+    import io
+
+    from anvilate.mcp import PROTOCOL_REVISION, SUPPORTED_PROTOCOL_REVISIONS, serve_stdio
+
+    def session(revision):
+        lines = [
+            {
+                "jsonrpc": "2.0",
+                "id": 0,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": revision,
+                    "capabilities": {},
+                    "clientInfo": {"name": "claude-code", "version": "2.1.250"},
+                },
+            },
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 1, "method": "ping"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        ]
+        out = io.StringIO()
+        serve_stdio(io.StringIO("".join(json.dumps(m) + "\n" for m in lines)), out)
+        return [json.loads(line) for line in out.getvalue().splitlines()]
+
+    for revision in SUPPORTED_PROTOCOL_REVISIONS:
+        init, pong, listed = session(revision)
+        assert init["result"]["protocolVersion"] == revision
+        newest = revision == PROTOCOL_REVISION
+        for reply in (init, pong, listed):
+            assert ("resultType" in reply["result"]) is newest, (revision, reply["id"])
+        assert listed["result"]["tools"] and init["result"]["instructions"]
+    # A revision the server does not know is answered with the newest it does.
+    init, *_ = session("1999-01-01")
+    assert init["result"]["protocolVersion"] == PROTOCOL_REVISION
+
+
 def test_every_tool_schema_compiles_offline_from_its_own_definition():
     """headless-automation: the MCP server is local software. Every `$ref` in a tool's
     input or output schema resolves to a schema embedded in that definition; they used to

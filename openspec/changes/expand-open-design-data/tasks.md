@@ -17,7 +17,9 @@
       A- and B-basis, from Tables 3.2.3.0(b1) and 3.7.6.0(b1). A screen on one states the basis,
       table and superseded note on every entry; the provenance trail carries the note too
 - [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step —
-      BLOCKED on the format, not the fetch: `anvilate.fetch` already does consented,
+      DECLINED 2026-10-08: MatNavi's data sits behind a per-user registration, and
+      Anvilate is fully local and usable without any account or login (the user's rule:
+      nothing that makes it a managed product). The record of why it was blocked stands: `anvilate.fetch` already does consented,
       digest-pinned downloads, but MatNavi's fatigue sheets sit behind a per-user
       registration, and no sample of their export is available without one. An importer
       written without a real file to parse would be a parser of a guessed format. Ship it

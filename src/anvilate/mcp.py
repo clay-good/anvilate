@@ -777,6 +777,53 @@ TOOL_UNAVAILABLE = -32000
 MISSING_REQUIRED_CLIENT_CAPABILITY = -32021
 
 PROTOCOL_REVISION = "2026-07-28"
+# The revisions this server can speak, newest first. A client names the one it wants, and
+# the server answers with that one when it can: Claude Code 2.1 asks for 2025-11-25 and
+# refused to connect at all ("Server's protocol version is not supported: 2026-07-28")
+# while the server answered with its own revision regardless. The tool surface is the same
+# in each; what an older revision lacks is `resultType` on a result, which
+# `_for_revision` removes.
+SUPPORTED_PROTOCOL_REVISIONS = ("2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26")
+
+
+def negotiated_revision(requested: object) -> str:
+    """The revision to answer ``requested`` with: itself when supported, else the newest."""
+    return requested if requested in SUPPORTED_PROTOCOL_REVISIONS else PROTOCOL_REVISION
+
+
+def _initialize_reply(request_id: Any, revision: str) -> dict[str, Any]:
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": {
+            "resultType": "complete",
+            "protocolVersion": revision,
+            "capabilities": {
+                "tools": {"listChanged": False},
+                "extensions": {TASKS_EXTENSION: {}},
+            },
+            # `version` is required of an Implementation, and its absence failed the
+            # official conformance suite's handshake before any other check could run.
+            # The installed distribution's, as `anvilate --version` reports it.
+            "serverInfo": {"name": "anvilate", "title": "Anvilate", "version": _version()},
+            "instructions": agent_instructions(),
+        },
+    }
+
+
+def _for_revision(response: dict[str, Any] | None, revision: str) -> dict[str, Any] | None:
+    """``response`` as ``revision`` defines a result: no `resultType` before 2026-07-28.
+
+    Only a completed result is reshaped. A task result keeps its shape, and an older client
+    never receives one: it cannot declare the Tasks extension, so the task-only tool refuses
+    it first (-32021).
+    """
+    if revision >= "2026-07-28" or response is None:
+        return response
+    result = response.get("result")
+    if isinstance(result, dict) and result.get("resultType") == "complete":
+        return {**response, "result": {k: v for k, v in result.items() if k != "resultType"}}
+    return response
 
 
 # What an agent has to be told besides the schemas, found by running a real model through the
@@ -1199,23 +1246,8 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
         return None
 
     if method == "initialize":
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "resultType": "complete",
-                "protocolVersion": PROTOCOL_REVISION,
-                "capabilities": {
-                    "tools": {"listChanged": False},
-                    "extensions": {TASKS_EXTENSION: {}},
-                },
-                # `version` is required of an Implementation, and its absence failed the
-                # official conformance suite's handshake before any other check could run.
-                # The installed distribution's, as `anvilate --version` reports it.
-                "serverInfo": {"name": "anvilate", "title": "Anvilate", "version": _version()},
-                "instructions": agent_instructions(),
-            },
-        }
+        revision = negotiated_revision((request.get("params") or {}).get("protocolVersion"))
+        return _for_revision(_initialize_reply(request_id, revision), revision)
     if method == "ping":
         # A receiver MUST answer ping promptly with an empty result (basic/utilities/ping);
         # it was answered "unknown method".
@@ -1952,7 +1984,8 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
 
     The whole transport: one message per line in, one per line out, flushed each time so a
     client blocked on a read is not waiting on a buffer. Every message is handled by
-    :func:`handle_request`, which holds no state, so restarting this loop loses nothing.
+    :func:`handle_request`, which holds no state. The loop keeps one fact, the protocol
+    revision initialize negotiated, and a client that restarts the process initializes again.
 
     A line that is not JSON is answered with a parse error and the loop continues, because
     a stream is not a session: one client sending rubbish must not take the server down for
@@ -1961,6 +1994,9 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
     """
     source = sys.stdin if stdin is None else stdin
     sink = sys.stdout if stdout is None else stdout
+    # The one thing a stream remembers: the protocol revision its initialize settled on, so
+    # every later result is shaped the way that client's revision defines one.
+    revision = PROTOCOL_REVISION
     for line in source:
         line = line.strip()
         if not line:
@@ -1973,6 +2009,14 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
             # No non-object check here any more: `handle_request` holds it, so every
             # transport gets it rather than only the one that remembered to write it.
             response = handle_request(request)
+            if (
+                isinstance(request, Mapping)
+                and request.get("method") == "initialize"
+                and isinstance(response, dict)
+                and "result" in response
+            ):
+                revision = response.get("result", {}).get("protocolVersion", revision)
+        response = _for_revision(response, revision)
         if response is None:
             continue
         sink.write(json.dumps(response) + "\n")

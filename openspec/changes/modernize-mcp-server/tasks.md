@@ -133,7 +133,13 @@
       is local software), so no validating client could compile them. Identifiers are now
       `urn:anvilate:...` names, every schema moved one minor version, and each tool
       definition embeds the schemas it references (headless-automation, "The MCP server is
-      local software, not a hosted service")
+      local software, not a hosted service"). **Fourth finding, 2026-10-08, from a real client:** Claude
+      Code 2.1 refused to connect ("Server's protocol version is not supported:
+      2026-07-28") because the server answered with its own revision whatever the client
+      asked for — the same gap the conformance shim had papered over by echoing. The
+      server now negotiates: it answers in the requested revision when it supports it
+      (2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26) and the stdio session drops
+      `resultType` for the older ones
 
 ## 4. Docs
 
