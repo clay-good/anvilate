@@ -537,16 +537,7 @@ class CalculationReport(StatableModel):
                 out.append(f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>")
             out.append("</table>")
         if drawn:
-            governing = self.governing()
-            out.append(
-                f"<p>Overall: <strong>{_STATUS_LABEL[self.status]}</strong>"
-                + (
-                    f" · governing check: <strong>{escape(governing.name)}</strong>"
-                    if governing is not None
-                    else ""
-                )
-                + "</p>"
-            )
+            out.extend(self._html_verdict())
             out.append('<section class="views">')
             out.append("<h2>Views</h2>")
             for caption, svg in views:
@@ -713,6 +704,57 @@ class CalculationReport(StatableModel):
         out = [f"<h2>{escape(heading)}</h2>", "<ul>"]
         out.extend(f"<li>{escape(item)}</li>" for item in items)
         out.append("</ul>")
+        return out
+
+    def _html_verdict(self) -> list[str]:
+        """The top of a part sheet: the verdict, and in its own words what decides it.
+
+        A reader of a one-page sheet reads the top of it, so each state says what that reader
+        needs: a pass names its governing check, a failure says how many checks fail and the
+        governing one's own sentence, a card that could not be judged says how many checks did
+        not run and what the first of them is waiting on, and a card with no checks says there
+        is no verdict rather than showing one.
+        """
+        entries = [section.entry for section in self.sections]
+        status = self.status
+        label = _STATUS_LABEL[status]
+        out = [f'<section class="verdict {status.value}">']
+        if not entries:
+            out.append(
+                f'<p><span class="status">{label}</span> — no checks ran, so this sheet '
+                "states no verdict: the spec gave the screen nothing it could judge.</p>"
+            )
+            out.append("</section>")
+            return out
+        failing = [e for e in entries if e.status is CheckStatus.FAIL]
+        unrun = [e for e in entries if e.status is CheckStatus.NOT_EVALUATED]
+        governing = self.governing()
+        if failing:
+            summary = f"{len(failing)} of {len(entries)} checks fail"
+        elif unrun:
+            summary = f"{len(unrun)} of {len(entries)} checks could not run"
+        else:
+            summary = f"all {len(entries)} checks pass" if len(entries) > 1 else "the check passes"
+        lead = governing if governing is not None else (failing or unrun or entries)[0]
+        role = "governing check"
+        if not failing and unrun:
+            # Nothing failed, so the reader's next step is a declaration: lead with a check
+            # that names one, not with whichever open check the governing order picks.
+            lead = next((e for e in unrun if e.needs), lead)
+            role = "next step"
+        out.append(
+            f'<p><span class="status">{label}</span> — {summary}; {role}: '
+            f"<strong>{escape(lead.name)}</strong></p>"
+        )
+        if lead.detail:
+            out.append(f"<p>{escape(lead.detail)}</p>")
+        waiting = next((e for e in unrun if e is not lead), None)
+        if waiting is not None and failing:
+            out.append(
+                f'<p class="source">Also not run: {escape(waiting.name)} — '
+                f"{escape(waiting.detail)}</p>"
+            )
+        out.append("</section>")
         return out
 
     def _html_section(self, section: ReportSection) -> list[str]:

@@ -2452,3 +2452,72 @@ def test_an_empty_report_says_it_holds_no_checks_rather_than_drawing_an_empty_ta
     html = report.to_html()
     assert '<table class="summary">' not in html
     assert '<p class="none">no checks were screened in this document' in html
+
+
+def _sheet_verdict(*entries) -> str:
+    """The verdict block of a part sheet built from these entries, as plain text."""
+    from anvilate.report import CalculationReport, ReportSection
+
+    html = CalculationReport(
+        title="part sheet",
+        sections=tuple(ReportSection(entry=entry) for entry in entries),
+    ).to_html(views_absent="not drawn here")
+    block = re.search(r'<section class="verdict (\w+)">(.*?)</section>', html, re.S)
+    assert block is not None, "a part sheet states its verdict in a verdict block"
+    text = block.group(1) + " " + re.sub(r"<[^>]+>", "", block.group(2))
+    return " ".join(text.split())
+
+
+def test_a_failing_sheet_counts_the_failures_and_quotes_the_governing_check():
+    from anvilate.scorecard import CheckStatus, ScorecardEntry
+
+    text = _sheet_verdict(
+        ScorecardEntry.from_safety_factor("pin bearing", computed=0.4, required=2.0),
+        ScorecardEntry.from_safety_factor("net tension", computed=3.0, required=2.0),
+        ScorecardEntry(name="T0 geometry", status=CheckStatus.NOT_EVALUATED, detail="no solid"),
+    )
+    assert text.startswith("fail FAIL — 1 of 3 checks fail; governing check: pin bearing")
+    assert "safety factor 0.40 vs required minimum 2.00" in text
+    assert "Also not run: T0 geometry — no solid" in text
+
+
+def test_an_unjudged_sheet_leads_with_the_declaration_it_needs():
+    """Nothing failed, so the reader's next step is to declare something: the sheet leads with
+    the open check that names a declaration, not the generic one the governing order picks."""
+    from anvilate.scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+
+    need = Need(
+        declaration="element_type",
+        takes="the element the part is",
+        units=(),
+        sources=(ValueSource.USER,),
+    )
+    text = _sheet_verdict(
+        ScorecardEntry(name="T0 geometry", status=CheckStatus.NOT_EVALUATED, detail="no solid"),
+        ScorecardEntry(
+            name="T1 analytical",
+            status=CheckStatus.NOT_EVALUATED,
+            detail="declare element_type",
+            needs=(need,),
+        ),
+        ScorecardEntry.from_safety_factor("material", computed=3.0, required=2.0),
+    )
+    assert text.startswith("not_evaluated NOT EVALUATED — 2 of 3 checks could not run; next step")
+    assert "next step: T1 analytical" in text and "declare element_type" in text
+
+
+def test_a_passing_sheet_names_its_governing_check_and_margin():
+    from anvilate.scorecard import ScorecardEntry
+
+    text = _sheet_verdict(
+        ScorecardEntry.from_safety_factor("bending", computed=1.9, required=1.5),
+        ScorecardEntry.from_safety_factor("shear", computed=4.0, required=1.5),
+    )
+    assert text.startswith("pass PASS — all 2 checks pass; governing check: bending")
+    assert "safety factor 1.90" in text
+
+
+def test_a_sheet_with_no_checks_states_no_verdict():
+    text = _sheet_verdict()
+    assert "no checks ran, so this sheet states no verdict" in text
+    assert "governing" not in text

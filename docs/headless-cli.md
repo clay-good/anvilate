@@ -1108,7 +1108,10 @@ bp1: pass (4 views) — wrote examples/base_plate.spec.html
 ```
 
 One HTML file, opened in your browser from disk: no server to start or stop. The top of
-the sheet states the overall verdict and the governing check. Below that, the part is drawn
+the sheet states the verdict in the terms that decide it: a pass names its governing check
+and margin; a failure says how many checks fail and quotes the governing one; a card that
+could not be judged says how many checks did not run and leads with the declaration the
+first of them needs; a card with no checks says it states no verdict. Below that, the part is drawn
 iso, front, top and right from the built solid, with its dimensions as built, and then every
 check follows with its formula, clause and margin, as in the calculation report. The
 drawings are embedded, so the file prints, mails and archives on its own.

@@ -26,7 +26,7 @@
       column, and a committed copy in tests/live_streams/ that a change must acknowledge
       (`test_the_live_check_stream_never_moves_what_it_already_printed`). Mutating progress
       to rewrite in place, or dropping the count padding, fails it
-- [ ] 2.3 Designed empty, waiting, and failed states for every pane — the report's empty state
+- [x] 2.3 Designed empty, waiting, and failed states for every pane — the report's empty state
       is designed: every block states `none declared`, and since 2026-09-25 a report with no
       checks says so in its margin summary rather than drawing a header over no rows. Its
       corpus case is in tests/test_renderings.py. The waiting and failed states belong to the
@@ -36,6 +36,15 @@
       writes a static one-page part sheet (drawings beside the scorecard, no server). On
       the user's decision of that day, the workbench spec stays open beside it as possible
       future work, and the sheet is not extended further for now
+      **Closed 2026-10-09 for the surfaces that exist,** after the user asked for the design
+      that serves engineers best: the part sheet and the agent are the panes. The sheet's
+      top now has a designed state for each outcome. A failure counts what fails and quotes
+      the governing check. A card that could not be judged leads with the declaration it
+      needs. A pass names its governing check and margin. An empty card says it states no
+      verdict. "Not drawn" was already designed. Waiting is the CLI's progress line, since a
+      static file has no waiting state. MCP `render_viewport` now attaches a PNG the agent
+      can see. Tests in tests/test_report.py. The workbench's own panes stay with the open
+      workbench-ui spec.
 
 ## 3. Vocabulary and colour
 

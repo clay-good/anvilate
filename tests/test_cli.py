@@ -5528,9 +5528,9 @@ def test_view_writes_one_self_contained_sheet_with_the_part_drawn(tmp_path, monk
     ]
     assert "As built: depth 240 mm, plate thickness 25 mm, width 300 mm" in sheet
     # The verdict comes before the drawings, where a one-page reader looks first.
-    assert sheet.index("Overall: <strong>PASS</strong> · governing check:") < sheet.index(
-        "<h2>Views"
-    )
+    verdict = sheet.index('<section class="verdict pass">')
+    assert "checks pass; governing check:" in sheet[verdict : sheet.index("</section>", verdict)]
+    assert verdict < sheet.index("<h2>Views")
     assert "<script" not in sheet and not re.search(r"(?:src|href)=\"(?!data:)", sheet)
 
 

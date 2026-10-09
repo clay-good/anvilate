@@ -1967,9 +1967,13 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
             ScorecardEntry(
                 name="T0 geometry",
                 status=CheckStatus.NOT_EVALUATED,
+                # It said "no geometry is generated from a spec today" after `build` and
+                # `build_part` shipped. Screening a document still builds nothing, so T0
+                # stays open here; the entry says where the solid is checked instead.
                 detail=(
                     "T0 checks a built solid — watertightness, self-intersection, minimum "
-                    "wall — and no geometry is generated from a spec today"
+                    "wall — and screening a document builds none; `anvilate build` or MCP "
+                    "build_part builds an audited pattern and refuses an invalid solid"
                 ),
             )
         )

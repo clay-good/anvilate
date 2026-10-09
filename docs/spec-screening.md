@@ -278,7 +278,7 @@ But the answer to something nobody screened is "not evaluated", never a pass.
 `max_mass: 150 g` read as a stated requirement and was consumed by nothing anywhere in the
 library. The entry that broke that silence then gave a reason of its own that was not true —
 "a mass is a property of a built solid, and no geometry is generated from a spec today". The
-second half is right and the first is not: a `base_plate` declares a width, a depth, a plate
+second half was true then (the audited builders came later) and the first was not: a `base_plate` declares a width, a depth, a plate
 thickness and a plate material, which is a rectangular prism with a density, and
 `anvilate.export.dxf.plate_mass` is in the package to weigh one. So the card now states it:
 *"the solid this document does declare weighs 17.66 kg (300 mm x 300 mm x 25 mm of ASTM-A36
