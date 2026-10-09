@@ -693,6 +693,11 @@ class StatableModel(RevalidatedModel):
     #: Whether the numbers this model holds are requirements, and so must be finite.
     states_requirements: ClassVar[bool] = False
 
+    #: Fields holding an encoded binary payload rather than text, exempt from the string
+    #: bound because a PNG viewport is longer than 4,096 characters of base64. Each must
+    #: declare its own `max_length`, and a test holds every listed field to that.
+    payload_fields: ClassVar[frozenset[str]] = frozenset()
+
     @model_validator(mode="after")
     def _every_value_is_one_a_document_can_state(self) -> Self:
         requirements = type(self).states_requirements
@@ -705,7 +710,7 @@ class StatableModel(RevalidatedModel):
             # float only can where the model states requirements.
             kind = type(value)
             if kind is str:
-                if len(value) <= _MAX_STRING_LENGTH:
+                if len(value) <= _MAX_STRING_LENGTH or name in type(self).payload_fields:
                     continue
             elif value is None or kind is bool or kind is int:
                 continue

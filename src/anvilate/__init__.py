@@ -70,6 +70,8 @@ that already ran and does one more thing with them:
   Y14.5's grammar enforced at construction.
 - :mod:`anvilate.geometry` — audited Design Spec patterns built as valid B-Rep solids,
   with stable semantic face tags and STEP output.
+- :mod:`anvilate.raster` — the viewport SVG rasterized to PNG with the standard library,
+  because a model reads PNG and not SVG.
 - :mod:`anvilate.ingest` — requirement documents read into a draft spec, where an
   extracted value stays a draft until a named person confirms it.
 - :mod:`anvilate.interop` — the typed doorway for member forces and section

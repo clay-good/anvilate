@@ -23,7 +23,7 @@ from math import isfinite, pi, sqrt
 from pathlib import Path
 from threading import Lock
 from types import MappingProxyType
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import ConfigDict, Field, FiniteFloat, model_validator
 
@@ -211,9 +211,13 @@ class ViewportImage(StatableModel):
     view: Literal["iso", "front", "top", "right"]
     width_px: Annotated[int, Field(ge=64, le=4096)]
     height_px: Annotated[int, Field(ge=64, le=3072)]
-    mime_type: Literal["image/svg+xml"]
+    mime_type: Literal["image/svg+xml", "image/png"]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    image: Annotated[str, Field(min_length=1)]
+    # Base64 of an image, checked against `sha256` below rather than read as text; bounded
+    # here instead of by the document string rule, which a PNG of any size would exceed.
+    image: Annotated[str, Field(min_length=1, max_length=16_000_000)]
+
+    payload_fields: ClassVar[frozenset[str]] = frozenset({"image"})
 
     @model_validator(mode="after")
     def _payload_matches_its_digest(self) -> ViewportImage:
@@ -272,21 +276,22 @@ class BuiltGeometry:
 
 @dataclass(frozen=True)
 class RenderedViewport:
-    """A deterministic SVG rendering and the metadata needed to attach it over MCP."""
+    """A deterministic SVG or PNG rendering and the metadata needed to attach it over MCP."""
 
     view: Literal["iso", "front", "top", "right"]
     width_px: int
     height_px: int
     data: bytes
+    format: Literal["svg", "png"] = "svg"
 
     @property
     def mime_type(self) -> str:
         """The media type of :attr:`data`."""
-        return "image/svg+xml"
+        return "image/png" if self.format == "png" else "image/svg+xml"
 
     @property
     def sha256(self) -> str:
-        """The lowercase SHA-256 digest of the exact SVG bytes."""
+        """The lowercase SHA-256 digest of the exact image bytes."""
         return sha256(self.data).hexdigest()
 
     def document(self) -> ViewportImage:
@@ -2668,6 +2673,40 @@ def render_viewport(
     *,
     view: Literal["iso", "front", "top", "right"] = "iso",
     width_px: int = 800,
+    format: Literal["svg", "png"] = "svg",  # noqa: A002 - the word the MCP argument uses
+) -> RenderedViewport:
+    """Render a deterministic viewport of one valid solid, as SVG or as PNG.
+
+    SVG is the drawing itself and what the part sheet embeds. PNG is the same drawing
+    rasterized by :mod:`anvilate.raster`, because a model reads PNG and not SVG: over MCP
+    an SVG attachment reached the agent as an image it could not look at.
+    """
+    if format not in ("svg", "png"):
+        raise GeometryError(
+            f"unknown viewport format {format!r}; choose svg or png",
+            action="select",
+            subject=f"the viewport format {format!r}",
+            source="the supported svg and png viewport formats",
+        )
+    rendered = _render_svg_viewport(built, view=view, width_px=width_px)
+    if format == "svg":
+        return rendered
+    from .raster import svg_to_png
+
+    return RenderedViewport(
+        view=rendered.view,
+        width_px=rendered.width_px,
+        height_px=rendered.height_px,
+        data=svg_to_png(rendered.data),
+        format="png",
+    )
+
+
+def _render_svg_viewport(
+    built: BuiltGeometry,
+    *,
+    view: Literal["iso", "front", "top", "right"],
+    width_px: int,
 ) -> RenderedViewport:
     """Render a deterministic vector viewport of one valid solid.
 

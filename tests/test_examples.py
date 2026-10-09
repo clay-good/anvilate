@@ -7781,7 +7781,7 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     assert [entry["status"] for entry in card["entries"]] == ["not_evaluated", "pass"]
     assert "declares no structural element type" in card["entries"][0]["detail"]
 
-    # The geometry build is real, and its handle produces an SVG image attachment.
+    # The geometry build is real, and its handle produces a PNG image attachment.
     built = by_id[6]["result"]["structuredContent"]
     geometry = built["geometry"]
     assert geometry["pattern"] == "base_plate/1" and geometry["valid"] is True
@@ -7791,7 +7791,7 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     assert viewport_result["content"][1] == {
         "type": "image",
         "data": viewport["image"],
-        "mimeType": "image/svg+xml",
+        "mimeType": "image/png",
     }
     assert by_id[9]["result"]["structuredContent"]["measurement"] == {
         "query": "area:top",

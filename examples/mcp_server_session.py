@@ -9,8 +9,9 @@ The build and refusal are different statements:
 
 1. **``build_part`` synchronously builds the audited ``base_plate`` primitive.** It executes
    no caller code and returns a published geometry summary with volume and semantic faces.
-2. **``render_viewport`` takes the build handle and returns a deterministic SVG.** The same
-   bytes cross as schema-backed structured data and as an MCP image attachment.
+2. **``render_viewport`` takes the build handle and returns a deterministic PNG,** the
+   format a model can look at (``format: "svg"`` returns the drawing). The same bytes cross
+   as schema-backed structured data and as an MCP image attachment.
 
 The session also does the thing subjects exist for: ``run_validation`` returns a handle to
 the card it screened, and ``read_scorecard`` reads that card back by handle. No memory

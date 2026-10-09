@@ -196,7 +196,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.13.0"
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
 _BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.26.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.4.0"
-_VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.1.0"
+_VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.2.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
 
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
@@ -487,7 +487,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             description=(
                 "Render the built part from a named view, so an agent can see what it made "
                 "before proposing the next edit. Returns the image as an attachment "
-                "alongside the structured view metadata."
+                "alongside the structured view metadata: PNG by default, which a model can "
+                "look at, or the SVG drawing with format svg."
             ),
             input_schema=_object_schema(
                 {
@@ -497,6 +498,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                         "enum": ["iso", "front", "top", "right"],
                     },
                     "width_px": {"type": "integer", "minimum": 64, "maximum": 4096},
+                    "format": {
+                        "type": "string",
+                        "enum": ["png", "svg"],
+                        "description": "png when omitted, which a model can see; svg: the drawing",
+                    },
                 },
                 required=["subject", "view"],
             ),
@@ -1717,6 +1723,7 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
             built,
             view=arguments["view"],
             width_px=arguments.get("width_px", 800),
+            format=arguments.get("format", "png"),
         )
     except UnknownSubject as unknown:
         raise _InvalidArguments(

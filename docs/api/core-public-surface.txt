@@ -381,6 +381,8 @@ profile.SuppliedValue
 profile.Profile
 profile.ProfileBinding
 profile.OutsideApplicability
+raster.RasterError
+raster.svg_to_png
 refusal.RefusalError
 refusal.Remedy
 environment_profiles.BENCHTOP

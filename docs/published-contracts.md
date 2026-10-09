@@ -23,7 +23,7 @@ that has never heard of anvilate.
 | [`docs/api/schemas/confirmed-cylindrical-mate.schema.json`](api/schemas/confirmed-cylindrical-mate.schema.json) | a named person's acceptance of one exact bore/shaft candidate without an automatic fit verdict | `CONFIRMED_CYLINDRICAL_MATE_SCHEMA_VERSION` |
 | [`docs/api/schemas/cylindrical-mate-engagement-check.schema.json`](api/schemas/cylindrical-mate-engagement-check.schema.json) | a confirmed measured bore/shaft pair checked against a caller-supplied, cited minimum axial engagement | `CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION` |
 | [`docs/api/schemas/cylindrical-mate-fit-check.schema.json`](api/schemas/cylindrical-mate-fit-check.schema.json) | a confirmed measured bore/shaft pair checked against caller-supplied ISO 286 fit inputs | `CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION` |
-| [`docs/api/schemas/viewport-image.schema.json`](api/schemas/viewport-image.schema.json) | a deterministic SVG viewport, integrity digest, and base64 payload | `VIEWPORT_SCHEMA_VERSION` |
+| [`docs/api/schemas/viewport-image.schema.json`](api/schemas/viewport-image.schema.json) | a deterministic PNG or SVG viewport, integrity digest, and base64 payload | `VIEWPORT_SCHEMA_VERSION` |
 | [`docs/api/schemas/geometry-measurement.schema.json`](api/schemas/geometry-measurement.schema.json) | one scalar read from the regenerated B-Rep, with unit and semantic feature | `MEASUREMENT_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
@@ -113,6 +113,15 @@ pack still ships an element by existing; bumping one means adding its tag to
 to `bolted_connection/1.0.0` is not told its contract moved because a pump duty gained a
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
+
+### Viewport image 1.2.0: a PNG the model can see
+
+`mime_type` may now be `image/png` as well as `image/svg+xml`, and `image` is bounded at
+16,000,000 characters of base64 instead of the 4,096 every other document string has. MCP
+`render_viewport` attaches a PNG by default, because a model reads PNG, JPEG, GIF and WebP and
+an SVG attachment reached the agent as an image it could not look at. `format: "svg"` still
+returns the drawing. The PNG is rasterized from that SVG by `anvilate.raster` with the
+standard library and is deterministic, so the digest still names the picture.
 
 ### Geometry summary 1.4.0 and CLI output 1.57.0: a timber beam's pattern
 

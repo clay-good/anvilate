@@ -18,7 +18,7 @@ patterns are callable today:
 | --- | --- | --- |
 | Compile the spec | `compile_spec` | **Dispatched.** |
 | Build the part | `build_part` | **Dispatched synchronously** for `base_plate`, rectangular/circular/annular `cover_plate`, prismatic solid `transmission_shaft`, and a sawn timber beam between its supports; returns the published geometry summary. |
-| Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic SVG as structured data and an image attachment. |
+| Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic PNG (or the SVG drawing with `format: "svg"`) as structured data and an image attachment, so the agent can look at what it built. |
 | Inspect the part | `measure_geometry` | **Dispatched synchronously.** Reads dimensions, volume, face count, or tagged-face area from the regenerated B-Rep. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |
 | Run T3 | `run_fea_validation` | **Task-dispatched.** Returns a durable handle; poll with `tasks/get`. Until a solver lands, the typed result is `not_evaluated`. |

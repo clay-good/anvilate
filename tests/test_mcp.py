@@ -1054,7 +1054,7 @@ def test_cover_plate_build_render_and_measure_flow_uses_one_built_subject():
 
     assert document["geometry"]["pattern"] == "cover_plate/1"
     assert document["geometry"]["faceTags"] == ["bore", "bottom", "perimeter", "top"]
-    assert rendered["content"][1]["mimeType"] == "image/svg+xml"
+    assert rendered["content"][1]["mimeType"] == "image/png"
     assert measured["structuredContent"]["measurement"]["value"] == pytest.approx(80)
 
 
@@ -1075,7 +1075,7 @@ def test_transmission_shaft_build_render_and_measure_flow_uses_one_built_subject
         "driven_end",
         "outside_surface",
     ]
-    assert rendered["content"][1]["mimeType"] == "image/svg+xml"
+    assert rendered["content"][1]["mimeType"] == "image/png"
     assert measured["structuredContent"]["measurement"] == {
         "query": "length",
         "value": 600,
@@ -1091,7 +1091,9 @@ def test_render_viewport_returns_the_same_svg_as_structured_data_and_an_image_at
     built = _call("build_part", {"spec": _base_plate_document()})["result"]
     handle = built["structuredContent"]["subject"]
 
-    result = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 640})["result"]
+    result = _call(
+        "render_viewport", {"subject": handle, "view": "iso", "width_px": 640, "format": "svg"}
+    )["result"]
     viewport = result["structuredContent"]["viewport"]
     attachment = result["content"][1]
 
@@ -1101,6 +1103,30 @@ def test_render_viewport_returns_the_same_svg_as_structured_data_and_an_image_at
     assert viewport["image"] == attachment["data"]
     assert base64.b64decode(attachment["data"]).startswith(b'<?xml version="1.0"')
     assert "image" not in json.loads(result["content"][0]["text"])["viewport"]
+
+
+def test_render_viewport_attaches_a_png_by_default_because_a_model_reads_png():
+    """An SVG attachment reached the model as an image it could not look at: model image
+    input is PNG, JPEG, GIF or WebP. The default is now a PNG of the same drawing."""
+    import base64
+    import struct
+
+    pytest.importorskip("build123d")
+    built = _call("build_part", {"spec": _base_plate_document()})["result"]
+    handle = built["structuredContent"]["subject"]
+
+    result = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 640})["result"]
+    viewport = result["structuredContent"]["viewport"]
+    attachment = result["content"][1]
+    png = base64.b64decode(attachment["data"])
+
+    assert viewport["mime_type"] == attachment["mimeType"] == "image/png"
+    assert viewport["image"] == attachment["data"]
+    assert png.startswith(b"\x89PNG\r\n\x1a\n")
+    assert struct.unpack(">II", png[16:24]) == (640, 480)
+    # Deterministic, so the digest still names the drawing.
+    again = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 640})
+    assert again["result"]["structuredContent"]["viewport"]["sha256"] == viewport["sha256"]
 
 
 def test_render_viewport_refuses_a_screening_handle_instead_of_rendering_the_wrong_subject():
