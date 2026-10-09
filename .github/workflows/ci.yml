@@ -139,6 +139,37 @@ jobs:
             exit 1
           fi
 
+  # The official MCP conformance suite drives servers over HTTP only (stdio support is
+  # modelcontextprotocol/conformance#258). The bridge relays its requests to the real stdio
+  # server, and the baseline names every scenario that fails for a reason that is not a
+  # defect. The suite fails on a new failure and on a baselined scenario that starts passing.
+  # Scheduled: it downloads the suite from npm (modernize-mcp-server 3.2).
+  mcp-conformance:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: pip install -e .
+      - name: Run the suite through the stdio bridge
+        run: |
+          set -euo pipefail
+          python tools/mcp-conformance/stdio_bridge.py --port 3971 &
+          for _ in $(seq 30); do
+            curl -sf -o /dev/null -X POST http://127.0.0.1:3971/mcp \
+              -d '{"jsonrpc":"2.0","id":0,"method":"ping"}' && break
+            sleep 1
+          done
+          npx -y @modelcontextprotocol/conformance@0.1.16 server \
+            --url http://127.0.0.1:3971/mcp \
+            --expected-failures tools/mcp-conformance/expected-failures.yaml
+
   # `pip install anvilate` is what a published tool's action runs, and there is no
   # `anvilate` on PyPI — so the composite action's first step would have failed for every
   # user of it. It installs the repository instead. This job is the thing that says when

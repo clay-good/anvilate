@@ -1,0 +1,39 @@
+# Scenarios the official MCP conformance suite (v0.1.16) fails against Anvilate, each for a
+# reason that is not a defect. The suite fails the run on any failure missing from this list
+# AND on any scenario listed here that passes, so the list cannot go stale quietly.
+# Run 2026-10-09 through stdio_bridge.py: 4 scenarios pass (initialize, ping, tools/list,
+# DNS-rebinding refusal by the bridge), and every failure below is one of three kinds:
+# an undeclared capability, a reference-server fixture tool, or HTTP-only transport.
+server:
+  # Capabilities Anvilate does not declare in `initialize`, answered -32601 as the spec
+  # requires for a method a server does not offer.
+  - logging-set-level
+  - completion-complete
+  - tools-call-with-logging
+  - resources-list
+  - resources-read-text
+  - resources-read-binary
+  - resources-templates-read
+  - resources-subscribe
+  - resources-unsubscribe
+  - prompts-list
+  - prompts-get-simple
+  - prompts-get-with-args
+  - prompts-get-embedded-resource
+  - prompts-get-with-image
+  # Fixture tools (`test_simple_text`, `test_image_content`, ...) that exist only on the
+  # suite's reference server; Anvilate's catalog is its own eight tools.
+  - tools-call-simple-text
+  - tools-call-image
+  - tools-call-audio
+  - tools-call-embedded-resource
+  - tools-call-mixed-content
+  - tools-call-error
+  - tools-call-with-progress
+  - tools-call-sampling
+  - tools-call-elicitation
+  - elicitation-sep1034-defaults
+  - elicitation-sep1330-enums
+  # Streamable-HTTP transport behavior: a warning that no session ID is issued for multiple
+  # SSE streams. Stdio has neither sessions nor streams, so the bridge offers none.
+  - server-sse-multiple-streams

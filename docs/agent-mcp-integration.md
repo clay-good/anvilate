@@ -510,7 +510,11 @@ and [JSON-RPC Invalid Request rules](https://www.jsonrpc.org/specification#respo
 - **`ping` is answered, and `serverInfo` names its version.** Both were missing until the
   official conformance suite was run against the server through a loopback HTTP shim: the
   handshake failed on `serverInfo.version`, which an Implementation requires, before any
-  other check could run.
+  other check could run. The suite now runs weekly in CI through
+  `tools/mcp-conformance/stdio_bridge.py`, which starts the real stdio server and relays the
+  suite's HTTP requests to it. Its only failures are capabilities Anvilate does not declare,
+  the suite's own fixture tools, and HTTP-only session behavior, each listed in
+  `tools/mcp-conformance/expected-failures.yaml`.
 - **Rubbish does not take the stream down.** A line that is not JSON gets a `-32700` with a
   null id and the loop continues. Nor does a well-formed line carrying the wrong shape: a
   property declared as one of the published schemas must arrive as a JSON object, and a

@@ -116,7 +116,7 @@
       exact PyPI version; verifies a pinned publisher binary by SHA-256; then authenticates
       to the official registry with GitHub OIDC and publishes. The release guide records the
       required PyPI-before-GitHub ordering and retry path
-- [ ] 3.2 Conformance run against the protocol test suite — the known JSON-RPC
+- [x] 3.2 Conformance run against the protocol test suite — the known JSON-RPC
       divergence is now closed: invalid request objects receive `-32600` and a null ID,
       including malformed objects without an ID; only valid notifications remain silent.
       MCP's string/integer request IDs and object parameters are enforced before dispatch,
@@ -144,7 +144,18 @@
       asked for — the same gap the conformance shim had papered over by echoing. The
       server now negotiates: it answers in the requested revision when it supports it
       (2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26) and the stdio session drops
-      `resultType` for the older ones
+      `resultType` for the older ones.
+      **Closed 2026-10-09: the full suite runs weekly against the shipped stdio server.**
+      The throwaway shim reimplemented the transport. `tools/mcp-conformance/stdio_bridge.py`
+      instead starts `python -m anvilate.mcp` and copies each HTTP request to its stdin as
+      one line, so the suite tests the real stdio session, negotiation included; the bridge
+      adds only HTTP framing and a loopback Host/Origin check. In v0.1.16, 4 scenarios
+      pass and 26 fail. Every failure is an undeclared capability (logging, completion,
+      resources, prompts: -32601 is correct), a fixture tool that exists only on the
+      suite's reference server, or HTTP-only session behavior, and each is listed with
+      its reason in `expected-failures.yaml`. The `mcp-conformance` CI job fails on any
+      new failure and on a listed one that starts passing. When #258 lands, the bridge
+      can be dropped and the same baseline used over stdio directly.
 
 ## 4. Docs
 

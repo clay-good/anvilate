@@ -132,7 +132,7 @@ client that sends the shell's spelling gets `-32602` naming the three valid valu
 
 ## Still open
 
-Registry publication and the external protocol conformance run remain release work. Viewport
+Registry publication remains release work. The official MCP conformance suite runs weekly in CI through `tools/mcp-conformance/stdio_bridge.py`, which relays its HTTP requests to the real stdio server; every scenario it fails is named, with its reason, in `tools/mcp-conformance/expected-failures.yaml`. Viewport
 image attachments, B-Rep measurement, and the Tasks extension are live; tasks use
 durable local records plus fixed subprocess workers, with no server-initiated sampling.
 
