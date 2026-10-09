@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from math import isnan
+from typing import Annotated
 
 from pydantic import ConfigDict, Field, computed_field, model_validator
 
@@ -53,6 +54,7 @@ __all__ = [
     "ValueSource",
     "Need",
     "AppliedFactor",
+    "UnverifiedOrigin",
     "ScorecardEntry",
     "Scorecard",
 ]
@@ -441,6 +443,30 @@ class AppliedFactor(StatableModel):
         return f"{self.label} {self.value:g} ({source}; from {self.origin})"
 
 
+class UnverifiedOrigin(StatableModel):
+    """Where a third-party module's result came from, carried on every entry it contributes.
+
+    A module from outside this repository is loaded only when a user names it and runs
+    confined, and what it says is the module's word, not a check this library ships or
+    tests. So the entry names the module, its version, where it was loaded from and the
+    SHA-256 of the source that ran: enough for a reader to find and judge the code. An export
+    gate never counts such an entry as validated.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    module: Named
+    version: Named
+    source: Named
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+    def __str__(self) -> str:
+        return (
+            f"unverified origin: third-party module {self.module} {self.version} "
+            f"({self.source}, sha256 {self.sha256[:12]})"
+        )
+
+
 class ScorecardEntry(StatableModel):
     """One check's result: a name, a tri-state status, and a detail line."""
 
@@ -497,6 +523,9 @@ class ScorecardEntry(StatableModel):
     # name that carries a member's name in it. `anvilate.failure_modes.coverage` reads this,
     # and counts it only when the check ran.
     addresses: tuple[Named, ...] = ()
+    # Set only on an entry a third-party module contributed; absent from the dump otherwise,
+    # so every in-tree card serializes exactly as before.
+    origin: UnverifiedOrigin | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _check_derivation_declaration(self) -> ScorecardEntry:
@@ -762,7 +791,11 @@ class ScorecardEntry(StatableModel):
             fragile = f" — fragile: {shortfall:.1f}% of samples fall short"
         inside = self.inside_capacity()
         inside = f" — {inside}" if inside else ""
-        return f"[{self.status.value.upper()}] {self.name}: {self.detail}{fragile}{inside}{cite}"
+        origin = f" [{self.origin}]" if self.origin is not None else ""
+        return (
+            f"[{self.status.value.upper()}] {self.name}: {self.detail}{fragile}{inside}{cite}"
+            f"{origin}"
+        )
 
     def inside_capacity(self) -> str | None:
         """The factors applied inside the capacity, as one sentence, or ``None``.

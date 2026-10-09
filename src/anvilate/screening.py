@@ -515,8 +515,13 @@ def screen_structure_element(structure: Structure, *, required_safety_factor: fl
     return Scorecard(entries=tuple(entries))
 
 
-def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
-    """The T1 entries for the element a spec declares, or one saying why there are none."""
+def _element_entries(spec: DesignSpec, modules: Sequence[Any] = ()) -> list[ScorecardEntry]:
+    """The T1 entries for the element a spec declares, or one saying why there are none.
+
+    ``modules`` are the third-party modules the caller enabled by name. One of them screens
+    the element only when it covers the tag; the registry's own elements are never handed
+    to one, since :func:`~anvilate.thirdparty.enable_module` refuses a module that covers them.
+    """
     if spec.element_type is None:
         return [
             ScorecardEntry(
@@ -528,6 +533,12 @@ def _element_entries(spec: DesignSpec) -> list[ScorecardEntry]:
         ]
     stated = spec.constraints.min_safety_factor
     band = spec.constraints.max_safety_factor
+    covering = next((module for module in modules if module.covers(spec.element_type)), None)
+    if covering is not None:
+        params = spec.model_dump(mode="json").get("element_params") or {}
+        required = None if stated is None else stated.value
+        entries = covering.screen(spec.element_type, params, required)
+        return [_attributed(entry, stated, band) for entry in entries]
     entries = _screen_element(
         spec.element_type,
         spec.element_params,
@@ -1606,7 +1617,7 @@ def _element_material(spec: DesignSpec) -> str | None:
     return declared if isinstance(declared, str) else None
 
 
-def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
+def _compile_findings(spec: DesignSpec, modules: Sequence[Any] = ()) -> tuple[list[str], list[str]]:
     """What a screen of ``spec`` would refuse before computing anything, as refusal lines
     and remedies: an unknown material (the document's or an element's) or standard
     component, an element type no pack screens, and element parameters the element's own
@@ -1657,6 +1668,8 @@ def _compile_findings(spec: DesignSpec) -> tuple[list[str], list[str]]:
     if spec.element_type is None:
         return problems, remedies
     registry = element_registry()
+    if any(module.covers(spec.element_type) for module in modules):
+        return problems, remedies
     if spec.element_type not in registry:
         meant = _element_spelling(spec.element_type, sorted(registry))
         # The names, not just their count: without them an agent holding "padeye" guessed
@@ -1938,7 +1951,12 @@ def _budget_entries(spec: DesignSpec, entries: list[ScorecardEntry]) -> list[Sco
     return produced
 
 
-def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) -> Scorecard:
+def screen_spec(
+    spec: DesignSpec,
+    *,
+    resolver: ReferenceResolver | None = None,
+    modules: Sequence[Any] = (),
+) -> Scorecard:
     """Screen ``spec`` on the tiers its acceptance criteria demand.
 
     Returns a :class:`~anvilate.scorecard.Scorecard` carrying one entry per check the
@@ -1955,6 +1973,10 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
     is the bundled standards databases. Pass one built from
     :meth:`~anvilate.standards.MaterialsDatabase.extended` to screen a spec that names a
     team-local alloy.
+
+    ``modules`` are third-party modules enabled by name through
+    :func:`anvilate.thirdparty.enable_module`. One screens the element when it covers the
+    declared tag, confined, and every entry it contributes is marked unverified-origin.
 
     See the module docstring for what is and is not screened, and why the T1 analytical
     tier reports a gap on every spec.
@@ -1978,7 +2000,7 @@ def screen_spec(spec: DesignSpec, *, resolver: ReferenceResolver | None = None) 
             )
         )
     if ValidationTier.T1_ANALYTICAL in tiers:
-        entries.extend(_on_the_declared_load_path(spec, _element_entries(spec)))
+        entries.extend(_on_the_declared_load_path(spec, _element_entries(spec, modules)))
     elif spec.element_type is not None:
         # An element is a declaration the *document* makes, like a reference or a chain, and
         # the note below says what this library does with those. Before the tag existed this

@@ -417,6 +417,7 @@ scorecard.GoverningChange
 scorecard.ValueSource
 scorecard.Need
 scorecard.AppliedFactor
+scorecard.UnverifiedOrigin
 scorecard.ScorecardEntry
 scorecard.Scorecard
 screening.DEPTH_ORDER
@@ -466,3 +467,6 @@ verification.VerificationPlan
 verification.DEFAULT_ARCHETYPES
 verification.plan_verification
 verification.record_outcome
+thirdparty.ThirdPartyModule
+thirdparty.ThirdPartyModuleError
+thirdparty.enable_module

@@ -8,15 +8,15 @@ has not shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
-| `check` | one or more specs, or a directory | `--format`, `--show-work` | every check passed, or passed with margin to spare |
-| `export` | one or more specs, or a directory | `--artifact`, `--format` | the bundle rolled up clean |
+| `check` | one or more specs, or a directory | `--format`, `--show-work`, `--module` | every check passed, or passed with margin to spare |
+| `export` | one or more specs, or a directory | `--artifact`, `--format`, `--module` | the bundle rolled up clean |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
-| `diff` | two specs | `--format` | nothing got worse |
-| `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214` | a valid, watermarked STEP artifact was written |
+| `diff` | two specs | `--format`, `--module` | nothing got worse |
+| `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214`, `--module` | a valid, watermarked STEP artifact was written |
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
-| `view` | a spec | `--output`, `--no-open`, `--force` | the part sheet was written, whatever its verdict |
+| `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -430,8 +430,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.57.0",
- "schema_version": "1.57.0", "command": "check", "status": "fail",
+{"schema": "urn:anvilate:schema:cli-output:1.58.0",
+ "schema_version": "1.58.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}

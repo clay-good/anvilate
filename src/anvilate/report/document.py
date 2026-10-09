@@ -275,8 +275,9 @@ class ReportSection(StatableModel):
             shortfall = entry.uncertainty.shortfall_probability * 100.0  # type: ignore[union-attr]
             fragile = f" — fragile: {shortfall:.1f}% of samples fall short"
         cite = f" [{entry.reference}]" if entry.reference else ""
+        origin = f" [{entry.origin}]" if entry.origin is not None else ""
         status = entry.status.value.upper()
-        return f"[{status}] {entry.name}: {self.verdict(system=system)}{fragile}{cite}"
+        return f"[{status}] {entry.name}: {self.verdict(system=system)}{fragile}{cite}{origin}"
 
     def repair_line(self) -> str:
         """The check's repair hint with the source of its number, or the empty string.
@@ -466,6 +467,8 @@ class CalculationReport(StatableModel):
                 out.append(f"    {unc.citation}")
             if section.citation:
                 out.append(f"  source: {section.citation}")
+            if section.entry.origin is not None:
+                out.append(f"  {section.entry.origin}")
             blocks.append(_TextBlock(tuple(out), heading=2))
         out = ["Margin summary", "--------------", *self._summary_grid()]
         governing = self.governing()
@@ -830,6 +833,8 @@ class CalculationReport(StatableModel):
             out.append(f'<p class="uncertainty-method">{escape(unc.citation)}</p>')
         if section.citation:
             out.append(f'<p class="source">Source: {escape(section.citation)}</p>')
+        if section.entry.origin is not None:
+            out.append(f'<p class="fallback">{escape(str(section.entry.origin))}</p>')
         out.append("</section>")
         return out
 

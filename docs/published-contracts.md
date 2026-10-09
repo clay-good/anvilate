@@ -114,6 +114,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Scorecard 1.14.0: a result from a third-party module says so
+
+`ScorecardEntry` gains an optional `origin`, set only on an entry a third-party module
+contributed: the module's id, version, the path it was loaded from and the SHA-256 of the
+source that ran. It is absent from every other entry, so in-tree cards serialize exactly as
+before. Evidence Bundle 1.27.0, STEP interface candidates 1.16.0 and CLI output 1.58.0 embed
+the entry and move with it. See [third-party modules](discipline-modules.md#third-party-modules).
+
 ### Viewport image 1.2.0: a PNG the model can see
 
 `mime_type` may now be `image/png` as well as `image/svg+xml`, and `image` is bounded at

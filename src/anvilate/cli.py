@@ -649,6 +649,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="replace an existing output file deliberately"
     )
 
+    # Third-party modules load only when named here; nothing is discovered. Each one runs
+    # confined and every entry it contributes is marked unverified-origin.
+    for screening in (check, diff, export, build, view):
+        screening.add_argument(
+            "--module",
+            action="append",
+            default=[],
+            metavar="PATH",
+            help="enable a third-party discipline module from this .py file (repeatable); "
+            "it runs confined and its results are marked unverified-origin",
+        )
+
     return parser
 
 
@@ -1269,6 +1281,9 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
     unbuilt commands are named rather than left unknown: a reader who sees no mass delta
     should be told there is none to be had, not left to wonder whether the mass was equal.
     """
+    modules = _modules(args, err=err, command="diff")
+    if isinstance(modules, int):
+        return modules
     from .screening import screen_spec
 
     loaded = _load_all([args.before, args.after], err=err, command="diff")
@@ -1276,7 +1291,7 @@ def _diff(args: argparse.Namespace, *, out, err) -> int:
         return loaded
     cards, names = [], []
     for _path, spec in loaded:
-        cards.append(screen_spec(spec))
+        cards.append(screen_spec(spec, **_with_modules(modules)))
         names.append(spec)
 
     before_card, after_card = cards
@@ -2619,6 +2634,9 @@ def _dxf(results, *, worst, fmt: str, out, err) -> int:
 
 def _export(args: argparse.Namespace, *, out, err) -> int:
     """``export``, for the artifacts a spec file alone can produce."""
+    modules = _modules(args, err=err, command="export")
+    if isinstance(modules, int):
+        return modules
     from .bundle import BundleSections, combinations_for
     from .screening import carbon_estimate_for
     from .standards.datasets import bundled_datasets
@@ -2654,7 +2672,7 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
                 path,
                 spec,
                 BundleSections(
-                    scorecard=screen_spec(spec),
+                    scorecard=screen_spec(spec, **_with_modules(modules)),
                     spec=spec,
                     # Where every number came from, which the bundle has had a place for
                     # since it was published and nothing filled in: `collect_provenance`
@@ -2913,6 +2931,32 @@ def _load_all(paths: list[Path], *, err, command: str) -> list[tuple[Path, Any]]
     return loaded if refused is None else refused
 
 
+def _with_modules(modules: tuple[Any, ...]) -> dict[str, Any]:
+    """The keyword ``screen_spec`` takes for enabled modules, empty when there are none.
+
+    Empty rather than ``modules=()`` so a run with none calls ``screen_spec(spec)`` exactly
+    as it did before third-party modules existed.
+    """
+    return {"modules": modules} if modules else {}
+
+
+def _modules(args: argparse.Namespace, *, err, command: str) -> tuple[Any, ...] | int:
+    """The third-party modules named with --module, enabled; or the exit code once refused."""
+    if not args.module:
+        return ()
+    from .thirdparty import ThirdPartyModuleError, enable_module
+
+    enabled = []
+    for path in args.module:
+        try:
+            enabled.append(enable_module(path))
+        except ThirdPartyModuleError as refused:
+            print(f"anvilate {command}: --module {path}: {refused}", file=err)
+            return EXIT_BAD_REQUEST
+        _progress(err, f"enabled third-party module {enabled[-1].origin}")
+    return tuple(enabled)
+
+
 _VIEWS = ("iso", "front", "top", "right")
 
 
@@ -2924,6 +2968,9 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
     single HTML file: the drawings are embedded, it needs nothing beside it, and it opens
     from disk.
     """
+    modules = _modules(args, err=err, command="view")
+    if isinstance(modules, int):
+        return modules
     from .export.dxf import _atomic_path
     from .geometry import (
         GeometryError,
@@ -2961,7 +3008,7 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
         return spec
 
     _progress(err, f"drawing and screening {args.spec}")
-    card = screen_spec(spec)
+    card = screen_spec(spec, **_with_modules(modules))
     views: list[tuple[str, bytes]] = []
     absent: str | None = None
     note: str | None = None
@@ -3002,6 +3049,9 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
 
 def _build(args: argparse.Namespace, *, out, err) -> int:
     """Build one supported Design Spec pattern and write a valid STEP solid."""
+    modules = _modules(args, err=err, command="build")
+    if isinstance(modules, int):
+        return modules
     import hashlib
 
     from .geometry import (
@@ -3053,7 +3103,7 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     from .export.gate import ExportRefused, authorize_export
     from .screening import screen_spec
 
-    card = screen_spec(spec)
+    card = screen_spec(spec, **_with_modules(modules))
     # Both refusals below are worded for a caller holding the library ("override=True"), so
     # this surface states them in its own flag: a shell user cannot pass a keyword argument.
     try:
@@ -3238,6 +3288,9 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     verdict across everything found — one failing part fails the run, which is what a merge
     gate needs.
     """
+    modules = _modules(args, err=err, command="check")
+    if isinstance(modules, int):
+        return modules
     from .screening import screen_spec
 
     resolved = _resolve(args.spec, err=err)
@@ -3265,7 +3318,7 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                 total=len(paths),
             )
         try:
-            results.append((path, spec, screen_spec(spec)))
+            results.append((path, spec, screen_spec(spec, **_with_modules(modules))))
             durations.append(time.monotonic() - started)
         except KeyboardInterrupt:
             raise _Cancelled(
@@ -3500,6 +3553,10 @@ def _render(
         # and printed the detail alone, so every cited check read as an uncited one.
         if entry.reference:
             lines.append(f"                 [{entry.reference}]")
+        # A third-party module's word, said on the line under its verdict, so it never
+        # reads as a check this library ships.
+        if entry.origin is not None:
+            lines.append(f"                 [{entry.origin}]")
         # A verdict at "1.00 required" whose margin sits inside the capacity reads as no
         # margin at all unless the factor is printed beside it.
         inside = entry.inside_capacity()
@@ -3541,6 +3598,12 @@ def _render(
     # that could not run are different facts, and one "incomplete" number would let a
     # reader act on the wrong one.
     lines.append(f"  out of depth:  {len(deferred)}")
+    unverified = [entry for entry in card.entries if entry.origin is not None]
+    if unverified:
+        lines.append(
+            f"  unverified:    {len(unverified)} from third-party modules, evidence to weigh "
+            "rather than validation"
+        )
     if spec is not None:
         modes = mode_coverage(card, facts_from_spec(spec))
         if modes.entries:

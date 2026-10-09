@@ -30,7 +30,7 @@ from pydantic import ConfigDict, model_validator
 
 from .._models import RevalidatedModel
 from ..refusal import RefusalError, Remedy
-from ..scorecard import Scorecard
+from ..scorecard import CheckStatus, Scorecard
 
 _SCORECARD_SOURCE = "the part's acceptance scorecard from its screening run"
 _GATE_DECISION_SOURCE = "the authorization authorize_export returned for the part's scorecard"
@@ -84,13 +84,18 @@ class ExportRefused(RefusalError):
     watermarked artifact; there is no way to ask again and get an unmarked one.
     """
 
-    def __init__(self, blocking: tuple[str, ...]) -> None:
+    def __init__(self, blocking: tuple[str, ...], *, unverified: bool = False) -> None:
         self.blocking = blocking
         named = ", ".join(blocking) if blocking else "no checks were run at all"
         # What is unmet, without the remedy: `override=True` is a remedy for a caller
         # holding the library, and a surface with its own remedy (the CLI's `--unvalidated`,
         # or none) states that one after this instead.
-        self.unmet = f"export is gated on the acceptance checks passing, and these did not: {named}"
+        self.unmet = (
+            "export is gated on checks this library ships, and this card passes on the word "
+            f"of a third-party module, which is evidence to weigh, not validation: {named}"
+            if unverified
+            else f"export is gated on the acceptance checks passing, and these did not: {named}"
+        )
         super().__init__(
             f"{self.unmet}. "
             f"Pass override=True to export anyway; the file will be watermarked as "
@@ -216,6 +221,22 @@ def authorize_export(scorecard: Scorecard | None, *, override: bool = False) -> 
     a caller working from a different card than the one they handed in.
     """
     passed = scorecard is not None and scorecard.passed
+    # A pass that rests on a third-party module's word is evidence for a reader to weigh,
+    # not a validated part: the discipline-packs spec forbids treating it as an in-tree
+    # check. So such a card exports only the way a failing one does, watermarked.
+    unverified = (
+        ()
+        if scorecard is None
+        else tuple(
+            f"{entry.name} ({entry.origin})"
+            for entry in scorecard.entries
+            if entry.origin is not None and entry.status is not CheckStatus.NOT_EVALUATED
+        )
+    )
+    if passed and unverified:
+        if not override:
+            raise ExportRefused(unverified, unverified=True)
+        return ExportAuthorization(validated=False, overridden=True, blocking=unverified)
     if passed:
         if override:
             raise _gate_refusal(

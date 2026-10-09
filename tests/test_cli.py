@@ -4046,7 +4046,7 @@ def test_every_spec_document_this_repository_ships_is_found_by_a_directory_sweep
 
     So this is held over the repository's own specs, which is where the counterexample was.
     """
-    shipped = sorted((_REPO / "examples").glob("*.spec.yaml"))
+    shipped = sorted((_REPO / "examples").rglob("*.spec.yaml"))
     assert shipped, "no shipped spec documents found; this gate has stopped matching"
 
     code, out, err = _run("check", str(_REPO / "examples"))

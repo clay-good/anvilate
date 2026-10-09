@@ -465,11 +465,14 @@ def test_an_element_document_the_library_accepts_its_published_schema_accepts_to
     jsonschema = pytest.importorskip("jsonschema")
     import yaml
 
+    from anvilate.screening import element_registry
+
     root = Path(__file__).resolve().parent.parent
     documents = []
     for path in sorted((root / "examples").rglob("*.yaml")):
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if isinstance(raw, dict) and "element_type" in raw:
+        # A third-party example's element is the module's, with no schema published here.
+        if isinstance(raw, dict) and raw.get("element_type") in element_registry():
             documents.append((path.name, raw["element_type"], raw["element_params"]))
     assert len(documents) >= 4, documents
     for tag in ("beam_member", "column_member"):

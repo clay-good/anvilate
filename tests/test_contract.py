@@ -5027,7 +5027,9 @@ _FORBIDDEN_CALL_PREFIXES = ("os.exec", "os.spawn", "os.posix_spawn", "os.fork", 
 # The task transport launches one fixed module in a new process group. This is executable
 # infrastructure, but it is not a route from document content to a command: the operation
 # and its arguments stay in a task record consumed by Anvilate code, never in argv.
-_ALLOWED_PROCESS_IMPORTS = frozenset({("src/anvilate/_mcp_tasks.py", "subprocess")})
+_ALLOWED_PROCESS_IMPORTS = frozenset(
+    {("src/anvilate/_mcp_tasks.py", "subprocess"), ("src/anvilate/thirdparty.py", "subprocess")}
+)
 
 
 def _RUNS_WHAT_IT_READS(target: str) -> bool:  # noqa: N802 - reads as the predicate it is
@@ -5105,9 +5107,10 @@ def test_the_library_runs_nothing_it_reads():
     at the moment the call is *added*, when the author still has the reason in front of
     them, rather than at the moment somebody finds a way to reach it.
 
-    `subprocess` stays on the list with one narrow exception: the MCP task launcher invokes
-    its own fixed worker module. A separate test holds that argv to literals and confirms
-    no second process boundary appeared.
+    `subprocess` stays on the list with two narrow exceptions: the MCP task launcher invokes
+    its own fixed worker module, and the third-party module runner starts its own fixed,
+    confined child. A separate test holds both argvs to fixed values and confirms no third
+    process boundary appeared.
 
     **The call is judged on what it resolves to, not on how it is spelled.** This gate
     compared `ast.unparse(node.func)` against a set of dotted names, so it read `os.system(cmd)`
@@ -5150,8 +5153,14 @@ def test_the_library_runs_nothing_it_reads():
     )
 
 
-def test_the_task_worker_is_the_only_process_boundary():
-    """The task subprocess is fixed infrastructure, not a command assembled from a spec."""
+def test_the_process_boundaries_are_the_two_fixed_ones():
+    """Two subprocess launches, each fixed infrastructure, neither a command from a document.
+
+    The MCP task launcher runs Anvilate's own worker module. The third-party module runner
+    starts its own confined child by file path in isolated mode; the module it loads is named
+    only by the user (`--module PATH`), and what that child may do is held by
+    `tests/test_thirdparty.py`.
+    """
     import ast
 
     src = _REPO / "src" / "anvilate"
@@ -5163,24 +5172,38 @@ def test_the_task_worker_is_the_only_process_boundary():
                 for alias in node.names:
                     if alias.name == "subprocess":
                         process_imports.append(str(path.relative_to(_REPO)))
-    assert process_imports == ["src/anvilate/_mcp_tasks.py"]
+    assert process_imports == ["src/anvilate/_mcp_tasks.py", "src/anvilate/thirdparty.py"]
 
-    tree = parsed_source(src / "_mcp_tasks.py")
-    bindings = _import_bindings(tree)
-    calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and _resolved_call(node, bindings).startswith("subprocess.")
-    ]
-    assert [_resolved_call(node, bindings) for node in calls] == ["subprocess.Popen"]
-    command = calls[0].args[0]
+    def launches(module: str) -> list[ast.Call]:
+        tree = parsed_source(src / module)
+        bindings = _import_bindings(tree)
+        found = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and _resolved_call(node, bindings).startswith("subprocess.")
+        ]
+        for call in found:
+            assert not any(keyword.arg == "shell" for keyword in call.keywords)
+        return found
+
+    (worker,) = launches("_mcp_tasks.py")
+    command = worker.args[0]
     assert isinstance(command, ast.List)
     assert ast.unparse(command.elts[0]) == "sys.executable"
     assert [ast.literal_eval(item) for item in command.elts[1:3]] == [
         "-m",
         "anvilate._mcp_tasks",
     ]
-    assert not any(keyword.arg == "shell" for keyword in calls[0].keywords)
+
+    (child,) = launches("thirdparty.py")
+    command = child.args[0]
+    assert isinstance(command, ast.List)
+    assert [ast.unparse(item) for item in command.elts] == [
+        "sys.executable",
+        "'-I'",
+        "str(_CHILD)",
+    ]
 
 
 def test_a_dimension_guard_enforces_the_dimension_its_message_names():
@@ -6232,6 +6255,9 @@ def test_every_json_and_yaml_read_goes_through_a_reader_that_bounds_nesting():
                 is_direct
                 and path.name != "_models.py"
                 and path.parts[-2:] != ("spec", "validate.py")
+                # The sandbox child cannot import this package (it runs by path, isolated),
+                # and reads only the parent's own serialization of a bounded document.
+                and path.name != "_sandbox_child.py"
             ):
                 direct.append(f"{path.name}:{node.lineno}")
     assert routed >= 30, f"only {routed} calls go through parse_json or parse_yaml"

@@ -1065,14 +1065,17 @@ def _install_the_coverage_collector() -> None:
 
     def recording_init(self, **data):
         original_init(self, **data)
-        if _built_by_the_library():
+        # A third-party module's entry is built here from the module's JSON, but its check
+        # is the module's: no gate on this library's derivations or citations applies to it.
+        if _built_by_the_library() and self.origin is None:
             _library_entries[id(self)] = self
 
     def recording_copy(self, **kwargs):
         copied = original_copy(self, **kwargs)
         if _built_by_the_library():
             _library_entries.pop(id(self), None)
-            _library_entries[id(copied)] = copied
+            if copied.origin is None:
+                _library_entries[id(copied)] = copied
         return copied
 
     ScorecardEntry.__init__ = recording_init

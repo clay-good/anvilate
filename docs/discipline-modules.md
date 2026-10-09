@@ -148,11 +148,43 @@ and three gates key on it:
 | Composition (`tests/test_limit_states.py`) | A screen evaluating a shared limit state does not call its named implementation. The check reads the screen's own call graph and the symbol's identity, so a same-named local function does not count. |
 | Emission (`tests/conftest.py`) | A module check the suite built resolves to no registered limit state. On a full run, it also fails when a registered check was never emitted. |
 
+## Third-party modules
+
+A module from outside this repository is one Python file, enabled only by naming it:
+
+```bash
+anvilate check rod.yaml --module examples/third_party_module/hanger_rod.py
+```
+
+The same `--module PATH` works on `diff`, `export`, `build` and `view`. For agents, add
+it to the server's launch command in your MCP configuration (`anvilate-mcp --module
+PATH`). A client cannot ask the server to load one. Nothing is discovered: an installed
+module that is not named contributes nothing.
+
+The file declares a `MANIFEST` (the fields of an in-tree manifest above) and one
+`screen_<element_type>(params, required_safety_factor=None)` function per element type it
+`covers`. The function receives the document's `element_params` as plain JSON and returns
+a list of plain JSON entries: `name`, `status` (`pass`, `fail`, `not_evaluated`, ...),
+`detail`, and optionally `reference`, `safety_factor` and `required_safety_factor`.
+`examples/third_party_module/hanger_rod.py` is a complete one.
+
+| Rule | What happens |
+| --- | --- |
+| It may add an element type, never replace one | A manifest covering an element this library screens, or claiming a shipped module's id or check namespace, is refused when enabled. |
+| It runs confined | Each call runs in a separate isolated Python process with CPU, memory, file-size and descriptor limits, a 30 s timeout, and an audit hook installed before the module is imported. The hook refuses network access, starting processes, ctypes, and file access outside its own directory, the Python installation and a scratch directory. A violation, even one the module catches, a crash or a timeout makes its check *not evaluated*, with the reason. |
+| What it returns is input from outside | An unknown status, an extra field or a malformed entry is refused and reported, never passed through. |
+| Every result is marked | Each entry carries `origin`: the module, its version, its path and the SHA-256 of the source that ran. `check` prints it under the verdict and counts it; the part sheet and report print it; the evidence bundle embeds it. A module edited after it was enabled is not run. |
+| It is never validation | A card that passes on a third-party entry exports only watermarked, the way a failing one does. Its word is evidence for a reader to weigh. |
+
+**Confinement is not trust.** The audit hook stops a module's mistakes and ordinary
+misbehaviour. A compiled extension can get around it. Enable only modules whose source you
+have read, which is what the SHA-256 in the mark lets a reviewer check.
+
 ## Status
 
 This is the manifest contract, including reserved namespaces and stable emitted check ids,
 the completeness and exercise gates (`openspec/changes/add-physical-domain-modules`, tasks
 1.1, 1.3, 2.1, 3.1, 3.2 and 3.3), the loader (2.2), declared coverage (1.2), the authoring
 page (5.1) and duplicate-limit-state detection by registry id (2.3):
-61 limit states across the 65 checks the shipped modules emit. Out-of-tree modules are what
-remain.
+61 limit states across the 65 checks the shipped modules emit, and third-party modules
+enabled by path, confined and marked unverified-origin (4.1, 4.2).

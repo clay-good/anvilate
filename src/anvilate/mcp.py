@@ -178,7 +178,7 @@ _SPEC_REF = "urn:anvilate:schema:design-spec:1.19.0"
 # property, and neither release closes `additionalProperties` — so an old client keeps
 # working; it simply cannot see whether a check is owed a derivation.
 # 1.12.0 adds the optional stable `check_id` that document-driven module checks receive.
-_SCORECARD_REF = "urn:anvilate:schema:scorecard:1.13.0"
+_SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
 # The evidence bundle, published so `export_artifact` can describe what it returns. It could
 # not before: the tool declared its entire output as `{"type": "object"}`, because
 # `contracts.py` generated a spec schema and a scorecard schema and no third one. A literal
@@ -194,7 +194,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.13.0"
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.26.0"
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.27.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.4.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.2.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
@@ -1637,7 +1637,7 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
         return {"errors": [_reason(failure)]}
     from .screening import _compile_findings
 
-    problems, remedies = _compile_findings(spec)
+    problems, remedies = _compile_findings(spec, _MODULES) if _MODULES else _compile_findings(spec)
     if problems:
         return {"errors": problems, "remedies": remedies}
     # Published, so the next call has something to name. A compiled document is the subject
@@ -1798,7 +1798,7 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [f"spec: {_reason(failure)}"], operation="run_validation"
         ) from failure
-    card = screen_spec(spec).model_dump(mode="json")
+    card = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {})).model_dump(mode="json")
     # The card is returned *and* published: returned because it is closed-form and the answer
     # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
     # for it that is not "the last thing you asked me".
@@ -1991,7 +1991,7 @@ def _run_fea_validation_task(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [f"spec: {_reason(failure)}"], operation="run_fea_validation"
         ) from failure
-    card = screen_spec(spec)
+    card = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {}))
     entries = tuple(
         entry.model_copy(
             update={
@@ -2092,10 +2092,18 @@ def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> No
         sink.flush()
 
 
-def main() -> None:
+# Third-party modules this server process was started with (`anvilate-mcp --module PATH`).
+# Set once at launch from the user's own MCP configuration, never from a tool call: a client
+# cannot make the server load code, which is what "enabled by the user, by path" means here.
+_MODULES: tuple[Any, ...] = ()
+
+
+def main(argv: list[str] | None = None) -> None:
     """Run the server on stdio. The console-script and ``python -m`` entry point.
 
-    Nothing to configure: the surface is the published catalog, the transport is stdin and
+    One option: ``--module PATH`` (repeatable) enables a third-party discipline module, run
+    confined and marked unverified-origin; see :mod:`anvilate.thirdparty`. Otherwise there is
+    nothing to configure: the surface is the published catalog, the transport is stdin and
     stdout, and there is no state to lose, so a client that restarts the process is in
     exactly the position it was in before.
 
@@ -2104,6 +2112,20 @@ def main() -> None:
     to print a traceback into the client's log and exit 120. Stdout is pointed at the null
     device first, or the interpreter's own flush at exit raises the same error again.
     """
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="anvilate-mcp", description="Anvilate's MCP server.")
+    parser.add_argument("--module", action="append", default=[], metavar="PATH")
+    options = parser.parse_args(argv)
+    if options.module:
+        from .thirdparty import ThirdPartyModuleError, enable_module
+
+        global _MODULES
+        try:
+            _MODULES = tuple(enable_module(path) for path in options.module)
+        except ThirdPartyModuleError as refused:
+            print(f"anvilate-mcp: --module: {refused}", file=sys.stderr)
+            raise SystemExit(2) from None
     try:
         serve_stdio()
         sys.stdout.flush()

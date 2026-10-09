@@ -1,0 +1,16 @@
+anvilate_spec: "1.19.0"
+name: hanger-rod
+description: An M12 hanger rod for a pipe support (third-party module).
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: hanger_rod
+element_params:
+  diameter: {magnitude: 12, unit: mm}
+  pitch: {magnitude: 1.75, unit: mm}
+  load: {magnitude: 9, unit: kN}
+  yield_strength: {magnitude: 240, unit: MPa}
+constraints:
+  min_safety_factor: {value: 2.0, origin: user_stated}
+acceptance:
+  tiers: [T1_analytical]

@@ -356,6 +356,11 @@ def launch_task(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
     nonce = record["_nonce"]
     environment = os.environ.copy()
     environment["ANVILATE_TASK_STORE"] = str(store.root)
+    from . import mcp
+
+    # The worker is a new process: the third-party modules the server was started with are
+    # handed over by path and enabled again there, so a task screens with the same modules.
+    environment["ANVILATE_TASK_MODULES"] = json.dumps([str(m.path) for m in mcp._MODULES])
     with store.execution_lease(task_id) as lease:
         store.enable_recovery(task_id)
         try:
@@ -428,6 +433,7 @@ def _execute_worker(store: TaskStore, task_id: str, nonce: str) -> int:
         with store.worker_lease(task_id):
             operation, arguments = store.worker_input(task_id, nonce)
             store.update_message(task_id, f"Running {operation}.")
+            from . import mcp
             from .mcp import (
                 INVALID_PARAMS,
                 TOOL_UNAVAILABLE,
@@ -436,6 +442,11 @@ def _execute_worker(store: TaskStore, task_id: str, nonce: str) -> int:
                 _Unavailable,
             )
 
+            paths = parse_json(os.environ.get("ANVILATE_TASK_MODULES") or "[]")
+            if paths:
+                from .thirdparty import enable_module
+
+                mcp._MODULES = tuple(enable_module(path) for path in paths)
             try:
                 result = _execute_task(operation, arguments)
             except _InvalidArguments as refusal:
