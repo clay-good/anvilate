@@ -851,28 +851,29 @@ def _for_revision(response: dict[str, Any] | None, revision: str) -> dict[str, A
 # spelled the material "ASTM A36" where the database says ASTM-A36, invented a hole pattern,
 # asked for every validation tier, and named no element, so nothing would have screened. The
 # schema says what is legal; these say what a request means and which identifiers exist.
-_AGENT_RULES = """Anvilate is a local, deterministic engineering checker. You write the Design Spec;
-Anvilate validates it and screens it. Workflow: compile_spec (validate a document and read its
-remedies) -> run_validation (screen it; returns the scorecard and a subject handle) ->
-read_scorecard or export_artifact with that handle. Fix what a refusal names and call
-again; never report a check that did not run.
-
-Writing a spec:
-- Write only what the user stated. Leave optional fields you were not told about out: no
-  invented interfaces, dimensions, exports or loads. Ask the user for a missing load,
-  material or interface rather than guessing it.
+_AGENT_RULES = """Anvilate is a local, deterministic engineering checker: you write the
+Design Spec, it validates and screens it. run_validation screens a spec and returns the
+scorecard and a subject handle for read_scorecard and export_artifact; build_part returns
+one for render_viewport and measure_geometry. compile_spec checks a document you wrote and
+names remedies. Fix what a refusal names and call again; never report a check that did not
+run.
+- Write only what the user stated: no invented interfaces, dimensions, exports or loads. Ask
+  for a missing load, material or interface rather than guessing it.
 - A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0, "origin":
-  "user_stated"}); constraints.max_safety_factor is only an explicit upper limit.
-- Copy identifiers exactly from the catalogue below: material.ref and element material fields
-  from Materials, interfaces[].ref from Components, and a field shown as name=a|b one of
-  the values listed after it.
-- To screen a part, set element_type to one of the element screens below and put its fields in
-  element_params, every required one included.
-- acceptance.tiers lists only what was asked for; a request to check or screen is
-  ["T1_analytical"].
-- A quantity is {"magnitude": number, "unit": "symbol"} in the units the user used, e.g.
-  {"magnitude": 50, "unit": "kN"}. Write a product of units with "*": a moment is
-  {"magnitude": 50, "unit": "kN*m"}, never "kNm" or "kN-m"."""
+  "user_stated"}); max_safety_factor is only an explicit upper limit.
+- To screen a part, set element_type to an element below and its fields in element_params.
+  acceptance.tiers lists only what was asked for; a check or screen is ["T1_analytical"].
+- Copy identifiers exactly as listed. A quantity is {"magnitude": 50, "unit": "kN"} in the
+  user's units; a product of units uses "*": "kN*m", never "kNm"."""
+
+# Claude Code 2.1 keeps the first 2,048 characters of a server's instructions and drops the
+# rest ("Server instructions truncated from 10192 to 2048 chars", its debug log, 2026-10-09).
+# The catalogue used to start with every component and section, so the element screens, the
+# one list an agent cannot write a spec without, were never seen: an agent asked to screen a
+# padeye guessed `padeye`, `lug` and `pad_eye`. The rules, element names and material ids
+# come first and are held under this limit by a test; the detail after it is also what the
+# refusals name, so a client that cuts it loses speed, not the way forward.
+CLIENT_INSTRUCTIONS_LIMIT = 2048
 
 
 def _closed_values(annotation: Any) -> tuple[str, ...]:
@@ -907,7 +908,10 @@ def agent_instructions() -> str:
     lines = [
         _AGENT_RULES,
         "",
+        "Elements: " + ", ".join(sorted(element_registry())),
         "Materials: " + ", ".join(resolver.known_materials()),
+        "",
+        "Detail (a client may cut what follows; refusals name the same fields and ids):",
         "Components: " + ", ".join(resolver.known_components()),
         # An agent that does not know a `section` can be named computes one, and a section's
         # properties are the numbers easiest to get wrong from memory.

@@ -2705,6 +2705,26 @@ def test_initialize_hands_the_agent_its_rules_and_the_live_catalogue():
         assert f"- {tag}: " in text and all(f"{n}*" in text for n in required), tag
 
 
+def test_what_a_client_keeps_of_the_instructions_is_enough_to_write_a_spec():
+    """Claude Code keeps the first 2,048 characters of a server's instructions. The rules,
+    every element type and every material id have to be inside them; the element lines after
+    them were the part no agent saw. When this fails, shorten the rules or the head, rather
+    than raise the limit: the limit is the client's, not this library's."""
+    from anvilate.mcp import _AGENT_RULES, CLIENT_INSTRUCTIONS_LIMIT, agent_instructions
+    from anvilate.screening import element_registry
+    from anvilate.standards import default_standards_resolver
+
+    kept = agent_instructions()[:CLIENT_INSTRUCTIONS_LIMIT]
+    assert CLIENT_INSTRUCTIONS_LIMIT == 2048
+    assert _AGENT_RULES in kept
+    (elements,) = [line for line in kept.splitlines() if line.startswith("Elements: ")]
+    assert elements.removeprefix("Elements: ").split(", ") == sorted(element_registry())
+    (materials,) = [line for line in kept.splitlines() if line.startswith("Materials: ")]
+    assert materials.removeprefix("Materials: ").split(", ") == list(
+        default_standards_resolver().known_materials()
+    )
+
+
 def test_the_catalogue_names_every_rolled_section_a_member_may_reference():
     """`section: IPE 200` resolves to the published profile; an agent not told so computes
     the properties itself, which are the numbers easiest to get wrong from memory."""

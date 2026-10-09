@@ -138,6 +138,11 @@ identifier that exists, generated from the bundled databases so the model copies
 rather than recalling them. A field that takes one of a fixed set of values is listed with
 them, for example `support*=cantilever|simply_supported|fixed_fixed|fixed_pinned|overhang`.
 
+Order matters, because clients cut it: Claude Code 2.1 keeps the first 2,048 characters.
+The rules, every element type and every material id come first and a test holds them
+inside that limit; components, rolled sections and each element's fields follow, and a
+refusal names the same fields and ids when a client never saw them.
+
 ```bash
 anvilate-mcp
 ```
