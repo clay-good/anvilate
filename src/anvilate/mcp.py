@@ -57,7 +57,7 @@ from ._models import Named, RevalidatedModel, _reason, _refusal_line, parse_json
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .evidence import provenance_for
-from .geometry import GeometrySummary
+from .geometry import _DRAWN_ELEMENT_TYPES, GeometrySummary
 from .refusal import RefusalError, Remedy
 from .spec import ValidationTier
 from .store import SUBJECT_PATTERN, UnknownSubject, _WrongKind, subject_store
@@ -459,8 +459,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Build or regenerate the part",
             description=(
                 "Build the audited pattern selected by the Design Spec and return its B-Rep "
-                "geometry summary. The current registry supports base_plate, cover_plate, "
-                "transmission_shaft, and timber_beam. "
+                "geometry summary. The current registry supports "
+                f"{', '.join(_DRAWN_ELEMENT_TYPES[:-1])}, and {_DRAWN_ELEMENT_TYPES[-1]}. "
                 "No caller code "
                 "is executed, so the bounded primitive build replies synchronously."
             ),
