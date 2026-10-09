@@ -2147,6 +2147,29 @@ def test_an_ordinary_mistake_is_told_a_value_that_validates(line, written, remed
     load_spec_yaml("\n".join([*others, "name: bracket-01", head + value + tail]))
 
 
+@pytest.mark.parametrize(
+    ("line", "written"),
+    [
+        ("manufacturing: {process: 3d_printing}", "3d_printing"),  # was `grinding`
+        ("manufacturing: {process: edm}", "edm"),  # was `fdm`
+        ("manufacturing: {process: slm}", "slm"),  # was `sls`, a polymer process
+        ("manufacturing: {process: sand_casting}", "sand_casting"),  # was `die_casting`
+        ("manufacturing: {process: stamping}", "stamping"),  # was `reaming`
+        # Was `user_stated`: a guess filed as something the user said.
+        ("units: {value: SI, origin: estimated}", "estimated"),
+    ],
+)
+def test_an_enum_value_that_is_not_certainly_one_option_is_given_the_choices(line, written):
+    """A remedy is an instruction an agent writes back. For a value that is not one option
+    spelt differently, the only honest instruction is to choose, so it lists them all."""
+    key = line.split(":", 1)[0]
+    others = [kept for kept in _required_lines() if not kept.startswith(f"{key}:")]
+    failure = _refusal("\n".join([*others, "name: bracket-01", line]))
+    (remedy,) = failure.remedy_texts
+    assert remedy.endswith(f"describes it; {written!r} is none of them"), remedy
+    assert "rather than" not in remedy
+
+
 def _example_specs():  # type: ignore[no-untyped-def]
     from anvilate.spec import load_spec_yaml
 

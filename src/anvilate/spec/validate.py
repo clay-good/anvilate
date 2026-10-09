@@ -95,8 +95,17 @@ def _normalised(text: str) -> str:
 
 
 def _nearest_option(written: str, expected: str) -> str | None:
-    """The allowed value ``written`` was reaching for: `si` for `SI`, `CNC milling` for
-    `cnc_milling`, `T1` for `T1_analytical`. ``expected`` is pydantic's list of them."""
+    """The allowed value ``written`` certainly means: `si` for `SI`, `CNC milling` for
+    `cnc_milling`, `T1` for `T1_analytical`. ``expected`` is pydantic's list of them.
+
+    Certainly, not probably: an enum value is a choice, and an agent writes back the one it
+    is handed. Edit distance chose `grinding` for `3d_printing`, `fdm` for `edm`, `sls` for
+    the metal process `slm`, `die_casting` for `sand_casting`, and `user_stated` for
+    `estimated`, which would have filed a guess as something the user said. So only two
+    things qualify: the same option spelt differently, and a code with a digit in it that
+    begins exactly one option. A word that begins one (`outdoor` for `outdoor_sheltered`)
+    may be naming the family, and the milder member of it, so it gets the list instead.
+    """
     options = re.findall(r"'([^']*)'", expected)
     wanted = _normalised(written)
     if not wanted:
@@ -104,11 +113,11 @@ def _nearest_option(written: str, expected: str) -> str | None:
     same = [option for option in options if _normalised(option) == wanted]
     if same:
         return same[0]
-    starts = [option for option in options if _normalised(option).startswith(wanted)]
-    if len(starts) == 1:
-        return starts[0]
-    near = difflib.get_close_matches(wanted, [_normalised(o) for o in options], n=1)
-    return next((o for o in options if near and _normalised(o) == near[0]), None)
+    if any(character.isdigit() for character in wanted):
+        coded = [option for option in options if _normalised(option).startswith(wanted + "_")]
+        if len(coded) == 1:
+            return coded[0]
+    return None
 
 
 def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str | None:
@@ -197,9 +206,16 @@ def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str
     if kind == "list_type" and isinstance(written, str | int | float) and location:
         return f"write `{path}` as a list, `[{written}]`"
     if kind in ("enum", "literal_error") and isinstance(written, str) and location:
-        option = _nearest_option(written, str((error.get("ctx") or {}).get("expected", "")))
+        expected = str((error.get("ctx") or {}).get("expected", ""))
+        option = _nearest_option(written, expected)
         if option is not None:
             return f"write `{path}` as `{option}` rather than {written!r}"
+        options = re.findall(r"'([^']*)'", expected)
+        if options:
+            return (
+                f"write `{path}` as whichever of {', '.join(f'`{o}`' for o in options)} "
+                f"describes it; {written!r} is none of them"
+            )
     return None
 
 
