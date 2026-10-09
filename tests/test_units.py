@@ -129,7 +129,7 @@ def test_unit_refusals_carry_structured_remedies_at_every_raise_site():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 30
+    assert len(sites) == 31
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
@@ -1429,3 +1429,20 @@ def test_the_numbers_a_unit_may_hold_still_parse(text: str, magnitude: float, un
     """Exponents, a fraction, and the "1/" of a reciprocal the library itself writes."""
     parsed = Quantity.parse(text)
     assert parsed.to(unit).magnitude == pytest.approx(magnitude, rel=1e-12)
+
+
+def test_a_conversion_across_dimensions_is_this_librarys_refusal_not_pints():
+    """pint raises DimensionalityError, a TypeError: the type every handler here reads as a
+    bug in this library. A document's unit slip must reach a reader as a refusal."""
+    from pint.errors import PintError
+
+    from anvilate.units import DimensionError
+
+    with pytest.raises(
+        DimensionError, match=r"0\.5 kg is \[mass\] and cannot be expressed in degree"
+    ) as refused:
+        Quantity.parse("0.5 kg").to("degree")
+    assert isinstance(refused.value, ValueError)
+    assert not isinstance(refused.value, PintError | TypeError)
+    assert refused.value.remedies[0].subject == "the value 0.5 kg"
+    assert Quantity.parse("2 in").to("mm").magnitude == pytest.approx(50.8)

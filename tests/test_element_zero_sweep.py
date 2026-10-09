@@ -194,6 +194,71 @@ def test_the_sweep_finds_the_crash_a_missing_declaration_lets_through(monkeypatc
     ), crashes
 
 
+def _quantities(node: object, path: tuple = ()) -> Iterator[tuple[tuple, dict]]:
+    if isinstance(node, dict):
+        if set(node) == {"magnitude", "unit"}:
+            yield path, node
+            return
+        for key, value in node.items():
+            yield from _quantities(value, (*path, key))
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _quantities(value, (*path, index))
+
+
+def _wrong_dimension_crashes() -> tuple[list[str], int]:
+    """Each quantity's unit swapped for one of another dimension, in turn.
+
+    pint's DimensionalityError is a TypeError, which the screens' refusal handler and
+    pydantic's validators both let through as this library's own bug. Thirty-five fields
+    in 17 elements turned a unit slip like `allowable_twist: 0.5 kg` into an internal error.
+    """
+    from anvilate.units import Quantity
+
+    registry = element_registry()
+    crashes, probes = [], 0
+    for tag, element_type, document in _corpus():
+        model, screen = registry[element_type]
+        parameters = inspect.signature(screen).parameters
+        keywords = {"required_safety_factor": 2.0} if "required_safety_factor" in parameters else {}
+        for path, quantity in _quantities(document):
+            probes += 1
+            mass = Quantity(magnitude=1.0, unit=quantity["unit"]).has_dimension("[mass]")
+            wrong = {**quantity, "unit": "mm" if mass else "kg"}
+            where = f"{tag}.{'.'.join(str(part) for part in path)} in {wrong['unit']}"
+            try:
+                element = model.model_validate(_with(document, path, wrong))
+                screen(element, **keywords)
+            except (ValueError, LookupError):
+                continue
+            except Exception as failure:  # noqa: BLE001 - reporting what escaped is the point
+                crashes.append(f"{where} -> {type(failure).__name__}: {failure}")
+    return crashes, probes
+
+
+def test_no_element_crashes_on_a_quantity_in_the_wrong_dimension():
+    crashes, probes = _wrong_dimension_crashes()
+    assert probes >= 250, f"only {probes} quantities were given a wrong unit"
+    assert not crashes, "\n".join(crashes)
+
+
+def test_the_dimension_sweep_finds_pints_own_error(monkeypatch):
+    """The adversary: let `Quantity.to` raise pint's error again, and the shaft's twist
+    limit in kilograms must be reported as the crash it was."""
+    from anvilate.units import Quantity
+
+    def unguarded(self, unit):
+        # The conversion as it was: right when the dimensions agree, pint's error when not.
+        return Quantity(magnitude=self.pint.to(unit).magnitude, unit=unit)
+
+    monkeypatch.setattr(Quantity, "to", unguarded)
+    crashes, _probes = _wrong_dimension_crashes()
+    assert any(
+        crash.startswith("transmission_shaft.allowable_twist in kg -> DimensionalityError")
+        for crash in crashes
+    ), crashes
+
+
 def test_a_document_cannot_declare_its_own_signed_fields():
     """`signed_fields` was a model field: a document could write `signed_fields: [width]`,
     have it accepted and echoed in every dump, while the guard ignored it. It is a class

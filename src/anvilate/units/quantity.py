@@ -644,7 +644,21 @@ class Quantity(RevalidatedModel):
         """Return this quantity converted to ``unit`` (preserving as a Quantity)."""
         # The target spelling is memoised for the same reason the source one is: `.to("MPa")`
         # inside a screen ran pint's unit parser on every call.
-        converted = self.pint.to(_unit_object(unit))
+        target = _unit_object(unit)
+        try:
+            converted = self.pint.to(target)
+        except pint.DimensionalityError as mismatch:
+            # pint's error is a TypeError, which every caller here treats as this library's
+            # own bug: a pack screen's refusal handler and a pydantic validator both let it
+            # through. So `yield_strength: 250 kg` on a shaft, one ordinary unit slip, ended
+            # `anvilate check` with an internal error, as it did in 17 of 29 elements.
+            raise DimensionError(
+                f"{self} is {self.dimensionality} and cannot be expressed in {unit} "
+                f"({_dimensionality_str(unit)})",
+                action="replace",
+                subject=f"the value {self}",
+                source=f"a quantity with the dimension of {unit}",
+            ) from mismatch
         return Quantity(magnitude=converted.magnitude, unit=_short_spelling(unit))
 
     def has_dimension(self, expected: str) -> bool:
