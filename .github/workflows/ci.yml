@@ -139,6 +139,29 @@ jobs:
             exit 1
           fi
 
+  # The responsiveness budget (tools/responsiveness/budget.json) on the reference profile, this
+  # runner class. The release workflow runs the same measurement and blocks on a sustained
+  # breach; this weekly run is the early warning, so a regression is seen before a release.
+  responsiveness:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install ".[geometry,export]"
+      - name: Interactive operations against their budget
+        run: python tools/responsiveness/measure.py --out responsiveness.json
+      - name: Fresh install to a first validated part
+        run: python tools/responsiveness/measure.py --first-part --out first-part.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: responsiveness
+          path: "*.json"
+
   # The official MCP conformance suite drives servers over HTTP only (stdio support is
   # modelcontextprotocol/conformance#258). The bridge relays its requests to the real stdio
   # server, and the baseline names every scenario that fails for a reason that is not a

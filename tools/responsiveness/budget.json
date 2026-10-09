@@ -1,0 +1,26 @@
+{
+  "reference_profile": {
+    "runner": "GitHub-hosted ubuntu-latest standard runner (x86_64, 4 vCPU, 16 GB)",
+    "python": "3.11",
+    "install": "pip install .[geometry,export]",
+    "why": "The one machine class every release is measured on, so two releases' numbers compare. A developer laptop is faster and noisier; the profile is what the budget means."
+  },
+  "repeats": 5,
+  "statistic": "median",
+  "sustained": "A breach blocks only if a second full pass reproduces it: one slow sample on a shared runner is the machine, the same breach twice is the code.",
+  "operations": {
+    "cli check": {"seconds": 2.0, "why": "One spec screened in a fresh process. No progress line, so it must finish within the 2 s responsiveness threshold."},
+    "cli build": {"seconds": 15.0, "why": "Cold kernel import plus a STEP write; reports progress, so it may exceed the threshold."},
+    "cli view": {"seconds": 15.0, "why": "Build plus four rendered views; reports progress."},
+    "mcp initialize": {"seconds": 2.0, "why": "Server start to the initialize reply: the wait before an agent can use any tool."},
+    "mcp tools/list": {"seconds": 1.0, "why": "First catalogue read."},
+    "mcp compile_spec": {"seconds": 1.0, "why": "First validation of a document."},
+    "mcp run_validation": {"seconds": 2.0, "why": "First screen of a document."},
+    "mcp read_scorecard": {"seconds": 1.0, "why": "Reading a stored card."},
+    "mcp build_part": {"seconds": 10.0, "why": "First build pays the kernel import."},
+    "mcp render_viewport": {"seconds": 2.0, "why": "One SVG view of a built part."},
+    "mcp measure_geometry": {"seconds": 2.0, "why": "One measurement of a built part."},
+    "mcp export_artifact": {"seconds": 2.0, "why": "The evidence bundle for a stored card."}
+  },
+  "time_to_first_part": {"seconds": 600.0, "why": "openspec/specs/onboarding: a fresh install to an exported validated sample part in under 10 minutes."}
+}

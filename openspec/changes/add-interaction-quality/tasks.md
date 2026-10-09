@@ -328,9 +328,19 @@
 
 ## 6. Budgets
 
-- [ ] 6.1 Interactive responsiveness budget, measured per release on the reference profile — BLOCKED:
-      the reference hardware profile and the release process the onboarding and benchmarking
-      specs name are both unbuilt, and a timing gate on shared CI runners measures the machine
+- [x] 6.1 Interactive responsiveness budget, measured per release on the reference profile — was
+      BLOCKED on an unbuilt reference profile and release process, and on a timing gate on
+      shared CI runners measuring the machine. Unblocked by the user 2026-10-09 and built:
+      `tools/responsiveness/budget.json` declares a budget per interactive operation (the
+      CLI's check/build/view, the first call of each MCP tool on a fresh server) and
+      onboarding's 10-minute time-to-first-part. The reference profile is one machine class,
+      the GitHub-hosted ubuntu-latest standard runner with Python 3.11. The release process
+      is the existing `publish-mcp-registry.yml`, which now measures before it publishes,
+      attaches the records to the release, and stops on a sustained breach. The shared-
+      runner objection is met by judging the median of repeats and counting a breach only
+      when a second full pass repeats it. Every timing first checks the operation succeeded,
+      since a refusal is fast. The same measurement runs weekly in ci.yml as an early
+      warning. Offline tests: tests/test_responsiveness_budget.py.
 - [x] 6.2 Cache repeated loads of bundled data; assert the cache is hit, not just present —
       every discovered loader is cached, and a repeat screen is served with hits up and misses
       flat

@@ -23,7 +23,36 @@ env:
   MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
 
 jobs:
+  # add-interaction-quality 6.1 and onboarding's time-to-first-part: measured on the
+  # reference profile (this runner class, Python 3.11) for every release, recorded on the
+  # release itself, and a sustained breach of tools/responsiveness/budget.json stops the
+  # registry publication below.
+  responsiveness:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install ".[geometry,export]"
+      - name: Interactive operations against their budget
+        run: python tools/responsiveness/measure.py --out responsiveness.json
+      - name: Fresh install to a first validated part
+        run: python tools/responsiveness/measure.py --first-part --out first-part.json
+      - name: Record the measurement on the release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" responsiveness.json first-part.json --clobber
+
   publish:
+    needs: responsiveness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

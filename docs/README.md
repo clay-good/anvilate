@@ -90,3 +90,6 @@ Each pack takes a declared element and returns a cited scorecard.
 
 [Adding a check to the analysis library](contributing-analysis.md) — the seven contract
 rules, which of them a gate actually enforces, and the sweeps that find what the gates miss.
+
+[The responsiveness budget](../tools/responsiveness/README.md) — how long each command and
+MCP tool may take on the reference runner, measured for every release, and what blocks one.
