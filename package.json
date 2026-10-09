@@ -16,6 +16,7 @@
     "fast-uri": "^3.1.8",
     "proxy-addr": "^2.0.8",
     "source-map-js": "^1.2.2",
-    "@modelcontextprotocol/sdk": "^1.31.0"
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "global-agent": "^4.1.3"
   }
 }
