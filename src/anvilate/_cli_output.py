@@ -24,6 +24,7 @@ from .geometry import (
     ConfirmedStepInterface,
     CylindricalMateEngagementCheck,
     CylindricalMateFitCheck,
+    GeometryPattern,
     PlanarContactAreaCheck,
     PlanarGapClearanceCheck,
     StepInterfaceCandidates,
@@ -34,10 +35,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.56.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.57.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.56.0"]
-SchemaVersion = Literal["1.56.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.57.0"]
+SchemaVersion = Literal["1.57.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -133,7 +134,7 @@ class BuildArtifact(_WireModel):
     path: str
     format: Literal["step", "3mf"]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    pattern: Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1"]
+    pattern: GeometryPattern
     volume_mm3: Annotated[float, Field(gt=0)]
     dimensions_mm: FrozenMap[str, Annotated[float, Field(gt=0)]] = Field(
         json_schema_extra={"additionalProperties": {"type": "number", "exclusiveMinimum": 0}}

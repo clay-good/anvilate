@@ -38,6 +38,7 @@ from anvilate.mcp import (
     tool_catalog,
     wire_definitions,
 )
+from anvilate.screening import element_registry
 from anvilate.spec import ValidationTier, parse_spec
 from anvilate.store import SUBJECT_PATTERN
 
@@ -1146,7 +1147,68 @@ def test_build_part_refuses_a_spec_without_an_audited_pattern():
     error = _call("build_part", {"spec": _spec_document()})["error"]
 
     assert error["code"] == -32000
-    assert "<undeclared>" in error["message"] and "supported: base_plate" in error["message"]
+    assert "declares no element_type" in error["message"]
+    assert "<undeclared>" not in error["message"], "an absence read as a type named <undeclared>"
+    assert "supported: base_plate" in error["message"]
+
+
+@pytest.mark.parametrize("element_type", [None, *sorted(element_registry())])
+def test_the_supported_list_is_exactly_what_build_spec_draws(element_type):
+    """Both directions, over every element the library screens. The list a refusal names is
+    written once; `build_spec` dispatches by its own chain. A placeholder param fails the
+    pattern's validation before the kernel is needed, so a drawn type refuses its params
+    and any other refuses the type, read without the geometry extra installed.
+    """
+    from anvilate.geometry import (
+        _DRAWN_ELEMENT_TYPES,
+        GeometryError,
+        GeometryUnavailable,
+        UnsupportedGeometry,
+        build_spec,
+    )
+    from anvilate.spec import DesignSpec
+
+    spec = DesignSpec.model_validate(
+        {
+            **_spec_document(),
+            "element_type": element_type,
+            "element_params": {"probe": 1.0} if element_type else {},
+        }
+    )
+    with pytest.raises(GeometryError) as refused:
+        build_spec(spec)
+
+    assert not isinstance(refused.value, GeometryUnavailable)
+    drawn = not isinstance(refused.value, UnsupportedGeometry)
+    assert drawn == (element_type in _DRAWN_ELEMENT_TYPES), str(refused.value)
+
+
+def test_every_geometry_pattern_has_a_publishable_summary():
+    """`timber_beam/1` shipped without joining the summary's pattern type, so MCP
+    `build_part` raised an internal error on every timber beam and `anvilate build
+    --format json` printed output its own published schema refused."""
+    from typing import get_args
+
+    from anvilate import geometry
+    from anvilate._cli_output import BuildArtifact
+
+    patterns = {
+        value
+        for name, value in vars(geometry).items()
+        if name.endswith("_PATTERN") and isinstance(value, str)
+    }
+    assert patterns and set(get_args(geometry.GeometryPattern)) == patterns
+    assert set(get_args(BuildArtifact.model_fields["pattern"].annotation)) == patterns
+    for pattern in sorted(patterns):
+        summary = geometry.GeometrySummary(
+            name="probe",
+            pattern=pattern,
+            valid=True,
+            volumeMm3=1.0,
+            dimensionsMm={"x": 1.0},
+            faceTags=("top",),
+        )
+        assert summary.pattern == pattern
 
 
 def test_build_part_without_the_geometry_extra_says_install_not_correct_the_spec(monkeypatch):

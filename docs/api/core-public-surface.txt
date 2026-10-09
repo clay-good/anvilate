@@ -245,6 +245,7 @@ geometry.TIMBER_BEAM_PATTERN
 geometry.BuiltGeometry
 geometry.GeometryError
 geometry.GeometryMeasurement
+geometry.GeometryPattern
 geometry.GeometrySummary
 geometry.GeometryUnavailable
 geometry.ConfirmedStepInterface

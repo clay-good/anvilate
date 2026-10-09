@@ -195,7 +195,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.13.0"
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
 _BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.26.0"
-_GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.3.0"
+_GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.4.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.1.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
 

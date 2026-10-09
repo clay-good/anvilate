@@ -65,6 +65,7 @@ __all__ = [
     "TIMBER_BEAM_PATTERN",
     "BuiltGeometry",
     "GeometryError",
+    "GeometryPattern",
     "GeometrySummary",
     "GeometryMeasurement",
     "GeometryUnavailable",
@@ -116,6 +117,19 @@ BASE_PLATE_PATTERN = "base_plate/1"
 COVER_PLATE_PATTERN = "cover_plate/1"
 TRANSMISSION_SHAFT_PATTERN = "transmission_shaft/1"
 TIMBER_BEAM_PATTERN = "timber_beam/1"
+# The element types `build_spec` draws, named once so a refusal's list cannot drift from it.
+_DRAWN_ELEMENT_TYPES = tuple(
+    pattern.split("/")[0]
+    for pattern in (
+        BASE_PLATE_PATTERN,
+        COVER_PLATE_PATTERN,
+        TRANSMISSION_SHAFT_PATTERN,
+        TIMBER_BEAM_PATTERN,
+    )
+)
+# Every pattern above, as the type the published summaries carry; a test holds the two
+# together, since timber_beam/1 shipped without it and every timber summary then raised.
+GeometryPattern = Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1", "timber_beam/1"]
 _COUNT_UNIT = "count"
 _AP242_SCHEMA = "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
 _AP214_SCHEMA = "AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }"
@@ -150,10 +164,10 @@ class GeometryUnavailable(GeometryError):
 class UnsupportedGeometry(GeometryError):
     """No audited geometry pattern exists for the requested element type."""
 
-    def __init__(self, message: str, *, subject: str, source: str) -> None:
+    def __init__(self, message: str, *, subject: str, source: str, action: str = "select") -> None:
         super().__init__(
             message,
-            action="select",
+            action=action,
             subject=subject,
             source=source,
         )
@@ -172,7 +186,7 @@ class GeometrySummary(StatableModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: Named
-    pattern: Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1"]
+    pattern: GeometryPattern
     valid: Literal[True]
     volume_mm3: Annotated[float, Field(alias="volumeMm3", gt=0)]
     dimensions_mm: FrozenMap[str, Annotated[float, Field(gt=0)]] = Field(
@@ -2540,11 +2554,21 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
             subject=f"the {spec.element_type} element_params mapping",
             source="the selected audited pattern's parameter schema",
         ) from failure
-    tag = spec.element_type or "<undeclared>"
+    supported = ", ".join(_DRAWN_ELEMENT_TYPES)
+    if spec.element_type is None:
+        # Said as what to declare: quoted as a placeholder name, the absence read as an
+        # element type the registry lacked.
+        raise UnsupportedGeometry(
+            "the spec declares no element_type, and geometry is built only from an audited "
+            f"pattern; declare element_type and its element_params (supported: {supported})",
+            action="declare",
+            subject="the spec's element_type",
+            source="the audited geometry pattern registry",
+        )
     raise UnsupportedGeometry(
-        f"no audited geometry pattern is registered for element_type {tag!r}; "
-        "supported: base_plate, cover_plate, transmission_shaft, timber_beam",
-        subject=f"the element_type {tag!r}",
+        f"no audited geometry pattern is registered for element_type {spec.element_type!r}; "
+        f"supported: {supported}",
+        subject=f"the element_type {spec.element_type!r}",
         source="the audited geometry pattern registry",
     )
 

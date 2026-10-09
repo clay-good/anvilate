@@ -430,8 +430,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.56.0",
- "schema_version": "1.56.0", "command": "check", "status": "fail",
+{"schema": "urn:anvilate:schema:cli-output:1.57.0",
+ "schema_version": "1.57.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}

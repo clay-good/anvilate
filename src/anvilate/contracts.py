@@ -128,7 +128,7 @@ SCORECARD_SCHEMA_VERSION = "1.13.0"
 BUNDLE_SCHEMA_VERSION = "1.26.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
-GEOMETRY_SCHEMA_VERSION = "1.3.0"
+GEOMETRY_SCHEMA_VERSION = "1.4.0"
 
 # Planar faces and through-hole patterns measured from imported mating STEP solids.
 INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.15.0"

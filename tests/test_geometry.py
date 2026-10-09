@@ -417,7 +417,7 @@ def test_migrated_geometry_refusals_require_explicit_structured_fields():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 90
+    assert len(sites) == 91
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         required = {"subject"}
@@ -1489,6 +1489,47 @@ def test_a_timber_beam_builds_as_its_dressed_section_over_its_span():
     assert bounds.max.Z - bounds.min.Z == pytest.approx(234.95)
     assert built.shape.volume == pytest.approx(38.1 * 234.95 * 3657.6, rel=1e-9)
     assert set(built.faces) == {"top", "bottom", "north", "south", "east", "west"}
+
+
+def _drawn_examples() -> list:
+    from pathlib import Path
+
+    import yaml
+
+    from anvilate.geometry import _DRAWN_ELEMENT_TYPES
+
+    root = Path(__file__).resolve().parents[1] / "examples"
+    return [
+        path
+        for path in sorted(root.glob("*.spec.yaml"))
+        if yaml.safe_load(path.read_text(encoding="utf-8")).get("element_type")
+        in _DRAWN_ELEMENT_TYPES
+    ]
+
+
+@pytest.mark.parametrize("path", _drawn_examples(), ids=lambda path: path.name)
+def test_every_drawn_example_builds_through_the_mcp_server(path):
+    """Each drawn example, end to end through `build_part`. The timber joist was the one
+    pattern no MCP test built, and its summary raised there: -32603 on every timber beam."""
+    import yaml
+
+    from anvilate.mcp import handle_request
+
+    response = handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "build_part",
+                "arguments": {"spec": yaml.safe_load(path.read_text(encoding="utf-8"))},
+            },
+        }
+    )
+
+    assert "error" not in response, response.get("error")
+    geometry = response["result"]["structuredContent"]["geometry"]
+    assert geometry["pattern"].split("/")[0] in path.read_text(encoding="utf-8")
 
 
 def test_a_step_export_stopped_before_its_stamp_leaves_no_file_at_the_target(tmp_path, monkeypatch):
