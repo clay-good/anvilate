@@ -6,9 +6,10 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Seven of the seven are backed today**; an eighth command, ``verify``, comes from the
-attestation capability. ``doctor`` reports which optional runtimes are present, and
-``fetch`` is where a user consents to downloading a dataset Anvilate may not ship.
+**Eight of the eight are backed today**; a ninth command, ``verify``, comes from the
+attestation capability. ``doctor`` reports which optional runtimes are present,
+``fetch`` is where a user consents to downloading a dataset Anvilate may not ship, and
+``view`` writes the part sheet: the drawn part beside its scorecard, as one HTML file.
 ``build`` now produces STEP for audited ``base_plate``, ``cover_plate``, and
 ``transmission_shaft`` patterns. Other element types are refused by name rather than sent
 through an unreviewed generic generator.
@@ -247,6 +248,7 @@ _COMMAND_EXAMPLES = {
     "verify": "anvilate verify bundle.dsse.json --artifact scorecard.json=scorecard.json",
     "diff": "anvilate diff before.yaml after.yaml --format json",
     "build": "anvilate build part.yaml --output part.step",
+    "view": "anvilate view part.yaml",
     "doctor": "anvilate doctor --format json",
     "fetch": "anvilate fetch aisc-shapes --consent",
     "interfaces": "anvilate interfaces mating.step --format json",
@@ -622,6 +624,31 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render the result"
     )
 
+    view = commands.add_parser(
+        "view",
+        help="write a one-page HTML part sheet: the drawn part beside its scorecard",
+        description="Screen one Design Spec and write a self-contained HTML part sheet: "
+        "the part drawn in four views (iso, front, top, right) above every check with its "
+        "clause and margin. One file and no server; it opens in your browser when run from "
+        "a terminal, and prints and mails like any document. A part with no geometry "
+        "pattern says why it is not drawn. Exit 0 means the sheet was written, whatever "
+        "the verdict on it; a bad spec or output exits 3. Existing files are not "
+        "overwritten unless --force is given.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['view']}",
+    )
+    view.add_argument("spec", type=Path, help="the Design Spec document to draw and screen")
+    view.add_argument(
+        "--output",
+        type=Path,
+        help="the HTML file to write (default: the spec's path with .html)",
+    )
+    view.add_argument(
+        "--no-open", action="store_true", help="write the sheet without opening a browser"
+    )
+    view.add_argument(
+        "--force", action="store_true", help="replace an existing output file deliberately"
+    )
+
     return parser
 
 
@@ -711,6 +738,8 @@ def run(
             code = _doctor(args, out=command_out)
         elif args.command == "fetch":
             code = _fetch(args, out=command_out, err=command_err)
+        elif args.command == "view":
+            code = _view(args, out=command_out, err=command_err)
         else:
             code = _check(args, out=command_out, err=command_err)
     except (KeyboardInterrupt, _Cancelled) as stopped:
@@ -766,7 +795,17 @@ def _wants_json(arguments: list[str]) -> bool:
 
 def _requested_command(arguments: list[str]) -> str:
     """Best command identity available before a malformed invocation can be parsed."""
-    commands = {"build", "check", "verify", "diff", "export", "doctor", "interfaces", *_UNBUILT}
+    commands = {
+        "build",
+        "check",
+        "verify",
+        "diff",
+        "export",
+        "doctor",
+        "interfaces",
+        "view",
+        *_UNBUILT,
+    }
     return next((argument for argument in arguments if argument in commands), "anvilate")
 
 
@@ -2872,6 +2911,85 @@ def _load_all(paths: list[Path], *, err, command: str) -> list[tuple[Path, Any]]
             continue
         loaded.append((path, spec))
     return loaded if refused is None else refused
+
+
+_VIEWS = ("iso", "front", "top", "right")
+
+
+def _view(args: argparse.Namespace, *, out, err) -> int:
+    """``view``: the part and its verdict on one page, written as a file and not served.
+
+    Engineers read a part as a drawing beside its numbers. A web server would be one more
+    process to run and stop for a page that never changes once written, so the sheet is a
+    single HTML file: the drawings are embedded, it needs nothing beside it, and it opens
+    from disk.
+    """
+    from .export.dxf import _atomic_path
+    from .geometry import (
+        GeometryError,
+        GeometryUnavailable,
+        UnsupportedGeometry,
+        build_spec,
+        render_viewport,
+    )
+    from .report import CalculationReport, ReportSection
+    from .screening import screen_spec
+
+    output = args.output or args.spec.with_suffix(".html")
+    if output.suffix.lower() not in (".html", ".htm"):
+        print(f"anvilate view: the sheet is HTML; name it .html, not {output.name}", file=err)
+        return EXIT_BAD_REQUEST
+    if not output.parent.is_dir():
+        print(f"anvilate view: output directory does not exist: {output.parent}", file=err)
+        return EXIT_BAD_REQUEST
+    if output.exists() and not args.force:
+        print(
+            f"anvilate view: output already exists: {output}; pass --force to replace it",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+    spec = _load(args.spec, err=err, command="view")
+    if isinstance(spec, int):
+        return spec
+
+    _progress(err, f"drawing and screening {args.spec}")
+    card = screen_spec(spec)
+    views: list[tuple[str, bytes]] = []
+    absent: str | None = None
+    note: str | None = None
+    try:
+        built = build_spec(spec)
+        views = [(name, render_viewport(built, view=name, width_px=680).data) for name in _VIEWS]
+        note = "As built: " + ", ".join(
+            f"{name.replace('_', ' ')} {value:g} mm"
+            for name, value in sorted(built.dimensions_mm.items())
+        )
+    except (GeometryUnavailable, UnsupportedGeometry, GeometryError) as failure:
+        # The checks do not need the drawing, so the sheet is still written, saying why the
+        # part is not drawn rather than leaving a gap where it would be.
+        absent = str(failure)
+    report = CalculationReport(
+        title=f"{spec.name} — part sheet",
+        project=spec.description,
+        unit_system=spec.units.value if spec.units else None,
+        sections=tuple(ReportSection(entry=entry) for entry in card.entries),
+    )
+    try:
+        with _atomic_path(output) as staging:
+            staging.write_text(
+                report.to_html(views=views, views_absent=absent, views_note=note), "utf-8"
+            )
+    except OSError as failure:
+        print(f"anvilate view: could not write {output} ({failure.strerror or failure})", file=err)
+        return EXIT_BAD_REQUEST
+
+    drawn = f"{len(views)} views" if views else "not drawn"
+    print(f"{spec.name}: {card.status.value} ({drawn}) — wrote {output}", file=out)
+    if not args.no_open and _is_terminal(out):
+        import webbrowser
+
+        webbrowser.open(output.resolve().as_uri())
+    return EXIT_OK
 
 
 def _build(args: argparse.Namespace, *, out, err) -> int:

@@ -16,6 +16,7 @@ has not shipped exits 4 naming that gap.
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
+| `view` | a spec | `--output`, `--no-open`, `--force` | the part sheet was written, whatever its verdict |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -1093,6 +1094,31 @@ carries `UNVALIDATED`, the screening notice, and its blocking checks in `FILE_DE
 nothing means the caller expected a different card. AP242 here means exchangeable solid geometry,
 not semantic PMI. The generated timestamp is normalized, so the same geometry and
 authorization produce byte-identical STEP and the same digest.
+
+## See the part: `anvilate view`
+
+```bash
+anvilate view examples/base_plate.spec.yaml
+```
+
+```text
+bp1: pass (4 views) — wrote examples/base_plate.spec.html
+```
+
+One HTML file, opened in your browser from disk: no server to start or stop. The top of
+the sheet states the overall verdict and the governing check. Below that, the part is drawn
+iso, front, top and right from the built solid, with its dimensions as built, and then every
+check follows with its formula, clause and margin, as in the calculation report. The
+drawings are embedded, so the file prints, mails and archives on its own.
+
+A part whose element has no geometry pattern yet (a lifting lug, say) still gets its sheet,
+and the sheet says why the part is not drawn instead of leaving a gap. The browser opens
+only when you run it at a terminal, or never with `--no-open`. Like `build`, it will not
+replace an existing file without `--force`. Exit 0 means the sheet was written; the verdict
+is on the sheet, and `anvilate check` is the command whose exit code is the verdict.
+
+For the solid itself, `anvilate build` writes STEP, which opens in the CAD tools you
+already use.
 
 ## Running it in CI
 

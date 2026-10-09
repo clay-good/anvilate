@@ -3611,7 +3611,10 @@ def test_the_module_says_how_many_of_its_commands_are_backed():
         if isinstance(action, argparse._SubParsersAction)
     )
     backed = sorted(set(commands) - set(cli._UNBUILT))
-    words = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+    words = {
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9,
+    }  # fmt: skip
 
     claimed = re.search(r"\*\*(\w+) of the (\w+) are backed today\*\*", cli.__doc__)
     assert claimed is not None, "the module no longer says how many commands are backed"
@@ -5460,3 +5463,73 @@ def test_the_exit_code_table_is_every_exit_code_the_cli_defines():
         f"documented but not defined: {sorted(documented - defined)}; "
         f"defined but not documented: {sorted(defined - documented)}"
     )
+
+
+# --- view: the part sheet ------------------------------------------------------------
+
+
+def _example(tmp_path: Path, name: str) -> Path:
+    source = Path(__file__).resolve().parents[1] / "examples" / f"{name}.spec.yaml"
+    target = tmp_path / f"{name}.yaml"
+    target.write_text(source.read_text())
+    return target
+
+
+def test_view_writes_one_self_contained_sheet_with_the_part_drawn(tmp_path, monkeypatch):
+    """The part and its verdict on one page, from a file and not a server."""
+    import webbrowser
+
+    pytest.importorskip("build123d")
+    monkeypatch.setattr(webbrowser, "open", lambda *_: pytest.fail("a pipe opened a browser"))
+    spec = _example(tmp_path, "base_plate")
+    code, out, err = _run("view", str(spec))
+    assert code == 0, err
+    sheet = (tmp_path / "base_plate.html").read_text()
+    assert out.strip().endswith(f"wrote {tmp_path / 'base_plate.html'}")
+    assert sheet.count('src="data:image/svg+xml;base64,') == 4
+    assert [c for c in ("iso", "front", "top", "right") if f"<figcaption>{c}<" in sheet] == [
+        "iso",
+        "front",
+        "top",
+        "right",
+    ]
+    assert "As built: depth 240 mm, plate thickness 25 mm, width 300 mm" in sheet
+    # The verdict comes before the drawings, where a one-page reader looks first.
+    assert sheet.index("Overall: <strong>PASS</strong> · governing check:") < sheet.index(
+        "<h2>Views"
+    )
+    assert "<script" not in sheet and not re.search(r"(?:src|href)=\"(?!data:)", sheet)
+
+
+def test_view_says_why_a_part_with_no_geometry_pattern_is_not_drawn(tmp_path):
+    spec = _example(tmp_path, "padeye")
+    code, _, err = _run("view", str(spec), "--no-open")
+    assert code == 0, err
+    sheet = (tmp_path / "padeye.html").read_text()
+    assert "data:image/svg" not in sheet
+    assert "Not drawn: " in sheet and "lifting_lug" in sheet
+    assert "padeye pin bearing" in sheet  # the checks are on it anyway
+
+
+def test_view_refuses_to_overwrite_or_to_write_something_that_is_not_html(tmp_path):
+    spec = _example(tmp_path, "padeye")
+    (tmp_path / "padeye.html").write_text("someone's page")
+    code, _, err = _run("view", str(spec))
+    assert code == 3 and "pass --force" in err
+    assert (tmp_path / "padeye.html").read_text() == "someone's page"
+    assert _run("view", str(spec), "--force")[0] == 0
+    code, _, err = _run("view", str(spec), "--output", str(tmp_path / "sheet.pdf"))
+    assert code == 3 and "name it .html" in err
+
+
+def test_view_opens_the_sheet_only_for_a_person_at_a_terminal(tmp_path, monkeypatch):
+    import webbrowser
+
+    opened: list[str] = []
+    monkeypatch.setattr(webbrowser, "open", opened.append)
+    spec = _example(tmp_path, "padeye")
+    assert run(["view", str(spec)], stdout=_Terminal(), stderr=io.StringIO()) == 0
+    assert opened == [(tmp_path / "padeye.html").resolve().as_uri()]
+    opened.clear()
+    run(["view", str(spec), "--force", "--no-open"], stdout=_Terminal(), stderr=io.StringIO())
+    assert opened == []

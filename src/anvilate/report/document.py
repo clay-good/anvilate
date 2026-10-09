@@ -21,7 +21,9 @@ diff between two reports is an engineering change, never rendering noise.
 
 from __future__ import annotations
 
+import base64
 import re
+from collections.abc import Sequence
 from html import escape
 from math import isfinite
 from typing import NamedTuple
@@ -494,8 +496,27 @@ class CalculationReport(StatableModel):
         blocks.append(_TextBlock((SCREENING_DISCLAIMER,)))
         return blocks
 
-    def to_html(self) -> str:
-        """The report as a self-contained HTML document (no external assets)."""
+    def to_html(
+        self,
+        *,
+        views: Sequence[tuple[str, bytes]] = (),
+        views_absent: str | None = None,
+        views_note: str | None = None,
+    ) -> str:
+        """The report as a self-contained HTML document (no external assets).
+
+        ``views`` are drawings of the part, each a caption and the SVG bytes, set above the
+        checks so the part and its verdict read on one page: the part sheet `anvilate view`
+        writes. Each is embedded as a ``data:`` image, so the file still needs nothing
+        beside it and no markup in a drawing reaches the page. ``views_absent`` says why a
+        part has none; a sheet with no drawing and no reason would read as a part with no
+        shape. ``views_note`` sits under the drawings: what they show in numbers, such as
+        the dimensions measured off the built solid. A sheet also states the overall verdict
+        and the governing check above the drawings, since the reader of a one-page sheet
+        looks at the top of it first. With none of these, the document is byte-identical to
+        the report.
+        """
+        drawn = bool(views) or views_absent is not None or views_note is not None
         out: list[str] = [
             "<!DOCTYPE html>",
             '<html lang="en">',
@@ -503,7 +524,7 @@ class CalculationReport(StatableModel):
             '<meta charset="utf-8">',
             f"<title>{escape(self.title)}</title>",
             "<style>",
-            _STYLESHEET,
+            _STYLESHEET + ("\n" + _VIEWS_STYLESHEET if drawn else ""),
             "</style>",
             "</head>",
             "<body>",
@@ -515,6 +536,33 @@ class CalculationReport(StatableModel):
             for label, value in header_rows:
                 out.append(f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>")
             out.append("</table>")
+        if drawn:
+            governing = self.governing()
+            out.append(
+                f"<p>Overall: <strong>{_STATUS_LABEL[self.status]}</strong>"
+                + (
+                    f" · governing check: <strong>{escape(governing.name)}</strong>"
+                    if governing is not None
+                    else ""
+                )
+                + "</p>"
+            )
+            out.append('<section class="views">')
+            out.append("<h2>Views</h2>")
+            for caption, svg in views:
+                encoded = base64.b64encode(svg).decode("ascii")
+                out.append('<figure class="view">')
+                out.append(
+                    f'<img src="data:image/svg+xml;base64,{encoded}" width="340" '
+                    f'alt="{escape(caption)}">'
+                )
+                out.append(f"<figcaption>{escape(caption)}</figcaption>")
+                out.append("</figure>")
+            if views_note is not None:
+                out.append(f'<p class="source">{escape(views_note)}</p>')
+            if views_absent is not None:
+                out.append(f'<p class="fallback">Not drawn: {escape(views_absent)}</p>')
+            out.append("</section>")
         out.extend(self._html_list("Standards relied upon", self.standards))
         out.extend(self._html_list("Assumptions", tuple(self._assumption_lines())))
         for section in self.sections:
@@ -1010,5 +1058,15 @@ td.num, th.num { text-align: right; white-space: nowrap; }
   tr, .derivation, section.check { break-inside: avoid; page-break-inside: avoid; }
   h2 { break-after: avoid; page-break-after: avoid; }
   body, .status, .repair, .uncertainty.fragile { color: #000; }
+}
+""".strip()
+
+# Only in a document that carries views, so a report's rendering is unchanged by them.
+_VIEWS_STYLESHEET = """
+figure.view { display: inline-block; margin: 0 1em 1em 0; }
+figure.view img { border: 1px solid var(--rule); background: #fff; }
+figcaption { font-size: 0.9em; color: var(--ink-muted); }
+@media print {
+  section.views { break-inside: avoid; page-break-inside: avoid; }
 }
 """.strip()

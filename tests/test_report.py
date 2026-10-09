@@ -2240,6 +2240,8 @@ _VISUAL_ELEMENTS = frozenset(
         "table", "thead", "tr", "th", "td",
         # typeset equations (MathML Core)
         "math", "mrow", "mi", "mn", "mo", "mfrac", "msqrt", "msub", "msup", "mspace",
+        # drawings of the part on the part sheet: the geometry is information, not ornament
+        "figure", "img", "figcaption",
     }
 )  # fmt: skip
 # Typography, spacing, rules and the scheme; nothing that paints an image or a shadow.
@@ -2257,9 +2259,13 @@ _ORNAMENT = ("gradient", "url(", "shadow", "image", "animation", "transition", "
 
 
 def _rendered_corpus() -> list[str]:
+    drawing = b'<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>'
     return [
         build().to_html()
         for build in (_report, _annotated_report, _ledgered_report, _budgeted_report)
+    ] + [
+        _report().to_html(views=(("iso", drawing),)),
+        _report().to_html(views_absent="no geometry pattern for this element"),
     ]
 
 
@@ -2319,9 +2325,9 @@ def test_every_rendered_element_is_in_the_enumerated_vocabulary():
 
 def test_the_stylesheet_uses_only_the_enumerated_properties_and_no_ornament():
     """Presentation-craft 3.1: no gradient, shadow, image or animation reaches the page."""
-    from anvilate.report.document import _STYLESHEET
+    from anvilate.report.document import _STYLESHEET, _VIEWS_STYLESHEET
 
-    rules = _css_rules(_STYLESHEET)
+    rules = _css_rules(_STYLESHEET) + _css_rules(_VIEWS_STYLESHEET)
     assert len(rules) >= 30, len(rules)
     for _, selector, declarations in rules:
         for name, value in declarations:

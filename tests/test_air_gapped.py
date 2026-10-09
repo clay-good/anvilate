@@ -265,9 +265,14 @@ def test_only_explicit_transports_import_a_network_client() -> None:
         if found:
             offenders[str(path.relative_to(package))] = found
 
-    assert offenders == {"fetch.py": {"urllib"}}, (
+    # `anvilate view` hands the user's browser the sheet it just wrote, and only that: the
+    # file:// URI of a local path (test_view_opens_the_sheet_only_for_a_person_at_a_terminal
+    # holds the exact URI). It reaches no host, but it is the one other module that can open
+    # a URL, so it is named here rather than left off the list.
+    assert offenders == {"fetch.py": {"urllib"}, "cli.py": {"webbrowser"}}, (
         f"the package's network surface has moved: {offenders}. Only the consented dataset "
-        "fetch may import a network client; Anvilate calls no model and serves nothing."
+        "fetch may import a network client, and the CLI the browser that opens a local part "
+        "sheet; Anvilate calls no model and serves nothing."
     )
 
     # SECURITY.md argues from the size of this set, and a number in prose has nothing

@@ -490,6 +490,7 @@ _RESULT_READS = frozenset(
 _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
     "bundle.py:sections<-design_basis_scorecard": "rolls the design-basis card into the bundle",
     "cli.py:_build<-screen_spec": "the build command gates on the card's status",
+    "cli.py:_view<-screen_spec": "the view command renders the card it ran onto the sheet",
     "mcp.py:_run_fea_validation_task<-screen_spec": "the MCP task reports the card it ran",
     "needs.py:deepening<-screen_spec": "the needs report reads which checks could not run",
     "packs/structural.py:screen_structure<-screen_shear_plate": (
