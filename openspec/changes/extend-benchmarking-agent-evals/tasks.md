@@ -10,7 +10,7 @@
       bundled** — the cases are drawings and rubrics rather than values, a leaderboard
       benchmark's version is what a published score must name, and the fetch-on-first-use
       flow already carries the checksum and the attribution CC BY 4.0 requires.
-- [ ] 1.2 Spec-format adapter (benchmark spec → Anvilate Spec IR where in-scope) —
+- [x] 1.2 Spec-format adapter (benchmark spec → Anvilate Spec IR where in-scope) —
       anchored 2026-08-27, see `design.md`: the case format is Markdown under fixed
       headings (Design Goal / Geometry and Dimensions / Material / Manufacturing Method /
       Connection Method / Mechanical Condition / Structural Features / Special
@@ -23,7 +23,8 @@
       `anvilate.fetch`, pinned to a commit. What is left of 1.2 is the translation of an
       in-scope case into a `DesignSpec`, which nothing can exercise until a material path
       exists.
-- [ ] 1.3 Funnel-stage scoring and out-of-scope accounting — the accounting has its first
+      **Closed 2026-10-09 as won't-do, by the user's decision,** for the reason recorded above; reopen it to revisit.
+- [x] 1.3 Funnel-stage scoring and out-of-scope accounting — the accounting has its first
       answer, from a census of all 106 cases on 2026-08-27 (`design.md`): 69 are
       assemblies, which a one-part `DesignSpec` cannot express, and all 37 single-part
       cases are PLA, timber, resin, sheet metal or ABS — none of them in the bundled
@@ -41,6 +42,7 @@
       furniture cases are outside a structural and mechanical screening tool, so the census
       (0 of 106, with its reasons) stays the published answer rather than a reason to add
       materials
+      **Closed 2026-10-09 as won't-do, by the user's decision,** for the reason recorded above; reopen it to revisit.
 
 ## 2. Agent-driving suite
 

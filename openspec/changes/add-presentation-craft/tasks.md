@@ -54,13 +54,14 @@
 
 ## 4. Motion
 
-- [ ] 4.1 Transitions only where one change caused another; bounded duration — nothing
+- [x] 4.1 Transitions only where one change caused another; bounded duration — nothing
       rendered today transitions at all (see 4.2); this is the design rule for the workbench,
       which is unbuilt
 - [x] 4.2 Reduced-motion honoured; nothing animates on a timer — for the surfaces that exist:
       the HTML report carries no script, transition, animation or timer, held over every report
       shape with a planted transition as the gate's own adversary (tests/test_report.py), and the
       CLI prints one line per update with no spinner or cursor control
+      **Closed 2026-10-09 as not applicable, by the user's decision:** the part sheet is a static file and nothing animates, so there is no transition to bound. The rule stays in the workbench-ui spec for a surface that animates.
 
 ## 5. Print
 

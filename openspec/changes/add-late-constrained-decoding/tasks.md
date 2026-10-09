@@ -50,7 +50,7 @@
       Also pinned: an omitted field counts against correctness, an unparseable candidate
       scores zero fields rather than no fields, and a task nobody attempted is an error
       rather than an omission
-- [ ] 3.3 Schema field-name change triggers the evaluation gate in CI — DECLINED 2026-10-08:
+- [x] 3.3 Schema field-name change triggers the evaluation gate in CI — DECLINED 2026-10-08:
       Anvilate no longer runs a model. The project is MCP-only: the user's own agent writes
       specs and Anvilate validates and screens them, so in-process constrained decoding has
       no runtime to measure, and the local Ollama and llama.cpp adapters were removed. The
@@ -59,6 +59,7 @@
       produced a wrong-but-valid lifting lug: minimum safety factor written as maximum, load
       dropped, "ASTM A36" for ASTM-A36, no element. Those findings became the MCP server's
       `instructions` to agents
+      **Closed 2026-10-09 as won't-do, by the user's decision,** for the reason recorded above; reopen it to revisit.
 
 ## 4. Docs
 

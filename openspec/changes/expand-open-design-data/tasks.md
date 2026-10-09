@@ -16,7 +16,7 @@
       database: 2024-T3 sheet, 2024-T351 plate, 7075-T6 sheet and 7075-T651 plate, each at
       A- and B-basis, from Tables 3.2.3.0(b1) and 3.7.6.0(b1). A screen on one states the basis,
       table and superseded note on every entry; the provenance trail carries the note too
-- [ ] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step —
+- [x] 2.2 NIMS MatNavi fetch-on-first-use importer with documented registration step —
       DECLINED 2026-10-08: MatNavi's data sits behind a per-user registration, and
       Anvilate is fully local and usable without any account or login (the user's rule:
       nothing that makes it a managed product). The record of why it was blocked stands: `anvilate.fetch` already does consented,
@@ -63,6 +63,7 @@
 - [x] 2.5 Bundled EN-profile open data with citations — `standards/data/en_profiles.yaml`:
       the 42 EN 10365 IPE and HEA profiles as dimensions, CC0, each cited; properties computed
       with the root fillets and held to the published tabulations (tests/test_profiles.py)
+      **Closed 2026-10-09 as won't-do, by the user's decision,** for the reason recorded above; reopen it to revisit.
 
 ## 3. Dataset publication
 

@@ -17,9 +17,10 @@
       tests/test_edition_differences.py). `compare_editions` reports the successor clause,
       the change and the citation, states "no difference is registered" for anything
       unlisted, and refuses an editionless citation; see 3.4 for side-by-side results
-- [ ] 2.4 Optional offline jurisdiction mapping — DECLINED: shipping one means shipping a
+- [x] 2.4 Optional offline jurisdiction mapping — DECLINED: shipping one means shipping a
       staleness-dated claim about the law in every jurisdiction, and an advisory answer to a
       legal question is the kind of thing that gets quoted as an authoritative one
+      **Closed 2026-10-09 as won't-do, by the user's decision,** for the reason recorded above; reopen it to revisit.
 
 ## 3. Tests
 
