@@ -2065,6 +2065,28 @@ def test_export_artifact_refuses_a_handle_to_the_wrong_kind_of_document():
     assert "'screening' was asked for" in error["message"]
 
 
+@pytest.mark.parametrize(
+    ("operation", "arguments", "producer"),
+    [
+        ("read_scorecard", {}, "run_validation"),
+        ("export_artifact", {"format": "evidence_bundle"}, "run_validation"),
+        ("render_viewport", {"view": "iso"}, "build_part"),
+        ("measure_geometry", {"query": "volume"}, "build_part"),
+    ],
+)
+def test_a_handle_of_the_wrong_kind_names_the_operation_that_publishes_the_right_one(
+    operation, arguments, producer
+):
+    """The two kind names alone were where agents stopped (measured 2026-10-09): holding
+    compile_spec's handle, nothing in the refusal said which call returns the one wanted."""
+    spec_handle = _call("compile_spec", {"document": _spec_document()})["result"][
+        "structuredContent"
+    ]["subject"]
+    error = _call(operation, {"subject": spec_handle, **arguments})["error"]
+    assert "names a 'design-spec'" in error["message"]
+    assert f"is the `subject` that {producer} returns" in error["message"]
+
+
 def test_export_artifact_goes_through_the_symbol_it_names(monkeypatch):
     """`backing` resolving is not evidence the handler goes anywhere near it.
 

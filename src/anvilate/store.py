@@ -96,6 +96,19 @@ class UnknownSubject(KeyError):
     """A handle the store does not hold — an expired entry, a wrong digest, another store."""
 
 
+class _WrongKind(UnknownSubject):
+    """A handle that resolves, to a record of another kind than the one asked for.
+
+    Still an :class:`UnknownSubject` to every caller that handles one. It carries the kind it
+    found, so a caller that knows which operation publishes the kind it wanted can say so
+    without reading the message back.
+    """
+
+    def __init__(self, message: str, *, found: object) -> None:
+        super().__init__(message)
+        self.found = found
+
+
 def subject_store_root(explicit: str | Path | None = None) -> Path:
     """Where handles resolve: ``explicit``, else ``$ANVILATE_SUBJECT_STORE``, else the cache.
 
@@ -235,8 +248,9 @@ class SubjectStore:
                 f"'kind' and a 'document'; delete {path} and publish the document again"
             )
         if kind is not None and record.get("kind") != kind:
-            raise UnknownSubject(
-                f"{handle} names a {record.get('kind')!r}, and a {kind!r} was asked for"
+            raise _WrongKind(
+                f"{handle} names a {record.get('kind')!r}, and a {kind!r} was asked for",
+                found=record.get("kind"),
             )
         if "document" not in record:
             # A `KeyError` here is not an `UnknownSubject`, so it left `resolve` unwrapped

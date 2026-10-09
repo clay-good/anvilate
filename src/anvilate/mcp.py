@@ -60,7 +60,7 @@ from .evidence import provenance_for
 from .geometry import GeometrySummary
 from .refusal import RefusalError, Remedy
 from .spec import ValidationTier
-from .store import SUBJECT_PATTERN, UnknownSubject, subject_store
+from .store import SUBJECT_PATTERN, UnknownSubject, _WrongKind, subject_store
 
 _REQUEST_SOURCE = "the MCP client's JSON-RPC request as sent over stdio"
 
@@ -1527,6 +1527,20 @@ def _task_call_result(structured: Mapping[str, Any]) -> dict[str, Any]:
 # refused by the store naming both kinds, which is the honest answer — see `_screening`.
 _SCREENING = "screening"
 _BUILT_GEOMETRY = "built-geometry"
+# Which operation publishes each kind a tool can ask for. A handle of the wrong kind was
+# refused with the two kind names and nothing else, and in the 2026-10-09 measurement agents
+# that passed compile_spec's handle to read_scorecard or render_viewport gave up there.
+_PUBLISHED_BY = {_SCREENING: "run_validation", _BUILT_GEOMETRY: "build_part"}
+
+
+def _producer_named(wrong: _WrongKind, kind: str) -> _WrongKind:
+    """``wrong``, with the operation that publishes a ``kind`` handle named in its message."""
+    producer = _PUBLISHED_BY[kind]
+    return _WrongKind(
+        f"{wrong.args[0]}. A {kind} handle is the `subject` that {producer} returns: call "
+        f"{producer} with the Design Spec and pass the subject it replies with",
+        found=wrong.found,
+    )
 
 
 def _screening(handle: str) -> Mapping[str, Any]:
@@ -1542,16 +1556,16 @@ def _screening(handle: str) -> Mapping[str, Any]:
     """
     try:
         record = subject_store().resolve(handle, kind=_SCREENING)
-    except UnknownSubject as unknown:
-        message = str(unknown.args[0])
-        if "'scorecard'" in message:
+    except _WrongKind as wrong:
+        message = str(wrong.args[0])
+        if wrong.found == "scorecard":
             raise UnknownSubject(
                 f"{message}. A handle used to name the scorecard alone; it names the spec "
                 f"and the scorecard together now, so that an exported evidence bundle "
                 f"carries the inputs its verdicts were computed from. Call run_validation "
                 f"again to publish a handle of the current shape"
-            ) from unknown
-        raise
+            ) from wrong
+        raise _producer_named(wrong, _SCREENING) from wrong
 
     # A record that resolves is not yet a record this build can read, and the difference is a
     # false claim rather than a crash. `read_scorecard` returned `record["scorecard"]`
@@ -1669,7 +1683,10 @@ def _built_geometry(handle: str):
     from .spec import parse_spec
 
     try:
-        record = subject_store().resolve(handle, kind=_BUILT_GEOMETRY)
+        try:
+            record = subject_store().resolve(handle, kind=_BUILT_GEOMETRY)
+        except _WrongKind as wrong:
+            raise _producer_named(wrong, _BUILT_GEOMETRY) from wrong
         spec = parse_spec(record["spec"])
         expected = GeometrySummary.model_validate(record["geometry"])
         built = build_spec(spec)
