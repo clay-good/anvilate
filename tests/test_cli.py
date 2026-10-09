@@ -5520,6 +5520,13 @@ def test_view_refuses_to_overwrite_or_to_write_something_that_is_not_html(tmp_pa
     assert _run("view", str(spec), "--force")[0] == 0
     code, _, err = _run("view", str(spec), "--output", str(tmp_path / "sheet.pdf"))
     assert code == 3 and "name it .html" in err
+    # A spec saved under an .html name is its own default output; --force must not
+    # replace the document with the sheet drawn from it.
+    disguised = tmp_path / "part.html"
+    disguised.write_text(spec.read_text())
+    code, _, err = _run("view", str(disguised), "--force")
+    assert code == 3 and "is the spec itself" in err
+    assert disguised.read_text() == spec.read_text()
 
 
 def test_view_opens_the_sheet_only_for_a_person_at_a_terminal(tmp_path, monkeypatch):
@@ -5533,3 +5540,13 @@ def test_view_opens_the_sheet_only_for_a_person_at_a_terminal(tmp_path, monkeypa
     opened.clear()
     run(["view", str(spec), "--force", "--no-open"], stdout=_Terminal(), stderr=io.StringIO())
     assert opened == []
+
+
+def test_view_escapes_a_spec_name_that_is_markup(tmp_path):
+    """The sheet's title and heading are the spec's name, which the user wrote."""
+    spec = _example(tmp_path, "padeye")
+    spec.write_text(spec.read_text().replace("name: padeye", 'name: "</title><script>x</script>"'))
+    assert _run("view", str(spec), "--no-open")[0] == 0
+    sheet = (tmp_path / "padeye.html").read_text()
+    assert "<script" not in sheet
+    assert "&lt;/title&gt;&lt;script&gt;x&lt;/script&gt; — part sheet" in sheet

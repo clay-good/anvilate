@@ -2942,6 +2942,14 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
     if not output.parent.is_dir():
         print(f"anvilate view: output directory does not exist: {output.parent}", file=err)
         return EXIT_BAD_REQUEST
+    if output.exists() and args.spec.exists() and output.samefile(args.spec):
+        # A spec saved as part.html makes its own path the default output, and --force
+        # would then replace the document with the sheet drawn from it.
+        print(
+            f"anvilate view: {output} is the spec itself; name the sheet with --output",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
     if output.exists() and not args.force:
         print(
             f"anvilate view: output already exists: {output}; pass --force to replace it",
