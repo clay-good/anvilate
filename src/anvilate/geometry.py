@@ -107,6 +107,7 @@ __all__ = [
     "detect_step_interfaces",
     "measure_geometry",
     "render_viewport",
+    "tessellate",
     "read_step_validation_properties",
     "verify_step_integrity",
     "write_step",
@@ -2666,6 +2667,50 @@ def _render_round_geometry(
         + "\n</svg>\n"
     ).encode("utf-8")
     return RenderedViewport(view=view, width_px=width_px, height_px=height_px, data=svg)
+
+
+def tessellate(built: BuiltGeometry, *, tolerance_mm: float = 0.2) -> dict[str, list]:
+    """The built solid as a triangle mesh for a 3D viewer: points, triangles, feature edges.
+
+    ``v`` is the flat list of vertex coordinates in millimetres (x, y, z per point),
+    ``t`` the flat list of triangle vertex indices, and ``e`` the flat list of edge pairs a
+    viewer draws as lines: every edge on one triangle only, and every edge where two
+    triangles meet at more than 30 degrees, which is the part's outline and creases rather
+    than the tessellation's own seams. Plain numbers only, so the mesh embeds in a page as
+    JSON with nothing in it that a page could run.
+    """
+    if not 0.01 <= tolerance_mm <= 10:
+        raise GeometryError(
+            f"tessellation tolerance must be from 0.01 to 10 mm; got {tolerance_mm}",
+            action="replace",
+            subject=f"the tessellation tolerance {tolerance_mm}",
+            source="a chord tolerance from 0.01 to 10 mm",
+        )
+    points, faces = built.shape.tessellate(tolerance_mm, 0.3)
+    vertices = [round(float(c), 4) for p in points for c in (p.X, p.Y, p.Z)]
+    triangles = [int(i) for face in faces for i in face]
+
+    def normal(a: int, b: int, c: int) -> tuple[float, float, float]:
+        ax, ay, az = (vertices[3 * a + k] for k in range(3))
+        u = [vertices[3 * b + k] - (ax, ay, az)[k] for k in range(3)]
+        w = [vertices[3 * c + k] - (ax, ay, az)[k] for k in range(3)]
+        n = (u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0])
+        size = sqrt(sum(x * x for x in n)) or 1.0
+        return (n[0] / size, n[1] / size, n[2] / size)
+
+    sharing: dict[tuple[int, int], list[tuple[float, float, float]]] = {}
+    for a, b, c in faces:
+        n = normal(a, b, c)
+        for edge in ((a, b), (b, c), (c, a)):
+            sharing.setdefault((min(edge), max(edge)), []).append(n)
+    crease = 0.866  # cos 30 degrees
+    edges = [
+        index
+        for edge, normals in sorted(sharing.items())
+        if len(normals) != 2 or abs(sum(x * y for x, y in zip(*normals, strict=True))) < crease
+        for index in edge
+    ]
+    return {"v": vertices, "t": triangles, "e": edges}
 
 
 def render_viewport(

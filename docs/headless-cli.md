@@ -16,7 +16,7 @@ has not shipped exits 4 naming that gap.
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
-| `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
+| `view` | a spec | `--output`, `--no-open`, `--force`, `--3d`, `--module` | the part sheet was written, whatever its verdict |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -1121,6 +1121,12 @@ and the sheet says why the part is not drawn instead of leaving a gap. The brows
 only when you run it at a terminal, or never with `--no-open`. Like `build`, it will not
 replace an existing file without `--force`. Exit 0 means the sheet was written; the verdict
 is on the sheet, and `anvilate check` is the command whose exit code is the verdict.
+
+`--3d` adds a view of the part you can turn: drag to rotate, scroll to zoom, double-click
+to reset, with Z up as in CAD. It is the one option that puts script in the sheet. The
+script is a small inline WebGL viewer that reads only the part's mesh, embedded as numbers,
+and fetches and stores nothing, so the file is still all there is. A browser without WebGL
+says so and the four drawings stand in for it.
 
 For the solid itself, `anvilate build` writes STEP, which opens in the CAD tools you
 already use.

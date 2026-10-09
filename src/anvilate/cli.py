@@ -646,6 +646,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-open", action="store_true", help="write the sheet without opening a browser"
     )
     view.add_argument(
+        "--3d",
+        dest="three_d",
+        action="store_true",
+        help="add a rotatable 3D view of the part (the sheet then carries a small inline "
+        "viewer script; still one file, nothing fetched)",
+    )
+    view.add_argument(
         "--force", action="store_true", help="replace an existing output file deliberately"
     )
 
@@ -3010,11 +3017,16 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
     _progress(err, f"drawing and screening {args.spec}")
     card = screen_spec(spec, **_with_modules(modules))
     views: list[tuple[str, bytes]] = []
+    model: dict[str, list] | None = None
     absent: str | None = None
     note: str | None = None
     try:
         built = build_spec(spec)
         views = [(name, render_viewport(built, view=name, width_px=680).data) for name in _VIEWS]
+        if args.three_d:
+            from .geometry import tessellate
+
+            model = tessellate(built)
         note = "As built: " + ", ".join(
             f"{name.replace('_', ' ')} {value:g} mm"
             for name, value in sorted(built.dimensions_mm.items())
@@ -3032,7 +3044,8 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
     try:
         with _atomic_path(output) as staging:
             staging.write_text(
-                report.to_html(views=views, views_absent=absent, views_note=note), "utf-8"
+                report.to_html(views=views, views_absent=absent, views_note=note, model_3d=model),
+                "utf-8",
             )
     except OSError as failure:
         print(f"anvilate view: could not write {output} ({failure.strerror or failure})", file=err)

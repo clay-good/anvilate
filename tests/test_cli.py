@@ -2828,6 +2828,18 @@ def test_dxf_of_a_part_with_no_cut_profile_is_unbuilt_not_an_internal_error(exam
     assert "has none; DXF supports 'base_plate/1' and 'cover_plate/1'" in err
 
 
+def test_view_adds_a_rotatable_3d_view_only_when_asked(tmp_path):
+    pytest.importorskip("build123d")
+    spec = _REPO / "examples" / "transmission_shaft.spec.yaml"
+    plain, solid = tmp_path / "plain.html", tmp_path / "solid.html"
+    assert _run("view", str(spec), "--output", str(plain), "--no-open")[0] == EXIT_OK
+    assert _run("view", str(spec), "--output", str(solid), "--no-open", "--3d")[0] == EXIT_OK
+    assert "<script" not in plain.read_text(encoding="utf-8")
+    sheet = solid.read_text(encoding="utf-8")
+    assert '<canvas id="part3d"' in sheet and 'id="part3d-mesh"' in sheet
+    assert not re.search(r"(?:src|href)=\"(?!data:)", sheet), "the sheet fetches nothing"
+
+
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
     spec = tmp_path / "lug.yaml"
     spec.write_text(_LUG_SPEC, encoding="utf-8")

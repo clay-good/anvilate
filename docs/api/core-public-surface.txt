@@ -286,6 +286,7 @@ geometry.check_cylindrical_mate_fit
 geometry.detect_step_interfaces
 geometry.measure_geometry
 geometry.render_viewport
+geometry.tessellate
 geometry.read_step_validation_properties
 geometry.verify_step_integrity
 geometry.write_step
