@@ -32,7 +32,10 @@
       corpus case is in tests/test_renderings.py. The waiting and failed states belong to the
       workbench's panes, which are unbuilt — and blocked on a decision, not on work: the
       workbench-ui spec's Describe pane compiles prose, which needs a model, and design
-      decision D2 (2026-10-08) says Anvilate runs none
+      decision D2 (2026-10-08) says Anvilate runs none. Since 2026-10-09 `anvilate view`
+      writes a static one-page part sheet (drawings beside the scorecard, no server). On
+      the user's decision of that day, the workbench spec stays open beside it as possible
+      future work, and the sheet is not extended further for now
 
 ## 3. Vocabulary and colour
 
