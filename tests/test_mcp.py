@@ -704,6 +704,10 @@ def test_tool_refusals_carry_structured_issues_and_remedies():
 
     capability = _call("run_fea_validation", {"spec": {}})["error"]
     assert capability["data"]["requiredCapabilities"]
+    # The message alone is what a client like Claude Code shows the model, so it names the
+    # missing extension and the synchronous alternative itself.
+    assert "io.modelcontextprotocol/tasks" in capability["message"]
+    assert "run_validation" in capability["message"]
     assert capability["data"]["remedies"] == [
         "declare the io.modelcontextprotocol/tasks extension in params._meta clientCapabilities"
     ]
@@ -1878,6 +1882,51 @@ def test_a_ref_property_must_be_an_object():
     )
     assert reply["error"]["code"] == -32602
     assert "must be a JSON object" in json.dumps(reply["error"])
+
+
+def test_every_tool_argument_states_its_type_inline():
+    """A model writes a call from the schema it can read, and a URN `$ref` is not one.
+
+    Measured 2026-10-09 through Claude Code 2.1: `spec`, declared as a bare `$ref`, was sent
+    as a JSON string in all 16 runs and refused every time, while `compile_spec.document`,
+    `"type": "object"` inline, arrived as an object every time. No agent completed a task.
+    """
+    untyped = [
+        f"{tool['name']}.{name}"
+        for tool in (definition.to_wire() for definition in tool_catalog())
+        for name, schema in tool["inputSchema"]["properties"].items()
+        if "type" not in schema
+    ]
+    assert untyped == []
+
+
+@pytest.mark.parametrize("operation", ["build_part", "run_validation", "run_fea_validation"])
+def test_an_object_sent_as_its_json_string_is_told_so(operation):
+    """The refusal names the mistake an agent actually made, not just the type it got."""
+    encoded = json.dumps({"name": "padeye"})
+    reply = handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": operation, "arguments": {"spec": encoded}},
+        }
+    )
+    assert reply["error"]["code"] == -32602
+    message = reply["error"]["message"]
+    assert f"{operation}.spec must be a JSON object; got a string holding one" in message
+    assert "not its JSON encoding" in message
+    # A string that is not JSON at all keeps the plain answer, rather than a hint that is
+    # false about it.
+    plain = handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": operation, "arguments": {"spec": "padeye"}},
+        }
+    )
+    assert plain["error"]["message"] == f"{operation}.spec must be a JSON object; got str"
 
 
 def test_a_handle_survives_the_server_that_made_it(tmp_path):

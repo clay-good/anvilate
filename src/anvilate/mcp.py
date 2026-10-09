@@ -219,6 +219,25 @@ _SUBJECT_SCHEMA = {
 _UNBOUNDED_TIERS = frozenset({ValidationTier.T3_FEA})
 
 
+def _spec_input() -> dict[str, Any]:
+    """The ``spec`` argument of the three tools that take a Design Spec document.
+
+    The ``$ref`` alone is a URN that a client resolves through the embedded ``$defs``, and
+    the model writing the call did not: measured through Claude Code 2.1 on 2026-10-09,
+    every one of 16 runs sent ``spec`` as a JSON *string*, while ``compile_spec.document``,
+    which says ``"type": "object"`` inline, arrived as an object every time. So the type
+    and where the object comes from are stated beside the reference, which 2020-12 allows.
+    """
+    return {
+        "$ref": _SPEC_REF,
+        "type": "object",
+        "description": (
+            "The Design Spec document as a JSON object, not a string holding its JSON: the "
+            "`spec` object compile_spec returned"
+        ),
+    }
+
+
 def _object_schema(properties: dict[str, Any], *, required: list[str]) -> dict[str, Any]:
     """One tool schema as a 2020-12 object document.
 
@@ -446,7 +465,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "is executed, so the bounded primitive build replies synchronously."
             ),
             input_schema=_object_schema(
-                {"spec": {"$ref": _SPEC_REF}},
+                {"spec": _spec_input()},
                 required=["spec"],
             ),
             output_schema=_object_schema(
@@ -529,7 +548,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             input_schema=_object_schema(
                 {
-                    "spec": {"$ref": _SPEC_REF},
+                    "spec": _spec_input(),
                     "tiers": {
                         "type": "array",
                         "items": {
@@ -576,7 +595,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             ),
             input_schema=_object_schema(
                 {
-                    "spec": {"$ref": _SPEC_REF},
+                    "spec": _spec_input(),
                     "convergence_tol": {"type": "number", "exclusiveMinimum": 0},
                 },
                 required=["spec"],
@@ -1022,7 +1041,7 @@ def _typed_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str
         # handler and raised `dict()`'s own message out of the server, where the client is
         # owed INVALID_PARAMS. Holding the shape here keeps the answer in one place.
         if not isinstance(value, Mapping):
-            return [f"{label} must be a JSON object; got {type(value).__name__}"]
+            return [_type_refusal(label, "object", value)]
         return []
     expected = _JSON_TYPES.get(declared) if declared is not None else None
     if expected is None:
@@ -1033,8 +1052,28 @@ def _typed_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str
         # count. Both numeric type names need the exception, not just "number".
         return [f"{label} must be a JSON {declared}; got a boolean"]
     if not isinstance(value, expected):
-        return [f"{label} must be a JSON {declared}; got {type(value).__name__}"]
+        return [_type_refusal(label, declared, value)]
     return _value_issues(label, value, schema)
+
+
+def _type_refusal(label: str, declared: str, value: Any) -> str:
+    """``value`` is not a JSON ``declared``, said so that the model can correct the call.
+
+    The common case is not a wrong value but a right one encoded twice: an object sent as
+    the string of its JSON. "got str" alone was the whole answer to that, and in the
+    2026-10-09 measurement agents retried the same string until they gave up.
+    """
+    if declared in ("object", "array") and isinstance(value, str):
+        try:
+            decoded = parse_json(value)
+        except ValueError:
+            decoded = None
+        if isinstance(decoded, _JSON_TYPES[declared]):
+            return (
+                f"{label} must be a JSON {declared}; got a string holding one. Pass the "
+                f"{declared} itself as the argument, not its JSON encoding"
+            )
+    return f"{label} must be a JSON {declared}; got {type(value).__name__}"
 
 
 def _value_issues(label: str, value: Any, schema: Mapping[str, Any]) -> list[str]:
@@ -1361,7 +1400,13 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             return _error(
                 request_id,
                 MISSING_REQUIRED_CLIENT_CAPABILITY,
-                "Missing required client capability",
+                # The message is what a model reads: Claude Code 2.1 shows it and nothing
+                # from `data`, and "Missing required client capability" alone sent agents
+                # to report a server fault in the 2026-10-09 measurement.
+                f"Missing required client capability: {tool.name} runs as a task, and this "
+                f"client did not declare the {TASKS_EXTENSION} extension, so it cannot "
+                "start one. The synchronous tiers are run_validation; this tier needs a "
+                "client that supports MCP tasks",
                 requiredCapabilities={"extensions": {TASKS_EXTENSION: {}}},
                 remedies=[
                     f"declare the {TASKS_EXTENSION} extension in params._meta clientCapabilities"

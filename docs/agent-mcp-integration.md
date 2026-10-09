@@ -183,6 +183,12 @@ against are one document. It is not fetched: the identifier is a URN, a name and
 location, and every tool definition embeds the schemas it references under `$defs`, so a
 client resolves them offline.
 
+An *input* that takes a spec also says `"type": "object"` beside its `$ref`, with a
+description naming where the object comes from. A model writes the call from what it can
+read, and a bare URN is not that: measured through Claude Code 2.1, every agent sent `spec`
+as a string holding the JSON and was refused, until the type was stated inline. A string
+that does hold a JSON object is refused with that reason, so the retry is the right one.
+
 ## Step one: compile the document
 
 ```python
