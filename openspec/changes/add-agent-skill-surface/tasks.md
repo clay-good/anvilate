@@ -41,18 +41,16 @@
 
 ## 4. Evaluation
 
-- [ ] 4.1 Measure the agent-driving funnel with and without the skill loaded; publish the
-      delta. Three of the four pieces are now in place: the scoring
-      (`anvilate.agenteval`, from `extend-benchmarking-agent-evals` 2.1-2.3), the server
-      (every tool names its subject and the loop runs end to end), and the corpus —
-      `agenteval.default_task_set`, eight tasks over the eight published operations,
-      including the three that are refused, because a set that avoided them would report a
-      model can drive Anvilate on the strength of a surface it never touched.
-
-      **What is missing is the measurement, and no code here can supply it**: running the
-      funnel needs an agent, and this package initiates no sampling and ships no model. The
-      corpus and the scoring are what a harness outside it consumes. An unmeasured delta is
-      still not published as one. Since 2026-10-08 the project is MCP-only, so the agent is
-      the user's own MCP client, and the server now also sends `instructions` (rules and the
-      live catalogue) on initialize; the measurement is a run of that client with and
-      without the skill
+- [x] 4.1 Measure the agent-driving funnel with and without the skill loaded; publish the
+      delta — measured 2026-10-09 through Claude Code 2.1.295 (`claude-opus-5-5`), with
+      `tools/agent-skill-measurement/`, and published in `docs/agent-driving-evals.md`,
+      where a test holds the table to the saved results. Completion is 7 of 8 in both
+      conditions, so the delta is not completion: with the skill, 6 of 8 answers frame the
+      result as a screen rather than a certified analysis (1 of 8 without), in 18 calls
+      instead of 30. The eighth task is the FEA tier, which Claude Code cannot start
+      because it declares no tasks extension. The first run scored 0 of 8 in both
+      conditions and found three defects, fixed before the published run: tool inputs
+      that took a spec as a bare `$ref`, which the model sent as a string every time; a
+      scorer that read an error rate of 0% because Claude Code strips the
+      `MCP error -326xx` prefix; and a corpus (now 1.1.0) with an unanswerable task and
+      a `compile_spec` prelude no correct run needs

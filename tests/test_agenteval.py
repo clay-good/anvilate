@@ -343,10 +343,12 @@ def test_the_default_task_set_covers_the_surface_it_claims_to():
     exercised = {operation for task in tasks for operation in task.operations}
     assert exercised == REQUIRED_OPERATIONS == {tool.name for tool in tool_catalog()}
 
-    # Every task states its opening separately from its loop, which is what makes an
-    # iteration count mean anything — a set whose tasks fold the two together would report
-    # one pass for a run that repaired twice.
-    assert all(task.prelude for task in tasks)
+    # A required call is a claim that no correct run skips it. `compile_spec` is that only
+    # where the run writes the document itself; everywhere else `run_validation` and
+    # `build_part` parse it, and requiring the compile marked correct runs incomplete
+    # (measured 2026-10-09). No loop repeats it either, so nothing can fold into a prelude.
+    assert [task.task_id for task in tasks if task.prelude] == ["screen-a-described-part"]
+    assert not any("compile_spec" in task.required_tools for task in tasks)
     assert all(task.notes and task.notes.strip() for task in tasks), (
         "a task with no note is a prompt whose grading rule nobody wrote down"
     )
@@ -407,11 +409,11 @@ def _agent_policy(**overrides) -> AgentRecommendationPolicy:
 
 def test_the_published_agent_corpus_and_evaluation_are_versioned_and_complete():
     task_set = default_versioned_task_set()
-    assert task_set.version == AGENT_TASK_SET_VERSION == "1.0.0"
+    assert task_set.version == AGENT_TASK_SET_VERSION == "1.1.0"
     assert task_set.tasks == default_task_set()
 
     evaluation = _agent_evaluation()
-    assert evaluation.task_set_version == "1.0.0"
+    assert evaluation.task_set_version == "1.1.0"
     assert evaluation.task_ids == tuple(outcome.task_id for outcome in evaluation.report.outcomes)
 
 
@@ -445,7 +447,7 @@ def test_local_model_recommendation_requires_both_evidence_sets_to_clear_policy(
 
 
 def test_unattempted_agent_work_is_not_a_passing_zero_error_run():
-    task_set = AgentTaskSet(version="1.0.0", tasks=tuple(_covering_set()))
+    task_set = AgentTaskSet(version=AGENT_TASK_SET_VERSION, tasks=tuple(_covering_set()))
     evaluation = evaluate_task_set(
         task_set,
         {task.task_id: [] for task in task_set.tasks},
@@ -465,7 +467,7 @@ def test_unattempted_agent_work_is_not_a_passing_zero_error_run():
 
 
 def test_agent_iteration_and_tool_error_gates_fail_independently_of_completion():
-    task_set = AgentTaskSet(version="1.0.0", tasks=tuple(_covering_set()))
+    task_set = AgentTaskSet(version=AGENT_TASK_SET_VERSION, tasks=tuple(_covering_set()))
     transcripts = {}
     for task in task_set.tasks:
         required = task.required_tools[0]
@@ -534,3 +536,46 @@ def test_the_corpus_reaches_every_backed_operation():
     assert set(mcp._UNBUILT) == set()
     reached = {operation for task in default_task_set() for operation in task.operations}
     assert set(mcp._DISPATCH) <= reached
+
+
+# --- the published measurement -------------------------------------------------------
+
+
+def test_the_published_skill_measurement_is_what_its_transcripts_score():
+    """The table in docs/agent-driving-evals.md, recomputed from the saved outcomes.
+
+    The rates are rebuilt by `AgentEvalReport` rather than read from the stored numbers, and
+    each outcome must carry the current corpus's operations: a corpus edit leaves this
+    measurement describing tasks that no longer exist, and it has to be re-run or relabelled
+    rather than left standing beside the new set.
+    """
+    import json
+    from pathlib import Path
+
+    from anvilate.agenteval import AgentEvalReport
+
+    root = Path(__file__).resolve().parent.parent
+    results = json.loads(
+        (root / "tools/agent-skill-measurement/results/2026-10-09.json").read_text("utf-8")
+    )
+    page = (root / "docs/agent-driving-evals.md").read_text("utf-8")
+    corpus = {task.task_id: task for task in default_task_set()}
+    for condition, label in (("baseline", "Baseline"), ("skill", "With the skill")):
+        report = AgentEvalReport.model_validate(results[condition]["report"])
+        for outcome in report.outcomes:
+            task = corpus[outcome.task_id]
+            assert (outcome.prelude, outcome.required_tools) == (
+                task.prelude,
+                task.required_tools,
+            ), f"{outcome.task_id}: the corpus changed since this measurement"
+        assert len(report.outcomes) == len(corpus)
+        calls = sum(len(outcome.calls) for outcome in report.outcomes)
+        errors = sum(outcome.tool_call_errors for outcome in report.outcomes)
+        completed = sum(outcome.completed for outcome in report.outcomes)
+        cost = sum(extra["cost_usd"] for extra in results[condition]["extra"].values())
+        row = (
+            f"| {label} | {completed} of {len(corpus)} ({report.completion_rate:.0%}) "
+            f"| {report.mean_iterations:.1f} | {errors} of {calls} "
+            f"({report.tool_call_error_rate:.0%}) | {calls} | ${cost:.2f} |"
+        )
+        assert row in page, row

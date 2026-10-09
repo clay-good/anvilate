@@ -108,8 +108,12 @@ is the top of a band, so the most over-engineered check governs, not the least. 
 `_STATUS_RANK` by a test rather than restated, so the sentence cannot drift from the ranking
 a third time.
 
-The skill targets the Python API, because that is the surface that exists today. When the
-CLI and the MCP server land ([`headless-automation`](../openspec/specs/headless-automation/spec.md)),
-the skill gains their workflows and the drift gate extends to their published schemas.
-Measuring whether shipping the skill improves an agent-driven funnel needs the
-benchmarking harness and has not been done.
+The skill's examples use the Python API, and that is what its drift gate resolves. The
+MCP server sends its own rules and live catalogue on initialize, so an agent driving
+the server has the tool surface without the skill.
+
+**Measured on 2026-10-09** through Claude Code, with and without the skill appended: it
+does not change whether an agent completes the tasks (7 of 8 either way). It changes the
+report. With it, 6 of 8 answers called the result a screen rather than a certified analysis,
+against 1 of 8 without, and the same work took 18 tool calls instead of 30. The numbers and
+their limits are in [Agent-driving evals](agent-driving-evals.md#measured-claude-code-with-and-without-the-skill-2026-10-09).

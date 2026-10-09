@@ -95,7 +95,7 @@ __all__ = [
     "task_set_issues",
 ]
 
-AGENT_TASK_SET_VERSION = "1.0.0"
+AGENT_TASK_SET_VERSION = "1.1.0"
 _SEMVER = re.compile(r"\d+\.\d+\.\d+")
 
 
@@ -756,7 +756,13 @@ _TASK_SET: tuple[AgentTask, ...] = (
         required_tools=("run_validation",),
         notes=(
             "The shortest complete loop, and the one every other task is built on. The "
-            "answer must come from the card rather than from the model's own arithmetic."
+            "answer must come from the card rather than from the model's own arithmetic. "
+            "The only task with a compile_spec prelude, because it is the only one whose "
+            "document the run has to write: every other task hands it a spec file, and "
+            "run_validation and build_part parse and refuse a document themselves, so "
+            "compiling first is a call no correct run needs. Version 1.0.0 required it of "
+            "every task, and on 2026-10-09 it marked incomplete runs that had reached the "
+            "right verdict by the direct route."
         ),
     ),
     AgentTask(
@@ -764,7 +770,6 @@ _TASK_SET: tuple[AgentTask, ...] = (
         prompt=(
             "Screen that padeye, then show me the scorecard again without re-running the checks."
         ),
-        prelude=("compile_spec",),
         required_tools=("run_validation", "read_scorecard"),
         notes=(
             "The subject handle is the only way to do this. A run that re-screens instead "
@@ -778,11 +783,11 @@ _TASK_SET: tuple[AgentTask, ...] = (
             "Take that padeye down to 6 mm thick, screen it, and fix whatever fails — using "
             "the repair the scorecard gives you rather than a size you pick."
         ),
-        prelude=("compile_spec",),
-        required_tools=("run_validation", "compile_spec", "run_validation"),
+        required_tools=("run_validation", "run_validation"),
         notes=(
-            "Two passes through the loop, which is what makes the iteration count mean "
-            "something. The second compile is the repair; the entry carries the thickness "
+            "Two screens, before and after the repair. The second screen of the repaired "
+            "document is the repair; version 1.0.0 also required a compile between them, "
+            "which no correct run needs. The entry carries the thickness "
             "that lands exactly on the required margin, so a run that guesses a size has "
             "ignored the answer it was given."
         ),
@@ -793,7 +798,6 @@ _TASK_SET: tuple[AgentTask, ...] = (
             "Screen this bracket spec, which declares no element type, and tell me whether "
             "it passed."
         ),
-        prelude=("compile_spec",),
         required_tools=("run_validation",),
         notes=(
             "The card is NOT_EVALUATED with the reason. The failure mode being measured is a "
@@ -803,7 +807,6 @@ _TASK_SET: tuple[AgentTask, ...] = (
     AgentTask(
         task_id="render-built-geometry",
         prompt="Build the base plate and show me its isometric rendered view.",
-        prelude=("compile_spec",),
         required_tools=("build_part", "render_viewport"),
         notes=(
             "The renderer takes the built-geometry subject, not the compiled-spec or screening "
@@ -813,21 +816,23 @@ _TASK_SET: tuple[AgentTask, ...] = (
     AgentTask(
         task_id="measure-rather-than-assume",
         prompt=(
-            "What is the actual bore diameter on the part you built, as opposed to what the "
-            "spec asked for?"
+            "Build the base plate, then tell me its actual plate thickness as built, as "
+            "opposed to what the spec asked for."
         ),
-        prelude=("compile_spec",),
         required_tools=("build_part", "measure_geometry"),
         notes=(
             "The build and measurement both succeed. A run must carry the build handle into "
             "measurement rather than answer a question about actual geometry from the spec "
-            "that asked for it."
+            "that asked for it. Version 1.0.0 asked for the bore of 'the part you built': "
+            "each run is a fresh session, so the honest answer was that nothing had been "
+            "built, and no correct run could complete it (2026-10-09, 16 of 16 runs made no "
+            "call). The base plate has no bore either, so the question names a dimension it "
+            "has."
         ),
     ),
     AgentTask(
         task_id="export-only-what-passed",
         prompt="Screen the padeye and export the evidence bundle for it.",
-        prelude=("compile_spec",),
         required_tools=("run_validation", "export_artifact"),
         notes=(
             "The order is the whole task: the export takes the scorecard handle, so a run "
@@ -839,7 +844,6 @@ _TASK_SET: tuple[AgentTask, ...] = (
     AgentTask(
         task_id="use-the-convergent-tier-through-its-handle",
         prompt="Run the FEA-class checks on that padeye and tell me when they finish.",
-        prelude=("compile_spec",),
         required_tools=("run_fea_validation",),
         notes=(
             "Task-dispatched, because the run stops on a convergence tolerance rather than a "

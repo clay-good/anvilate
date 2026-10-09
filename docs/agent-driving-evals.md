@@ -20,10 +20,10 @@ down and its error count with it; only the completion rate says so.
 
 ## The opening and the loop are separate, and that is what makes iterations mean anything
 
-A task states a `prelude` — the one-off opening, compiling the spec — and `required_tools`,
-the loop that repeats. Folded into one sequence, a run that repaired twice counts a single
-pass, because the second pass goes looking for a second `compile_spec` that no correct run
-makes. The library asserts exactly that: the same transcript scores 2 split and 1 folded.
+A task states a `prelude` — a one-off opening, such as compiling a document the run wrote
+itself — and `required_tools`, the loop that repeats. Folded into one sequence, a run that
+repaired twice counts a single pass, because the second pass goes looking for a second
+`compile_spec` that no correct run makes. The library asserts exactly that: the same transcript scores 2 split and 1 folded.
 
 ## A tool-call error is not a failing check
 
@@ -54,7 +54,7 @@ transcript, which scores incomplete.
 with the system prompt, the retry policy and the context window as much as with the model,
 so a number recorded without them cannot be compared with another one.
 
-`default_versioned_task_set()` wraps the published corpus in `AgentTaskSet` version 1.0.0.
+`default_versioned_task_set()` wraps the published corpus in `AgentTaskSet` version 1.1.0.
 `evaluate_task_set()` retains that version and the complete ordered task-id list beside the
 report; an `AgentEvaluation` refuses a report that silently drops or adds a task.
 
@@ -84,13 +84,51 @@ The viewport and measurement tasks check the positive geometry path: build a bas
 carry its subject handle into `render_viewport` and `measure_geometry`, and use the returned
 image and measurements rather than describing or calculating values the model invented.
 
-**What is still missing is the measurement.** Running the funnel needs an agent, and nothing
-here runs a model: this package initiates no sampling and ships none. It scores a transcript,
-which is what makes it testable offline and what keeps the published recommendation gated on
-a measurement rather than an impression — and the delta between "with the skill" and "without
-it" stays unpublished until somebody outside this package produces the transcripts. The
-publication path is built; without those real transcripts its honest output is no
-recommendation.
+## Measured: Claude Code, with and without the skill (2026-10-09)
+
+The corpus was run through Claude Code 2.1.295 (`claude -p`, model `claude-opus-5-5`), once
+with only the server's own instructions and once with the [skill](agent-skill.md)
+appended to the system prompt. Each run got a fresh session and subject store, the three
+example specs, and only `Read`, `Glob` and the Anvilate tools. The harness, scorer and
+both scored result sets are in
+[`tools/agent-skill-measurement/`](../tools/agent-skill-measurement/).
+
+| Condition | Completion | Mean iterations | Tool-call errors | Calls | Cost |
+| --- | --- | --- | --- | --- | --- |
+| Baseline | 7 of 8 (88%) | 1.0 | 1 of 30 (3%) | 30 | $3.22 |
+| With the skill | 7 of 8 (88%) | 1.0 | 1 of 18 (6%) | 18 | $3.36 |
+
+**The skill does not change whether an agent can drive Anvilate. It changes how the
+result is reported.** Both conditions finish the same seven tasks. With the skill, 6 of
+8 final answers state that the result is a screen and not a certified analysis, against
+1 of 8 without it (a keyword count over the answers, which is cruder than the scoring
+above), and the same work takes 18 calls instead of 30. The error-rate difference is one
+refusal over two denominators, not a difference.
+
+The task neither condition completes is the FEA tier. `run_fea_validation` runs as an MCP
+task and Claude Code declares no tasks extension, so the server refuses it in both
+conditions. Both agents said so rather than inventing a result.
+
+**The first run of this measurement scored 0 of 8 in both conditions**
+([its results](../tools/agent-skill-measurement/results/2026-10-09-before-schema-fix.json)).
+It found three defects, and the numbers above are from after fixing them:
+
+- **The server.** The tools that take a spec declared it as a bare `$ref`. In all 16 runs
+  the model sent `spec` as a JSON string and was refused. Every input now states its type
+  inline (gated in `tests/test_mcp.py`), and a string that holds a JSON object is refused
+  with that reason.
+- **The scorer.** It counted a call as failed only when the text read `MCP error -32…`.
+  Claude Code strips that prefix, so a run made entirely of refused calls scored a 0%
+  error rate. A refusal is now recognized as bare text where an answer is a JSON document.
+- **The corpus** (now `AgentTaskSet` 1.1.0). One task asked about "the part you built" in
+  a session where nothing had been built, so no correct run could finish it. Every task
+  also required a `compile_spec` call that no correct run needs, which marked runs that
+  reached the right verdict directly as incomplete. `compile_spec` is now required only
+  where the run writes the document itself.
+
+What this does not show: one run per task per condition, one model and one client. The
+runs also inherited the operator's own Claude Code configuration, the same in both
+conditions. A difference smaller than a whole task is not resolvable at this size.
 
 ## The other half: external suites, referenced rather than bundled
 
