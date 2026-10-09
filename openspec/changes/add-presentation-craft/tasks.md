@@ -15,13 +15,24 @@
 
 ## 2. Layout
 
-- [ ] 2.1 Reserved space for streaming results; no reflow as checks resolve
-- [ ] 2.2 Layout-stability check in CI over a reference corpus
+- [x] 2.1 Reserved space for streaming results; no reflow as checks resolve — for the
+      surface that fills while a person watches, the CLI sweep: progress is append-only on
+      stderr, each count padded to the width of its total, and the cards print to stdout
+      once every spec has resolved, so no result displaces another. A workbench, if one is
+      built, inherits the requirement (see 2.3)
+- [x] 2.2 Layout-stability check in CI over a reference corpus — the report renderings
+      are held to committed copies (tests/test_renderings.py), and since 2026-10-09 the live
+      check stream is too: twelve specs, no control character but the newline, one activity
+      column, and a committed copy in tests/live_streams/ that a change must acknowledge
+      (`test_the_live_check_stream_never_moves_what_it_already_printed`). Mutating progress
+      to rewrite in place, or dropping the count padding, fails it
 - [ ] 2.3 Designed empty, waiting, and failed states for every pane — the report's empty state
       is designed: every block states `none declared`, and since 2026-09-25 a report with no
       checks says so in its margin summary rather than drawing a header over no rows. Its
       corpus case is in tests/test_renderings.py. The waiting and failed states belong to the
-      workbench's panes, which are unbuilt
+      workbench's panes, which are unbuilt — and blocked on a decision, not on work: the
+      workbench-ui spec's Describe pane compiles prose, which needs a model, and design
+      decision D2 (2026-10-08) says Anvilate runs none
 
 ## 3. Vocabulary and colour
 

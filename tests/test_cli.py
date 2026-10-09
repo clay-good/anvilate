@@ -4968,6 +4968,70 @@ def test_a_long_check_reports_progress_on_stderr_and_leaves_stdout_the_result(tm
     assert "screening" not in piped_err.getvalue(), "progress printed into a pipe"
 
 
+class _RecordingTerminal(_Terminal):
+    """A terminal that keeps every write, so the stream can be read as it arrived."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.writes: list[str] = []
+
+    def write(self, text: str) -> int:
+        self.writes.append(text)
+        return super().write(text)
+
+
+_LIVE_STREAMS = Path(__file__).resolve().parent / "live_streams"
+
+
+def test_the_live_check_stream_never_moves_what_it_already_printed(tmp_path):
+    """Presentation-craft 2.1 and 2.2, for the surface that fills while a person watches.
+
+    A sweep's progress is the one CLI output that arrives over time, so it is held to the
+    layout rules over a reference corpus: twelve specs, so the count gains a digit.
+
+    - Append-only: no write carries a carriage return, a backspace, an escape sequence or
+      any other control but the newline, so nothing already on screen can be overwritten,
+      cleared or shifted. Results go to stdout once every spec has resolved, so no card is
+      displaced by a later one.
+    - Fixed column: every activity starts in the same column, the count padded to the
+      width of the total (`[ 9/12]`, `[10/12]`).
+    - Acknowledged: the stream, with its timing estimate masked, is the committed copy in
+      tests/live_streams/. A change to it fails until accepted with
+      `ANVILATE_ACCEPT_RENDERINGS=1`, as the report renderings are.
+    """
+    source = (Path(__file__).resolve().parents[1] / "examples" / "padeye.spec.yaml").read_text()
+    for index in range(1, 13):
+        (tmp_path / f"part-{index:02d}.yaml").write_text(source)
+    err = _RecordingTerminal()
+    out = io.StringIO()
+    run(["check", str(tmp_path)], stdout=out, stderr=err)
+
+    stream = "".join(err.writes)
+    controls = sorted({repr(c) for c in stream if (ord(c) < 32 and c != "\n") or c == "\x7f"})
+    assert controls == [], f"the live stream can move settled content with {controls}"
+    lines = stream.splitlines()
+    assert len(lines) == 12
+    columns = {line.index("] ") for line in lines}
+    assert columns == {len("[12/12]") - 1}, lines
+
+    masked = re.sub(
+        r" \((?:about \d+ s|under 1 s) left, estimated from \d+ finished specs?\)",
+        " (<estimate>)",
+        stream,
+    )
+    masked = masked.replace(str(tmp_path), "<corpus>")
+    golden = _LIVE_STREAMS / "check_sweep.txt"
+    if os.environ.get("ANVILATE_ACCEPT_RENDERINGS") == "1":
+        golden.parent.mkdir(exist_ok=True)
+        golden.write_text(masked, encoding="utf-8")
+    assert golden.exists(), "no committed copy; accept one with ANVILATE_ACCEPT_RENDERINGS=1"
+    assert masked == golden.read_text(encoding="utf-8"), (
+        "the live check stream changed. If meant, acknowledge it with "
+        "`ANVILATE_ACCEPT_RENDERINGS=1 pytest tests/test_cli.py -k live_check_stream` and "
+        "commit tests/live_streams/"
+    )
+
+
 def test_the_completion_script_is_read_off_the_parser_and_completes_in_bash(tmp_path):
     """Interaction-quality 5.3: every command and each command's options, from the parser."""
     import shutil
