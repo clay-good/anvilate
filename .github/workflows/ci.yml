@@ -200,11 +200,29 @@ jobs:
       - name: Every audited pattern's STEP reads with no errors and no warnings
         run: |
           set -euo pipefail
-          for pattern in base_plate cover_plate transmission_shaft; do
-            # A plate's own card does not pass, so it is written watermarked; the shaft's
-            # does, and --unvalidated is refused for a card that passes.
-            anvilate build "examples/$pattern.spec.yaml" --output "$pattern.step" \
-              || anvilate build "examples/$pattern.spec.yaml" --output "$pattern.step" --unvalidated
+          # The examples are read from the pattern registry, not listed here: a list of three
+          # names left timber_beam/1 unrefereed when it shipped. A drawn element type with no
+          # example fails the step rather than shrinking it.
+          specs=$(python - <<'PY'
+          import pathlib, yaml
+          from anvilate.geometry import _DRAWN_ELEMENT_TYPES
+          found = {}
+          for path in sorted(pathlib.Path("examples").glob("*.spec.yaml")):
+              kind = yaml.safe_load(path.read_text()).get("element_type")
+              if kind in _DRAWN_ELEMENT_TYPES:
+                  found.setdefault(kind, path)
+          missing = sorted(set(_DRAWN_ELEMENT_TYPES) - set(found))
+          assert not missing, f"no example spec draws {missing}"
+          print(" ".join(str(found[kind]) for kind in _DRAWN_ELEMENT_TYPES))
+          PY
+          )
+          echo "refereeing: $specs"
+          for spec in $specs; do
+            pattern=$(basename "$spec" .spec.yaml)
+            # A card that does not pass is written watermarked; --unvalidated is refused for
+            # a card that passes, so each is tried the way it can succeed.
+            anvilate build "$spec" --output "$pattern.step" \
+              || anvilate build "$spec" --output "$pattern.step" --unvalidated
             ./stepcode/build/bin/p21read_sdai_ap242 "$pattern.step" | tee "$pattern.txt"
             # Both passes, the instance read and the reference check, must say it.
             test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$pattern.txt")" -eq 2
