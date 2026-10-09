@@ -54,7 +54,7 @@ transcript, which scores incomplete.
 with the system prompt, the retry policy and the context window as much as with the model,
 so a number recorded without them cannot be compared with another one.
 
-`default_versioned_task_set()` wraps the published corpus in `AgentTaskSet` version 1.1.0.
+`default_versioned_task_set()` wraps the published corpus in `AgentTaskSet` version 1.2.0.
 `evaluate_task_set()` retains that version and the complete ordered task-id list beside the
 report; an `AgentEvaluation` refuses a report that silently drops or adds a task.
 
@@ -74,7 +74,7 @@ harness, and names every failed gate in release-note-ready Markdown.
 
 ## Scope
 
-**The corpus is written now**, as `agenteval.default_task_set`: eight tasks over the eight
+**The corpus is written now**, as `agenteval.default_task_set`: nine tasks over the eight
 published operations. It waited for the server, because a task set is a claim about what an
 agent should have done with the tools and writing it before they could be driven would have
 been writing it against nothing — the same order
@@ -90,41 +90,36 @@ The corpus was run through Claude Code 2.1.295 (`claude -p`, model `claude-opus-
 with only the server's own instructions and once with the [skill](agent-skill.md)
 appended to the system prompt. Each run got a fresh session and subject store, the three
 example specs, and only `Read`, `Glob` and the Anvilate tools. The harness, scorer and
-both scored result sets are in
+every scored result set are in
 [`tools/agent-skill-measurement/`](../tools/agent-skill-measurement/).
 
 | Condition | Completion | Mean iterations | Tool-call errors | Calls | Cost |
 | --- | --- | --- | --- | --- | --- |
-| Baseline | 7 of 8 (88%) | 1.0 | 1 of 30 (3%) | 30 | $3.22 |
-| With the skill | 7 of 8 (88%) | 1.0 | 1 of 18 (6%) | 18 | $3.36 |
+| Baseline | 8 of 9 (89%) | 1.0 | 1 of 17 (6%) | 17 | $3.05 |
+| With the skill | 8 of 9 (89%) | 1.0 | 1 of 15 (7%) | 15 | $3.45 |
 
 **The skill does not change whether an agent can drive Anvilate. It changes how the
-result is reported.** Both conditions finish the same seven tasks. With the skill, 6 of
-8 final answers state that the result is a screen and not a certified analysis, against
-1 of 8 without it (a keyword count over the answers, which is cruder than the scoring
-above), and the same work takes 18 calls instead of 30. The error-rate difference is one
-refusal over two denominators, not a difference.
+result is reported.** Both conditions finish the same eight tasks in nearly the same number
+of calls. With the skill, 5 of 9 final answers say the result is a screen and not a
+certified analysis, against 0 of 9 without it. That is a keyword count over the answers,
+cruder than the scoring above. The skill costs about $0.40 more over the nine tasks, which
+is the length of the prompt it adds. The error-rate difference is one refusal over two
+denominators, not a difference.
 
 The task neither condition completes is the FEA tier. `run_fea_validation` runs as an MCP
 task and Claude Code declares no tasks extension, so the server refuses it in both
 conditions. Both agents said so rather than inventing a result.
 
-**The first run of this measurement scored 0 of 8 in both conditions**
-([its results](../tools/agent-skill-measurement/results/2026-10-09-before-schema-fix.json)).
-It found three defects, and the numbers above are from after fixing them:
+### How the number got here: three runs, four defects
 
-- **The server.** The tools that take a spec declared it as a bare `$ref`. In all 16 runs
-  the model sent `spec` as a JSON string and was refused. Every input now states its type
-  inline (gated in `tests/test_mcp.py`), and a string that holds a JSON object is refused
-  with that reason.
-- **The scorer.** It counted a call as failed only when the text read `MCP error -32…`.
-  Claude Code strips that prefix, so a run made entirely of refused calls scored a 0%
-  error rate. A refusal is now recognized as bare text where an answer is a JSON document.
-- **The corpus** (now `AgentTaskSet` 1.1.0). One task asked about "the part you built" in
-  a session where nothing had been built, so no correct run could finish it. Every task
-  also required a `compile_spec` call that no correct run needs, which marked runs that
-  reached the right verdict directly as incomplete. `compile_spec` is now required only
-  where the run writes the document itself.
+The same day's earlier runs are kept beside this one, because each found something the
+offline suite could not:
+
+| Run | Result | What it found |
+| --- | --- | --- |
+| [1](../tools/agent-skill-measurement/results/2026-10-09-before-schema-fix.json) | 0 of 8, both conditions | The tools that take a spec declared it as a bare `$ref`, and the model sent `spec` as a JSON string in all 16 runs. Every input now states its type inline (gated in `tests/test_mcp.py`), and a string holding a JSON object is refused with that reason. The scorer also read 0% errors here: it looked for `MCP error -32…`, which Claude Code strips, so a refusal is now recognized as bare text where an answer is a JSON document. |
+| [2](../tools/agent-skill-measurement/results/2026-10-09-before-instructions-fix.json) | 7 of 8 both; 30 calls against 18 | Claude Code keeps the first 2,048 characters of a server's instructions, and the element list sat after them, so the baseline agent guessed element names the skill had told the other one. The rules, element names and material ids now come first, held under that limit by a test. The call gap closed in run 3. |
+| This one | 8 of 9 both | Corpus 1.0.0 asked about "the part you built" in a fresh session, and required a `compile_spec` that `run_validation` makes unnecessary, which scored correct runs incomplete. Corpus 1.2.0 requires `compile_spec` only where a document is checked without screening it. |
 
 What this does not show: one run per task per condition, one model and one client. The
 runs also inherited the operator's own Claude Code configuration, the same in both

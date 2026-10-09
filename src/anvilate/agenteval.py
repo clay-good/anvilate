@@ -95,7 +95,7 @@ __all__ = [
     "task_set_issues",
 ]
 
-AGENT_TASK_SET_VERSION = "1.1.0"
+AGENT_TASK_SET_VERSION = "1.2.0"
 _SEMVER = re.compile(r"\d+\.\d+\.\d+")
 
 
@@ -752,17 +752,29 @@ _TASK_SET: tuple[AgentTask, ...] = (
             "60 kN sling leg. Required safety factor 2.0. Screen it and tell me the verdict "
             "with the clause behind each check."
         ),
-        prelude=("compile_spec",),
         required_tools=("run_validation",),
         notes=(
             "The shortest complete loop, and the one every other task is built on. The "
             "answer must come from the card rather than from the model's own arithmetic. "
-            "The only task with a compile_spec prelude, because it is the only one whose "
-            "document the run has to write: every other task hands it a spec file, and "
-            "run_validation and build_part parse and refuse a document themselves, so "
-            "compiling first is a call no correct run needs. Version 1.0.0 required it of "
-            "every task, and on 2026-10-09 it marked incomplete runs that had reached the "
-            "right verdict by the direct route."
+            "No compile_spec prelude: run_validation parses and refuses a document itself, "
+            "so a run that writes the spec right first time and screens it has done the "
+            "task. Versions 1.0.0 and 1.1.0 required the compile, and on 2026-10-09 they "
+            "marked exactly that run incomplete. compile_spec is held by the task that "
+            "needs it, check-a-document-without-screening-it."
+        ),
+    ),
+    AgentTask(
+        task_id="check-a-document-without-screening-it",
+        prompt=(
+            "Is base_plate.spec.yaml a valid Design Spec as written? Don't run any "
+            "engineering checks on it."
+        ),
+        required_tools=("compile_spec",),
+        notes=(
+            "The one operation that validates a document without screening it, so the one "
+            "task where compile_spec is required rather than merely allowed. The answer is "
+            "the errors list compile_spec returns, empty for this file; a run that screens "
+            "the part has done what it was told not to."
         ),
     ),
     AgentTask(
@@ -857,7 +869,7 @@ _TASK_SET: tuple[AgentTask, ...] = (
 def default_task_set() -> tuple[AgentTask, ...]:
     """The agent-driving corpus, in a fixed order.
 
-    Eight tasks over the eight published operations, so a completion rate is a claim about
+    Nine tasks over the eight published operations, so a completion rate is a claim about
     the whole surface rather than about the half that happens to be dispatched. Held against
     the live catalog by :func:`task_set_issues`, which is what stops a renamed operation
     quietly narrowing what the eval covers.

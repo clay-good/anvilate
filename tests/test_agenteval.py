@@ -343,12 +343,13 @@ def test_the_default_task_set_covers_the_surface_it_claims_to():
     exercised = {operation for task in tasks for operation in task.operations}
     assert exercised == REQUIRED_OPERATIONS == {tool.name for tool in tool_catalog()}
 
-    # A required call is a claim that no correct run skips it. `compile_spec` is that only
-    # where the run writes the document itself; everywhere else `run_validation` and
-    # `build_part` parse it, and requiring the compile marked correct runs incomplete
-    # (measured 2026-10-09). No loop repeats it either, so nothing can fold into a prelude.
-    assert [task.task_id for task in tasks if task.prelude] == ["screen-a-described-part"]
-    assert not any("compile_spec" in task.required_tools for task in tasks)
+    # A required call is a claim that no correct run skips it. `run_validation` and
+    # `build_part` parse a document themselves, so a compile before them is allowed and never
+    # required: requiring it marked correct runs incomplete, even where the run wrote the
+    # document (measured 2026-10-09). The one task that needs it asks for no screen.
+    assert not any(task.prelude for task in tasks)
+    (compiling,) = [task for task in tasks if "compile_spec" in task.required_tools]
+    assert compiling.required_tools == ("compile_spec",)
     assert all(task.notes and task.notes.strip() for task in tasks), (
         "a task with no note is a prompt whose grading rule nobody wrote down"
     )
@@ -409,11 +410,11 @@ def _agent_policy(**overrides) -> AgentRecommendationPolicy:
 
 def test_the_published_agent_corpus_and_evaluation_are_versioned_and_complete():
     task_set = default_versioned_task_set()
-    assert task_set.version == AGENT_TASK_SET_VERSION == "1.1.0"
+    assert task_set.version == AGENT_TASK_SET_VERSION == "1.2.0"
     assert task_set.tasks == default_task_set()
 
     evaluation = _agent_evaluation()
-    assert evaluation.task_set_version == "1.1.0"
+    assert evaluation.task_set_version == "1.2.0"
     assert evaluation.task_ids == tuple(outcome.task_id for outcome in evaluation.report.outcomes)
 
 

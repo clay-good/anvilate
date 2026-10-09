@@ -113,7 +113,7 @@ MCP server sends its own rules and live catalogue on initialize, so an agent dri
 the server has the tool surface without the skill.
 
 **Measured on 2026-10-09** through Claude Code, with and without the skill appended: it
-does not change whether an agent completes the tasks (7 of 8 either way). It changes the
-report. With it, 6 of 8 answers called the result a screen rather than a certified analysis,
-against 1 of 8 without, and the same work took 18 tool calls instead of 30. The numbers and
-their limits are in [Agent-driving evals](agent-driving-evals.md#measured-claude-code-with-and-without-the-skill-2026-10-09).
+does not change whether an agent completes the tasks (8 of 9 either way, in 15 calls against
+17). It changes the report. With it, 5 of 9 answers called the result a screen rather than a
+certified analysis, against 0 of 9 without. The numbers and their limits are in
+[Agent-driving evals](agent-driving-evals.md#measured-claude-code-with-and-without-the-skill-2026-10-09).

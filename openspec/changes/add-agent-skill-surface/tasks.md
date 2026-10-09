@@ -44,13 +44,13 @@
 - [x] 4.1 Measure the agent-driving funnel with and without the skill loaded; publish the
       delta — measured 2026-10-09 through Claude Code 2.1.295 (`claude-opus-5-5`), with
       `tools/agent-skill-measurement/`, and published in `docs/agent-driving-evals.md`,
-      where a test holds the table to the saved results. Completion is 7 of 8 in both
-      conditions, so the delta is not completion: with the skill, 6 of 8 answers frame the
-      result as a screen rather than a certified analysis (1 of 8 without), in 18 calls
-      instead of 30. The eighth task is the FEA tier, which Claude Code cannot start
-      because it declares no tasks extension. The first run scored 0 of 8 in both
-      conditions and found three defects, fixed before the published run: tool inputs
-      that took a spec as a bare `$ref`, which the model sent as a string every time; a
-      scorer that read an error rate of 0% because Claude Code strips the
-      `MCP error -326xx` prefix; and a corpus (now 1.1.0) with an unanswerable task and
-      a `compile_spec` prelude no correct run needs
+      where a test holds the table to the saved results. Completion is 8 of 9 in both
+      conditions, so the delta is not completion: with the skill, 5 of 9 answers frame the
+      result as a screen rather than a certified analysis (0 of 9 without), in 15 calls
+      against 17, for about $0.40 more. The ninth task is the FEA tier, which Claude Code
+      cannot start because it declares no tasks extension. It took three runs, and the two
+      before found four defects fixed first: tool inputs that took a spec as a bare `$ref`,
+      which the model sent as a string every time; a scorer that read 0% errors because
+      Claude Code strips the `MCP error -326xx` prefix; server instructions cut at the
+      2,048 characters Claude Code keeps, before the element list; and a corpus (now
+      1.2.0) with an unanswerable task and a `compile_spec` prelude no correct run needs

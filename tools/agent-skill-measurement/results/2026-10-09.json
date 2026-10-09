@@ -1,8 +1,8 @@
 {
   "baseline": {
-    "completion_rate": 0.875,
+    "completion_rate": 0.8888888888888888,
     "mean_iterations": 1.0,
-    "tool_call_error_rate": 0.03333333333333333,
+    "tool_call_error_rate": 0.058823529411764705,
     "report": {
       "model_name": "claude-opus-5-5",
       "client": "Claude Code 2.1.295 (claude -p)",
@@ -25,44 +25,26 @@
               "error": null
             },
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_validation",
               "failed": false,
               "error": null
             }
           ],
-          "prelude": [
+          "prelude": []
+        },
+        {
+          "task_id": "check-a-document-without-screening-it",
+          "required_tools": [
             "compile_spec"
-          ]
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
         },
         {
           "task_id": "read-the-card-back-by-handle",
@@ -71,11 +53,6 @@
             "read_scorecard"
           ],
           "calls": [
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
             {
               "tool": "run_validation",
               "failed": false,
@@ -97,11 +74,6 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_validation",
               "failed": false,
               "error": null
@@ -121,11 +93,6 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_validation",
               "failed": false,
               "error": null
@@ -140,11 +107,6 @@
             "render_viewport"
           ],
           "calls": [
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
             {
               "tool": "build_part",
               "failed": false,
@@ -166,17 +128,7 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "build_part",
-              "failed": false,
-              "error": null
-            },
-            {
-              "tool": "measure_geometry",
               "failed": false,
               "error": null
             },
@@ -201,11 +153,6 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_validation",
               "failed": false,
               "error": null
@@ -225,14 +172,9 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_fea_validation",
               "failed": true,
-              "error": "Missing required client capability"
+              "error": "Missing required client capability: run_fea_validation runs as a task, and this client did not declare the io.modelcontextprotocol/tasks extension, so it cannot start one. The synchronous tiers are run_validation; this tier needs a client that supports MCP tasks"
             }
           ],
           "prelude": []
@@ -241,51 +183,56 @@
     },
     "extra": {
       "screen-a-described-part": {
-        "cost_usd": 0.45045840000000004,
-        "turns": 11,
-        "answer": "**Verdict: PASS on the two checks that ran.** That is not a full padeye clearance, because I couldn't screen tear-out behind the hole without more dimensions. Details are below.\n\nI screened it in Anvilate as a `lifting_lug` at the analytical tier, against your required safety factor of 2.0.\n\n| Check | Formula | Stress | Safety factor (\u2265 2.0 required) | Clause | Result |\n|---|---|---|---|---|---|\n| Net tension across the hole | \u03c3 = P / ((W \u2212 d)\u00b7t) = 60 kN / (80 \u00d7 20 mm) | 37.5 MPa | **6.67** | ASME BTH-1 \u00a73-3 | Pass |\n| Bearing on the pin | \u03c3 = P / (d\u00b7t) = 60 kN / (40 \u00d7 20 mm) | 75 MPa | **3.33"
+        "cost_usd": 0.3730976,
+        "turns": 5,
+        "answer": "**Verdict: both strength checks that ran pass, but the screen is not complete.** The tool's overall status is \"not evaluated,\" not \"pass,\" and several padeye failure modes were never checked because the geometry you gave doesn't include them.\n\n| Check | Result | Safety factor (required 2.0) | Clause |\n|---|---|---|---|\n| Net-section tension across the hole: \u03c3 = P / ((W \u2212 d)\u00b7t) = 60 kN / (80 mm \u00d7 20 mm) | 37.5 MPa | **6.67, pass** | ASME BTH-1 \u00a73-3 |\n| Pin bearing: \u03c3 = P / (d\u00b7t) = 60 kN / (40 mm \u00d7 20 mm) | 75 MPa | **3.33, pass** | ASME BTH-1 \u00a73-3 |\n| Material lookup | ASTM-A36 found in the mat"
+      },
+      "check-a-document-without-screening-it": {
+        "cost_usd": 0.1651914,
+        "turns": 5,
+        "answer": "**Yes. `base_plate.spec.yaml` is a valid Design Spec as written.** I ran it through `compile_spec`, which only checks the document's structure. It came back with no errors.\n\n- It's on schema version 1.3.0, and `base_plate` is a recognized element type.\n- The material reference `ASTM-A36` matched a known material, both at the top level and in `plate_material`.\n- All seven fields under `element_params` were accepted: width, depth, plate thickness, cantilever, plate material, axial load and concrete strength. Every quantity had a valid magnitude and unit.\n- `min_safety_factor: 2.0` is in the righ"
       },
       "read-the-card-back-by-handle": {
-        "cost_usd": 0.3687998,
-        "turns": 7,
-        "answer": "The padeye passes. I screened `padeye.spec.yaml` exactly as written (ASTM-A36, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN, minimum safety factor 2.0, analytical checks only). The scorecard below was read back from its saved result, `sha256:81bfc8c5\u2026582e0d`, so the checks were not run a second time.\n\n**Overall: PASS**\n\n| Check | Formula (ASME BTH-1 \u00a73-3) | Stress | Safety factor | Required | Status |\n|---|---|---|---|---|---|\n| Net tension | \u03c3_t = P / ((W \u2212 d) \u00b7 t) | 37.5 MPa | 6.67 | 2.00 | pass |\n| Pin bearing | \u03c3_p = P / (d \u00b7 t) | 75 MPa | 3.33 | 2.00 | pass |\n| Material resolution | lookup"
+        "cost_usd": 0.3383034,
+        "turns": 6,
+        "answer": "I screened `padeye.spec.yaml` with `run_validation`, which ran the checks once. I then pulled the scorecard back with `read_scorecard` using the handle that run returned, so nothing was recomputed. The card I read back is the same as the one from the run.\n\n**Scorecard: padeye (ASTM-A36, 120 mm wide \u00d7 20 mm thick, 40 mm hole, 60 kN load). Overall: PASS**\n\n| Check | Formula | Stress | Safety factor (required 2.00) | Status |\n|---|---|---|---|---|\n| Net-section tension | \u03c3_t = P / ((W \u2212 d) \u00b7 t) | 37.5 MPa | 6.67 | pass |\n| Pin bearing | \u03c3_p = P / (d \u00b7 t) | 75 MPa | 3.33 | pass |\n| Material resolu"
       },
       "repair-a-failing-check": {
-        "cost_usd": 0.39102239999999994,
-        "turns": 7,
-        "answer": "At 6 mm the padeye fails the pin bearing check. Raising it to the 12 mm the scorecard gave fixes that, and the re-screen passes. I haven't changed `padeye.spec.yaml`, because I don't have a file-editing tool in this session. It still says 20 mm.\n\n**Screen at 6 mm: fail** (ASTM-A36 steel, 60 kN load, minimum safety factor 2.0)\n\n| Check | Stress | Safety factor | Result |\n|---|---|---|---|\n| Net tension | 125 MPa | 2.00 | pass, exactly at the minimum |\n| Pin bearing | 250 MPa | 1.00 | **fail** |\n\nThe scorecard's repair for the bearing failure was to raise the thickness to 12.000000000012 mm. I u"
+        "cost_usd": 0.3621026,
+        "turns": 6,
+        "answer": "At 6 mm the padeye fails the pin bearing check. I applied the thickness the scorecard gave as its repair, 12.000000000012 mm, and the rescreen passes. So the plate can't go down to 6 mm. The scorecard's fix takes it back to 12 mm.\n\n**Screen at 6 mm** (60 kN load, ASTM\u2011A36, minimum safety factor 2.0, ASME BTH\u20111 \u00a73\u20113): **FAIL**\n\n| Check | Stress | Safety factor | Result |\n|---|---|---|---|\n| Net tension | 125 MPa | 2.00 | pass, exactly at the minimum |\n| Pin bearing | 250 MPa | **1.00** | **fail** |\n\nThe scorecard's repair for the bearing failure was to increase thickness to **12.000000000012 mm"
       },
       "refuse-to-paper-over-a-gap": {
-        "cost_usd": 0.37479280000000004,
-        "turns": 6,
-        "answer": "**No, it didn't pass.** The overall result is `not_evaluated`, and that isn't a pass. The bracket's strength was never checked.\n\nI screened `bracket.spec.yaml` as written and didn't add an element type, because that would mean making up dimensions you never gave.\n\n| Check | Result | Why |\n|---|---|---|\n| T1 analytical (strength / safety factor) | **not evaluated** | The spec doesn't say what kind of structural element the bracket is, so the tool had no strength check to run. Your 1.1 kg motor load and minimum safety factor of 2.0 were never tested. |\n| T0 geometry | **not evaluated** | The too"
+        "cost_usd": 0.3279426,
+        "turns": 5,
+        "answer": "**It did not pass.** The screen didn't fail either. The overall status is `not_evaluated`, because the strength check never ran.\n\nThe spec has no `element_type`. That means the screener can't choose a structural check, so nothing was ever compared against the 1.1 kg cantilevered motor load. I ran the file exactly as written and didn't add an element type, since that would mean making up the geometry and the way the part carries load.\n\n| Check | Result |\n|---|---|\n| T1 analytical (strength) | **Not run.** It needs `element_type` and `element_params` |\n| T0 geometry | **Not run.** This needs a b"
       },
       "render-built-geometry": {
-        "cost_usd": 0.3794592,
-        "turns": 7,
-        "answer": "I built the base plate from `base_plate.spec.yaml` and it came out valid. Here's the isometric render.\n\n**Geometry**\n\n| | |\n|---|---|\n| Size | 300 \u00d7 240 \u00d7 25 mm |\n| Volume | 1,800,000 mm\u00b3 |\n| Faces | top, bottom, north, south, east, west |\n| Material | ASTM-A36 |\n| Warnings | none |\n\n**Isometric view** (800 \u00d7 600 SVG): `<local path>"
+        "cost_usd": 0.34410640000000003,
+        "turns": 6,
+        "answer": "I built the base plate from `base_plate.spec.yaml` and rendered its isometric view.\n\n**Build:** the geometry is valid. It's a solid A36 plate, 300 mm wide \u00d7 240 mm deep \u00d7 25 mm thick, with a volume of 1,800,000 mm\u00b3. The six faces are tagged top, bottom, north, south, east and west, and there were no warnings.\n\n**Isometric view:** the render is an 800\u00d7600 SVG saved to:\n`<local path>"
       },
       "measure-rather-than-assume": {
-        "cost_usd": 0.36445560000000005,
-        "turns": 9,
-        "answer": "The base plate built cleanly, and its actual thickness is **25 mm, the same as the spec asked for.**\n\nI didn't take the build summary's word for it. I measured the built part directly:\n\n| Check | Spec asked for | Measured on the built part |\n|---|---|---|\n| Plate thickness (distance from bottom face to top face) | 25 mm | **25 mm** |\n| Top face area | 300 \u00d7 240 = 72,000 mm\u00b2 | 72,000 mm\u00b2 |\n| Volume | 300 \u00d7 240 \u00d7 25 = 1,800,000 mm\u00b3 | 1,800,000 mm\u00b3 |\n\nThe volume divided by the top area also comes out to 25 mm, which confirms the thickness a second way. The part is ASTM A36 steel (`bp1`, from `bas"
+        "cost_usd": 0.32784699999999994,
+        "turns": 7,
+        "answer": "I built the base plate from `base_plate.spec.yaml`. As built, the plate is **25 mm thick**, the same as the spec asked for.\n\n- **How I got it:** I measured the finished solid rather than reading the number back from the spec. The thickness was measured as the distance between the bottom and top faces: 25 mm.\n- **Second check:** the measured volume is 1,800,000 mm\u00b3. Dividing by the 300 \u00d7 240 mm footprint gives 25 mm again.\n- **Build result:** the solid is valid, with six faces (top, bottom, north, south, east and west) and no warnings.\n\n| | Spec | As built |\n|---|---|---|\n| Plate thickness | 25"
       },
       "export-only-what-passed": {
-        "cost_usd": 0.40553500000000003,
-        "turns": 7,
-        "answer": "I screened the padeye and it passed all 3 checks, with both strength checks above your required minimum safety factor of 2.0. I exported its evidence bundle, but it isn't saved anywhere yet: the export tool returns the bundle in its reply, and I don't have a tool in this session that can write files.\n\n**Screening results** (from `padeye.spec.yaml`: ASTM A36, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load; analytical checks only)\n\n| Check | Calculated stress | Safety factor | Status |\n|---|---|---|---|\n| Net tension, ASME BTH-1 \u00a73-3 | 37.5 MPa | 6.67 | pass |\n| Pin bearing, ASME BTH-1 \u00a73-3 | "
+        "cost_usd": 0.36678520000000003,
+        "turns": 6,
+        "answer": "The padeye passes all 3 checks it was screened on, and I exported the evidence bundle. The bundle came back in this session but isn't saved to disk yet, because I don't have a file-writing tool here.\n\n**Screening** (`padeye.spec.yaml`: ASTM A36 plate, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load, minimum safety factor 2.0, closed-form checks only)\n\n| Check | Result | Safety factor | Basis |\n|---|---|---|---|\n| Net tension | 37.5 MPa | **6.67** (needs 2.0) | ASME BTH-1 \u00a73-3 |\n| Pin bearing | 75 MPa | **3.33** (needs 2.0) | ASME BTH-1 \u00a73-3 |\n| Material lookup | ASTM-A36 found in the material"
       },
       "use-the-convergent-tier-through-its-handle": {
-        "cost_usd": 0.48932980000000004,
-        "turns": 6,
-        "answer": "I couldn't run the FEA checks on the padeye. Nothing ran, so there are no FEA results to report.\n\n**What happened**\n1. I read `padeye.spec.yaml`. It is the lifting-lug padeye: ASTM-A36, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load, minimum safety factor 2.0.\n2. The spec passed validation with no errors once I set its requested checks to FEA only (`T3_fea`). I didn't change the file on disk; it still asks only for the hand-calculation checks (`T1_analytical`).\n3. Starting the FEA run was refused with `Missing required client capability`.\n\n**Why it failed**\nThe FEA tool doesn't answer right "
+        "cost_usd": 0.44785880000000006,
+        "turns": 5,
+        "answer": "The FEA checks didn't run, so there's nothing to wait for.\n\nI sent `padeye.spec.yaml` to `run_fea_validation` and asked for only the FEA tier (`T3_fea`). I left your file as it was; it still asks for the hand-calc tier (`T1_analytical`). The tool refused before it started. It runs as a long background task, and this client doesn't support that kind of MCP (Model Context Protocol) task, so it can't be started from this session. The padeye has no FEA results yet.\n\nTo get them, run the checks from a client that supports MCP tasks. I don't have a shell here, so I can't start it any other way.\n\nIf "
       }
     }
   },
   "skill": {
-    "completion_rate": 0.875,
+    "completion_rate": 0.8888888888888888,
     "mean_iterations": 1.0,
-    "tool_call_error_rate": 0.05555555555555555,
+    "tool_call_error_rate": 0.06666666666666667,
     "report": {
       "model_name": "claude-opus-5-5",
       "client": "Claude Code 2.1.295 (claude -p)",
@@ -298,19 +245,26 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_validation",
               "failed": false,
               "error": null
             }
           ],
-          "prelude": [
+          "prelude": []
+        },
+        {
+          "task_id": "check-a-document-without-screening-it",
+          "required_tools": [
             "compile_spec"
-          ]
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
         },
         {
           "task_id": "read-the-card-back-by-handle",
@@ -319,11 +273,6 @@
             "read_scorecard"
           ],
           "calls": [
-            {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
             {
               "tool": "run_validation",
               "failed": false,
@@ -424,11 +373,6 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_validation",
               "failed": false,
               "error": null
@@ -448,14 +392,9 @@
           ],
           "calls": [
             {
-              "tool": "compile_spec",
-              "failed": false,
-              "error": null
-            },
-            {
               "tool": "run_fea_validation",
               "failed": true,
-              "error": "Missing required client capability"
+              "error": "Missing required client capability: run_fea_validation runs as a task, and this client did not declare the io.modelcontextprotocol/tasks extension, so it cannot start one. The synchronous tiers are run_validation; this tier needs a client that supports MCP tasks"
             }
           ],
           "prelude": []
@@ -464,44 +403,49 @@
     },
     "extra": {
       "screen-a-described-part": {
-        "cost_usd": 0.38245739999999995,
-        "turns": 4,
-        "answer": "**Verdict: pass, as a T1 screen.** All three checks on the card pass at your required safety factor of 2.0. This is a closed-form screening result, not a certified analysis.\n\n| Check | Status | Computed | Safety factor (need 2.0) | Clause on the entry |\n|---|---|---|---|---|\n| Padeye pin bearing (**governs**) | pass | \u03c3_p = P/(d\u00b7t) = 75 MPa | **3.33** | ASME BTH-1 \u00a73-3 |\n| Padeye net tension | pass | \u03c3_t = P/((W\u2212d)\u00b7t) = 37.5 MPa | 6.67 | ASME BTH-1 \u00a73-3 |\n| Material resolution | pass | ASTM-A36 found in the bundled materials database | \u2014 | none (it's a database lookup, not a clause) |\n\nPin bea"
+        "cost_usd": 0.34893260000000004,
+        "turns": 3,
+        "answer": "**Verdict: PASS on the T1 screen.** All 3 checks passed and none came back `not_evaluated`. This is a closed-form screening result, not a certified analysis.\n\n| Check | Clause (from the entry) | Calculated stress | Safety factor | Required | Status |\n|---|---|---|---|---|---|\n| Pin bearing (**governing**) | ASME BTH-1 \u00a73-3 | \u03c3_p = P/(d\u00b7t) = 75 MPa | **3.33** | 2.00 | pass |\n| Net tension | ASME BTH-1 \u00a73-3 | \u03c3_t = P/((W\u2212d)\u00b7t) = 37.5 MPa | 6.67 | 2.00 | pass |\n| Material resolution | none (database lookup) | \u2014 | \u2014 | \u2014 | pass |\n\nPin bearing is the check to quote. It has the lowest margin, using 6"
+      },
+      "check-a-document-without-screening-it": {
+        "cost_usd": 0.2095782,
+        "turns": 5,
+        "answer": "**Yes, it's valid as written.** I ran Anvilate's `compile_spec` on `base_plate.spec.yaml`. It returned **0 errors** and gave the document a subject handle (`sha256:fc846938\u2026`). I ran no engineering checks, so there is no scorecard and no pass or fail on the plate.\n\n**What the compile confirmed:**\n- The document matches the Design Spec 1.3.0 schema.\n- The material reference `ASTM-A36` resolves.\n- `base_plate` is a recognized element type.\n- The required safety factor is stated (2.0, `user_stated`), so a later screen won't come back `not_evaluated` for lack of one.\n\n**Defaults the compiler fille"
       },
       "read-the-card-back-by-handle": {
-        "cost_usd": 0.4196556,
-        "turns": 7,
-        "answer": "I screened `padeye.spec.yaml` (A36 lifting lug: 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load, required safety factor 2.0, as the spec states). Then I fetched the stored scorecard with `read_scorecard`, using the handle the screening returned (`sha256:81bfc8c5\u2026582e0d`). Nothing was re-run, and the stored card matches the original exactly.\n\n**Scorecard: `pass`.** All 3 checks passed and none were left unevaluated.\n\n| Check | Status | Result | Safety factor (required 2.00) | Reference |\n|---|---|---|---|---|\n| padeye net tension | pass | \u03c3_t = P / ((W \u2212 d)\u00b7t) = 37.5 MPa | 6.67 | ASME BTH-1 \u00a73"
+        "cost_usd": 0.38277720000000004,
+        "turns": 6,
+        "answer": "I screened the padeye in `padeye.spec.yaml` at T1 analytical, with the required safety factor of 2.0 that the spec states. **The scorecard status is `pass`**, and all 3 checks passed.\n\nTo show the card again without re-running anything, I read it back by its handle `sha256:81bfc8c5\u2026582e0d` using `read_scorecard`. It came back identical to the first run.\n\n| Check | Status | Result | Safety factor (need \u2265 2.00) | Reference |\n|---|---|---|---|---|\n| padeye pin bearing | pass | \u03c3_p = P/(d\u00b7t) = 75 MPa | **3.33** (governing) | ASME BTH-1 \u00a73-3 |\n| padeye net tension | pass | \u03c3_t = P/((W\u2212d)\u00b7t) = 37.5 "
       },
       "repair-a-failing-check": {
-        "cost_usd": 0.4060164,
+        "cost_usd": 0.4046146,
         "turns": 6,
-        "answer": "At 6 mm the padeye **fails**. The repair the scorecard gave was to increase the thickness to **12 mm**. With that applied, all three checks pass, but pin bearing only just passes.\n\n**Screen at 6 mm** (ASTM-A36, 120 mm wide, 40 mm hole, 60 kN load, required safety factor 2.0):\n\n| Check | Stress | Safety factor | Status |\n|---|---|---|---|\n| Pin bearing (ASME BTH-1 \u00a73-3) | 250 MPa | 1.00 | **fail** (governs) |\n| Net tension (ASME BTH-1 \u00a73-3) | 125 MPa | 2.00 | pass, right at the limit |\n| Material resolution | \u2014 | \u2014 | pass |\n\n**The repair.** The pin-bearing failure came with a repair hint: incre"
+        "answer": "At 6 mm the padeye fails the pin bearing check. The fix the scorecard gave was 12 mm, and the padeye passes at 12 mm. But 12 mm only just meets your required safety factor of 2.0, with no margin above it. Both runs used the MCP screen. I haven't changed `padeye.spec.yaml`: this session has no tool that can write files, so it still says 20 mm.\n\n**At 6 mm the screen fails:**\n\n| Check (ASME BTH-1 \u00a73-3) | Stress | Safety factor | Required | Status |\n|---|---|---|---|---|\n| Pin bearing | 250 MPa | 1.00 | 2.00 | **fail** |\n| Net tension | 125 MPa | 2.00 | 2.00 | pass, exactly at the limit |\n| Materi"
       },
       "refuse-to-paper-over-a-gap": {
-        "cost_usd": 0.3767928,
+        "cost_usd": 0.37236640000000004,
         "turns": 5,
-        "answer": "**No, it did not pass.** The scorecard status is `not_evaluated`. Four of the nine checks did not run, and one of them is the strength screen, so nothing has checked whether this bracket is strong enough.\n\n**The four checks that did not run:**\n\n| Check | Why it did not run |\n|---|---|\n| T1 analytical (the strength screen) | `bracket.spec.yaml` doesn't declare an `element_type` or `element_params`, so there's no screen to pick. |\n| T0 geometry | This check needs a built solid, and nothing builds one from a spec yet. |\n| `max_mass` 150 g | Nothing has measured the part's mass. |\n| `mount_pattern"
+        "answer": "**It did not pass.** The scorecard's status is `not_evaluated`. That isn't a failure, but it isn't a pass either. No strength check ran, so nothing yet shows this bracket can carry the motor.\n\nI screened `bracket.spec.yaml` exactly as written. There are 9 checks: 5 passed and 4 were not evaluated.\n\n**Not evaluated:**\n\n| Check | Why it didn't run |\n|---|---|\n| T1 analytical | The spec declares no `element_type`, so there is no screen to run. This is the only strength check, and it's the one that decides the verdict. |\n| T0 geometry | Anvilate doesn't build a solid from a spec today, so there is"
       },
       "render-built-geometry": {
-        "cost_usd": 0.4127768000000001,
+        "cost_usd": 0.4432806000000001,
         "turns": 7,
-        "answer": "I built the base plate from `base_plate.spec.yaml` and rendered its isometric view. The view is saved as an SVG here:\n\n`<local path>`\n\nThe terminal can't display images, so open that file in a browser to see it. I read the SVG's source to check the picture. It shows one flat rectang"
+        "answer": "I built the base plate from `base_plate.spec.yaml` without changing it, and rendered the `iso` view.\n\n**Build:** valid solid. It is 300 mm wide, 240 mm deep and 25 mm thick, with a volume of 1,800,000 mm\u00b3 and no warnings. Six faces are tagged: top, bottom, north, south, east and west.\n\n**Render:** the image is an 800\u00d7600 SVG saved at:\n`<local path>"
       },
       "measure-rather-than-assume": {
-        "cost_usd": 0.36904000000000003,
+        "cost_usd": 0.3692728,
         "turns": 7,
-        "answer": "The built plate is **25 mm** (about 0.98 in) thick. That's the same as the 25 mm the spec asked for, so there's no difference between the two.\n\nI built `bp1` from `base_plate.spec.yaml` using the `base_plate/1` pattern, and the build reported the geometry as valid. I didn't take the thickness from the spec or from the build summary. I measured it on the solid itself:\n\n| Quantity | Spec | Measured on the built solid |\n|---|---|---|\n| Plate thickness | 25 mm | **25 mm** (distance between the bottom and top faces) |\n| Volume | \u2014 | 1,800,000 mm\u00b3 |\n\nThe volume is a second check on that number: 300 "
+        "answer": "The plate came out **25 mm** thick, which is exactly what the spec asked for.\n\nI built `base_plate.spec.yaml` and then measured the thickness directly on the built solid, from the bottom face to the top face. I didn't just repeat the number from the spec.\n\n| | Spec asked for | Measured on the part |\n|---|---|---|\n| Plate thickness | 25 mm | **25 mm** (about 0.98 in) |\n| Volume | 300 \u00d7 240 \u00d7 25 mm = 1,800,000 mm\u00b3 | 1,800,000 mm\u00b3 |\n\nThe build came back valid with no warnings. The volume matching the spec's footprint times 25 mm is a second confirmation of the thickness.\n\n- **\"As built\" means the"
       },
       "export-only-what-passed": {
-        "cost_usd": 0.45366000000000006,
-        "turns": 7,
-        "answer": "I screened the padeye and it passes: all 3 checks pass and none are \"not evaluated.\" The evidence bundle was generated, but it isn't saved anywhere yet. The export returns the document instead of writing a file, and I don't have a file-writing tool in this session.\n\n**Screening of `padeye.spec.yaml`** (ASTM A36 plate, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load; required safety factor 2.0, which the spec marks as `user_stated`)\n\n| Check | Reference | Stress | Safety factor (need 2.00) | Status |\n|---|---|---|---|---|\n| Pin bearing | ASME BTH-1 \u00a73-3 | 75 MPa | **3.33** (lowest) | pass |\n| "
+        "cost_usd": 0.42100760000000004,
+        "turns": 6,
+        "answer": "I screened the padeye and exported its evidence bundle. All three checks passed. This is a closed-form screening result, not a certified analysis, and it has not been checked by any test.\n\n**Scorecard: `pass`** (from `padeye.spec.yaml`: ASTM A36, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load, minimum safety factor 2.0 as stated in the spec)\n\n| Check | Reference | Result | Safety factor (min. 2.00) |\n|---|---|---|---|\n| Net tension | ASME BTH-1 \u00a73-3 | \u03c3_t = 37.5 MPa | **6.67** |\n| Pin bearing | ASME BTH-1 \u00a73-3 | \u03c3_p = 75 MPa | **3.33** |\n| Material resolution | bundled materials database | A"
       },
       "use-the-convergent-tier-through-its-handle": {
-        "cost_usd": 0.5375800000000001,
-        "turns": 7,
-        "answer": "I couldn't run the FEA checks, so there is no FEA result to report.\n\n**What happened:** I took the padeye from `padeye.spec.yaml`, since it was the only padeye in the working directory. Anvilate accepted it without errors (handle `sha256:267bc09e\u20266820`). When I started the FEA run, it was refused with `Missing required client capability`. Because an FEA run continues until the result settles rather than for a fixed time, Anvilate runs it as a background job you can track and cancel. This session doesn't support that kind of job, so the run never started. Nothing passed or failed: no FEA checks"
+        "cost_usd": 0.4994105999999999,
+        "turns": 5,
+        "answer": "I couldn't start the FEA (T3) checks on `padeye.spec.yaml`, so nothing ran and there's nothing to wait for.\n\nAnvilate refused the request before it began: FEA runs as a background job, and this session doesn't support background jobs from the Anvilate tools. The FEA checks on the padeye have no results at all. They haven't passed and they haven't failed.\n\nTo get them run, you have two options:\n- **Use a different client.** Run it from a client that supports MCP background tasks, which is the `io.modelcontextprotocol/tasks` extension.\n- **Run it yourself.** Run it directly from the Anvilate Pyt"
       }
     }
   }

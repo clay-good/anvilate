@@ -1,0 +1,508 @@
+{
+  "baseline": {
+    "completion_rate": 0.875,
+    "mean_iterations": 1.0,
+    "tool_call_error_rate": 0.03333333333333333,
+    "report": {
+      "model_name": "claude-opus-5-5",
+      "client": "Claude Code 2.1.295 (claude -p)",
+      "harness": "baseline: stdio MCP, Read/Glob only",
+      "outcomes": [
+        {
+          "task_id": "screen-a-described-part",
+          "required_tools": [
+            "run_validation"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": [
+            "compile_spec"
+          ]
+        },
+        {
+          "task_id": "read-the-card-back-by-handle",
+          "required_tools": [
+            "run_validation",
+            "read_scorecard"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "read_scorecard",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "repair-a-failing-check",
+          "required_tools": [
+            "run_validation",
+            "run_validation"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "refuse-to-paper-over-a-gap",
+          "required_tools": [
+            "run_validation"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "render-built-geometry",
+          "required_tools": [
+            "build_part",
+            "render_viewport"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "build_part",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "render_viewport",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "measure-rather-than-assume",
+          "required_tools": [
+            "build_part",
+            "measure_geometry"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "build_part",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "measure_geometry",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "measure_geometry",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "measure_geometry",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "export-only-what-passed",
+          "required_tools": [
+            "run_validation",
+            "export_artifact"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "export_artifact",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "use-the-convergent-tier-through-its-handle",
+          "required_tools": [
+            "run_fea_validation"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_fea_validation",
+              "failed": true,
+              "error": "Missing required client capability"
+            }
+          ],
+          "prelude": []
+        }
+      ]
+    },
+    "extra": {
+      "screen-a-described-part": {
+        "cost_usd": 0.45045840000000004,
+        "turns": 11,
+        "answer": "**Verdict: PASS on the two checks that ran.** That is not a full padeye clearance, because I couldn't screen tear-out behind the hole without more dimensions. Details are below.\n\nI screened it in Anvilate as a `lifting_lug` at the analytical tier, against your required safety factor of 2.0.\n\n| Check | Formula | Stress | Safety factor (\u2265 2.0 required) | Clause | Result |\n|---|---|---|---|---|---|\n| Net tension across the hole | \u03c3 = P / ((W \u2212 d)\u00b7t) = 60 kN / (80 \u00d7 20 mm) | 37.5 MPa | **6.67** | ASME BTH-1 \u00a73-3 | Pass |\n| Bearing on the pin | \u03c3 = P / (d\u00b7t) = 60 kN / (40 \u00d7 20 mm) | 75 MPa | **3.33"
+      },
+      "read-the-card-back-by-handle": {
+        "cost_usd": 0.3687998,
+        "turns": 7,
+        "answer": "The padeye passes. I screened `padeye.spec.yaml` exactly as written (ASTM-A36, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN, minimum safety factor 2.0, analytical checks only). The scorecard below was read back from its saved result, `sha256:81bfc8c5\u2026582e0d`, so the checks were not run a second time.\n\n**Overall: PASS**\n\n| Check | Formula (ASME BTH-1 \u00a73-3) | Stress | Safety factor | Required | Status |\n|---|---|---|---|---|---|\n| Net tension | \u03c3_t = P / ((W \u2212 d) \u00b7 t) | 37.5 MPa | 6.67 | 2.00 | pass |\n| Pin bearing | \u03c3_p = P / (d \u00b7 t) | 75 MPa | 3.33 | 2.00 | pass |\n| Material resolution | lookup"
+      },
+      "repair-a-failing-check": {
+        "cost_usd": 0.39102239999999994,
+        "turns": 7,
+        "answer": "At 6 mm the padeye fails the pin bearing check. Raising it to the 12 mm the scorecard gave fixes that, and the re-screen passes. I haven't changed `padeye.spec.yaml`, because I don't have a file-editing tool in this session. It still says 20 mm.\n\n**Screen at 6 mm: fail** (ASTM-A36 steel, 60 kN load, minimum safety factor 2.0)\n\n| Check | Stress | Safety factor | Result |\n|---|---|---|---|\n| Net tension | 125 MPa | 2.00 | pass, exactly at the minimum |\n| Pin bearing | 250 MPa | 1.00 | **fail** |\n\nThe scorecard's repair for the bearing failure was to raise the thickness to 12.000000000012 mm. I u"
+      },
+      "refuse-to-paper-over-a-gap": {
+        "cost_usd": 0.37479280000000004,
+        "turns": 6,
+        "answer": "**No, it didn't pass.** The overall result is `not_evaluated`, and that isn't a pass. The bracket's strength was never checked.\n\nI screened `bracket.spec.yaml` as written and didn't add an element type, because that would mean making up dimensions you never gave.\n\n| Check | Result | Why |\n|---|---|---|\n| T1 analytical (strength / safety factor) | **not evaluated** | The spec doesn't say what kind of structural element the bracket is, so the tool had no strength check to run. Your 1.1 kg motor load and minimum safety factor of 2.0 were never tested. |\n| T0 geometry | **not evaluated** | The too"
+      },
+      "render-built-geometry": {
+        "cost_usd": 0.3794592,
+        "turns": 7,
+        "answer": "I built the base plate from `base_plate.spec.yaml` and it came out valid. Here's the isometric render.\n\n**Geometry**\n\n| | |\n|---|---|\n| Size | 300 \u00d7 240 \u00d7 25 mm |\n| Volume | 1,800,000 mm\u00b3 |\n| Faces | top, bottom, north, south, east, west |\n| Material | ASTM-A36 |\n| Warnings | none |\n\n**Isometric view** (800 \u00d7 600 SVG): `<local path>"
+      },
+      "measure-rather-than-assume": {
+        "cost_usd": 0.36445560000000005,
+        "turns": 9,
+        "answer": "The base plate built cleanly, and its actual thickness is **25 mm, the same as the spec asked for.**\n\nI didn't take the build summary's word for it. I measured the built part directly:\n\n| Check | Spec asked for | Measured on the built part |\n|---|---|---|\n| Plate thickness (distance from bottom face to top face) | 25 mm | **25 mm** |\n| Top face area | 300 \u00d7 240 = 72,000 mm\u00b2 | 72,000 mm\u00b2 |\n| Volume | 300 \u00d7 240 \u00d7 25 = 1,800,000 mm\u00b3 | 1,800,000 mm\u00b3 |\n\nThe volume divided by the top area also comes out to 25 mm, which confirms the thickness a second way. The part is ASTM A36 steel (`bp1`, from `bas"
+      },
+      "export-only-what-passed": {
+        "cost_usd": 0.40553500000000003,
+        "turns": 7,
+        "answer": "I screened the padeye and it passed all 3 checks, with both strength checks above your required minimum safety factor of 2.0. I exported its evidence bundle, but it isn't saved anywhere yet: the export tool returns the bundle in its reply, and I don't have a tool in this session that can write files.\n\n**Screening results** (from `padeye.spec.yaml`: ASTM A36, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load; analytical checks only)\n\n| Check | Calculated stress | Safety factor | Status |\n|---|---|---|---|\n| Net tension, ASME BTH-1 \u00a73-3 | 37.5 MPa | 6.67 | pass |\n| Pin bearing, ASME BTH-1 \u00a73-3 | "
+      },
+      "use-the-convergent-tier-through-its-handle": {
+        "cost_usd": 0.48932980000000004,
+        "turns": 6,
+        "answer": "I couldn't run the FEA checks on the padeye. Nothing ran, so there are no FEA results to report.\n\n**What happened**\n1. I read `padeye.spec.yaml`. It is the lifting-lug padeye: ASTM-A36, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load, minimum safety factor 2.0.\n2. The spec passed validation with no errors once I set its requested checks to FEA only (`T3_fea`). I didn't change the file on disk; it still asks only for the hand-calculation checks (`T1_analytical`).\n3. Starting the FEA run was refused with `Missing required client capability`.\n\n**Why it failed**\nThe FEA tool doesn't answer right "
+      }
+    }
+  },
+  "skill": {
+    "completion_rate": 0.875,
+    "mean_iterations": 1.0,
+    "tool_call_error_rate": 0.05555555555555555,
+    "report": {
+      "model_name": "claude-opus-5-5",
+      "client": "Claude Code 2.1.295 (claude -p)",
+      "harness": "skill: stdio MCP, Read/Glob only",
+      "outcomes": [
+        {
+          "task_id": "screen-a-described-part",
+          "required_tools": [
+            "run_validation"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": [
+            "compile_spec"
+          ]
+        },
+        {
+          "task_id": "read-the-card-back-by-handle",
+          "required_tools": [
+            "run_validation",
+            "read_scorecard"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "read_scorecard",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "repair-a-failing-check",
+          "required_tools": [
+            "run_validation",
+            "run_validation"
+          ],
+          "calls": [
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "refuse-to-paper-over-a-gap",
+          "required_tools": [
+            "run_validation"
+          ],
+          "calls": [
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "render-built-geometry",
+          "required_tools": [
+            "build_part",
+            "render_viewport"
+          ],
+          "calls": [
+            {
+              "tool": "build_part",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "render_viewport",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "measure-rather-than-assume",
+          "required_tools": [
+            "build_part",
+            "measure_geometry"
+          ],
+          "calls": [
+            {
+              "tool": "build_part",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "measure_geometry",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "measure_geometry",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "export-only-what-passed",
+          "required_tools": [
+            "run_validation",
+            "export_artifact"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_validation",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "export_artifact",
+              "failed": false,
+              "error": null
+            }
+          ],
+          "prelude": []
+        },
+        {
+          "task_id": "use-the-convergent-tier-through-its-handle",
+          "required_tools": [
+            "run_fea_validation"
+          ],
+          "calls": [
+            {
+              "tool": "compile_spec",
+              "failed": false,
+              "error": null
+            },
+            {
+              "tool": "run_fea_validation",
+              "failed": true,
+              "error": "Missing required client capability"
+            }
+          ],
+          "prelude": []
+        }
+      ]
+    },
+    "extra": {
+      "screen-a-described-part": {
+        "cost_usd": 0.38245739999999995,
+        "turns": 4,
+        "answer": "**Verdict: pass, as a T1 screen.** All three checks on the card pass at your required safety factor of 2.0. This is a closed-form screening result, not a certified analysis.\n\n| Check | Status | Computed | Safety factor (need 2.0) | Clause on the entry |\n|---|---|---|---|---|\n| Padeye pin bearing (**governs**) | pass | \u03c3_p = P/(d\u00b7t) = 75 MPa | **3.33** | ASME BTH-1 \u00a73-3 |\n| Padeye net tension | pass | \u03c3_t = P/((W\u2212d)\u00b7t) = 37.5 MPa | 6.67 | ASME BTH-1 \u00a73-3 |\n| Material resolution | pass | ASTM-A36 found in the bundled materials database | \u2014 | none (it's a database lookup, not a clause) |\n\nPin bea"
+      },
+      "read-the-card-back-by-handle": {
+        "cost_usd": 0.4196556,
+        "turns": 7,
+        "answer": "I screened `padeye.spec.yaml` (A36 lifting lug: 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load, required safety factor 2.0, as the spec states). Then I fetched the stored scorecard with `read_scorecard`, using the handle the screening returned (`sha256:81bfc8c5\u2026582e0d`). Nothing was re-run, and the stored card matches the original exactly.\n\n**Scorecard: `pass`.** All 3 checks passed and none were left unevaluated.\n\n| Check | Status | Result | Safety factor (required 2.00) | Reference |\n|---|---|---|---|---|\n| padeye net tension | pass | \u03c3_t = P / ((W \u2212 d)\u00b7t) = 37.5 MPa | 6.67 | ASME BTH-1 \u00a73"
+      },
+      "repair-a-failing-check": {
+        "cost_usd": 0.4060164,
+        "turns": 6,
+        "answer": "At 6 mm the padeye **fails**. The repair the scorecard gave was to increase the thickness to **12 mm**. With that applied, all three checks pass, but pin bearing only just passes.\n\n**Screen at 6 mm** (ASTM-A36, 120 mm wide, 40 mm hole, 60 kN load, required safety factor 2.0):\n\n| Check | Stress | Safety factor | Status |\n|---|---|---|---|\n| Pin bearing (ASME BTH-1 \u00a73-3) | 250 MPa | 1.00 | **fail** (governs) |\n| Net tension (ASME BTH-1 \u00a73-3) | 125 MPa | 2.00 | pass, right at the limit |\n| Material resolution | \u2014 | \u2014 | pass |\n\n**The repair.** The pin-bearing failure came with a repair hint: incre"
+      },
+      "refuse-to-paper-over-a-gap": {
+        "cost_usd": 0.3767928,
+        "turns": 5,
+        "answer": "**No, it did not pass.** The scorecard status is `not_evaluated`. Four of the nine checks did not run, and one of them is the strength screen, so nothing has checked whether this bracket is strong enough.\n\n**The four checks that did not run:**\n\n| Check | Why it did not run |\n|---|---|\n| T1 analytical (the strength screen) | `bracket.spec.yaml` doesn't declare an `element_type` or `element_params`, so there's no screen to pick. |\n| T0 geometry | This check needs a built solid, and nothing builds one from a spec yet. |\n| `max_mass` 150 g | Nothing has measured the part's mass. |\n| `mount_pattern"
+      },
+      "render-built-geometry": {
+        "cost_usd": 0.4127768000000001,
+        "turns": 7,
+        "answer": "I built the base plate from `base_plate.spec.yaml` and rendered its isometric view. The view is saved as an SVG here:\n\n`<local path>`\n\nThe terminal can't display images, so open that file in a browser to see it. I read the SVG's source to check the picture. It shows one flat rectang"
+      },
+      "measure-rather-than-assume": {
+        "cost_usd": 0.36904000000000003,
+        "turns": 7,
+        "answer": "The built plate is **25 mm** (about 0.98 in) thick. That's the same as the 25 mm the spec asked for, so there's no difference between the two.\n\nI built `bp1` from `base_plate.spec.yaml` using the `base_plate/1` pattern, and the build reported the geometry as valid. I didn't take the thickness from the spec or from the build summary. I measured it on the solid itself:\n\n| Quantity | Spec | Measured on the built solid |\n|---|---|---|\n| Plate thickness | 25 mm | **25 mm** (distance between the bottom and top faces) |\n| Volume | \u2014 | 1,800,000 mm\u00b3 |\n\nThe volume is a second check on that number: 300 "
+      },
+      "export-only-what-passed": {
+        "cost_usd": 0.45366000000000006,
+        "turns": 7,
+        "answer": "I screened the padeye and it passes: all 3 checks pass and none are \"not evaluated.\" The evidence bundle was generated, but it isn't saved anywhere yet. The export returns the document instead of writing a file, and I don't have a file-writing tool in this session.\n\n**Screening of `padeye.spec.yaml`** (ASTM A36 plate, 120 mm wide, 40 mm hole, 20 mm thick, 60 kN load; required safety factor 2.0, which the spec marks as `user_stated`)\n\n| Check | Reference | Stress | Safety factor (need 2.00) | Status |\n|---|---|---|---|---|\n| Pin bearing | ASME BTH-1 \u00a73-3 | 75 MPa | **3.33** (lowest) | pass |\n| "
+      },
+      "use-the-convergent-tier-through-its-handle": {
+        "cost_usd": 0.5375800000000001,
+        "turns": 7,
+        "answer": "I couldn't run the FEA checks, so there is no FEA result to report.\n\n**What happened:** I took the padeye from `padeye.spec.yaml`, since it was the only padeye in the working directory. Anvilate accepted it without errors (handle `sha256:267bc09e\u20266820`). When I started the FEA run, it was refused with `Missing required client capability`. Because an FEA run continues until the result settles rather than for a fixed time, Anvilate runs it as a background job you can track and cancel. This session doesn't support that kind of job, so the run never started. Nothing passed or failed: no FEA checks"
+      }
+    }
+  }
+}
