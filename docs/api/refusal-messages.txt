@@ -1238,7 +1238,7 @@ check: cycles must be positive and finite; got {cycles}
 _well_formed: a weld detail category must state its {field}; a bare number is a curve label, not a detail
 _well_formed: detail_category must be a stress range; got {self.detail_category}
 _well_formed: detail_category must be a positive, finite stress range; got {self.detail_category}
-_well_formed: {value} MPa is not an {_EN1993_STANDARD_PREFIX} direct-stress detail category. The standard tabulates details into a fixed ladder and defines no curve between the rungs; the nearest are {sorted(near)}. If this came from a National Annex or another standard, declare that standard instead of interpolating this one
+_well_formed: {value} MPa is not an {_EN1993_STANDARD_PREFIX} direct-stress detail category. The standard tabulates details into a fixed ladder and defines no curve between the rungs; {offered}. If this came from a National Annex or another standard, declare that standard instead of interpolating this one
 curve: {self.description} is a {self.stress_kind.value}-stress category, and this module builds the direct-stress curve only. The shear family runs at a single slope of m = 5 with no knee at 5 million cycles, so the direct-stress construction would over-state its life
 en1993_detail_category_curve: detail_category must be a [pressure] quantity; got {detail_category}
 en1993_detail_category_curve: detail_category must be a stress; got {detail_category}

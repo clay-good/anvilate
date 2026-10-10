@@ -32,7 +32,9 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 ## 4. Refusals
 
 - [ ] 4.1 Each refusal names the field, the reason and a valid example, within a length limit
-- [ ] 4.2 No suggestion less conservative than what was refused; near-match only when unambiguous
+- [x] 4.2 No suggestion less conservative than what was refused; near-match only when unambiguous
+      (finding 23; every refusal that offers a value is listed and read in
+      `tests/test_agent_surface.py`)
 - [x] 4.3 Same mistake, same words on CLI and MCP (`tests/test_refusal_parity.py`: twenty
       mistakes through `check`/`run_validation` and `build`/`build_part`; findings 19, 20)
 

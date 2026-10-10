@@ -785,12 +785,22 @@ class WeldDetailCategory(RevalidatedModel):
         ):
             ladder = EN1993_NORMAL_DETAIL_CATEGORIES
             if not any(abs(value - c) < 1e-9 for c in ladder):
-                near = sorted(ladder, key=lambda c: abs(c - value))[:2]
+                # Only the rung below is offered. The one above is as near, and claims more
+                # fatigue strength than the document stated: a refusal that names it has
+                # suggested a less conservative value than the one it refused.
+                below = [rung for rung in ladder if rung < value]
+                offered = (
+                    f"the rung below it is {max(below):g} MPa, which claims no more "
+                    "strength than was stated"
+                    if below
+                    else f"it is under the lowest rung, {min(ladder):g} MPa, and no "
+                    "tabulated category claims so little"
+                )
                 raise _fatigue_record_refusal(
                     f"{value:g} MPa is not an {_EN1993_STANDARD_PREFIX} direct-stress "
                     f"detail category. The standard tabulates details into a fixed ladder "
-                    f"and defines no curve between the rungs; the nearest are "
-                    f"{sorted(near)}. If this came from a National Annex or another "
+                    f"and defines no curve between the rungs; {offered}. "
+                    f"If this came from a National Annex or another "
                     f"standard, declare that standard instead of interpolating this one",
                     subject="standard, detail_category, and stress_kind",
                     source=_DETAIL_SOURCE,

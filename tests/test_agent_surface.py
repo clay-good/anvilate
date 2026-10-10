@@ -339,3 +339,37 @@ def test_a_validation_failure_is_stated_as_its_fields_and_their_reasons():
     assert said.endswith("second: Field required")
     assert "Pair" not in said and "pydantic" not in said and "input_value" not in said
     assert _reason(ValueError("as it was")) == "as it was"
+
+
+# Every refusal that offers a value in place of the one it refused, with why the offer
+# cannot loosen anything (audit 4.2). A new one fails the test below until it is read.
+_OFFERS_A_VALUE = {
+    ("_patterns_screened.py", "build_rolling_bearing"): (
+        "lists catalog bearings by name; the ratings the screen uses are the caller's own"
+    ),
+    ("_patterns_screened.py", "build_pipe_run"): (
+        "lists catalog pipes by name; the drawing is then refused unless the bore agrees"
+    ),
+    ("patterns.py", "describe_part"): "lists element names; a name carries no requirement",
+    ("units/quantity.py", "_validate_unit"): "names one unit, and only above a 0.8 match",
+}
+
+
+def test_every_refusal_that_offers_a_value_has_been_read_for_what_it_offers():
+    """A refusal's suggestion is an instruction an agent follows.
+
+    The fatigue record's offered the two nearest detail categories, one of them stronger
+    than the value it refused. It now offers the rung below. These are the others that
+    put a value in a refusal, each read and found to offer a name and not a requirement.
+    """
+    import re
+
+    listed, _analysis = _refusal_list().refusals()
+    offers = {
+        (module, function)
+        for module, rows in listed.items()
+        for function, text in rows
+        if re.search(r"closest:|did you mean|the nearest|_nearest_", text)
+    }
+    assert offers == set(_OFFERS_A_VALUE), sorted(offers ^ set(_OFFERS_A_VALUE))
+    assert all(len(cause.split()) >= 6 for cause in _OFFERS_A_VALUE.values())

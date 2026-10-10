@@ -345,9 +345,14 @@ def test_a_detail_category_cannot_be_a_bare_number(field, expected):
 def test_the_en1993_ladder_is_discrete_and_a_value_between_rungs_is_refused():
     with pytest.raises(ValidationError, match="not an EN 1993-1-9 direct-stress"):
         _category(detail_category=Quantity.parse("85 MPa"))
-    # The refusal names the near misses rather than leaving the caller to guess.
-    with pytest.raises(ValidationError, match=r"\[80, 90\]"):
+    # The refusal offers the rung below, and never the one above: 90 is as near to 85 as 80
+    # is, and claims more fatigue strength than the document stated.
+    with pytest.raises(ValidationError, match="the rung below it is 80 MPa") as refused:
         _category(detail_category=Quantity.parse("85 MPa"))
+    assert "90" not in str(refused.value)
+    with pytest.raises(ValidationError, match="under the lowest rung, 36 MPa") as refused:
+        _category(detail_category=Quantity.parse("30 MPa"))
+    assert "rung below" not in str(refused.value)
 
 
 def test_every_rung_of_the_published_ladder_is_accepted():
