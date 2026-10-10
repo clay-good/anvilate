@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:sheet_metal_bracket:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'sheet_metal_bracket': the fields a Design Spec puts in `element_params` when it declares `element_type: sheet_metal_bracket`. Generated from anvilate.packs.parts.SheetMetalBracket.",
+  "properties": {
+    "flange_a": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "flange_b": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "flange_c": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "inside_radius": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "k_factor": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "K Factor"
+    },
+    "k_factor_source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "K Factor Source"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "shape": {
+      "default": "L",
+      "enum": [
+        "L",
+        "U",
+        "Z"
+      ],
+      "title": "Shape",
+      "type": "string"
+    },
+    "thickness": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "name",
+    "thickness",
+    "inside_radius",
+    "width",
+    "flange_a",
+    "flange_b"
+  ],
+  "title": "SheetMetalBracket",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

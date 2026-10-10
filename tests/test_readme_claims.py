@@ -397,6 +397,7 @@ def test_every_docs_page_is_in_the_docs_index():
         "Fifty-nine": 59,
         "Sixty": 60,
         "Sixty-one": 61,
+        "Sixty-two": 62,
         "Fifty-two": 52,
     }
     claimed = re.search(r"^([A-Z][a-z]+(?:-[a-z]+)?) pages,", index, re.M)
@@ -524,6 +525,7 @@ def test_the_screen_counts_on_the_screening_page_are_the_registrys_own():
         "twenty-eight": 28,
         "twenty-nine": 29,
         "thirty": 30,
+        "forty-four": 44,
     }
     claimed_judged, claimed_total = re.search(
         r"([\w-]+) of the ([\w-]+) screens\s+are judged against one",

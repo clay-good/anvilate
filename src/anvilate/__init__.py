@@ -83,6 +83,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.patterns` — the registry of drawable patterns: one table that building,
   the drawable catalog and the "supported" list in a refusal all read.
 - :mod:`anvilate._patterns_core` — the private registrations for the first four patterns.
+- :mod:`anvilate._patterns_parts` — the private builders and registrations for the everyday
+  parts in :mod:`anvilate.packs.parts`.
 - :mod:`anvilate.features` — the shared holes, slots and hole patterns every drawable part
   cuts the same way, each tagged, measurable and refused when it does not fit.
 - :mod:`anvilate.raster` — the viewport SVG rasterized to PNG with the standard library,

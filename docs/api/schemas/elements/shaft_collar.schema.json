@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:shaft_collar:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'shaft_collar': the fields a Design Spec puts in `element_params` when it declares `element_type: shaft_collar`. Generated from anvilate.packs.parts.ShaftCollar.",
+  "properties": {
+    "bore": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "outer_diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "name",
+    "bore",
+    "outer_diameter",
+    "width"
+  ],
+  "title": "ShaftCollar",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

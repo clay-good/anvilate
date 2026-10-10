@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
@@ -38,9 +39,10 @@ class Pattern:
     """One drawable archetype: its name, the element it draws, and how it is built.
 
     ``build`` takes the validated element and the part's name and returns the built
-    geometry. ``outputs`` are what the pattern supports beyond the solid itself.
+    geometry. ``example`` is its worked spec, a path under the repository's ``examples``.
+    ``outputs`` are what the pattern supports beyond the solid itself.
     ``envelope`` marks a catalog component drawn from its tabulated size: where it goes, not
-    how it is made.
+    how it is made. ``screened`` is false for a part that is drawn and not checked.
     """
 
     name: str
@@ -48,8 +50,10 @@ class Pattern:
     model: type
     build: Callable[[Any, str], Any]
     summary: str
+    example: str
     outputs: tuple[str, ...] = ("views", "step", "3mf")
     envelope: bool = False
+    screened: bool = True
 
     def __post_init__(self) -> None:
         if self.name != f"{self.element_type}/{self.name.rpartition('/')[2]}":
@@ -86,7 +90,7 @@ def patterns() -> Mapping[str, Pattern]:
         _LOADED = True
         # Imported for their registrations. Here rather than at module import, because the
         # builders import this module's `register`.
-        from . import _patterns_core  # noqa: F401
+        from . import _patterns_core, _patterns_parts  # noqa: F401
 
     return MappingProxyType(_REGISTRY)
 
@@ -101,12 +105,44 @@ def build(element_type: str, element: Any, name: str) -> Any:
     return patterns()[element_type].build(element, name)
 
 
+def _takes(info: Any) -> str:
+    """What one parameter takes, in a word a spec author can act on."""
+    from typing import Literal, get_args, get_origin
+
+    from .units import Quantity
+
+    def one(annotation: Any) -> str:
+        if annotation is Quantity:
+            return "quantity"
+        if annotation is bool:
+            return "true or false"
+        if annotation is int:
+            return "whole number"
+        if annotation is float:
+            return "number"
+        if annotation is str:
+            return "text"
+        if get_origin(annotation) is Literal:
+            return " | ".join(str(choice) for choice in get_args(annotation))
+        if get_origin(annotation) is tuple:
+            return f"list of {one(get_args(annotation)[0])}"
+        if isinstance(annotation, type) and issubclass(annotation, Enum):
+            return " | ".join(str(member.value) for member in annotation)
+        if isinstance(annotation, type):
+            return annotation.__name__
+        members = [one(arg) for arg in get_args(annotation) if arg is not type(None)]
+        return " | ".join(dict.fromkeys(members)) or "value"
+
+    return one(info.annotation)
+
+
 def drawable_catalog() -> tuple[dict[str, Any], ...]:
     """What can be drawn, generated from the registry: one entry per pattern.
 
-    Each entry names the element type, the pattern, what it is, its parameters with whether
-    each is required, the outputs it supports, and whether it is an envelope. An agent reads
-    this to choose a pattern without trial and error.
+    Each entry names the element type, the pattern, what it is, its worked example, its
+    parameters with whether each is required and what it takes, the outputs it supports,
+    whether it is an envelope and whether a screen checks it. An agent reads this to choose
+    a pattern without trial and error.
     """
     entries = []
     for element_type in sorted(patterns()):
@@ -117,16 +153,14 @@ def drawable_catalog() -> tuple[dict[str, Any], ...]:
                 "element_type": element_type,
                 "pattern": pattern.name,
                 "summary": pattern.summary,
+                "example": pattern.example,
                 "parameters": [
-                    {
-                        "name": field,
-                        "required": info.is_required(),
-                        "description": info.description or "",
-                    }
+                    {"name": field, "required": info.is_required(), "takes": _takes(info)}
                     for field, info in fields.items()
                 ],
                 "outputs": list(pattern.outputs),
                 "envelope": pattern.envelope,
+                "screened": pattern.screened,
             }
         )
     return tuple(entries)

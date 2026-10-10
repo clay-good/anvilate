@@ -17,7 +17,7 @@ patterns are callable today:
 | Step | Tool | Today |
 | --- | --- | --- |
 | Compile the spec | `compile_spec` | **Dispatched.** |
-| Build the part | `build_part` | **Dispatched synchronously** for `base_plate`, rectangular/circular/annular `cover_plate`, prismatic solid `transmission_shaft`, and a sawn timber beam between its supports; returns the published geometry summary. |
+| Build the part | `build_part` | **Dispatched synchronously** for every part in the [parts catalog](parts-catalog.md): plates, brackets, flanges, spacers, shafts, pulleys, tubes, sheet-metal brackets and enclosures. Returns the published geometry summary, with each hole and slot under its tag. A part with no screen is drawn and not checked, and its exports carry the unvalidated mark. |
 | Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic PNG (or the SVG drawing with `format: "svg"`) with one line of text and no structured content, so the model actually sees it, and writes the image to the server's output folder. |
 | Inspect the part | `measure_geometry` | **Dispatched synchronously.** Reads dimensions, volume, face count, or tagged-face area from the regenerated B-Rep. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |

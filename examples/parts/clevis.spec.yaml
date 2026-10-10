@@ -1,0 +1,20 @@
+# A drawable part: A clevis with a 12 mm pin hole through both ears.
+#   anvilate view examples/parts/clevis.spec.yaml
+anvilate_spec: 1.3.0
+name: rod-end-clevis
+description: A clevis with a 12 mm pin hole through both ears.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: clevis
+element_params:
+  name: rod-end-clevis
+  width: {magnitude: 40.0, unit: mm}
+  gap: {magnitude: 20.0, unit: mm}
+  depth: {magnitude: 30.0, unit: mm}
+  height: {magnitude: 50.0, unit: mm}
+  base_thickness: {magnitude: 12.0, unit: mm}
+  pin_diameter: {magnitude: 12.0, unit: mm}
+  pin_height: {magnitude: 34.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

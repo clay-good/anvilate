@@ -1,0 +1,101 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:tube:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'tube': the fields a Design Spec puts in `element_params` when it declares `element_type: tube`. Generated from anvilate.packs.parts.Tube.",
+  "properties": {
+    "height": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "outer_diameter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "shape": {
+      "default": "round",
+      "enum": [
+        "round",
+        "rectangular"
+      ],
+      "title": "Shape",
+      "type": "string"
+    },
+    "wall": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "name",
+    "wall",
+    "length"
+  ],
+  "title": "Tube",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

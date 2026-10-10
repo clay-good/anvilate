@@ -1,0 +1,352 @@
+{
+  "$defs": {
+    "Hole": {
+      "additionalProperties": false,
+      "description": "One hole, positioned from the centre of the face it is cut into.\n\n``kind`` is ``through`` (the default), ``counterbore`` (give ``counterbore_diameter``\nand ``counterbore_depth``) or ``countersink`` (give ``head_diameter``). ``thread`` marks\na tapped hole by its designation, such as ``M6x1``; the thread is data, never geometry.",
+      "properties": {
+        "counterbore_depth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "counterbore_diameter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "head_diameter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "default": "through",
+          "enum": [
+            "through",
+            "counterbore",
+            "countersink"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "thread": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thread"
+        },
+        "x": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "y": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "tag",
+        "x",
+        "y",
+        "diameter"
+      ],
+      "title": "Hole",
+      "type": "object"
+    },
+    "HolePattern": {
+      "additionalProperties": false,
+      "description": "Several equal through holes: a ``rectangular`` grid or a ``bolt_circle``.\n\nA grid states ``count_x``, ``count_y`` and the pitches; a bolt circle states ``count``\nand ``circle_diameter``. Both are centred on the face unless ``centre_x`` and\n``centre_y`` say otherwise.",
+      "properties": {
+        "centre_x": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "centre_y": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "circle_diameter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count"
+        },
+        "count_x": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count X"
+        },
+        "count_y": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count Y"
+        },
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "kind": {
+          "enum": [
+            "rectangular",
+            "bolt_circle"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "pitch_x": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pitch_y": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "start_angle_deg": {
+          "default": 0.0,
+          "title": "Start Angle Deg",
+          "type": "number"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "thread": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Thread"
+        }
+      },
+      "required": [
+        "tag",
+        "kind",
+        "diameter"
+      ],
+      "title": "HolePattern",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Slot": {
+      "additionalProperties": false,
+      "description": "A round-ended through slot: ``length`` overall, ``width`` across, turned by ``angle_deg``.",
+      "properties": {
+        "angle_deg": {
+          "default": 0.0,
+          "title": "Angle Deg",
+          "type": "number"
+        },
+        "length": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "width": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "x": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "y": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "tag",
+        "x",
+        "y",
+        "length",
+        "width"
+      ],
+      "title": "Slot",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:mounting_plate:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'mounting_plate': the fields a Design Spec puts in `element_params` when it declares `element_type: mounting_plate`. Generated from anvilate.packs.parts.MountingPlate.",
+  "properties": {
+    "corner_radius": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "hole_patterns": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/HolePattern"
+      },
+      "title": "Hole Patterns",
+      "type": "array"
+    },
+    "holes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Hole"
+      },
+      "title": "Holes",
+      "type": "array"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "slots": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Slot"
+      },
+      "title": "Slots",
+      "type": "array"
+    },
+    "thickness": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "name",
+    "width",
+    "length",
+    "thickness"
+  ],
+  "title": "MountingPlate",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

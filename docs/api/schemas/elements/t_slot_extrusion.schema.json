@@ -1,0 +1,48 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:t_slot_extrusion:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 't_slot_extrusion': the fields a Design Spec puts in `element_params` when it declares `element_type: t_slot_extrusion`. Generated from anvilate.packs.parts.TSlotExtrusion.",
+  "properties": {
+    "designation": {
+      "title": "Designation",
+      "type": "string"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "designation",
+    "length"
+  ],
+  "title": "TSlotExtrusion",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

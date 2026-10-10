@@ -421,7 +421,7 @@ def test_migrated_geometry_refusals_require_explicit_structured_fields():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 93
+    assert len(sites) == 94
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         required = {"subject"}
@@ -1512,21 +1512,13 @@ def test_a_timber_beam_builds_as_its_dressed_section_over_its_span():
 
 
 def _drawn_examples() -> list:
+    """Every pattern's worked example, read from the registry so a new pattern is covered."""
     from pathlib import Path
 
-    import yaml
-
-    from anvilate.geometry import _drawn_element_types
-
-    _DRAWN_ELEMENT_TYPES = _drawn_element_types()
+    from anvilate.patterns import patterns
 
     root = Path(__file__).resolve().parents[1] / "examples"
-    return [
-        path
-        for path in sorted(root.glob("*.spec.yaml"))
-        if yaml.safe_load(path.read_text(encoding="utf-8")).get("element_type")
-        in _DRAWN_ELEMENT_TYPES
-    ]
+    return [root / pattern.example for _type, pattern in sorted(patterns().items())]
 
 
 @pytest.mark.parametrize("path", _drawn_examples(), ids=lambda path: path.name)

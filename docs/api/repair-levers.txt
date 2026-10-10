@@ -177,3 +177,18 @@ screening.screen_structure_element
 stress.strength_scorecard
 structural.screen_beam_column
 structural.screen_beam_member
+# The everyday parts are drawn and not checked, so no check on them can fail and offer a lever.
+parts.screen_angle_bracket
+parts.screen_bushing
+parts.screen_clevis
+parts.screen_enclosure
+parts.screen_mounting_plate
+parts.screen_plate_flange
+parts.screen_pulley
+parts.screen_shaft_collar
+parts.screen_sheet_metal_bracket
+parts.screen_spacer
+parts.screen_standoff
+parts.screen_stepped_shaft
+parts.screen_t_slot_extrusion
+parts.screen_tube

@@ -1,0 +1,136 @@
+{
+  "$defs": {
+    "Keyway": {
+      "additionalProperties": false,
+      "description": "A keyway milled into one shaft step: ``step`` counts from 1 at the drive end.\n\n``offset`` is the distance from the start of that step to the start of the keyway.",
+      "properties": {
+        "depth": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "length": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        },
+        "width": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "step",
+        "width",
+        "depth",
+        "length"
+      ],
+      "title": "Keyway",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "ShaftStep": {
+      "additionalProperties": false,
+      "description": "One step of a shaft: its ``diameter`` and ``length``.",
+      "properties": {
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "length": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "diameter",
+        "length"
+      ],
+      "title": "ShaftStep",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:stepped_shaft:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'stepped_shaft': the fields a Design Spec puts in `element_params` when it declares `element_type: stepped_shaft`. Generated from anvilate.packs.parts.SteppedShaft.",
+  "properties": {
+    "end_chamfer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "keyways": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Keyway"
+      },
+      "title": "Keyways",
+      "type": "array"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/ShaftStep"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "steps"
+  ],
+  "title": "SteppedShaft",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

@@ -2840,7 +2840,7 @@ def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
     code, out, err = _run("build", str(spec), "--output", str(tmp_path / "lug.step"))
 
     assert code == EXIT_UNBUILT and out == ""
-    assert "lifting_lug" in err and "supported: base_plate" in err
+    assert "lifting_lug" in err and "supported: angle_bracket, base_plate" in err
 
 
 def test_build_does_not_replace_an_artifact_without_force(tmp_path):

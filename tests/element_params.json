@@ -1,4 +1,100 @@
 {
+ "angle_bracket": {
+  "base_holes": [
+   {
+    "counterbore_depth": null,
+    "counterbore_diameter": null,
+    "diameter": {
+     "magnitude": 6.6,
+     "unit": "mm"
+    },
+    "head_diameter": null,
+    "kind": "through",
+    "tag": "b1",
+    "thread": null,
+    "x": {
+     "magnitude": 10.0,
+     "unit": "mm"
+    },
+    "y": {
+     "magnitude": -15.0,
+     "unit": "mm"
+    }
+   },
+   {
+    "counterbore_depth": null,
+    "counterbore_diameter": null,
+    "diameter": {
+     "magnitude": 6.6,
+     "unit": "mm"
+    },
+    "head_diameter": null,
+    "kind": "through",
+    "tag": "b2",
+    "thread": null,
+    "x": {
+     "magnitude": 10.0,
+     "unit": "mm"
+    },
+    "y": {
+     "magnitude": 15.0,
+     "unit": "mm"
+    }
+   }
+  ],
+  "base_length": {
+   "magnitude": 60.0,
+   "unit": "mm"
+  },
+  "base_patterns": [],
+  "base_slots": [],
+  "material": null,
+  "name": "shelf-angle-bracket",
+  "rib_leg": {
+   "magnitude": 25.0,
+   "unit": "mm"
+  },
+  "rib_thickness": {
+   "magnitude": 5.0,
+   "unit": "mm"
+  },
+  "thickness": {
+   "magnitude": 5.0,
+   "unit": "mm"
+  },
+  "upright_height": {
+   "magnitude": 80.0,
+   "unit": "mm"
+  },
+  "upright_holes": [],
+  "upright_patterns": [],
+  "upright_slots": [
+   {
+    "angle_deg": 0.0,
+    "length": {
+     "magnitude": 20.0,
+     "unit": "mm"
+    },
+    "tag": "s1",
+    "width": {
+     "magnitude": 6.6,
+     "unit": "mm"
+    },
+    "x": {
+     "magnitude": 0.0,
+     "unit": "mm"
+    },
+    "y": {
+     "magnitude": 15.0,
+     "unit": "mm"
+    }
+   }
+  ],
+  "width": {
+   "magnitude": 50.0,
+   "unit": "mm"
+  }
+ },
  "base_plate": {
   "axial_load": {
    "magnitude": 200.0,
@@ -134,6 +230,62 @@
    "unit": "kN"
   }
  },
+ "bushing": {
+  "flange_diameter": {
+   "magnitude": 22.0,
+   "unit": "mm"
+  },
+  "flange_thickness": {
+   "magnitude": 2.0,
+   "unit": "mm"
+  },
+  "inner_diameter": {
+   "magnitude": 12.0,
+   "unit": "mm"
+  },
+  "length": {
+   "magnitude": 20.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "flanged-bushing",
+  "outer_diameter": {
+   "magnitude": 16.0,
+   "unit": "mm"
+  }
+ },
+ "clevis": {
+  "base_thickness": {
+   "magnitude": 12.0,
+   "unit": "mm"
+  },
+  "depth": {
+   "magnitude": 30.0,
+   "unit": "mm"
+  },
+  "gap": {
+   "magnitude": 20.0,
+   "unit": "mm"
+  },
+  "height": {
+   "magnitude": 50.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "rod-end-clevis",
+  "pin_diameter": {
+   "magnitude": 12.0,
+   "unit": "mm"
+  },
+  "pin_height": {
+   "magnitude": 34.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 40.0,
+   "unit": "mm"
+  }
+ },
  "column_member": {
   "axial_load": {
    "magnitude": 40.0,
@@ -238,6 +390,58 @@
    "unit": "kPa"
   }
  },
+ "enclosure": {
+  "corner_radius": {
+   "magnitude": 6.0,
+   "unit": "mm"
+  },
+  "floor": null,
+  "floor_holes": [],
+  "floor_patterns": [
+   {
+    "centre_x": null,
+    "centre_y": null,
+    "circle_diameter": null,
+    "count": null,
+    "count_x": 2,
+    "count_y": 2,
+    "diameter": {
+     "magnitude": 4.5,
+     "unit": "mm"
+    },
+    "kind": "rectangular",
+    "pitch_x": {
+     "magnitude": 90.0,
+     "unit": "mm"
+    },
+    "pitch_y": {
+     "magnitude": 50.0,
+     "unit": "mm"
+    },
+    "start_angle_deg": 0.0,
+    "tag": "mnt",
+    "thread": null
+   }
+  ],
+  "height": {
+   "magnitude": 40.0,
+   "unit": "mm"
+  },
+  "length": {
+   "magnitude": 80.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "control-box",
+  "wall": {
+   "magnitude": 3.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 120.0,
+   "unit": "mm"
+  }
+ },
  "feeder": {
   "conductor_ampacity": {
    "magnitude": 115.0,
@@ -264,7 +468,7 @@
   "reactance": null,
   "resistivity": {
    "magnitude": 1.68e-08,
-   "unit": "m * \u03a9"
+   "unit": "m * Ω"
   }
  },
  "gusset_plate": {
@@ -393,6 +597,102 @@
   },
   "slenderness_ratio": 40.0
  },
+ "mounting_plate": {
+  "corner_radius": {
+   "magnitude": 8.0,
+   "unit": "mm"
+  },
+  "hole_patterns": [
+   {
+    "centre_x": null,
+    "centre_y": null,
+    "circle_diameter": null,
+    "count": null,
+    "count_x": 2,
+    "count_y": 2,
+    "diameter": {
+     "magnitude": 6.6,
+     "unit": "mm"
+    },
+    "kind": "rectangular",
+    "pitch_x": {
+     "magnitude": 100.0,
+     "unit": "mm"
+    },
+    "pitch_y": {
+     "magnitude": 60.0,
+     "unit": "mm"
+    },
+    "start_angle_deg": 0.0,
+    "tag": "m6",
+    "thread": null
+   }
+  ],
+  "holes": [
+   {
+    "counterbore_depth": {
+     "magnitude": 3.0,
+     "unit": "mm"
+    },
+    "counterbore_diameter": {
+     "magnitude": 11.0,
+     "unit": "mm"
+    },
+    "diameter": {
+     "magnitude": 6.6,
+     "unit": "mm"
+    },
+    "head_diameter": null,
+    "kind": "counterbore",
+    "tag": "cb",
+    "thread": null,
+    "x": {
+     "magnitude": 0.0,
+     "unit": "mm"
+    },
+    "y": {
+     "magnitude": 0.0,
+     "unit": "mm"
+    }
+   }
+  ],
+  "length": {
+   "magnitude": 80.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "motor-mounting-plate",
+  "slots": [
+   {
+    "angle_deg": 0.0,
+    "length": {
+     "magnitude": 30.0,
+     "unit": "mm"
+    },
+    "tag": "adj",
+    "width": {
+     "magnitude": 6.0,
+     "unit": "mm"
+    },
+    "x": {
+     "magnitude": 0.0,
+     "unit": "mm"
+    },
+    "y": {
+     "magnitude": 25.0,
+     "unit": "mm"
+    }
+   }
+  ],
+  "thickness": {
+   "magnitude": 6.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 120.0,
+   "unit": "mm"
+  }
+ },
  "pipe_run": {
   "available_head": {
    "magnitude": 2.0,
@@ -417,6 +717,56 @@
   },
   "roughness": {
    "magnitude": 0.045,
+   "unit": "mm"
+  }
+ },
+ "plate_flange": {
+  "bolt_circle_diameter": {
+   "magnitude": 90.0,
+   "unit": "mm"
+  },
+  "bolt_count": 6,
+  "bolt_hole_diameter": {
+   "magnitude": 9.0,
+   "unit": "mm"
+  },
+  "bore_diameter": {
+   "magnitude": 50.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "pump-plate-flange",
+  "outer_diameter": {
+   "magnitude": 120.0,
+   "unit": "mm"
+  },
+  "thickness": {
+   "magnitude": 12.0,
+   "unit": "mm"
+  }
+ },
+ "pulley": {
+  "bore": {
+   "magnitude": 20.0,
+   "unit": "mm"
+  },
+  "groove_angle_deg": 38.0,
+  "groove_depth": {
+   "magnitude": 11.0,
+   "unit": "mm"
+  },
+  "groove_width": {
+   "magnitude": 13.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "v-belt-pulley",
+  "outer_diameter": {
+   "magnitude": 100.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 20.0,
    "unit": "mm"
   }
  },
@@ -497,6 +847,22 @@
    "unit": "kN"
   }
  },
+ "shaft_collar": {
+  "bore": {
+   "magnitude": 20.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "shaft-collar-20",
+  "outer_diameter": {
+   "magnitude": 40.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 15.0,
+   "unit": "mm"
+  }
+ },
  "shaft_key": {
   "allowable_bearing": {
    "magnitude": 180.0,
@@ -570,6 +936,53 @@
    "unit": "mm ** 2"
   }
  },
+ "sheet_metal_bracket": {
+  "flange_a": {
+   "magnitude": 30.0,
+   "unit": "mm"
+  },
+  "flange_b": {
+   "magnitude": 50.0,
+   "unit": "mm"
+  },
+  "flange_c": {
+   "magnitude": 25.0,
+   "unit": "mm"
+  },
+  "inside_radius": {
+   "magnitude": 2.0,
+   "unit": "mm"
+  },
+  "k_factor": 0.44,
+  "k_factor_source": "shop bend table rev C",
+  "material": null,
+  "name": "z-bracket",
+  "shape": "Z",
+  "thickness": {
+   "magnitude": 2.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 40.0,
+   "unit": "mm"
+  }
+ },
+ "spacer": {
+  "inner_diameter": {
+   "magnitude": 6.4,
+   "unit": "mm"
+  },
+  "length": {
+   "magnitude": 10.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "m6-spacer",
+  "outer_diameter": {
+   "magnitude": 12.0,
+   "unit": "mm"
+  }
+ },
  "spur_gear_mesh": {
   "allowable_bending_stress": {
    "magnitude": 250.0,
@@ -612,6 +1025,84 @@
   "size_factor": 1.0,
   "surface_condition_factor": 1.0
  },
+ "standoff": {
+  "across_flats": {
+   "magnitude": 8.0,
+   "unit": "mm"
+  },
+  "hole_diameter": {
+   "magnitude": 3.3,
+   "unit": "mm"
+  },
+  "length": {
+   "magnitude": 25.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "m4-hex-standoff",
+  "thread": "M4x0.7"
+ },
+ "stepped_shaft": {
+  "end_chamfer": {
+   "magnitude": 1.0,
+   "unit": "mm"
+  },
+  "keyways": [
+   {
+    "depth": {
+     "magnitude": 3.5,
+     "unit": "mm"
+    },
+    "length": {
+     "magnitude": 25.0,
+     "unit": "mm"
+    },
+    "offset": {
+     "magnitude": 5.0,
+     "unit": "mm"
+    },
+    "step": 1,
+    "width": {
+     "magnitude": 6.0,
+     "unit": "mm"
+    }
+   }
+  ],
+  "material": null,
+  "name": "drive-shaft",
+  "steps": [
+   {
+    "diameter": {
+     "magnitude": 20.0,
+     "unit": "mm"
+    },
+    "length": {
+     "magnitude": 40.0,
+     "unit": "mm"
+    }
+   },
+   {
+    "diameter": {
+     "magnitude": 30.0,
+     "unit": "mm"
+    },
+    "length": {
+     "magnitude": 60.0,
+     "unit": "mm"
+    }
+   },
+   {
+    "diameter": {
+     "magnitude": 25.0,
+     "unit": "mm"
+    },
+    "length": {
+     "magnitude": 30.0,
+     "unit": "mm"
+    }
+   }
+  ]
+ },
  "structure": {
   "members": [
    {
@@ -638,6 +1129,14 @@
     "element_type": "lifting_lug"
    }
   ]
+ },
+ "t_slot_extrusion": {
+  "designation": "EXT-4040",
+  "length": {
+   "magnitude": 500.0,
+   "unit": "mm"
+  },
+  "name": "frame-rail"
  },
  "tension_member": {
   "gross_area": {
@@ -761,6 +1260,28 @@
   "yield_strength": {
    "magnitude": 370.0,
    "unit": "MPa"
+  }
+ },
+ "tube": {
+  "height": {
+   "magnitude": 20.0,
+   "unit": "mm"
+  },
+  "length": {
+   "magnitude": 300.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "frame-tube",
+  "outer_diameter": null,
+  "shape": "rectangular",
+  "wall": {
+   "magnitude": 2.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 40.0,
+   "unit": "mm"
   }
  },
  "ventilation_zone": {

@@ -332,7 +332,7 @@ def test_a_subset_records_what_it_turned_off_and_reaches_only_its_own_screens() 
         manifest_for("industrial").screens
     )
     assert "screen_gear_mesh" not in run.screens()
-    assert "9 disabled" in str(run)
+    assert "10 disabled" in str(run)
 
 
 def test_a_module_nobody_enabled_cannot_be_loaded() -> None:

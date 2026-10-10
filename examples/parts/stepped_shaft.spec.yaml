@@ -1,0 +1,27 @@
+# A drawable part: A three-step shaft with a keyway and chamfered ends.
+#   anvilate view examples/parts/stepped_shaft.spec.yaml
+anvilate_spec: 1.3.0
+name: drive-shaft
+description: A three-step shaft with a keyway and chamfered ends.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_turning}
+element_type: stepped_shaft
+element_params:
+  name: drive-shaft
+  steps:
+  - diameter: {magnitude: 20.0, unit: mm}
+    length: {magnitude: 40.0, unit: mm}
+  - diameter: {magnitude: 30.0, unit: mm}
+    length: {magnitude: 60.0, unit: mm}
+  - diameter: {magnitude: 25.0, unit: mm}
+    length: {magnitude: 30.0, unit: mm}
+  keyways:
+  - step: 1
+    width: {magnitude: 6.0, unit: mm}
+    depth: {magnitude: 3.5, unit: mm}
+    length: {magnitude: 25.0, unit: mm}
+    offset: {magnitude: 5.0, unit: mm}
+  end_chamfer: {magnitude: 1.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

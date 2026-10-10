@@ -1209,7 +1209,7 @@ def test_build_part_refuses_a_spec_without_an_audited_pattern():
     assert error["code"] == -32000
     assert "declares no element_type" in error["message"]
     assert "<undeclared>" not in error["message"], "an absence read as a type named <undeclared>"
-    assert "supported: base_plate" in error["message"]
+    assert "supported: angle_bracket, base_plate" in error["message"]
 
 
 @pytest.mark.parametrize("element_type", [None, *sorted(element_registry())])

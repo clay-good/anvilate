@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Sixty-one pages, arranged by what you are trying to do. The [README](../README.md) is the
+Sixty-two pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -10,6 +10,7 @@ You have a part and you want a verdict.
 | | |
 | --- | --- |
 | [Quickstart](quickstart.md) | Install, screen a lifting lug, read the verdict. Ten minutes, no network, no CAD. |
+| [Parts you can ask for](parts-catalog.md) | Every part Anvilate draws, with a picture of each and the fields it takes. Generated from the pattern registry. |
 | [Example highlights](example-highlights.md) | Worked examples where the governing check is not the obvious one, each with the figures it prints. |
 | [`anvilate` on the command line](headless-cli.md) | Screen a spec, export its bundle, verify an attestation, diff two revisions. The exit codes are the interface, and **2 is not a pass**. |
 | [Screening a Design Spec](spec-screening.md) | What a spec document alone can be screened on, and the tier that has to name a gap rather than run. |

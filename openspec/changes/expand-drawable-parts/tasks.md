@@ -30,14 +30,19 @@
 
 ## 4. New everyday parts (element, schema, pattern, example each)
 
-- [ ] 4.1 Angle bracket with screens (leg bending, bolt bearing, edge distance)
-- [ ] 4.2 Mounting plate with holes and slots
-- [ ] 4.3 Plate flange with bolt circle
-- [ ] 4.4 Spacer, bushing, standoff, shaft collar
-- [ ] 4.5 Pulley; clevis with pin screens
-- [ ] 4.6 Tube and T-slot extrusion profile
-- [ ] 4.7 Sheet-metal bracket (L, U, Z): formed solid, flat pattern, K-factor as input
-- [ ] 4.8 Enclosure: box and lid shell
+- [x] 4.1 Angle bracket: two legs, holes and slots per leg, optional stiffening rib
+- [x] 4.2 Mounting plate with holes and slots
+- [x] 4.3 Plate flange with bolt circle
+- [x] 4.4 Spacer, bushing, standoff, shaft collar
+- [x] 4.5 Pulley; clevis with pin hole; stepped shaft with keyways and end chamfers
+- [x] 4.6 Tube and T-slot extrusion profile
+- [x] 4.7 Sheet-metal bracket (L, U, Z): formed solid, developed length, K-factor as input
+- [x] 4.8 Enclosure: open box shell with floor holes
+- [ ] 4.9 Screens: angle bracket (leg bending, bolt bearing, edge distance), clevis (pin
+      shear and bearing), stepped shaft (stress at a shoulder)
+- [ ] 4.10 Sheet-metal flat pattern as a DXF with bend lines; minimum bend radius reported
+      through the existing bend-radius screen
+- [ ] 4.11 Enclosure lid
 
 ## 5. Catalog and honesty
 
@@ -49,5 +54,5 @@
 
 ## 6. Docs
 
-- [ ] 6.1 Catalog page with one picture per pattern, generated
+- [x] 6.1 Catalog page with one picture per pattern, generated
 - [ ] 6.2 README and agent guide updated with the parts list

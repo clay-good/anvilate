@@ -1,0 +1,22 @@
+# A drawable part: A Z bracket bent from 2 mm sheet, with its flat length.
+#   anvilate view examples/parts/sheet_metal_bracket.spec.yaml
+anvilate_spec: 1.3.0
+name: z-bracket
+description: A Z bracket bent from 2 mm sheet, with its flat length.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+element_type: sheet_metal_bracket
+element_params:
+  name: z-bracket
+  shape: Z
+  thickness: {magnitude: 2.0, unit: mm}
+  inside_radius: {magnitude: 2.0, unit: mm}
+  width: {magnitude: 40.0, unit: mm}
+  flange_a: {magnitude: 30.0, unit: mm}
+  flange_b: {magnitude: 50.0, unit: mm}
+  flange_c: {magnitude: 25.0, unit: mm}
+  k_factor: 0.44
+  k_factor_source: shop bend table rev C
+acceptance:
+  tiers: [T1_analytical]

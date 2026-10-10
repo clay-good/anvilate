@@ -3243,6 +3243,17 @@ def write_step(
             _GVP_RECOMMENDED_PRACTICE,
             *(f"{key}={value}" for key, value in authorization.metadata()),
         ]
+        if text.count("PRODUCT(") != 1:
+            # A solid that carries a placement is written as an assembly of one: a second
+            # product, and no validation properties on the part. Reading that file back
+            # crashed the kernel, so it is refused here, before the read.
+            raise _ExchangeGeometryError(
+                "STEP writer produced more than one product for a single part; the solid "
+                "carries a placement instead of being built in place",
+                action="rebuild or report",
+                subject=f"the {built.pattern} generated solid",
+                source="the audited pattern's contract of one unplaced solid",
+            )
         product_name = _step_string(built.name)
         text, products_changed = re.subn(
             r"PRODUCT\('(?:[^']|'')*'\s*,\s*'(?:[^']|'')*'\s*,",

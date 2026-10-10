@@ -217,6 +217,8 @@ def test_a_pattern_cannot_be_registered_twice_or_misnamed():
     with pytest.raises(ValueError, match="already has a pattern"):
         patterns.register(existing)
     with pytest.raises(ValueError, match="must be named"):
-        patterns.Pattern("wrong/1", "spacer", object, lambda e, n: None, "x")
+        patterns.Pattern("wrong/1", "spacer", object, lambda e, n: None, "x", "x.yaml")
     with pytest.raises(ValueError, match="nothing produces"):
-        patterns.Pattern("spacer/1", "spacer", object, lambda e, n: None, "x", outputs=("gltf",))
+        patterns.Pattern(
+            "spacer/1", "spacer", object, lambda e, n: None, "x", "x.yaml", outputs=("gltf",)
+        )

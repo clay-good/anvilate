@@ -1,0 +1,16 @@
+# A drawable part: A plain collar for a 20 mm shaft.
+#   anvilate view examples/parts/shaft_collar.spec.yaml
+anvilate_spec: 1.3.0
+name: shaft-collar-20
+description: A plain collar for a 20 mm shaft.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_turning}
+element_type: shaft_collar
+element_params:
+  name: shaft-collar-20
+  bore: {magnitude: 20.0, unit: mm}
+  outer_diameter: {magnitude: 40.0, unit: mm}
+  width: {magnitude: 15.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

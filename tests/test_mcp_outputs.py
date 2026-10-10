@@ -98,6 +98,50 @@ def test_a_cad_file_is_not_written_for_a_part_whose_checks_do_not_pass(out):
     assert "FAIL" in (out / "padeye.html").read_text(encoding="utf-8")
 
 
+def test_a_part_that_is_drawn_and_not_checked_is_written_marked_unvalidated(out):
+    """No screen ships for a mounting plate, so its card can never pass. Refusing its STEP
+    would leave every drawn part of the catalog with no way into CAD; it is written with the
+    unvalidated mark, and the result tells the agent so."""
+    pytest.importorskip("build123d")
+    built, screened = _handles("parts/mounting_plate")
+    card = _call("read_scorecard", {"subject": screened})["result"]["structuredContent"]
+    assert "drawn" in json.dumps(card) and "not_evaluated" in json.dumps(card)
+    for artifact in ("step", "3mf"):
+        result = _call("export_artifact", {"subject": built, "format": artifact})["result"]
+        assert not result.get("isError"), result
+        body = result["structuredContent"]
+        assert body["validated"] is False and "drawn and not checked" in body["note"]
+        assert Path(body["file"]["path"]).parent == out
+    step = (out / "motor-mounting-plate.step").read_text(encoding="utf-8", errors="replace")
+    assert "UNVALIDATED" in step
+
+
+def test_a_passing_part_says_nothing_about_being_unvalidated(out):
+    pytest.importorskip("build123d")
+    built, _screened = _handles("transmission_shaft")
+    body = _call("export_artifact", {"subject": built, "format": "step"})["result"][
+        "structuredContent"
+    ]
+    assert "validated" not in body and "note" not in body
+
+
+def test_only_a_part_with_no_screen_and_no_failure_is_exported_unvalidated():
+    from anvilate.mcp import _drawn_and_not_checked
+    from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+    from anvilate.spec import parse_spec
+
+    def card(status):
+        return Scorecard(entries=(ScorecardEntry(name="x", status=status, detail="d"),))
+
+    plate, lug = parse_spec(_spec("parts/mounting_plate")), parse_spec(_spec("padeye"))
+    shaft = parse_spec(_spec("transmission_shaft"))
+    assert _drawn_and_not_checked(plate, card(CheckStatus.NOT_EVALUATED))
+    assert not _drawn_and_not_checked(plate, card(CheckStatus.FAIL))
+    # A screened part that did not pass is refused, drawn or not.
+    assert not _drawn_and_not_checked(shaft, card(CheckStatus.NOT_EVALUATED))
+    assert not _drawn_and_not_checked(lug, card(CheckStatus.NOT_EVALUATED))
+
+
 def test_a_handle_of_the_wrong_kind_is_refused_by_name(out):
     pytest.importorskip("build123d")
     built, screened = _handles("base_plate")

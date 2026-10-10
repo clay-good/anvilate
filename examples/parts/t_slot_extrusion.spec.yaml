@@ -1,0 +1,15 @@
+# A drawable part: A 40 x 40 T-slot extrusion cut to 500 mm, as an envelope.
+#   anvilate view examples/parts/t_slot_extrusion.spec.yaml
+anvilate_spec: 1.3.0
+name: frame-rail
+description: A 40 x 40 T-slot extrusion cut to 500 mm, as an envelope.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: t_slot_extrusion
+element_params:
+  name: frame-rail
+  designation: EXT-4040
+  length: {magnitude: 500.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

@@ -682,7 +682,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "mesh, or a DXF profile for a flat part. Files are written to the server's "
                 "output folder and the result names each path, size and SHA-256; no tool "
                 "takes a destination. STEP, 3MF, DXF and QIF are written only when the "
-                "part's checks pass, and this surface grants no override."
+                "part's checks pass, and this surface grants no override. A part that is "
+                "drawn and has no screen is written marked unvalidated, and the result "
+                "says so."
             ),
             input_schema=_object_schema(
                 {
@@ -702,6 +704,10 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     # The file a call wrote: where, how big, and its digest. Absent only
                     # for a bundle returned by a server with no output folder.
                     "file": _FILE_SCHEMA,
+                    # False, with the reason, for a part that is drawn and not checked: the
+                    # file is written and carries the unvalidated mark. Absent otherwise.
+                    "validated": {"type": "boolean"},
+                    "note": {"type": "string"},
                 },
                 required=["format", "sha256"],
             ),
@@ -898,19 +904,17 @@ def _for_revision(response: dict[str, Any] | None, revision: str) -> dict[str, A
 # asked for every validation tier, and named no element, so nothing would have screened. The
 # schema says what is legal; these say what a request means and which identifiers exist.
 _AGENT_RULES = """Anvilate is a local, deterministic engineering checker: you write the
-Design Spec, it validates and screens it. run_validation screens a spec and returns the
-scorecard and a subject handle for read_scorecard and export_artifact; build_part returns
-one for render_viewport and measure_geometry. compile_spec checks a document you wrote and
-names remedies. Fix what a refusal names and call again; never report a check that did not
-run.
+Design Spec, it validates and screens it. run_validation and build_part each return a
+subject handle the other tools take; compile_spec checks a document and names remedies.
+Fix what a refusal names and call again; never report a check that did not run.
 - Write only what the user stated: no invented interfaces, dimensions, exports or loads. Ask
-  for a missing load, material or interface rather than guessing it.
+  for a missing load, material or interface; do not guess it.
 - A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0, "origin":
   "user_stated"}); max_safety_factor is only an explicit upper limit.
-- To screen a part, set element_type to an element below and its fields in element_params.
-  acceptance.tiers lists only what was asked for; a check or screen is ["T1_analytical"].
+- To screen or draw a part, set element_type to an element below and its fields in
+  element_params. acceptance.tiers is ["T1_analytical"] for a check or screen.
 - Copy identifiers exactly as listed. A quantity is {"magnitude": 50, "unit": "kN"} in the
-  user's units; a product of units uses "*": "kN*m", never "kNm"."""
+  user's units; a product of units uses "*": "kN*m"."""
 
 # Claude Code 2.1 keeps the first 2,048 characters of a server's instructions and drops the
 # rest ("Server instructions truncated from 10192 to 2048 chars", its debug log, 2026-10-09).
@@ -956,7 +960,7 @@ def agent_instructions() -> str:
     lines = [
         _AGENT_RULES,
         "",
-        "Elements (* = build_part draws it): "
+        "Elements (* = drawable): "
         + ", ".join(name + ("*" if name in drawn else "") for name in sorted(element_registry())),
         "Materials: " + ", ".join(resolver.known_materials()),
         "",
@@ -1943,6 +1947,19 @@ def _no_override(artifact: str, unmet: str) -> _Unavailable:
     )
 
 
+def _drawn_and_not_checked(spec: Any, card: Any) -> bool:
+    """Whether ``spec`` is a part the catalog draws with no screen, and nothing on it failed."""
+    from .patterns import pattern_for
+    from .scorecard import CheckStatus
+
+    pattern = pattern_for(spec.element_type)
+    return (
+        pattern is not None
+        and not pattern.screened
+        and not any(entry.status is CheckStatus.FAIL for entry in card.entries)
+    )
+
+
 def _needs_output_folder(artifact: str) -> None:
     if output_folder() is None:
         raise _Unavailable(
@@ -1955,7 +1972,8 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
     """STEP, 3MF or DXF for a built part, written to the output folder when its card passes.
 
     The handle names the spec that was built, so the gate screens that spec, as
-    `anvilate build` does: a CAD file is written for a part whose acceptance checks pass.
+    `anvilate build` does: a CAD file is written for a part whose acceptance checks pass. A
+    part that is drawn and not checked is written marked unvalidated, and the result says so.
     """
     import tempfile
 
@@ -1980,12 +1998,16 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
         ) from unknown
     except GeometryUnavailable as failure:
         raise _Unavailable(str(failure)) from failure
+    card = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {}))
     try:
-        authorization = authorize_export(
-            screen_spec(spec, **({"modules": _MODULES} if _MODULES else {}))
-        )
+        authorization = authorize_export(card)
     except ExportRefused as refused:
-        raise _no_override(artifact, refused.unmet) from refused
+        # A part no screen exists for can never pass, and refusing its file would mean the
+        # catalog's drawn parts could not be taken into CAD at all. It is written with the
+        # unvalidated mark instead. A part with a check that failed is still refused.
+        if not _drawn_and_not_checked(spec, card):
+            raise _no_override(artifact, refused.unmet) from refused
+        authorization = authorize_export(card, override=True)
     stem = safe_stem(built.name)
     try:
         if artifact == "step":
@@ -2011,7 +2033,14 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
     except GeometryError as failure:
         raise _InvalidArguments([f"subject: {failure}"], operation="export_artifact") from failure
     file = write_output(name, data)
-    return {"format": artifact, "sha256": file["sha256"], "file": file}
+    result = {"format": artifact, "sha256": file["sha256"], "file": file}
+    if not authorization.validated:
+        result["validated"] = False
+        result["note"] = (
+            f"{spec.element_type} is drawn and not checked: no screen ships for it, so the "
+            "file carries the unvalidated mark. Say so when you hand it over"
+        )
+    return result
 
 
 def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:

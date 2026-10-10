@@ -255,20 +255,15 @@ jobs:
         run: |
           set -euo pipefail
           # The examples are read from the pattern registry, not listed here: a list of three
-          # names left timber_beam/1 unrefereed when it shipped. A drawn element type with no
-          # example fails the step rather than shrinking it.
+          # names left timber_beam/1 unrefereed when it shipped. Every pattern names its worked
+          # example, and one whose file is missing fails the step rather than shrinking it.
           specs=$(python - <<'PY'
-          import pathlib, yaml
-          from anvilate.geometry import _drawn_element_types
-          _DRAWN_ELEMENT_TYPES = _drawn_element_types()
-          found = {}
-          for path in sorted(pathlib.Path("examples").glob("*.spec.yaml")):
-              kind = yaml.safe_load(path.read_text()).get("element_type")
-              if kind in _DRAWN_ELEMENT_TYPES:
-                  found.setdefault(kind, path)
-          missing = sorted(set(_DRAWN_ELEMENT_TYPES) - set(found))
-          assert not missing, f"no example spec draws {missing}"
-          print(" ".join(str(found[kind]) for kind in _DRAWN_ELEMENT_TYPES))
+          import pathlib
+          from anvilate.patterns import patterns
+          found = [pathlib.Path("examples") / pattern.example for pattern in patterns().values()]
+          missing = sorted(str(path) for path in found if not path.is_file())
+          assert len(found) >= 18 and not missing, f"pattern examples missing: {missing}"
+          print(" ".join(str(path) for path in found))
           PY
           )
           echo "refereeing: $specs"

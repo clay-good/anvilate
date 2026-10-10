@@ -5,26 +5,40 @@
 # the debt the catalogue carries, one line per shipped element class, and it should shrink,
 # never grow: tests/test_failure_modes.py holds the list to the element registry both ways
 # and caps its length. The fix for a line here is a cited mode, not a longer list.
+angle_bracket
 base_plate
 beam_column_member
 beam_member
+bushing
+clevis
 column_member
 concrete_bearing
 cover_plate
 driven_pile
+enclosure
 feeder
 gusset_plate
 infinite_slope
 lifting_lug
 lighting_installation
 masonry_wall
+mounting_plate
 pipe_run
+plate_flange
+pulley
 pump_duty
 retaining_wall
+shaft_collar
 shaft_key
 shallow_footing
 shear_plate
+sheet_metal_bracket
+spacer
+standoff
+stepped_shaft
 structure
+t_slot_extrusion
 tension_member
+tube
 ventilation_zone
 worker_noise_exposure

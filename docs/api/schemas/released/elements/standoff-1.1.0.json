@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:standoff:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'standoff': the fields a Design Spec puts in `element_params` when it declares `element_type: standoff`. Generated from anvilate.packs.parts.Standoff.",
+  "properties": {
+    "across_flats": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "hole_diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "thread": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Thread"
+    }
+  },
+  "required": [
+    "name",
+    "across_flats",
+    "length",
+    "hole_diameter"
+  ],
+  "title": "Standoff",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

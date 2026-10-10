@@ -1,0 +1,16 @@
+# A drawable part: A plain round spacer for an M6 screw.
+#   anvilate view examples/parts/spacer.spec.yaml
+anvilate_spec: 1.3.0
+name: m6-spacer
+description: A plain round spacer for an M6 screw.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_turning}
+element_type: spacer
+element_params:
+  name: m6-spacer
+  outer_diameter: {magnitude: 12.0, unit: mm}
+  inner_diameter: {magnitude: 6.4, unit: mm}
+  length: {magnitude: 10.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

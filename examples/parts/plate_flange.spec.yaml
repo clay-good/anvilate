@@ -1,0 +1,19 @@
+# A drawable part: A flat ring flange with six bolt holes on a 90 mm circle.
+#   anvilate view examples/parts/plate_flange.spec.yaml
+anvilate_spec: 1.3.0
+name: pump-plate-flange
+description: A flat ring flange with six bolt holes on a 90 mm circle.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: plate_flange
+element_params:
+  name: pump-plate-flange
+  outer_diameter: {magnitude: 120.0, unit: mm}
+  bore_diameter: {magnitude: 50.0, unit: mm}
+  thickness: {magnitude: 12.0, unit: mm}
+  bolt_circle_diameter: {magnitude: 90.0, unit: mm}
+  bolt_count: 6
+  bolt_hole_diameter: {magnitude: 9.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

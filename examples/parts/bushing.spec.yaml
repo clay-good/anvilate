@@ -1,0 +1,18 @@
+# A drawable part: A flanged sleeve bushing for a 12 mm shaft.
+#   anvilate view examples/parts/bushing.spec.yaml
+anvilate_spec: 1.3.0
+name: flanged-bushing
+description: A flanged sleeve bushing for a 12 mm shaft.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_turning}
+element_type: bushing
+element_params:
+  name: flanged-bushing
+  outer_diameter: {magnitude: 16.0, unit: mm}
+  inner_diameter: {magnitude: 12.0, unit: mm}
+  length: {magnitude: 20.0, unit: mm}
+  flange_diameter: {magnitude: 22.0, unit: mm}
+  flange_thickness: {magnitude: 2.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

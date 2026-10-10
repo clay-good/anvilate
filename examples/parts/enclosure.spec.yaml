@@ -1,0 +1,26 @@
+# A drawable part: An open box with 3 mm walls and four floor mounting holes.
+#   anvilate view examples/parts/enclosure.spec.yaml
+anvilate_spec: 1.3.0
+name: control-box
+description: An open box with 3 mm walls and four floor mounting holes.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: enclosure
+element_params:
+  name: control-box
+  width: {magnitude: 120.0, unit: mm}
+  length: {magnitude: 80.0, unit: mm}
+  height: {magnitude: 40.0, unit: mm}
+  wall: {magnitude: 3.0, unit: mm}
+  corner_radius: {magnitude: 6.0, unit: mm}
+  floor_patterns:
+  - tag: mnt
+    kind: rectangular
+    diameter: {magnitude: 4.5, unit: mm}
+    count_x: 2
+    count_y: 2
+    pitch_x: {magnitude: 90.0, unit: mm}
+    pitch_y: {magnitude: 50.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

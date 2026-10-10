@@ -1,0 +1,19 @@
+# A drawable part: A single-groove V-belt pulley with a 38 degree groove.
+#   anvilate view examples/parts/pulley.spec.yaml
+anvilate_spec: 1.3.0
+name: v-belt-pulley
+description: A single-groove V-belt pulley with a 38 degree groove.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_turning}
+element_type: pulley
+element_params:
+  name: v-belt-pulley
+  outer_diameter: {magnitude: 100.0, unit: mm}
+  bore: {magnitude: 20.0, unit: mm}
+  width: {magnitude: 20.0, unit: mm}
+  groove_depth: {magnitude: 11.0, unit: mm}
+  groove_width: {magnitude: 13.0, unit: mm}
+  groove_angle_deg: 38
+acceptance:
+  tiers: [T1_analytical]

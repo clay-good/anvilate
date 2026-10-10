@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:bushing:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'bushing': the fields a Design Spec puts in `element_params` when it declares `element_type: bushing`. Generated from anvilate.packs.parts.Bushing.",
+  "properties": {
+    "flange_diameter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "flange_thickness": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "inner_diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "length": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "outer_diameter": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "name",
+    "outer_diameter",
+    "inner_diameter",
+    "length"
+  ],
+  "title": "Bushing",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

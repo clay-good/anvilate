@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:clevis:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'clevis': the fields a Design Spec puts in `element_params` when it declares `element_type: clevis`. Generated from anvilate.packs.parts.Clevis.",
+  "properties": {
+    "base_thickness": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "depth": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "gap": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "height": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "material": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "pin_diameter": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "pin_height": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "name",
+    "width",
+    "gap",
+    "depth",
+    "height",
+    "base_thickness",
+    "pin_diameter",
+    "pin_height"
+  ],
+  "title": "Clevis",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}
