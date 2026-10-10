@@ -469,7 +469,26 @@ def build_shaft_collar(collar: parts.ShaftCollar) -> BuiltGeometry:
     width = _mm(collar.width, "width", tag)
     _inside(bore, outer, element=tag, inner_field="bore", outer_field="outer_diameter")
     dimensions = {"bore": bore, "outer_diameter": outer, "width": width}
-    return _built(collar, tag, _ring(outer, bore, width), dimensions)
+    shape = _ring(outer, bore, width)
+    if collar.keyway_width is not None:
+        from build123d import Align, Box
+
+        key_width = _mm(collar.keyway_width, "keyway_width", tag)
+        depth = _mm(collar.keyway_depth, "keyway_depth", tag)
+        _inside(key_width, bore, element=tag, inner_field="keyway_width", outer_field="bore")
+        if bore / 2 + depth >= outer / 2:
+            raise _refuse(
+                f"keyway_depth ({depth:g} mm) cuts through the collar's {(outer - bore) / 2:g} mm "
+                "wall",
+                element=tag,
+                field="keyway_depth",
+            )
+        # From inside the bore out to `depth` beyond its surface on the +x side, where a
+        # stepped shaft's keyways are milled.
+        tool = Box(bore / 2 + depth, key_width, width, align=(Align.MIN, Align.CENTER, Align.MIN))
+        shape = shape - tool
+        dimensions |= {"keyway_width": key_width, "keyway_depth": depth}
+    return _built(collar, tag, shape, dimensions)
 
 
 def build_stepped_shaft(shaft: parts.SteppedShaft) -> BuiltGeometry:
@@ -537,6 +556,9 @@ def build_stepped_shaft(shaft: parts.SteppedShaft) -> BuiltGeometry:
             f"keyway_{number}_width": key_width,
             f"keyway_{number}_depth": depth,
             f"keyway_{number}_length": key_length,
+            # Where it is, for what seats in it: from the drive end, on this diameter.
+            f"keyway_{number}_start": starts[keyway.step - 1] + offset,
+            f"keyway_{number}_diameter": diameter,
         }
     del Axis
     return _built(shaft, tag, shape, dimensions)

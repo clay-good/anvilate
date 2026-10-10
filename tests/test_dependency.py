@@ -490,6 +490,9 @@ _RESULT_READS = frozenset(
 _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
     "bundle.py:sections<-design_basis_scorecard": "rolls the design-basis card into the bundle",
     "cli.py:_build<-screen_spec": "the build command gates on the card's status",
+    "combination.py:_seated_key<-screen_shaft_key": (
+        "a seated key's screen entries are the shaft key screen's own, renamed for the mate"
+    ),
     "combination.py:_joint_entries<-screen_bolted_connection": (
         "a loaded joint's entries are the bolted connection's own, renamed for the mate "
         "and the part, and nothing is computed from them"

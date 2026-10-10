@@ -342,15 +342,28 @@ class Standoff(_Part):
 
 
 class ShaftCollar(_Part):
-    """A plain shaft collar: a ring of ``bore``, ``outer_diameter`` and ``width``."""
+    """A shaft collar: a ring of ``bore``, ``outer_diameter`` and ``width``.
 
-    positive_fields = ("bore", "outer_diameter", "width")
+    ``keyway_width`` and ``keyway_depth`` cut a keyseat along the bore, on the +x side,
+    ``keyway_depth`` deep from the bore's surface at the keyseat's centreline. The two are
+    stated together.
+    """
+
+    positive_fields = ("bore", "outer_diameter", "width", "keyway_width", "keyway_depth")
 
     name: Named
     bore: Quantity
     outer_diameter: Quantity
     width: Quantity
+    keyway_width: Quantity | None = None
+    keyway_depth: Quantity | None = None
     material: str | None = None
+
+    @model_validator(mode="after")
+    def _a_keyseat_has_both_dimensions(self) -> ShaftCollar:
+        if (self.keyway_width is None) != (self.keyway_depth is None):
+            raise _refuse("a keyseat states keyway_width and keyway_depth", subject="keyway_depth")
+        return self
 
 
 class ShaftStep(_Part):

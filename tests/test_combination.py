@@ -804,3 +804,131 @@ def test_a_dowel_pin_carries_no_declared_load():
 
     with pytest.raises(CombinationError, match="loads a dowel pin"):
         _built("bracket_on_plate", loaded_pin)
+
+
+def _keyed(change=None, **key):
+    """The collar on its shaft with a keyway under it, a keyseat in it, and a key in both.
+
+    The shaft's 30 mm step runs from 40 to 100 mm and gets an 8 x 4 keyway from 55 to 75;
+    the collar sits from 60 to 72 with an 8 x 3.3 keyseat; the key is 8 x 7 x 20.
+    """
+
+    def build(document: dict) -> None:
+        document["parts"][0]["spec"]["element_params"]["keyways"].append(
+            {"step": 2, "width": _mm(8), "depth": _mm(4), "length": _mm(20), "offset": _mm(15)}
+        )
+        document["parts"][1]["spec"]["element_params"].update(
+            keyway_width=_mm(8), keyway_depth=_mm(3.3)
+        )
+        document["keys"] = [
+            {"mate": "seated", "keyway": 2, "width": _mm(8), "height": _mm(7), "length": _mm(20)}
+        ]
+        for name, value in key.items():
+            if value is None:
+                document["keys"][0].pop(name, None)
+            else:
+                document["keys"][0][name] = value
+        if change is not None:
+            change(document)
+
+    return _built("collar_on_shaft", build)
+
+
+def test_a_key_sits_in_the_shafts_keyway_and_the_hubs_keyseat():
+    built = _keyed()
+    (key,) = [body for body in built.hardware if body.kind == "key"]
+    box = key.shape.bounding_box()
+    # On the keyway's floor, 4 mm below the 30 mm step's crown, and 7 mm tall from there.
+    assert (box.min.X, box.max.X) == pytest.approx((11.0, 18.0), abs=1e-6)
+    assert (box.min.Y, box.max.Y) == pytest.approx((-4.0, 4.0), abs=1e-6)
+    assert (box.min.Z, box.max.Z) == pytest.approx((55.0, 75.0), abs=1e-6)
+    assert str(built.bom[-1]) == " 3  1 x key 8x7x20: key (envelope)"
+    assert "4 mm of the 7 mm key is in the shaft and 3 mm in the hub" in (
+        _entry(built, "seated key height").detail
+    )
+    assert "'collar' covers 12 mm of it" in _entry(built, "seated key length").detail
+    for check in ("width", "height", "length"):
+        assert _entry(built, f"seated key {check}").status is CheckStatus.PASS, check
+    assert _entry(built, "interference").status is CheckStatus.PASS
+    assert not [e for e in built.card.entries if "shear" in e.name]
+
+
+@pytest.mark.parametrize(
+    ("key", "change", "check", "said"),
+    [
+        ({"width": _mm(6)}, None, "width", "the key is 6 mm wide and the keyway in 'shaft' is 8"),
+        (
+            {},
+            lambda d: d["parts"][1]["spec"]["element_params"].update(keyway_width=_mm(10)),
+            "width",
+            "the keyseat in 'collar' is 10 mm",
+        ),
+        (
+            {},
+            lambda d: [
+                d["parts"][1]["spec"]["element_params"].pop(k)
+                for k in ("keyway_width", "keyway_depth")
+            ],
+            "width",
+            "'collar' has no keyseat for it",
+        ),
+        (
+            {},
+            lambda d: d["mates"][0].update(rotation_deg=90.0),
+            "width",
+            "turned away from the keyway",
+        ),
+        ({"height": _mm(4)}, None, "height", "nothing of it stands proud"),
+        ({"height": _mm(8)}, None, "height", "it is 0.7 mm too tall"),
+        ({"length": _mm(24)}, None, "length", "the key is 24 mm long and the keyway is 20"),
+        (
+            {},
+            lambda d: d["mates"][1].update(offset=_mm(-80.0)),
+            "length",
+            "'collar' is not over the keyway, which runs from 55 to 75 mm",
+        ),
+    ],
+)
+def test_a_key_that_does_not_fit_fails_the_check_that_names_why(key, change, check, said):
+    built = _keyed(change, **key)
+    entry = _entry(built, f"seated key {check}")
+    assert entry.status is CheckStatus.FAIL and said in entry.detail
+    assert built.card.status is CheckStatus.FAIL
+
+
+def test_a_key_that_states_its_torque_is_screened_over_the_length_the_hub_covers():
+    """60 N m on a 30 mm shaft through 12 mm of an 8 x 7 key.
+
+    Shear is 2T/(d w L) = 41.67 MPa and side bearing 4T/(d h L) = 95.24 MPa.
+    """
+    loaded = {
+        "torque": {"magnitude": 60.0, "unit": "N*m"},
+        "allowable_shear": {"magnitude": 100.0, "unit": "MPa"},
+        "allowable_bearing": {"magnitude": 180.0, "unit": "MPa"},
+    }
+    built = _keyed(**loaded)
+    shear, bearing = _entry(built, "seated key shear"), _entry(built, "seated key side bearing")
+    assert shear.safety_factor == pytest.approx(100 / (2 * 60000 / (30 * 8 * 12)))
+    assert bearing.safety_factor == pytest.approx(180 / (4 * 60000 / (30 * 7 * 12)))
+    assert shear.status is CheckStatus.PASS and bearing.status is CheckStatus.FAIL
+    assert shear.required_safety_factor == 2.0 and shear.derivation is not None
+    eased = _keyed(**loaded, min_safety_factor=1.5)
+    assert _entry(eased, "seated key side bearing").status is CheckStatus.PASS
+    # With the hub off the keyway there is no engaged length, and nothing to screen on.
+    off = _keyed(lambda d: d["mates"][1].update(offset=_mm(-80.0)), **loaded)
+    assert not [e for e in off.card.entries if "shear" in e.name]
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        (lambda k: k.update(mate="located"), "which is not a shaft_in_bore mate"),
+        (lambda k: k.update(keyway=5), "neither 'collar' nor 'shaft' is a shaft with that many"),
+        (lambda k: k.update(width=_mm(0)), "states its width as 0"),
+        (lambda k: k.update(torque={"magnitude": 60.0, "unit": "N*m"}), "without allowable_shear"),
+        (lambda k: k.update(min_safety_factor=1.5), "for a key that states its torque"),
+    ],
+)
+def test_a_key_document_that_cannot_be_seated_is_refused(change, reason):
+    with pytest.raises(CombinationError, match=reason):
+        _keyed(lambda d: change(d["keys"][0]))

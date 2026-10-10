@@ -226,6 +226,8 @@ def test_a_part_with_no_screen_says_it_was_drawn_and_not_checked(element_type):
         ("bushing", {"flange_thickness": _mm(20)}, "flange_thickness"),
         ("standoff", {"hole_diameter": _mm(8)}, "hole_diameter"),
         ("shaft_collar", {"bore": _mm(40)}, "bore"),
+        ("shaft_collar", {"keyway_width": _mm(6), "keyway_depth": _mm(12)}, "cuts through"),
+        ("shaft_collar", {"keyway_width": _mm(25), "keyway_depth": _mm(2)}, "keyway_width"),
         ("stepped_shaft", {"keyways__0__length": _mm(40)}, "runs 45 mm along"),
         ("stepped_shaft", {"keyways__0__depth": _mm(10)}, "does not fit"),
         ("stepped_shaft", {"end_chamfer": _mm(10)}, "end_chamfer"),
@@ -563,3 +565,20 @@ def test_a_clevis_load_is_a_force_and_an_ear_with_no_section_is_not_passed():
     closed = _checks(screen_spec(_spec("clevis", gap=_mm(40))))
     for name in ("ear bearing", "ear net tension", "ear shear-out"):
         assert closed[name].status is CheckStatus.NOT_EVALUATED, name
+
+
+def test_a_shaft_collar_takes_a_keyseat_along_its_bore():
+    """An 8 x 3.3 keyseat in a 20 mm bore, 15 mm long: the slot less what the bore already took."""
+    keyed = build_spec(_spec("shaft_collar", keyway_width=_mm(8), keyway_depth=_mm(3.3)))
+    plain = build_spec(_spec("shaft_collar"))
+    strip = 4 * math.sqrt(10**2 - 4**2) + 10**2 * math.asin(4 / 10)  # of the bore, |y| < 4, x > 0
+    assert plain.volume_mm3 - keyed.volume_mm3 == pytest.approx((8 * 13.3 - strip) * 15, rel=1e-9)
+    assert (keyed.dimensions_mm["keyway_width"], keyed.dimensions_mm["keyway_depth"]) == (8.0, 3.3)
+    with pytest.raises(ValueError, match="keyway_width and keyway_depth"):
+        build_spec(_spec("shaft_collar", keyway_width=_mm(8)))
+
+
+def test_a_shaft_says_where_each_keyway_is():
+    shaft = build_spec(_spec("stepped_shaft")).dimensions_mm
+    # Step 1 is 20 mm across and starts at the drive end; the keyway is 5 mm along it.
+    assert (shaft["keyway_1_start"], shaft["keyway_1_diameter"]) == (5.0, 20.0)

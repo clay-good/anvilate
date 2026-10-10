@@ -237,7 +237,7 @@ A plain shaft collar: a ring on a shaft. **drawn, not checked**.
 ![shaft_collar](parts/shaft_collar.png)
 
 - Required: `name` (text), `bore` (quantity), `outer_diameter` (quantity), `width` (quantity)
-- Optional: `material` (text)
+- Optional: `keyway_width` (quantity), `keyway_depth` (quantity), `material` (text)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/shaft_collar.spec.yaml`](../examples/parts/shaft_collar.spec.yaml)
 

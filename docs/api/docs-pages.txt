@@ -39,7 +39,7 @@ hydraulics-screening.md | Screening by discipline | nothing | -
 industrial-covers.md | Screening by discipline | nothing | -
 lifting-devices.md | Screening by discipline | example-highlights | -
 load-combinations.md | Deciding what the answer is worth | example-highlights | -
-machinery-screening.md | Screening by discipline | nothing | -
+machinery-screening.md | Screening by discipline | combinations | -
 margin-ledger.md | Deciding what the answer is worth | calculation-reports, example-highlights, headless-cli, performance-budgets, published-contracts | -
 masonry-screening.md | Screening by discipline | nothing | -
 mcp-registry-release.md | Driving it from an agent | README | -

@@ -959,6 +959,8 @@
    "magnitude": 20.0,
    "unit": "mm"
   },
+  "keyway_depth": null,
+  "keyway_width": null,
   "material": null,
   "name": "shaft-collar-20",
   "outer_diameter": {

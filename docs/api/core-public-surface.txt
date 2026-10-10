@@ -121,6 +121,7 @@ combination.Mate
 combination.MateEnd
 combination.PlacedPart
 combination.PlacedSummary
+combination.SeatedKey
 combination.Weld
 combination.build_combination
 combination.parse_combination

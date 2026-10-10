@@ -22,11 +22,13 @@ Depends on `expand-drawable-parts` groups 1 and 2 (registry, shared features, pr
 - [x] 3.1 Hole-pattern agreement, clearance class, bolt engagement length
 - [x] 3.2a Shaft/bore fit: a `shaft_in_bore` mate holds bore and shaft to one nominal size,
       and a declared `fit` (ISO 286) is stated with what it leaves between them
-- [ ] 3.2b Key in keyway and seat
+- [x] 3.2b Key in keyway and seat: `keys` on a `shaft_in_bore` mate, checked for width, height
+      and length against the shaft's keyway and a shaft collar's keyseat
 - [x] 3.3 Interference between every pair, with overlap volume
 - [x] 3.4a Joint screens fed from mated geometry: a loaded bolted mate (bolt shear, bearing on
       each part) and the shaft/bore fit (3.2a)
-- [ ] 3.4b Shaft key screen fed from a seated key (waits on 3.2b)
+- [x] 3.4b Shaft key screen fed from a seated key that states its torque, over the length the
+      hub covers
 
 ## 4. Output
 

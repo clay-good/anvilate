@@ -51,6 +51,7 @@ __all__ = [
     "Weld",
     "PlacedPart",
     "PlacedSummary",
+    "SeatedKey",
     "build_combination",
     "parse_combination",
     "render_combination",
@@ -284,6 +285,74 @@ class HardwareStack(StatableModel):
         return self
 
 
+class SeatedKey(StatableModel):
+    """A parallel key between a shaft and the hub seated on it by a ``shaft_in_bore`` mate.
+
+    ``width``, ``height`` and ``length`` are the key's own. It sits on the floor of the
+    shaft's keyway (``keyway`` counts the shaft's keyways from 1), centred along it, and
+    stands proud into the hub's keyseat.
+
+    ``torque`` is what the joint transmits. With it the key is screened for shear and side
+    bearing against ``allowable_shear`` and ``allowable_bearing``, over the length of it
+    the hub covers, at ``min_safety_factor`` (2.0 when none is stated, as the shaft key
+    screen has it). The three are stated together.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    mate: Named
+    width: Quantity
+    height: Quantity
+    length: Quantity
+    keyway: int = Field(default=1, ge=1, le=20)
+    torque: Quantity | None = None
+    allowable_shear: Quantity | None = None
+    allowable_bearing: Quantity | None = None
+    min_safety_factor: float | None = None
+
+    @model_validator(mode="after")
+    def _a_key(self) -> SeatedKey:
+        for name in ("width", "height", "length"):
+            value = getattr(self, name)
+            if not value.has_dimension("[length]") or value.to("mm").magnitude <= 0:
+                raise _refuse(
+                    f"the key in mate '{self.mate}' states its {name} as {value}",
+                    subject=f"keys[].{name}",
+                )
+        joint = ("torque", "allowable_shear", "allowable_bearing")
+        missing = [name for name in joint if getattr(self, name) is None]
+        if missing and len(missing) < len(joint):
+            raise _refuse(
+                f"the key in mate '{self.mate}' states a loaded joint without "
+                f"{' and '.join(missing)}; its torque and its two allowables are stated together",
+                subject=f"keys[].{missing[0]}",
+            )
+        if not missing:
+            assert self.torque is not None
+            if not self.torque.has_dimension("[force] * [length]"):
+                raise _refuse(
+                    f"the key in mate '{self.mate}' states its torque as {self.torque}",
+                    subject="keys[].torque",
+                )
+            for name in joint[1:]:
+                if not getattr(self, name).has_dimension("[pressure]"):
+                    raise _refuse(
+                        f"the key in mate '{self.mate}' states {name} as "
+                        f"{getattr(self, name)}; it is a stress",
+                        subject=f"keys[].{name}",
+                    )
+        if self.min_safety_factor is not None and (
+            missing or not math.isfinite(self.min_safety_factor) or self.min_safety_factor <= 0
+        ):
+            raise _refuse(
+                f"the key in mate '{self.mate}' states min_safety_factor as "
+                f"{self.min_safety_factor}; it is a number above zero, for a key that "
+                "states its torque",
+                subject="keys[].min_safety_factor",
+            )
+        return self
+
+
 class Weld(StatableModel):
     """A weld between the two faces of a face-to-face mate: its type and its size.
 
@@ -322,6 +391,7 @@ class Combination(StatableModel):
     parts: tuple[CombinationPart, ...] = Field(min_length=2, max_length=24)
     mates: tuple[Mate, ...] = Field(min_length=1, max_length=96)
     hardware: tuple[HardwareStack, ...] = Field(default=(), max_length=24)
+    keys: tuple[SeatedKey, ...] = Field(default=(), max_length=24)
     welds: tuple[Weld, ...] = Field(default=(), max_length=24)
 
     @model_validator(mode="after")
@@ -370,6 +440,14 @@ class Combination(StatableModel):
                     f"hardware names the mate '{stack.mate}', which is not a hole_pattern "
                     f"mate of this combination ({', '.join(sorted(patterns)) or 'it has none'})",
                     subject="hardware[].mate",
+                )
+        seats = {mate.id for mate in self.mates if mate.kind == "shaft_in_bore"}
+        for key in self.keys:
+            if key.mate not in seats:
+                raise _refuse(
+                    f"a key names the mate '{key.mate}', which is not a shaft_in_bore mate "
+                    f"of this combination ({', '.join(sorted(seats)) or 'it has none'})",
+                    subject="keys[].mate",
                 )
         contacts = {mate.id for mate in self.mates if mate.kind == "face_to_face"}
         for weld in self.welds:
@@ -557,7 +635,7 @@ class HardwareBody:
     """One fastener envelope: what it is, the solid as tabulated, and where it goes."""
 
     designation: str
-    kind: Literal["bolt", "washer", "nut", "pin"]
+    kind: Literal["bolt", "washer", "nut", "pin", "key"]
     mate: str
     solid: Any
     rotation: Matrix
@@ -1144,6 +1222,163 @@ def _joint_entries(
     return entries
 
 
+def _seated_key(
+    key: SeatedKey, mate: Mate, moving: PlacedPart, fixed: PlacedPart
+) -> tuple[list[HardwareBody], list[ScorecardEntry]]:
+    """A key on the floor of the shaft's keyway, and whether it fits there and in the hub.
+
+    The shaft is the part with the keyway the key names, and the hub the other one. The key
+    is drawn in the shaft's own coordinates: a stepped shaft's keyways are milled on its +x
+    side, so it sits there, centred along the keyway, and moves with the shaft. Its fit is
+    three things: it is as wide as both slots, it is tall enough to stand proud of the
+    shaft and no taller than the two slots together, and it is no longer than the keyway
+    and has the hub over some of it.
+    """
+    from build123d import Align, Box, Pos
+
+    def dims(part: PlacedPart) -> Mapping[str, float]:
+        return part.built.dimensions_mm
+
+    number = key.keyway
+    shaft, hub = (fixed, moving) if f"keyway_{number}_start" in dims(fixed) else (moving, fixed)
+    if f"keyway_{number}_start" not in dims(shaft):
+        raise _refuse(
+            f"the key in mate '{mate.id}' names keyway {number}, and neither '{moving.id}' "
+            f"nor '{fixed.id}' is a shaft with that many keyways",
+            subject="keys[].keyway",
+        )
+    slot_width = dims(shaft)[f"keyway_{number}_width"]
+    slot_depth = dims(shaft)[f"keyway_{number}_depth"]
+    slot_length = dims(shaft)[f"keyway_{number}_length"]
+    start = dims(shaft)[f"keyway_{number}_start"]
+    diameter = dims(shaft)[f"keyway_{number}_diameter"]
+    width, height = key.width.to("mm").magnitude, key.height.to("mm").magnitude
+    length = key.length.to("mm").magnitude
+    low = start + (slot_length - length) / 2
+    solid = Pos(diameter / 2 - slot_depth, 0, low) * Box(
+        height, width, length, align=(Align.MIN, Align.CENTER, Align.MIN)
+    )
+    body = HardwareBody(
+        f"key {width:g}x{height:g}x{length:g}",
+        "key",
+        mate.id,
+        solid,
+        shaft.rotation,
+        shaft.translation,
+    )
+
+    seat_width, seat_depth = dims(hub).get("keyway_width"), dims(hub).get("keyway_depth")
+    name = f"{mate.id} key"
+    entries: list[ScorecardEntry] = []
+
+    def entry(check: str, problems: list[str], sound: str) -> None:
+        entries.append(
+            ScorecardEntry(
+                name=f"{name} {check}",
+                status=CheckStatus.FAIL if problems else CheckStatus.PASS,
+                detail="; and ".join(problems) if problems else sound,
+                underived=_MEASURED,
+            )
+        )
+
+    wide = []
+    if abs(width - slot_width) > EXACT_MM:
+        wide.append(
+            f"the key is {width:g} mm wide and the keyway in '{shaft.id}' is {slot_width:g} mm"
+        )
+    if seat_width is None:
+        wide.append(
+            f"'{hub.id}' has no keyseat for it: declare keyway_width and keyway_depth on it"
+        )
+    elif abs(width - seat_width) > EXACT_MM:
+        wide.append(
+            f"the key is {width:g} mm wide and the keyseat in '{hub.id}' is {seat_width:g} mm"
+        )
+    # The two slots face each other only if the hub is turned the way the shaft is.
+    turned = _norm(_sub(hub.direction((1.0, 0.0, 0.0)), shaft.direction((1.0, 0.0, 0.0))))
+    if seat_width is not None and turned > 1e-6:
+        wide.append(
+            f"the keyseat in '{hub.id}' is turned away from the keyway in '{shaft.id}'; "
+            "state rotation_deg on the mate to line them up"
+        )
+    entry(
+        "width",
+        wide,
+        f"the {width:g} mm key fills the keyway in '{shaft.id}' and the keyseat in '{hub.id}'",
+    )
+
+    tall = []
+    room = slot_depth + (seat_depth or 0.0)
+    if height <= slot_depth + EXACT_MM:
+        tall.append(
+            f"the key is {height:g} mm high and the keyway is {slot_depth:g} mm deep, so "
+            "nothing of it stands proud to drive the hub"
+        )
+    if seat_depth is not None and height > room + EXACT_MM:
+        tall.append(
+            f"the key is {height:g} mm high and the two slots together are {room:g} mm "
+            f"({slot_depth:g} in the shaft, {seat_depth:g} in the hub); it is "
+            f"{height - room:g} mm too tall"
+        )
+    entry(
+        "height",
+        tall,
+        f"{slot_depth:g} mm of the {height:g} mm key is in the shaft and "
+        f"{height - slot_depth:g} mm in the hub"
+        + (f", with {room - height:g} mm over it" if seat_depth is not None else ""),
+    )
+
+    # Where the hub is along the shaft, from the shaft's own drive end.
+    axis = shaft.direction((0.0, 0.0, 1.0))
+    box = hub.shape.bounding_box()
+    corners = [
+        _dot(_sub((x, y, z), shaft.point((0.0, 0.0, 0.0))), axis)
+        for x in (box.min.X, box.max.X)
+        for y in (box.min.Y, box.max.Y)
+        for z in (box.min.Z, box.max.Z)
+    ]
+    covered = max(0.0, min(low + length, max(corners)) - max(low, min(corners)))
+    long = []
+    if length > slot_length + EXACT_MM:
+        long.append(f"the key is {length:g} mm long and the keyway is {slot_length:g} mm")
+    if covered <= EXACT_MM:
+        long.append(
+            f"'{hub.id}' is not over the keyway, which runs from {start:g} to "
+            f"{start + slot_length:g} mm along '{shaft.id}'; nothing of the key is in the hub"
+        )
+    entry(
+        "length",
+        long,
+        f"the {length:g} mm key is within the {slot_length:g} mm keyway, and '{hub.id}' "
+        f"covers {covered:g} mm of it",
+    )
+
+    if key.torque is not None and covered > EXACT_MM:
+        from .packs.machinery import ShaftKey, screen_shaft_key
+
+        card = screen_shaft_key(
+            ShaftKey(
+                shaft_diameter=Quantity(magnitude=diameter, unit="mm"),
+                key_width=key.width,
+                key_height=key.height,
+                key_length=Quantity(magnitude=covered, unit="mm"),
+                torque=key.torque,
+                allowable_shear=key.allowable_shear,
+                allowable_bearing=key.allowable_bearing,
+            ),
+            **(
+                {}
+                if key.min_safety_factor is None
+                else {"required_safety_factor": key.min_safety_factor}
+            ),
+        )
+        entries += [
+            checked.model_copy(update={"name": f"{mate.id} {checked.name}"})
+            for checked in card.entries
+        ]
+    return [body], entries
+
+
 # The pin entries carry no `reference`. A scorecard citation of a normative standard names
 # its edition, and the bundled dowel table records none for ISO 2338: its source line is
 # "ISO 2338 parallel-pin dimensions". An edition written here would be one recalled, not
@@ -1540,6 +1775,11 @@ def build_combination(combination: Combination) -> BuiltCombination:
             bodies, checks = _stack(stacks[mate.id], mate, moving, fixed)
             hardware += bodies
             entries += checks
+        for key in combination.keys:
+            if key.mate == mate.id:
+                bodies, checks = _seated_key(key, mate, moving, fixed)
+                hardware += bodies
+                entries += checks
         for weld in combination.welds:
             if weld.mate == mate.id:
                 entries.append(
