@@ -73,6 +73,36 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | `verify` | verify an attestation envelope or STEP import integrity | `--artifact`, `--format`, `--hmac-key-file` |
 | `view` | write a one-page HTML part sheet: the drawn part beside its scorecard | `--force`, `--module`, `--no-open`, `--output` |
 
+## Where the time goes
+
+One pass of `tools/responsiveness/measure.py` on a developer laptop, 2026-10-10. The budget
+is judged on the reference runner; this run is evidence of what dominates, not a result.
+
+| The five slowest | Measured | Budget | What the time is |
+| --- | --- | --- | --- |
+| `anvilate combine` | 2.4 s | 20 s | importing the geometry kernel is most of it; placing and intersecting three bodies is the rest |
+| `anvilate view` | 2.4 s | 15 s | the kernel import, then one build and four projections |
+| `anvilate build` | 2.4 s | 15 s | the kernel import, then one build and a STEP write that is read back |
+| `anvilate read` (a STEP file) | 2.3 s | 15 s | the kernel import; the read itself is milliseconds |
+| `build_part` over MCP, first call | 1.6 s | 10 s | the kernel import, paid once per server; later builds are tens of milliseconds |
+
+Every one is the same cost: loading the kernel in a fresh process. It is paid once per
+command at the shell and once per session over MCP, where every later geometry call is
+fast (`build_combination` 0.02 s, `read_cad_file` 0.002 s in the same run). Commands that
+need no geometry do not pay it: `anvilate check` 0.5 s, `anvilate parts` 0.4 s. Nothing here
+is worth trading correctness for; the kernel is imported only by the calls that need it.
+
+## Checked and found sound
+
+| What was checked | What holds it |
+| --- | --- |
+| The README reaches a first part in three steps, says what comes back and what Anvilate is not. | The README's first screen; its counts and its example are each held by a test. |
+| Every docs page is reachable from the README or the docs index, by task. | A test fails on a page neither links, and on a link to a page that is gone. |
+| No page still describes the removed viewer, a web server or a built-in model. | Searched; the design-decisions page records their removal and nothing else mentions them. |
+| `anvilate doctor` says in plain words what is missing and what to do about it. | Each failing item carries a `fix:` line. Its exit status is finding 9. |
+| A bad spec is refused in the same words at the shell and over MCP. | The surface-parity tests compare the two, field by field. |
+| Every command's help opens with what the command is for. | The commands table above is generated from those lines. |
+
 ## Findings
 
 | # | Finding | Evidence | Outcome |

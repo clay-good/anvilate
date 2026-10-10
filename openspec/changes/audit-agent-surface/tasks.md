@@ -39,7 +39,7 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 - [ ] 5.1 Publish to the package index; geometry and exchange formats in the default install
 - [ ] 5.2 One-line server launch through a package runner; one-line setup per client
 - [ ] 5.3 CI: install from the built wheel in a clean environment and run the README steps
-- [ ] 5.4 `doctor` says in plain words what is missing
+- [x] 5.4 `doctor` says in plain words what is missing
 
 ## 6. CLI
 
@@ -49,12 +49,12 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 ## 7. Performance
 
 - [x] 7.1 Responsiveness budget covers every tool and command, cold and warm
-- [ ] 7.2 Profile the five slowest; improve or justify each (kernel import, first build)
+- [x] 7.2 Profile the five slowest; improve or justify each (kernel import, first build)
 - [ ] 7.3 Suite runtime: profile, and cut the slowest tests that add no coverage
 
 ## 8. Docs
 
-- [ ] 8.1 README: three steps to a first part, what comes back, what Anvilate is not
-- [ ] 8.2 One index by task; orphan-page gate
-- [ ] 8.3 Remove or correct pages describing the workbench, a web server or a built-in model
+- [x] 8.1 README: three steps to a first part, what comes back, what Anvilate is not
+- [x] 8.2 One index by task; orphan-page gate
+- [x] 8.3 Remove or correct pages describing the workbench, a web server or a built-in model
 - [ ] 8.4 Examples: keep the ones a newcomer needs in the index; the rest stay as tests
