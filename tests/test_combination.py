@@ -481,3 +481,24 @@ def test_a_part_is_listed_after_the_parts_it_is_placed_on():
 
     with pytest.raises(CombinationError, match="comes after it; list a part after"):
         _built("portal_frame", out_of_order)
+
+
+def test_each_balloon_sits_on_its_own_part_and_no_two_share_a_place():
+    """Two flanges on one axis had both balloons in the bore, at the middle of each part's
+    box, and a bolt, its washer and its nut were three balloons on one stack."""
+    built = _built("flange_pair")
+    svg, _width, _height = render_combination(built, width_px=900, format="svg")
+    centres = {}
+    for label, points in re.findall(r'data-balloon="(\d+)" points="([^"]+)"', svg.decode("utf-8")):
+        pairs = [tuple(map(float, point.split(","))) for point in points.split()]
+        centres[label] = (
+            sum(x for x, _y in pairs) / len(pairs),
+            sum(y for _x, y in pairs) / len(pairs),
+        )
+    assert sorted(centres) == ["1", "2", "3", "4", "5"]
+    labels = sorted(centres)
+    for index, first in enumerate(labels):
+        for second in labels[index + 1 :]:
+            assert math.dist(centres[first], centres[second]) > 18, (first, second)
+    # The two flanges' balloons are apart from top to bottom, as the flanges are.
+    assert centres["1"][1] > centres["2"][1]

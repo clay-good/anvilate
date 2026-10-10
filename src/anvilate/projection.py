@@ -348,7 +348,7 @@ def _view_markup(
     dimensions: bool,
     unit: str = "mm",
     palettes: Mapping[str, tuple[str, str, str]] | None = None,
-    marks: Sequence[tuple[str, Vec]] = (),
+    marks: Sequence[tuple[str, str]] = (),
 ) -> list[str]:
     camera = _Camera(shape, view)
     visible, hidden = _hidden_lines(shape, camera)
@@ -390,8 +390,21 @@ def _view_markup(
         )
     size = max(8.0, min(11.0, w / 40))
     drawn: list[Point] = []
-    for label, at in marks:
-        centre = sheet.at(camera.flat(at))
+    for label, tag in marks:
+        # On the body's own visible surface: the middle of the largest of its triangles
+        # that face the eye. The middle of a body's box is in the bore of a ring, and two
+        # rings on one axis had their balloons in the same empty place.
+        mine = [(depth, corners) for depth, _tone, face_tag, corners in faces if face_tag == tag]
+        if not mine:
+            continue
+        # Among the quarter of them nearest the eye, so the choice is a face that is seen
+        # and not a bolt's shank inside its hole.
+        nearest, farthest = max(d for d, _c in mine), min(d for d, _c in mine)
+        front = [c for d, c in mine if d >= nearest - 0.25 * (nearest - farthest)]
+        widest = max(front, key=_triangle_area)
+        centre = sheet.at(
+            (sum(point[0] for point in widest) / 3, sum(point[1] for point in widest) / 3)
+        )
         # Bodies stacked in one hole would have their balloons on top of each other, so a
         # balloon that lands on an earlier one steps to the right of it.
         while any(math.dist(centre, other) < size * 2.6 for other in drawn):
@@ -399,6 +412,11 @@ def _view_markup(
         drawn.append(centre)
         out += _balloon(label, centre, size)
     return out
+
+
+def _triangle_area(corners: Sequence[Point]) -> float:
+    (ax, ay), (bx, by), (cx, cy) = corners
+    return abs((bx - ax) * (cy - ay) - (cx - ax) * (by - ay)) / 2
 
 
 def _balloon(label: str, centre: Point, height: float) -> list[str]:
@@ -545,19 +563,7 @@ def render_assembly(
         else:
             palettes[str(index)] = ASSEMBLY_PALETTES[designed % len(ASSEMBLY_PALETTES)]
             designed += 1
-    balloons = []
-    for label, index in marks:
-        box = bodies[index][1].bounding_box()
-        balloons.append(
-            (
-                label,
-                (
-                    (box.min.X + box.max.X) / 2,
-                    (box.min.Y + box.max.Y) / 2,
-                    (box.min.Z + box.max.Z) / 2,
-                ),
-            )
-        )
+    balloons = [(label, str(index)) for label, index in marks]
     views_px = max(64, round(width_px * 0.75))
     header = max(40.0, views_px * 0.12)
     cell_w, cell_h = width_px / 2, (views_px - header) / 2

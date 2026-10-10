@@ -1254,11 +1254,15 @@ def _numbered(built: BuiltCombination) -> tuple[list[tuple[str, Any, bool]], lis
     bodies = [(part.id, part.shape, bool(part.built.envelope)) for part in built.parts]
     bodies += [(body.designation, body.shape, True) for body in built.hardware]
     item = {line.name: line.item for line in built.bom}
-    marks, seen = [], set()
+    places: dict[str, list[int]] = {}
     for index, (label, _solid, _envelope) in enumerate(bodies):
-        if label not in seen:
-            seen.add(label)
-            marks.append((str(item[label]), index))
+        places.setdefault(label, []).append(index)
+    # One balloon per line of the parts list. A fastener that is in several holes is
+    # marked in a different hole from the one before it, so the bolt, its washer and its
+    # nut are not three balloons on one stack.
+    marks = []
+    for turn, (label, indices) in enumerate(places.items()):
+        marks.append((str(item[label]), indices[turn % len(indices)]))
     return bodies, marks
 
 
