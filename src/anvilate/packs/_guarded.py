@@ -184,8 +184,8 @@ class GuardedInputs(RevalidatedModel):
                 )
             if name not in signed and value.magnitude < 0:
                 raise _guarded_pack_refusal(
-                    f"{name} must not be negative; got {value}. If the sign is meant to "
-                    f"carry information, declare the field in this model's signed_fields.",
+                    f"{name} must not be negative; got {value}. It is a magnitude "
+                    f"here, with no direction to carry: write it positive.",
                     subject=name,
                     source=_guarded_pack_input_source(name),
                 )

@@ -120,6 +120,24 @@ def _nearest_option(written: str, expected: str) -> str | None:
     return None
 
 
+def _element_reasons(refused: ValidationError, model: type[BaseModel]) -> str:
+    """Why ``model`` refused an element's parameters: each field, its reason, what to write.
+
+    One sentence per failure, the same wherever an element is refused. The scorecard states
+    a refused element this way, and so does a build: pydantic's own text for it carries the
+    model's name, a repr of the whole input and a URL, and the repr differs with how the
+    parameters arrived, so the command line and the MCP server once refused one mistake in
+    two sets of words.
+    """
+    return "; ".join(
+        _refusal_line(
+            ".".join(str(part) for part in error["loc"]),
+            error["msg"] + (f" — {remedy}" if (remedy := _remedy(error, model)) else ""),
+        )
+        for error in refused.errors()
+    )
+
+
 def _remedy(error: Mapping[str, Any], root: type[BaseModel] = DesignSpec) -> str | None:
     """What to do about one pydantic validation failure against ``root``, when its kind says.
 

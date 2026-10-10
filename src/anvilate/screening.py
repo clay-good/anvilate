@@ -80,7 +80,7 @@ from .loads import combination_derivation
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .spec import DesignSpec, ReferenceResolver, ScreeningDepth, ValidationTier
 from .spec.provenance import Origin, Provenanced
-from .spec.validate import _remedy
+from .spec.validate import _element_reasons, _remedy
 from .standards import default_standards_resolver
 from .standards.materials import (
     MaterialPropertyUnavailable,
@@ -377,13 +377,7 @@ def _screen_element(
     except ValidationError as refused:
         # With what to do about each, as a spec's own fields get: `hole_dia` is told it
         # nearly names `hole_diameter`, and `load: 60 kN` is shown as a quantity.
-        reasons = "; ".join(
-            _refusal_line(
-                ".".join(str(part) for part in error["loc"]),
-                error["msg"] + (f" — {remedy}" if (remedy := _remedy(error, model)) else ""),
-            )
-            for error in refused.errors()
-        )
+        reasons = _element_reasons(refused, model)
         return [
             ScorecardEntry(
                 name="T1 analytical",

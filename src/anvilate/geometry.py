@@ -2631,8 +2631,19 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
         except GeometryError:
             raise
         except ValueError as failure:
+            from pydantic import ValidationError
+
+            from .spec.validate import _element_reasons
+
+            # A refused parameter is stated as the scorecard states it. pydantic's own
+            # text names the model, dumps the input and ends in a URL.
+            reasons = (
+                _element_reasons(failure, pattern.model)
+                if isinstance(failure, ValidationError)
+                else str(failure)
+            )
             raise GeometryError(
-                f"invalid {spec.element_type} element_params: {failure}",
+                f"invalid {spec.element_type} element_params: {reasons}",
                 action="correct",
                 subject=f"the {spec.element_type} element_params mapping",
                 source="the selected audited pattern's parameter schema",
