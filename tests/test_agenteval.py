@@ -725,3 +725,94 @@ def test_every_journey_task_has_a_correct_run_that_completes_it(tmp_path):
     finally:
         _outputs.set_output_folder(None)
         context.set_context_roots(None)
+
+
+def _published(condition: str = "skill"):
+    import json
+    from pathlib import Path
+
+    from anvilate.agenteval import AgentEvalReport
+
+    results = Path(__file__).resolve().parents[1] / "tools/agent-skill-measurement/results"
+    document = json.loads((results / "2026-10-09.json").read_text("utf-8"))
+    return AgentEvalReport.model_validate(document[condition]["report"])
+
+
+def test_a_task_an_agent_stopped_completing_is_a_regression_by_name():
+    """The release gate's comparison (audit-agent-surface 3.5), on the published run.
+
+    Held against itself nothing got worse. With one task's calls taken away, that task is
+    named and the count is stated. A second client is not a comparison, and a task whose
+    required calls changed is named for measuring again.
+    """
+    from anvilate.agenteval import completion_regressions
+
+    report = _published()
+    assert completion_regressions(report, report) == []
+    done = [outcome for outcome in report.outcomes if outcome.completed]
+    assert len(done) >= 2
+    lost = done[0]
+    worse = report.model_copy(
+        update={
+            "outcomes": tuple(
+                outcome.model_copy(update={"calls": ()}) if outcome is lost else outcome
+                for outcome in report.outcomes
+            )
+        }
+    )
+    assert not next(o for o in worse.outcomes if o.task_id == lost.task_id).completed
+    said = completion_regressions(report, worse)
+    assert f"task {lost.task_id!r} completed before and does not now" in said
+    assert any(f"down from {len(done)}" in line for line in said)
+    # Getting better is not a regression, in either direction of the same pair.
+    assert completion_regressions(worse, report) == []
+    other = report.model_copy(update={"client": "another client"})
+    (refused,) = completion_regressions(report, other)
+    assert "compared with its own last measurement" in refused
+    fewer = report.model_copy(update={"outcomes": report.outcomes[1:]})
+    assert f"task {report.outcomes[0].task_id!r} was measured before and is not now" in (
+        completion_regressions(report, fewer)
+    )
+    changed = report.model_copy(
+        update={
+            "outcomes": (
+                report.outcomes[0].model_copy(update={"required_tools": ("build_part",)}),
+                *report.outcomes[1:],
+            )
+        }
+    )
+    assert any(
+        "requires different calls" in line for line in completion_regressions(report, changed)
+    )
+
+
+def test_the_gate_script_exits_by_what_it_found(tmp_path):
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    tools = Path(__file__).resolve().parents[1] / "tools/agent-skill-measurement"
+    published = tools / "results/2026-10-09.json"
+
+    def gate(*files) -> subprocess.CompletedProcess:
+        return subprocess.run(  # noqa: S603 - our own script, fixed argv
+            [sys.executable, str(tools / "gate.py"), *map(str, files)],
+            capture_output=True,
+            text=True,
+        )
+
+    clean = gate(published, published)
+    assert clean.returncode == 0 and "no regression across baseline, skill" in clean.stdout
+    document = json.loads(published.read_text("utf-8"))
+    for outcome in document["skill"]["report"]["outcomes"]:
+        outcome["calls"] = []
+    worse = tmp_path / "worse.json"
+    worse.write_text(json.dumps(document), encoding="utf-8")
+    failed = gate(published, worse)
+    assert failed.returncode == 1 and "skill: task " in failed.stdout
+    assert "baseline: " not in failed.stdout
+    del document["baseline"]
+    worse.write_text(json.dumps(document), encoding="utf-8")
+    assert "the candidate was not" in gate(published, worse).stdout
+    assert gate(published).returncode == 2

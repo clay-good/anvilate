@@ -89,6 +89,7 @@ __all__ = [
     "assess_local_model_recommendation",
     "default_task_set",
     "default_versioned_task_set",
+    "completion_regressions",
     "evaluate_task_set",
     "journey_task_set",
     "score_run_set",
@@ -691,6 +692,49 @@ def evaluate_task_set(
         task_ids=tuple(task.task_id for task in task_set.tasks),
         report=report,
     )
+
+
+def completion_regressions(before: AgentEvalReport, after: AgentEvalReport) -> list[str]:
+    """What an agent on one client stopped completing between two measurements.
+
+    Empty when nothing got worse. A release is held against this for each client it names:
+    a task a model finished on the last release and does not finish on this one is a
+    regression whatever the other figures did, and a lower completion rate over the tasks
+    both runs share is one too. Two clients are never compared with each other, and a task
+    whose required calls changed is not compared at all: it is named, so the baseline is
+    measured again and not quietly forgiven.
+    """
+    if before.client != after.client:
+        return [
+            f"the two reports are for {before.client!r} and {after.client!r}; a client is "
+            "compared with its own last measurement"
+        ]
+    now = {outcome.task_id: outcome for outcome in after.outcomes}
+    issues: list[str] = []
+    shared_before, shared_after = 0, 0
+    compared = 0
+    for outcome in before.outcomes:
+        current = now.get(outcome.task_id)
+        if current is None:
+            issues.append(f"task {outcome.task_id!r} was measured before and is not now")
+            continue
+        if (current.prelude, current.required_tools) != (outcome.prelude, outcome.required_tools):
+            issues.append(
+                f"task {outcome.task_id!r} requires different calls than it did; measure the "
+                "baseline again on the corpus as it is"
+            )
+            continue
+        compared += 1
+        shared_before += outcome.completed
+        shared_after += current.completed
+        if outcome.completed and not current.completed:
+            issues.append(f"task {outcome.task_id!r} completed before and does not now")
+    if compared and shared_after < shared_before:
+        issues.append(
+            f"{after.client} completes {shared_after} of the {compared} tasks both runs "
+            f"share, down from {shared_before}"
+        )
+    return issues
 
 
 def task_set_issues(tasks: Sequence[AgentTask]) -> list[str]:

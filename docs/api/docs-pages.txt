@@ -4,7 +4,7 @@
 # link, command, option and tool the page names still exists.
 # 64 pages.
 
-agent-driving-evals.md | Driving it from an agent | agent-skill, example-highlights | -
+agent-driving-evals.md | Driving it from an agent | agent-skill, example-highlights, mcp-registry-release | -
 agent-mcp-integration.md | Driving it from an agent | README, headless-cli, mcp-tool-contracts | -
 agent-skill.md | Driving it from an agent | agent-driving-evals, agent-mcp-integration | -
 agent-surface-audit.md | Start here | nothing | -

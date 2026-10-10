@@ -88,6 +88,13 @@ reach every tool in the catalog. No measurement has been scored on the added ten
 published run is held to the nine it ran. Each of the ten is walked in a test by a correct
 run against the real server, so none is a task that cannot be completed.
 
+**A release is held to the last measurement.** `agenteval.completion_regressions` compares
+two reports for one client and names every task that completed before and does not now, and
+a lower count over the tasks both share. `python tools/agent-skill-measurement/gate.py
+BASELINE.json CANDIDATE.json` runs it for each condition and exits 1 on any. A second client
+is held to its own baseline, never to the first one's; there is none for Codex yet, so a
+release cannot claim it there.
+
 The viewport and measurement tasks check the positive geometry path: build a base plate,
 carry its subject handle into `render_viewport` and `measure_geometry`, and use the returned
 image and measurements rather than describing or calculating values the model invented.

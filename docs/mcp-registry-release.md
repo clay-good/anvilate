@@ -12,6 +12,12 @@ stdio.
 3. Create and publish the matching `vX.Y.Z` GitHub release.
 4. Confirm the **Publish MCP registry metadata** workflow passes.
 
+Before step 1, measure the agent-driving corpus on each client the release names and hold
+the result to that client's last one:
+`python tools/agent-skill-measurement/gate.py BASELINE.json CANDIDATE.json`. It exits 1 and
+names each task an agent completed on the last release and does not on this one. A release
+that fails it does not ship. See [agent-driving evals](agent-driving-evals.md).
+
 The workflow checks every version before it authenticates. It then waits up to 5 minutes
 for the exact PyPI version, downloads the pinned MCP publisher, verifies its SHA-256 digest,
 validates `server.json`, authenticates with GitHub OIDC, and publishes the entry. No registry

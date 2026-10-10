@@ -23,3 +23,12 @@ directory with the padeye, base-plate and bracket specs. A call counts as failed
 the protocol rejected it, per `agenteval.ToolCall`. Claude Code strips the `MCP error -326xx`
 prefix from that text, so the scorer tells a rejection (bare text) from a tool's answer (a
 JSON document, even one listing errors).
+
+## Holding a release to the last run
+
+```bash
+python tools/agent-skill-measurement/gate.py results/2026-10-09.json /tmp/new-results.json
+```
+
+Exits 1 and names each task that completed in the first file and does not in the second,
+for each condition both carry. Run it per client, against that client's own last result.

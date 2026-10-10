@@ -28,6 +28,7 @@ agenteval.ToolCall
 agenteval.assess_local_model_recommendation
 agenteval.default_task_set
 agenteval.default_versioned_task_set
+agenteval.completion_regressions
 agenteval.evaluate_task_set
 agenteval.journey_task_set
 agenteval.score_run_set

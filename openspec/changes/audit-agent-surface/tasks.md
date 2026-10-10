@@ -36,7 +36,9 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
       by a correct run in a test; not yet measured on either client, which is 3.3)
 - [ ] 3.3 Baseline run on both clients; results published per client and version
 - [x] 3.4 Gates: description and instruction length, schema constraints, result size, call time
-- [ ] 3.5 Release blocked on a completion-rate regression on either client
+- [x] 3.5 Release blocked on a completion-rate regression on either client
+      (`agenteval.completion_regressions` and `tools/agent-skill-measurement/gate.py`, a step
+      of the release order; each client is held to its own baseline, and Codex has none yet)
 
 ## 4. Refusals
 
