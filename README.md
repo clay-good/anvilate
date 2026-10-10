@@ -8,9 +8,11 @@ Anvilate runs the engineering checks you'd otherwise do by hand in a spreadsheet
 
 > **Status: pre-alpha (v0.0.1).** The analytical screening core, the command line, the MCP server, and a few audited 3D patterns (STEP, DXF, 3MF) work today. Plain-English requests work through your own MCP agent, which writes the spec. The wider geometry catalog, FEA, and semantic PMI described under [Where this is going](#where-this-is-going) are still being built.
 
-## Install
+## How to use it
 
-Python 3.11+.
+Three steps. You talk to your own AI agent; the agent calls Anvilate.
+
+**1. Install** (Python 3.11+)
 
 ```bash
 git clone https://github.com/clay-good/anvilate.git
@@ -19,15 +21,42 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[geometry,export,pdf]"  # geometry adds B-Rep/STEP; export adds DXF; pdf reads requirement sheets
 ```
 
-## Use it from your AI agent
-
-Anvilate has no language model of its own. Your agent (Claude Code, Claude Desktop, Cursor, or any MCP client) is the model: it turns your description into a spec, and Anvilate validates and screens it locally over stdio. There is no account, no API key and nothing hosted.
+**2. Connect your agent** (one line, no account, no API key)
 
 ```bash
-claude mcp add anvilate -- "$(which anvilate-mcp)"
+claude mcp add anvilate -- "$(which anvilate-mcp)"   # Claude Code
 ```
 
-Then ask in plain English, for example *"Check an ASTM A36 lifting lug, 80 mm wide, 12 mm thick with a 25 mm pin hole, for a 50 kN load and a safety factor of 2."* The agent writes the spec, Anvilate returns a scorecard where every check cites its source, and a check that could not run says so. Other clients and the full loop are in [agent integration](docs/agent-mcp-integration.md).
+```bash
+codex mcp add anvilate -- "$(which anvilate-mcp)"    # OpenAI Codex
+```
+
+**3. Ask in plain English**
+
+> *Check an ASTM A36 lifting lug, 80 mm wide, 12 mm thick with a 25 mm pin hole, for a 50 kN load and a safety factor of 2.*
+
+> *Design a 300 x 240 x 25 mm steel base plate for a 600 kN column load, check it, and write me the STEP file.*
+
+**What you get back**
+
+| You get | What it is |
+| --- | --- |
+| A verdict | Pass, fail or *not evaluated*, check by check, each with the formula and the code clause it came from. |
+| A picture | The part drawn in four views from its built solid, so you can see what was made. |
+| A STEP file | The solid, to open in the CAD you already use: SolidWorks, Fusion, Onshape, NX, CATIA, FreeCAD. Flat plates also export as DXF. |
+| A one-page sheet | `anvilate view part.yaml` writes the drawings and every check into one HTML file you can print or send. |
+
+Your agent writes a short spec file from what you asked, and Anvilate does the rest on your
+machine. To keep the files, ask the agent to run `anvilate build part.yaml --output part.step`
+(drawable today: base plates, cover plates, shafts and timber beams; more parts are planned).
+
+**What it is not.** Anvilate is not a CAD system and not a certification. It gives you a
+fast, cited first check and a clean file to carry into your own tools. A check it could not
+run says *not evaluated* and never counts as a pass.
+
+You can also use it with no agent at all: write the spec yourself and run the commands
+below. Anvilate has no language model of its own, calls none, and sends nothing off your
+machine. Other clients and the full loop are in [agent integration](docs/agent-mcp-integration.md).
 
 ## Try it
 
