@@ -213,6 +213,8 @@ def test_the_contracts_page_backing_table_is_the_catalogs_own():
         7: "Seven",
         8: "Eight",
         9: "Nine",
+        10: "Ten",
+        11: "Eleven",
     }
     unbacked = len(catalog) - backed
     total = words[len(catalog)].lower()

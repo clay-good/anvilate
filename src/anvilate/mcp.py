@@ -83,6 +83,7 @@ __all__ = [
     "Dispatch",
     "Gate",
     "CATALOG_OPERATIONS",
+    "CONTEXT_OPERATIONS",
     "REQUIRED_OPERATIONS",
     "ToolDefinition",
     "catalog_issues",
@@ -153,6 +154,12 @@ REQUIRED_OPERATIONS = frozenset(
 # measures driving the pipeline, is not required to exercise it.
 CATALOG_OPERATIONS = frozenset({"describe_part"})
 
+# The two tools that read the user's own files: a listing of a context folder, and the
+# measured facts of one CAD file in it. They act on files inside folders named at launch
+# (`--context DIR`), never on server memory, and return measurements, never contents.
+CONTEXT_OPERATIONS = frozenset({"list_context", "read_cad_file"})
+_LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS
+
 # Written out, not read from `contracts`. Deriving these would make the check below
 # vacuous: a reference computed from the same call it is compared against agrees with
 # itself at every version, including the one where the tool surface should have moved and
@@ -207,6 +214,8 @@ _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
 _PART_CATALOG_REF = "urn:anvilate:schema:part-catalog:1.0.0"
+_CONTEXT_INVENTORY_REF = "urn:anvilate:schema:context-inventory:1.0.0"
+_CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -730,6 +739,70 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             subject="subject",
         ),
         ToolDefinition(
+            name="list_context",
+            title="List a context folder",
+            description=(
+                "List the engineering files in a folder the user pointed this server at, "
+                "and whose each is to read: Anvilate measures STEP, DXF, STL and 3MF with "
+                "read_cad_file; images, PDFs and text are yours to read; DWG, IGES and "
+                "native CAD files need exporting first, and the listing says how. Pass "
+                '"." for the context folder itself. Nothing is opened.'
+            ),
+            input_schema=_object_schema(
+                {
+                    "folder": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": 'a folder inside the context, or "." for its root',
+                    },
+                },
+                required=["folder"],
+            ),
+            output_schema=_object_schema(
+                {"inventory": {"$ref": _CONTEXT_INVENTORY_REF}},
+                required=["inventory"],
+            ),
+            cost=Cost.BOUNDED,
+            subject="folder",
+            backing="anvilate.context:inventory",
+        ),
+        ToolDefinition(
+            name="read_cad_file",
+            title="Measure a CAD file",
+            description=(
+                "Measure one STEP, DXF, STL or 3MF file in the context folder instead of "
+                "reading its text. Returns its size, volume, holes with diameters and "
+                "positions, hole patterns, and for a DXF its closed profiles and "
+                "dimensions, in millimetres, with the unit the file was written in and "
+                "its SHA-256. A DXF or STL that states no unit needs unit. Use these "
+                "numbers, and name the file, when a spec value comes from it."
+            ),
+            input_schema=_object_schema(
+                {
+                    # `source`, not `path`: every path-like name on this surface would read as
+                    # somewhere to write, and no tool takes a destination.
+                    "source": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "a file inside the context folder, as list_context names it",
+                    },
+                    "unit": {
+                        "type": "string",
+                        "enum": ["mm", "cm", "m", "in", "ft"],
+                        "description": "the unit of a DXF or STL that states none",
+                    },
+                },
+                required=["source"],
+            ),
+            output_schema=_object_schema(
+                {"facts": {"$ref": _CAD_FACTS_REF}},
+                required=["facts"],
+            ),
+            cost=Cost.BOUNDED,
+            subject="source",
+            backing="anvilate.context:read_cad_file",
+        ),
+        ToolDefinition(
             name="describe_part",
             title="List the parts, or describe one",
             description=(
@@ -818,6 +891,8 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _VIEWPORT_REF,
             _MEASUREMENT_REF,
             _PART_CATALOG_REF,
+            _CONTEXT_INVENTORY_REF,
+            _CAD_FACTS_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -841,10 +916,10 @@ def catalog_issues() -> list[str]:
     duplicates = sorted({name for name in names if names.count(name) > 1})
     if duplicates:
         issues.append(f"the catalog defines these tools more than once: {duplicates}")
-    missing = sorted((REQUIRED_OPERATIONS | CATALOG_OPERATIONS) - set(names))
+    missing = sorted((REQUIRED_OPERATIONS | _LOOKUPS) - set(names))
     if missing:
         issues.append(f"the spec requires operations the catalog does not expose: {missing}")
-    extra = sorted(set(names) - REQUIRED_OPERATIONS - CATALOG_OPERATIONS)
+    extra = sorted(set(names) - REQUIRED_OPERATIONS - _LOOKUPS)
     if extra:
         issues.append(
             f"the catalog exposes operations nothing specified: {extra}. Add them to "
@@ -1881,6 +1956,42 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return {"viewport": rendered.document().model_dump(mode="json"), "file": file}
 
 
+def _list_context(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``list_context``: the engineering files in a context folder, and whose each is."""
+    from .context import ContextError, inventory, resolve_in_context
+
+    try:
+        listing = inventory(resolve_in_context(arguments["folder"]))
+    except ContextError as refused:
+        raise _context_refusal(refused, "folder", "list_context") from refused
+    return {"inventory": listing.model_dump(mode="json")}
+
+
+def _read_cad_file(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``read_cad_file``: one CAD file in the context, measured."""
+    from .context import ContextError, read_cad_file, resolve_in_context
+
+    try:
+        facts = read_cad_file(resolve_in_context(arguments["source"]), unit=arguments.get("unit"))
+    except ContextError as refused:
+        raise _context_refusal(refused, "source", "read_cad_file") from refused
+    return {"facts": facts.model_dump(mode="json")}
+
+
+def _context_refusal(refused: Exception, argument: str, operation: str) -> Exception:
+    """A server with no context folder is unavailable; anything else is a bad argument."""
+    from .context import context_roots
+
+    if not context_roots():
+        return _Unavailable(f"{operation} cannot read files: {refused}")
+    # The refusal says which argument it is about: a drawing with no unit is about `unit`.
+    remedies = getattr(refused, "remedies", ())
+    named = remedies[0].subject if remedies else argument
+    # The library calls the file `path`; this tool's argument for it is the one named here.
+    named = argument if named == "path" else named
+    return _InvalidArguments([f"{named}: {refused}"], operation=operation)
+
+
 def _describe_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """``describe_part``: every element in a line, or one with its fields and an example."""
     from .geometry import GeometryError
@@ -2299,7 +2410,9 @@ _DISPATCH: dict[str, Any] = {
     "compile_spec": _compile_spec,
     "describe_part": _describe_part,
     "export_artifact": _export_artifact,
+    "list_context": _list_context,
     "measure_geometry": _measure_geometry,
+    "read_cad_file": _read_cad_file,
     "read_scorecard": _read_scorecard,
     "render_viewport": _render_viewport,
     "run_validation": _run_validation,
@@ -2379,7 +2492,23 @@ def main(argv: list[str] | None = None) -> None:
         metavar="DIR",
         help="the one folder results are written to (default: ./anvilate-out, or ANVILATE_OUT)",
     )
+    parser.add_argument(
+        "--context",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="a folder of the user's drawings and models the server may read (repeatable, "
+        "read-only; or ANVILATE_CONTEXT). With none, no tool reads a file",
+    )
     options = parser.parse_args(argv)
+    if options.context:
+        from .context import set_context_roots
+
+        missing = [folder for folder in options.context if not Path(folder).is_dir()]
+        if missing:
+            print(f"anvilate-mcp: --context: not a folder: {', '.join(missing)}", file=sys.stderr)
+            raise SystemExit(2)
+        set_context_roots(options.context)
     # Decided once, here, by whoever starts the server. No tool takes a destination.
     set_output_folder(options.out or os.environ.get("ANVILATE_OUT") or Path.cwd() / "anvilate-out")
     if options.module:

@@ -6,8 +6,9 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Nine of the nine are backed today**; a tenth command, ``verify``, comes from the
-attestation capability. ``parts`` lists what a spec can declare, ``doctor`` reports which
+**Ten of the ten are backed today**; an eleventh command, ``verify``, comes from the
+attestation capability. ``parts`` lists what a spec can declare, ``read`` measures a CAD
+file or lists a folder of them, ``doctor`` reports which
 optional runtimes are present,
 ``fetch`` is where a user consents to downloading a dataset Anvilate may not ship, and
 ``view`` writes the part sheet: the drawn part beside its scorecard, as one HTML file.
@@ -245,6 +246,7 @@ _COMMAND_EXAMPLES = {
     "doctor": "anvilate doctor --format json",
     "fetch": "anvilate fetch aisc-shapes --consent",
     "parts": "anvilate parts mounting_plate",
+    "read": "anvilate read drawings/plate.dxf --unit mm",
     "interfaces": "anvilate interfaces mating.step --format json",
 }
 
@@ -573,6 +575,23 @@ def _build_parser() -> argparse.ArgumentParser:
         "element_type", nargs="?", help="the element to describe, such as mounting_plate"
     )
 
+    read = commands.add_parser(
+        "read",
+        help="measure a STEP, DXF, STL or 3MF file, or list a folder of them",
+        description="Given a CAD file, print what it holds, measured: size, volume, holes "
+        "and hole patterns, a drawing's closed profiles and dimensions, in millimetres, "
+        "with the unit the file was written in. Given a folder, list its engineering files "
+        "and whose each is to read. The same facts the MCP tools read_cad_file and "
+        "list_context return. Nothing is written.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['read']}",
+    )
+    read.add_argument("path", type=Path, help="a CAD file to measure, or a folder to list")
+    read.add_argument(
+        "--unit",
+        choices=("mm", "cm", "m", "in", "ft"),
+        help="the unit of a DXF or STL that states none",
+    )
+
     fetch = commands.add_parser(
         "fetch",
         help="download a dataset Anvilate may read but not ship, once, with your consent",
@@ -757,6 +776,8 @@ def run(
             code = _doctor(args, out=command_out)
         elif args.command == "parts":
             code = _parts(args, out=command_out, err=command_err)
+        elif args.command == "read":
+            code = _read(args, out=command_out, err=command_err)
         elif args.command == "fetch":
             code = _fetch(args, out=command_out, err=command_err)
         elif args.command == "view":
@@ -825,6 +846,7 @@ def _requested_command(arguments: list[str]) -> str:
         "doctor",
         "interfaces",
         "parts",
+        "read",
         "view",
         *_UNBUILT,
     }
@@ -996,6 +1018,21 @@ def _external_refs(schema: dict[str, Any]) -> list[str]:
 
     embedded = set((schema.get("$defs") or {}).keys())
     return sorted(ref for ref in _refs(schema) if not ref.startswith("#") and ref not in embedded)
+
+
+def _read(args: argparse.Namespace, *, out, err) -> int:
+    """Measure one CAD file, or list a folder's engineering files."""
+    from .context import ContextError, inventory, read_cad_file
+
+    try:
+        if args.path.is_dir():
+            print(inventory(args.path), file=out)
+        else:
+            print(read_cad_file(args.path, unit=args.unit), file=out)
+    except ContextError as refused:
+        print(f"anvilate read: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    return EXIT_OK
 
 
 def _parts(args: argparse.Namespace, *, out, err) -> int:

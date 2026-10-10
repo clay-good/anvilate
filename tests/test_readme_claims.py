@@ -201,7 +201,8 @@ def test_the_tool_surface_count_is_the_catalogs_own():
     words = {"six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
     # The pipeline's operations; the catalog lookup beside them is not one.
     assert words[claimed] == len(REQUIRED_OPERATIONS)
-    assert len(tool_catalog()) == len(REQUIRED_OPERATIONS) + 1
+    # One catalog lookup and two readers of the user's own files stand beside them.
+    assert len(tool_catalog()) == len(REQUIRED_OPERATIONS) + 3
 
 
 def test_the_geometric_characteristic_count_is_the_models_own():
@@ -567,6 +568,7 @@ def test_the_pages_that_count_something_count_the_real_thing():
         "ten": 10,
         "Eight": 8,
         "Nine": 9,
+        "eleven": 11,
         "sixteen": 16,
         "Sixteen": 16,
         "seventeen": 17,

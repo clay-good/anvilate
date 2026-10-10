@@ -46,9 +46,11 @@ def _cli(*argv: str, produces: Path | None = None) -> float:
 class _Session:
     """One fresh stdio server, as an agent's first connection meets it."""
 
-    def __init__(self) -> None:
+    def __init__(self, folder: Path) -> None:
+        # One scratch folder is both where the server writes and what it may read, so the
+        # STEP file a build exports is the file the reader is timed on.
         self._child = subprocess.Popen(
-            [sys.executable, "-m", "anvilate.mcp"],
+            [sys.executable, "-m", "anvilate.mcp", "--out", str(folder), "--context", str(folder)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
@@ -82,7 +84,8 @@ def _mcp_pass() -> dict[str, float]:
     import yaml
 
     spec = yaml.safe_load(_PASSING.read_text(encoding="utf-8"))
-    session = _Session()
+    scratch = tempfile.TemporaryDirectory()
+    session = _Session(Path(scratch.name))
     try:
         timings: dict[str, float] = {}
         start = time.perf_counter()
@@ -114,9 +117,14 @@ def _mcp_pass() -> dict[str, float]:
         timings["mcp describe_part"], _ = session.tool(
             "describe_part", {"element_type": "mounting_plate"}
         )
+        _, exported = session.tool("export_artifact", {"subject": part, "format": "step"})
+        written = Path(exported["structuredContent"]["file"]["path"]).name
+        timings["mcp list_context"], _ = session.tool("list_context", {"folder": "."})
+        timings["mcp read_cad_file"], _ = session.tool("read_cad_file", {"source": written})
         return timings
     finally:
         session.close()
+        scratch.cleanup()
 
 
 def _one_pass(repeats: int) -> dict[str, list[float]]:

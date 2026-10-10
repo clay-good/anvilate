@@ -1,7 +1,7 @@
 # Driving Anvilate from a coding agent
 
 This is the operator's half of [the MCP tool surface](mcp-tool-contracts.md). That page
-says what the nine tools *are*; this one is what an agent actually does with them, and
+says what the eleven tools *are*; this one is what an agent actually does with them, and
 what it will hit when it tries the loop everybody writes first.
 
 The rules an agent must follow while doing any of this are the shipped
@@ -188,7 +188,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 ```text
 protocol: 2026-07-28
 server: anvilate
-tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, describe_part
+tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, list_context, read_cad_file, describe_part
 compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.19.0"}
 ```
 
@@ -233,6 +233,40 @@ section it or measure it, open the STEP file:
 | FreeCAD | File > Open, `.step` | The most faithful open route. DXF is 2D. |
 
 Anvilate writes millimetres with Z up, and says so in the file.
+
+## Pointing your agent at a folder
+
+Start the server with the folder the engineer wants read, and two more tools answer:
+
+```bash
+anvilate-mcp --context ~/projects/gearbox --out ~/projects/gearbox/anvilate-out
+```
+
+`--context` may be given more than once. With none, `list_context` and `read_cad_file`
+are refused with `-32000` and say how to enable them.
+
+| What is in the folder | Who reads it | How |
+| --- | --- | --- |
+| STEP (`.step`, `.stp`) | Anvilate | `read_cad_file`: each solid's size and volume, its holes and bosses with diameter, depth and position, hole patterns with their pitch and bolt circle, and the unit the file was written in. |
+| DXF (`.dxf`) | Anvilate | `read_cad_file`: layers, closed profiles with their size and the holes inside them, and dimension entities, flagging one whose text disagrees with what it measures. A drawing that states no unit needs `unit`. |
+| STL, 3MF | Anvilate | `read_cad_file`: overall size, volume when the mesh is closed, triangle count. A mesh has no holes or faces to report, and says so. |
+| Images, PDFs, text, spreadsheets | The agent | With its own file tools. A number it reads from one is the agent's reading, not a measurement: say which file it came from, and ask the engineer to confirm it. |
+| DWG, IGES, Parasolid, native CAD files | Nobody, yet | Refused by name. The listing says what to export from the CAD tool: DXF for a drawing, STEP for a model. Anvilate bundles no converter. |
+
+A session reads like this. The agent calls `list_context` with `folder: "."` and learns
+there is a `bracket.step`, a `plate.dxf` and a `sketch.png`. It calls `read_cad_file` with
+`source: "plate.dxf"` and gets a 101.6 x 76.2 mm rectangle with four 6.35 mm holes, each
+38.1 mm and 25.4 mm from the centre, and a note that the file was drawn in inches. It calls
+`describe_part` for a mounting plate, writes the spec from those numbers, and builds it.
+
+Three rules hold on every read. **Lengths are millimetres, and the result says which unit
+the file was written in.** **A file is measured and never returned:** the result carries
+sizes, positions and the file's SHA-256, and no geometry data. **Nothing outside the
+context folders is read:** a path is resolved, links included, before it is checked, and
+the folders are never written to.
+
+At the shell, `anvilate read FILE` prints the same facts and `anvilate read FOLDER` the
+same listing.
 
 ## Step one: compile the document
 

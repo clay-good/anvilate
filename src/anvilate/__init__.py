@@ -87,6 +87,9 @@ that already ran and does one more thing with them:
   parts in :mod:`anvilate.packs.parts`.
 - :mod:`anvilate._patterns_screened` — the private builders for elements a pack already
   screens: a lug, a key, a spring, a bearing, a gear pair and rolled members.
+- :mod:`anvilate.context` — a project folder as context: which files are whose to read,
+  and measured facts from the STEP, DXF, STL and 3MF files in it, confined to the folders
+  the server was started with.
 - :mod:`anvilate.features` — the shared holes, slots and hole patterns every drawable part
   cuts the same way, each tagged, measurable and refused when it does not fit.
 - :mod:`anvilate.raster` — the viewport SVG rasterized to PNG with the standard library,

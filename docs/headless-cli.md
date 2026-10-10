@@ -17,6 +17,7 @@ has not shipped exits 4 naming that gap.
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
+| `read` | a CAD file, or a folder | `--unit` | the file was measured, or the folder listed |
 | `parts` | an element type, or none to list them | none | the catalog, or that element's fields and example, was printed |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -1123,6 +1124,25 @@ is on the sheet, and `anvilate check` is the command whose exit code is the verd
 
 For the solid itself, `anvilate build` writes STEP, which opens in the CAD tools you
 already use.
+
+## Measure a CAD file: `anvilate read`
+
+`anvilate read FILE` measures one STEP, DXF, STL or 3MF file and prints what it holds: its
+size and volume, each solid's holes with their diameters and positions, a drawing's closed
+profiles with the holes inside them and its dimensions, in millimetres, with the unit the
+file was written in and its SHA-256. `anvilate read FOLDER` lists a folder's engineering
+files and whose each is to read. Nothing is written.
+
+```bash
+anvilate read drawings/plate.dxf --unit mm
+anvilate read drawings/
+```
+
+A DXF that declares no unit is refused until `--unit` states one: a drawing in inches read
+as millimetres is wrong by 25.4. DWG, IGES, Parasolid and native CAD files are refused by
+name with what to export instead. These are the facts an agent gets from the MCP tools
+`read_cad_file` and `list_context`; see
+[pointing your agent at a folder](agent-mcp-integration.md#pointing-your-agent-at-a-folder).
 
 ## List the parts: `anvilate parts`
 

@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "ContextFile": {
+      "additionalProperties": false,
+      "description": "One file in a context folder: what it is, and whose it is to read.",
+      "properties": {
+        "bytes": {
+          "minimum": 0,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "format": {
+          "title": "Format",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "reader": {
+          "enum": [
+            "anvilate",
+            "agent",
+            "unsupported"
+          ],
+          "title": "Reader",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "format",
+        "bytes",
+        "reader"
+      ],
+      "title": "ContextFile",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:context-inventory:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate context inventory: the engineering files in a folder the user named, each with its format, its size, and whether Anvilate measures it, the agent reads it, or it needs exporting first. Generated from anvilate.context.ContextInventory.",
+  "properties": {
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ContextFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "folder": {
+      "title": "Folder",
+      "type": "string"
+    },
+    "not_listed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Not Listed",
+      "type": "integer"
+    },
+    "other_files": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Other Files",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "folder",
+    "files"
+  ],
+  "title": "ContextInventory",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

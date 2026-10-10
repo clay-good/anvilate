@@ -341,10 +341,12 @@ def test_the_default_task_set_covers_the_surface_it_claims_to():
     assert task_set_issues(list(tasks)) == []
 
     exercised = {operation for task in tasks for operation in task.operations}
-    from anvilate.mcp import CATALOG_OPERATIONS
+    from anvilate.mcp import CATALOG_OPERATIONS, CONTEXT_OPERATIONS
 
     assert exercised == REQUIRED_OPERATIONS
-    assert {tool.name for tool in tool_catalog()} == REQUIRED_OPERATIONS | CATALOG_OPERATIONS
+    assert {tool.name for tool in tool_catalog()} == (
+        REQUIRED_OPERATIONS | CATALOG_OPERATIONS | CONTEXT_OPERATIONS
+    )
 
     # A required call is a claim that no correct run skips it. `run_validation` and
     # `build_part` parse a document themselves, so a compile before them is allowed and never
@@ -541,7 +543,7 @@ def test_the_corpus_reaches_every_backed_operation():
     reached = {operation for task in default_task_set() for operation in task.operations}
     # Every pipeline operation. The catalog lookup is a reference an agent may read, not
     # a step it must take, so the corpus is not required to reach it.
-    assert set(mcp._DISPATCH) - mcp.CATALOG_OPERATIONS <= reached
+    assert set(mcp._DISPATCH) - mcp.CATALOG_OPERATIONS - mcp.CONTEXT_OPERATIONS <= reached
 
 
 # --- the published measurement -------------------------------------------------------

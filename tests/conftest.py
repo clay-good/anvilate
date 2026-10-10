@@ -125,12 +125,16 @@ def _subject_store_stays_out_of_the_users_cache(tmp_path, monkeypatch):
     # The MCP server's output folder is process state set by `main()`. A test that starts the
     # server (even one that expects it to refuse) left it pointing at ./anvilate-out, and
     # every later test that rendered or exported wrote into the repository.
-    from anvilate import _outputs
+    # The context folders it may read are the same kind of state, set the same way.
+    from anvilate import _outputs, context
 
     monkeypatch.delenv("ANVILATE_OUT", raising=False)
+    monkeypatch.delenv("ANVILATE_CONTEXT", raising=False)
     _outputs.set_output_folder(None)
+    context.set_context_roots(None)
     yield
     _outputs.set_output_folder(None)
+    context.set_context_roots(None)
 
 
 class NetworkInTest(AssertionError):

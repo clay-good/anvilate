@@ -24,6 +24,7 @@ from anvilate.contracts import (
 )
 from anvilate.mcp import (
     CATALOG_OPERATIONS,
+    CONTEXT_OPERATIONS,
     METHOD_NOT_FOUND,
     PROTOCOL_REVISION,
     REQUIRED_OPERATIONS,
@@ -52,10 +53,12 @@ def test_the_catalog_covers_exactly_the_specified_operations():
     # Named, and counted. A gate that iterates an accidentally-empty collection passes
     # while checking nothing; asserting the number means an emptied catalog fails here.
     names = [tool.name for tool in tool_catalog()]
-    assert len(names) == 9
-    # Eight pipeline operations, and the one lookup of what ships.
+    assert len(names) == 11
+    # Eight pipeline operations, the one lookup of what ships, and the two that read the
+    # user's own files.
     assert len(REQUIRED_OPERATIONS) == 8 and set(CATALOG_OPERATIONS) == {"describe_part"}
-    assert set(names) == REQUIRED_OPERATIONS | CATALOG_OPERATIONS
+    assert set(CONTEXT_OPERATIONS) == {"list_context", "read_cad_file"}
+    assert set(names) == REQUIRED_OPERATIONS | CATALOG_OPERATIONS | CONTEXT_OPERATIONS
     assert len(set(names)) == len(names)
 
 
@@ -239,6 +242,8 @@ def test_the_synchronous_tools_are_the_ones_that_finish():
         "read_scorecard",
         "export_artifact",
         "describe_part",
+        "list_context",
+        "read_cad_file",
     }
 
 
@@ -262,11 +267,11 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. All nine operations
+    A dotted path in a table is a comment until something imports it. All eleven operations
     are backed today, and each claim names a symbol that exists.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 9, backed
+    assert len(backed) == 11, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -1698,6 +1703,8 @@ def _released_registry():
 
     from anvilate.contracts import (
         BUNDLE_SCHEMA_VERSION,
+        CAD_FACTS_SCHEMA_VERSION,
+        CONTEXT_INVENTORY_SCHEMA_VERSION,
         GEOMETRY_SCHEMA_VERSION,
         MEASUREMENT_SCHEMA_VERSION,
         PART_CATALOG_SCHEMA_VERSION,
@@ -1718,6 +1725,8 @@ def _released_registry():
                 _released(f"evidence-bundle-{BUNDLE_SCHEMA_VERSION}.json"),
                 _released(f"geometry-summary-{GEOMETRY_SCHEMA_VERSION}.json"),
                 _released(f"part-catalog-{PART_CATALOG_SCHEMA_VERSION}.json"),
+                _released(f"context-inventory-{CONTEXT_INVENTORY_SCHEMA_VERSION}.json"),
+                _released(f"cad-file-facts-{CAD_FACTS_SCHEMA_VERSION}.json"),
                 _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
                 _released(f"geometry-measurement-{MEASUREMENT_SCHEMA_VERSION}.json"),
             )
@@ -1748,6 +1757,20 @@ def _dispatched_arguments(tool_name: str) -> dict:
         return {"spec": _base_plate_document()}
     if tool_name == "describe_part":
         return {"element_type": "mounting_plate"}
+    if tool_name in ("list_context", "read_cad_file"):
+        # A context folder holding one mesh, named the way the server is told at launch.
+        # The fixture that isolates every test clears it again.
+        import struct
+        import tempfile
+
+        from anvilate import context
+
+        folder = pathlib.Path(tempfile.mkdtemp(prefix="anvilate-context-"))
+        corners = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+        triangle = struct.pack("<12fH", 0, 0, 0, *(v for corner in corners for v in corner), 0)
+        (folder / "tab.stl").write_bytes(b"\0" * 80 + struct.pack("<I", 1) + triangle)
+        context.set_context_roots([folder])
+        return {"folder": "."} if tool_name == "list_context" else {"source": "tab.stl"}
     if tool_name == "render_viewport":
         built = _call("build_part", {"spec": _base_plate_document()})["result"]
         return {"subject": built["structuredContent"]["subject"], "view": "iso"}

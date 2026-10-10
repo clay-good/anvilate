@@ -21,6 +21,8 @@
     "mcp render_viewport": {"seconds": 2.0, "why": "One SVG view of a built part."},
     "mcp measure_geometry": {"seconds": 2.0, "why": "One measurement of a built part."},
     "mcp export_artifact": {"seconds": 2.0, "why": "The evidence bundle for a stored card."},
+    "mcp list_context": {"seconds": 1.0, "why": "A folder's engineering files, classified by name; nothing is opened."},
+    "mcp read_cad_file": {"seconds": 10.0, "why": "One CAD file measured; a STEP read pays the kernel import when it is the first geometry call."},
     "mcp describe_part": {"seconds": 1.0, "why": "One element's fields and its example spec, read before a spec is written."}
   },
   "time_to_first_part": {"seconds": 600.0, "why": "openspec/specs/onboarding: a fresh install to an exported validated sample part in under 10 minutes."}

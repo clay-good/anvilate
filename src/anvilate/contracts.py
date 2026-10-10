@@ -71,6 +71,8 @@ __all__ = [
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
     "PART_CATALOG_SCHEMA_VERSION",
+    "CONTEXT_INVENTORY_SCHEMA_VERSION",
+    "CAD_FACTS_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -85,6 +87,8 @@ __all__ = [
     "interface_candidates_json_schema",
     "measurement_json_schema",
     "part_catalog_json_schema",
+    "context_inventory_json_schema",
+    "cad_facts_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -168,6 +172,11 @@ MEASUREMENT_SCHEMA_VERSION = "1.2.0"
 # What ``describe_part`` returns: every element in a line, or one with its fields and an
 # example spec.
 PART_CATALOG_SCHEMA_VERSION = "1.0.0"
+
+# What ``list_context`` and ``read_cad_file`` return: a folder's engineering files and whose
+# each is to read, and the measured facts of one CAD file.
+CONTEXT_INVENTORY_SCHEMA_VERSION = "1.0.0"
+CAD_FACTS_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -411,6 +420,40 @@ def part_catalog_json_schema() -> dict[str, Any]:
     )
 
 
+def context_inventory_json_schema() -> dict[str, Any]:
+    """A context folder's engineering files, and whose each is to read."""
+    from .context import ContextInventory
+
+    return _artifact(
+        ContextInventory,
+        name="context-inventory",
+        version=CONTEXT_INVENTORY_SCHEMA_VERSION,
+        description=(
+            "Anvilate context inventory: the engineering files in a folder the user named, "
+            "each with its format, its size, and whether Anvilate measures it, the agent "
+            "reads it, or it needs exporting first. Generated from "
+            "anvilate.context.ContextInventory."
+        ),
+    )
+
+
+def cad_facts_json_schema() -> dict[str, Any]:
+    """One CAD file, measured: never its contents."""
+    from .context import CadFacts
+
+    return _artifact(
+        CadFacts,
+        name="cad-file-facts",
+        version=CAD_FACTS_SCHEMA_VERSION,
+        description=(
+            "Anvilate CAD file facts: what one STEP, DXF, STL or 3MF file holds, measured, "
+            "in millimetres, with the unit the file was written in and its SHA-256. Solids "
+            "with their holes and hole patterns, drawing profiles with their holes and "
+            "dimensions, or a mesh's size and volume. Generated from anvilate.context.CadFacts."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -593,6 +636,8 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),
         "part-catalog.schema.json": part_catalog_json_schema(),
+        "context-inventory.schema.json": context_inventory_json_schema(),
+        "cad-file-facts.schema.json": cad_facts_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

@@ -57,6 +57,20 @@ machine. The files land in `./anvilate-out` (or the folder you name with
 each: plates, brackets, flanges, spacers, shafts, keys, pulleys, gear pairs, bearings,
 springs, tubes, rolled beams and columns, lifting lugs, sheet-metal brackets and enclosures.
 
+**Already have drawings?** Point the server at the folder when you connect it, and ask
+your agent to start from what is there:
+
+```bash
+claude mcp add anvilate -- "$(which anvilate-mcp)" --context ~/projects/gearbox
+```
+
+> *Look at the drawings in the context folder and make me a mounting plate that matches plate.dxf.*
+
+Your agent reads the pictures, PDFs and notes itself. Anvilate measures the STEP, DXF, STL
+and 3MF files for it, exactly, in millimetres, and says which unit each file was written
+in. It only reads inside that folder, and it never changes a file there. DWG, IGES and
+native CAD files are not read: export STEP or DXF from your CAD first.
+
 **What it is not.** Anvilate is not a CAD system and not a certification. It gives you a
 fast, cited first check and a clean file to carry into your own tools. A check it could not
 run says *not evaluated* and never counts as a pass.
@@ -168,7 +182,7 @@ Units are first-class — mix `kip`, `ksi`, `in`, `mm` and `MPa` freely.
 ## What's inside
 
 - **Screening packs** for structural steel, cold-formed steel, aluminum, concrete, masonry, timber, geotechnical, hydraulics, pressure vessels, process piping, lifting devices, machinery, and building services — each check naming the clause it came from.
-- **An analytical library** (237 closed-form modules and 1,883 public symbols, each dimension-checked and tested; 7,838 tests), with machine-readable repairs now spanning units, tolerances, manufacturing quality, geometry, casting, casting gating, centrifugal casting, injection molding, sheet-metal bending and drawing, wire drawing, shear spinning, thermoforming, extrusion, forging, rolling, conventional machining, broaching, drilling, grinding, EDM, electrochemical machining, laser cutting, weld design, arc-welding heat input, resistance welding, electroplating, shot peening, wear, corrosion and asset integrity, Hall–Petch strengthening, creep and rupture life, elastic constants, axial response, stress combination and concentration, reinforced- and prestressed-concrete response, masonry allowable-stress design, timber member, record, and stability design, aluminum member and weld-affected design, cold-formed-steel effective-width and Direct Strength Method checks, structural load combinations, steel compactness, elastic foundations, riveted joints, O-ring glands, lifting mechanics, work-energy, impact and friction mechanics, power transmission, living hinges, ball screws, centrifugal governors, mechanism kinematics, fundamental motion, gravitation, radioactivity, and radiation shielding, electromechanical sensors, surface engineering, fluid storage, HVAC duct and fan sizing, compressible flow, gas compression, combustion, chemical equilibria, geometric, wave, and instrument optics, quantum photonics, shaft torsion, springs, and shared branch-selector inputs; every analysis module now raises its refusals with a structured remedy naming the parameter to correct, and [a ledger](docs/api/raised-refusals-without-remedies.txt) counts the core refusals still waiting for one.
+- **An analytical library** (237 closed-form modules and 1,883 public symbols, each dimension-checked and tested; 7,914 tests), with machine-readable repairs now spanning units, tolerances, manufacturing quality, geometry, casting, casting gating, centrifugal casting, injection molding, sheet-metal bending and drawing, wire drawing, shear spinning, thermoforming, extrusion, forging, rolling, conventional machining, broaching, drilling, grinding, EDM, electrochemical machining, laser cutting, weld design, arc-welding heat input, resistance welding, electroplating, shot peening, wear, corrosion and asset integrity, Hall–Petch strengthening, creep and rupture life, elastic constants, axial response, stress combination and concentration, reinforced- and prestressed-concrete response, masonry allowable-stress design, timber member, record, and stability design, aluminum member and weld-affected design, cold-formed-steel effective-width and Direct Strength Method checks, structural load combinations, steel compactness, elastic foundations, riveted joints, O-ring glands, lifting mechanics, work-energy, impact and friction mechanics, power transmission, living hinges, ball screws, centrifugal governors, mechanism kinematics, fundamental motion, gravitation, radioactivity, and radiation shielding, electromechanical sensors, surface engineering, fluid storage, HVAC duct and fan sizing, compressible flow, gas compression, combustion, chemical equilibria, geometric, wave, and instrument optics, quantum photonics, shaft torsion, springs, and shared branch-selector inputs; every analysis module now raises its refusals with a structured remedy naming the parameter to correct, and [a ledger](docs/api/raised-refusals-without-remedies.txt) counts the core refusals still waiting for one.
 - **Reports and exports:** calculation reports (text, HTML, PDF), DXF, STEP, 3MF and QIF — written only when the checks pass, or stamped `UNVALIDATED`, with machine-readable repairs when geometry cannot be released.
 - **A command line** — `anvilate check`, `view`, `build`, `export`, `verify`, `interfaces`, `diff`, `doctor`, `fetch`, with field-specific repairs for invalid specs. See [the CLI guide](docs/headless-cli.md).
 - **Third-party discipline modules** — enabled only by path (`--module`), run confined in a separate process, and marked unverified-origin on every result, so they never pass for a check Anvilate ships. See [discipline modules](docs/discipline-modules.md#third-party-modules).
