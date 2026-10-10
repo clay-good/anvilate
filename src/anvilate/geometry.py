@@ -63,6 +63,7 @@ __all__ = [
     "TRANSMISSION_SHAFT_PATTERN",
     "TIMBER_BEAM_PATTERN",
     "BuiltGeometry",
+    "FlatProfile",
     "GeometryError",
     "GeometryPattern",
     "FeatureSummary",
@@ -276,6 +277,25 @@ class ViewportImage(StatableModel):
 
 
 @dataclass(frozen=True)
+class FlatProfile:
+    """A flat part's cut profile, in millimetres: what a laser or a waterjet follows.
+
+    ``outline`` is the outside as closed polyline vertices ``(x, y, bulge)``, where a
+    bulge is the tangent of a quarter of the arc to the next vertex, as DXF writes an arc
+    segment; a round part states ``diameter`` instead. ``circles`` are round cuts as
+    ``(x, y, diameter)`` and ``slots`` round-ended ones as ``(x, y, length, width,
+    angle_deg)``. ``bends`` are the bend lines of a developed sheet-metal part, each two
+    points: they are marked for the brake and are never cut.
+    """
+
+    outline: tuple[tuple[float, float, float], ...] = ()
+    diameter: float | None = None
+    circles: tuple[tuple[float, float, float], ...] = ()
+    slots: tuple[tuple[float, float, float, float, float], ...] = ()
+    bends: tuple[tuple[tuple[float, float], tuple[float, float]], ...] = ()
+
+
+@dataclass(frozen=True)
 class BuiltGeometry:
     """One valid solid and the stable semantic names attached to its faces."""
 
@@ -288,6 +308,8 @@ class BuiltGeometry:
     # envelope. Both default to "none", which is what the first four patterns are.
     features: tuple[Any, ...] = ()
     envelope: bool = False
+    # The part's flat cut profile, for a part that has one: what a DXF export draws.
+    profile: FlatProfile | None = None
 
     @property
     def volume_mm3(self) -> float:

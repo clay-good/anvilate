@@ -14,7 +14,7 @@ from typing import Any
 
 from . import features, geometry
 from ._patterns_parts import _X, _Y, _built, _low, _mm, _refuse, _ring
-from .geometry import BuiltGeometry, GeometryError
+from .geometry import BuiltGeometry, FlatProfile, GeometryError
 from .packs.machinery import (
     HelicalCompressionSpring,
     RollingBearing,
@@ -73,7 +73,17 @@ def build_lifting_lug(lug: LiftingLug, name: str, params: Mapping[str, Any]) -> 
         "hole_height": height,
         "height": height + width / 2,
     }
-    return _built(lug, tag, shape, dimensions, cut)
+    # The lug's face is the x-z plane: a rectangle to the hole's height, a half disc above.
+    profile = FlatProfile(
+        outline=(
+            (-width / 2, 0.0, 0.0),
+            (width / 2, 0.0, 0.0),
+            (width / 2, height, 1.0),
+            (-width / 2, height, 0.0),
+        ),
+        circles=((0.0, height, hole),),
+    )
+    return _built(lug, tag, shape, dimensions, cut, profile=profile)
 
 
 def build_shaft_key(key: ShaftKey, name: str, params: Mapping[str, Any]) -> BuiltGeometry:
@@ -254,6 +264,7 @@ _register(
     LiftingLug,
     build_lifting_lug,
     "A lifting lug (pad eye): a plate with a round top concentric with its pin hole.",
+    outputs=("views", "step", "3mf", "dxf"),
 )
 _register(
     "shaft_key", ShaftKey, build_shaft_key, "A parallel shaft key: a bar of its width and height."

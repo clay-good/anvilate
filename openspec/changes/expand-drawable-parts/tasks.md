@@ -43,8 +43,9 @@
 - [x] 4.8 Enclosure: open box shell with floor holes
 - [ ] 4.9 Screens: angle bracket (leg bending, bolt bearing, edge distance), clevis (pin
       shear and bearing), stepped shaft (stress at a shoulder)
-- [ ] 4.10 Sheet-metal flat pattern as a DXF with bend lines; minimum bend radius reported
-      through the existing bend-radius screen
+- [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
+      developed blank with its bend lines
+- [ ] 4.10b Minimum bend radius reported through the existing bend-radius screen
 - [ ] 4.11 Enclosure lid
 
 ## 5. Catalog and honesty
@@ -58,4 +59,4 @@
 ## 6. Docs
 
 - [x] 6.1 Catalog page with one picture per pattern, generated
-- [ ] 6.2 README and agent guide updated with the parts list
+- [x] 6.2 README and agent guide updated with the parts list

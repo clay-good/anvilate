@@ -41,7 +41,7 @@ JOURNEYS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "context",
         "Start from the drawings in my folder",
-        ("list_context", "read_cad_file", "describe_part", "build_part", "render_viewport"),
+        ("list_context", "read_cad_file", "build_part", "render_viewport"),
     ),
     (
         "combination",

@@ -15,7 +15,7 @@ from types import MappingProxyType
 from typing import Any
 
 from . import features, geometry
-from .geometry import BuiltGeometry, GeometryError
+from .geometry import BuiltGeometry, FlatProfile, GeometryError
 from .packs import parts
 from .patterns import Pattern, register
 
@@ -80,6 +80,7 @@ def _built(
     *,
     envelope: bool = False,
     name: str | None = None,
+    profile: FlatProfile | None = None,
 ) -> BuiltGeometry:
     tags = [feature.tag for feature in cut]
     repeated = sorted({tag for tag in tags if tags.count(tag) > 1})
@@ -95,6 +96,7 @@ def _built(
         dimensions_mm=MappingProxyType(dict(dimensions)),
         features=tuple(cut),
         envelope=envelope,
+        profile=profile,
     )
     if not built.is_valid:
         raise GeometryError(
@@ -105,6 +107,52 @@ def _built(
             source="dimensions and features that leave one connected solid",
         )
     return built
+
+
+# The bulge of a quarter-circle corner: the tangent of a quarter of ninety degrees.
+_QUARTER = math.tan(math.pi / 8)
+
+
+def _rounded_rectangle(
+    width: float, height: float, radius: float
+) -> tuple[tuple[float, float, float], ...]:
+    """A centred rectangle as polyline vertices, its corners arcs of ``radius`` when it has one."""
+    w, h = width / 2, height / 2
+    if radius <= 0:
+        return ((-w, -h, 0.0), (w, -h, 0.0), (w, h, 0.0), (-w, h, 0.0))
+    r = radius
+    return (
+        (-w + r, -h, 0.0),
+        (w - r, -h, _QUARTER),
+        (w, -h + r, 0.0),
+        (w, h - r, _QUARTER),
+        (w - r, h, 0.0),
+        (-w + r, h, _QUARTER),
+        (-w, h - r, 0.0),
+        (-w, -h + r, _QUARTER),
+    )
+
+
+def _flat_cuts(
+    cut: Sequence[features.Feature], x: int = 0, y: int = 1
+) -> tuple[
+    tuple[tuple[float, float, float], ...], tuple[tuple[float, float, float, float, float], ...]
+]:
+    """The features of one face as the circles and slots of its flat profile.
+
+    ``x`` and ``y`` are which of a feature's three coordinates lie in the profile's plane.
+    A counterbore or a countersink is cut at its through diameter; the recess is machined.
+    """
+    circles, slots = [], []
+    for feature in cut:
+        at = (feature.position_mm[x], feature.position_mm[y])
+        if feature.kind == "slot":
+            slots.append(
+                (*at, feature.extra["length"], feature.diameter_mm, feature.extra["angle_deg"])
+            )
+        elif feature.kind != "blind_hole":
+            circles.append((*at, feature.diameter_mm))
+    return tuple(circles), tuple(slots)
 
 
 def _cuts(
@@ -226,7 +274,13 @@ def build_mounting_plate(plate: parts.MountingPlate) -> BuiltGeometry:
     shape, cut = features.apply(
         shape, host, _cuts(tag, plate.holes, plate.hole_patterns, plate.slots)
     )
-    return _built(plate, tag, shape, dimensions, cut)
+    circles, slots = _flat_cuts(cut)
+    profile = FlatProfile(
+        outline=_rounded_rectangle(width, length, dimensions.get("corner_radius", 0.0)),
+        circles=circles,
+        slots=slots,
+    )
+    return _built(plate, tag, shape, dimensions, cut, profile=profile)
 
 
 def build_angle_bracket(bracket: parts.AngleBracket) -> BuiltGeometry:
@@ -341,7 +395,8 @@ def build_plate_flange(flange: parts.PlateFlange) -> BuiltGeometry:
         "bolt_circle_diameter": circle,
         "bolt_hole_diameter": hole,
     }
-    return _built(flange, tag, shape, dimensions, cut)
+    profile = FlatProfile(diameter=outer, circles=_flat_cuts(cut)[0])
+    return _built(flange, tag, shape, dimensions, cut, profile=profile)
 
 
 def build_spacer(spacer: parts.Spacer) -> BuiltGeometry:
@@ -702,11 +757,30 @@ def build_sheet_metal_bracket(bracket: parts.SheetMetalBracket) -> BuiltGeometry
         },
     }
     flat = parts.flat_pattern(bracket)
+    profile = None
     if flat is not None:
-        dimensions["bend_allowance"] = flat.bend_allowance.to("mm").magnitude
-        dimensions["flat_length"] = flat.developed_length.to("mm").magnitude
+        allowance = flat.bend_allowance.to("mm").magnitude
+        developed = flat.developed_length.to("mm").magnitude
+        dimensions["bend_allowance"] = allowance
+        dimensions["flat_length"] = developed
+        # The blank, laid out along x from one free edge, with a line down the middle of
+        # each bend's allowance: where the brake's tool lands.
+        lines, travelled = [], 0.0
+        for straight in straights[:-1]:
+            travelled += straight + allowance / 2
+            lines.append(((travelled, -width / 2), (travelled, width / 2)))
+            travelled += allowance / 2
+        profile = FlatProfile(
+            outline=(
+                (0.0, -width / 2, 0.0),
+                (developed, -width / 2, 0.0),
+                (developed, width / 2, 0.0),
+                (0.0, width / 2, 0.0),
+            ),
+            bends=tuple(lines),
+        )
     del Align
-    return _built(bracket, tag, shape, dimensions)
+    return _built(bracket, tag, shape, dimensions, profile=profile)
 
 
 def build_enclosure(box: parts.Enclosure) -> BuiltGeometry:
@@ -777,6 +851,7 @@ _register(
     parts.MountingPlate,
     build_mounting_plate,
     "A flat rectangular plate with holes, hole patterns and slots, and optional round corners.",
+    outputs=("views", "step", "3mf", "dxf"),
 )
 _register(
     "angle_bracket",
@@ -789,6 +864,7 @@ _register(
     parts.PlateFlange,
     build_plate_flange,
     "A flat ring flange: a disc with a central bore and a circle of bolt holes.",
+    outputs=("views", "step", "3mf", "dxf"),
 )
 _register("spacer", parts.Spacer, build_spacer, "A plain round spacer: a ring of one length.")
 _register(
@@ -840,6 +916,7 @@ _register(
     parts.SheetMetalBracket,
     build_sheet_metal_bracket,
     "A bracket bent from one sheet (L, U or Z), with its developed flat length.",
+    outputs=("views", "step", "3mf", "flat_pattern"),
 )
 _register(
     "enclosure",

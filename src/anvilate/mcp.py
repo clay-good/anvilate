@@ -868,7 +868,10 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "reading its text. Returns its size, volume, holes with diameters and "
                 "positions, hole patterns, and for a DXF its closed profiles and "
                 "dimensions, in millimetres, with the unit the file was written in and "
-                "its SHA-256. A DXF or STL that states no unit needs unit. A spec value "
+                "its SHA-256. A DXF or STL that states no unit needs unit. When the file "
+                "is a shape the catalog draws (a plate with holes, a flange, a tube), seed "
+                "holds that part's element_params and the sources citing the file: add "
+                "the fields seed.missing names and build it. A spec value "
                 "taken from a file cites it in the spec's sources (field, origin, file, "
                 "sha256, locator): measured_from_file for these numbers, agent_read for "
                 "one you read off a picture or PDF yourself. Leave confirmed_by empty; "
@@ -892,7 +895,23 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 required=["source"],
             ),
             output_schema=_object_schema(
-                {"facts": {"$ref": _CAD_FACTS_REF}},
+                {
+                    "facts": {"$ref": _CAD_FACTS_REF},
+                    # Present when the file is a shape the catalog draws: that part's
+                    # parameters filled from the measurements, the sources that cite the
+                    # file for each, and the fields a file of this kind cannot give.
+                    "seed": {
+                        "type": "object",
+                        "properties": {
+                            "element_type": {"type": "string"},
+                            "element_params": {"type": "object"},
+                            "sources": {"type": "array", "items": {"type": "object"}},
+                            "missing": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["element_type", "element_params", "sources", "missing"],
+                        "additionalProperties": False,
+                    },
+                },
                 required=["facts"],
             ),
             cost=Cost.BOUNDED,
@@ -2196,13 +2215,17 @@ def _list_context(arguments: Mapping[str, Any]) -> dict[str, Any]:
 
 def _read_cad_file(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """``read_cad_file``: one CAD file in the context, measured."""
-    from .context import ContextError, read_cad_file, resolve_in_context
+    from .context import ContextError, read_cad_file, resolve_in_context, seed_part
 
     try:
         facts = read_cad_file(resolve_in_context(arguments["source"]), unit=arguments.get("unit"))
     except ContextError as refused:
         raise _context_refusal(refused, "source", "read_cad_file") from refused
-    return {"facts": facts.model_dump(mode="json")}
+    result = {"facts": facts.model_dump(mode="json")}
+    seed = seed_part(facts)
+    if seed is not None:
+        result["seed"] = {"missing": [], **seed.model_dump(mode="json")}
+    return result
 
 
 def _context_refusal(refused: Exception, argument: str, operation: str) -> Exception:

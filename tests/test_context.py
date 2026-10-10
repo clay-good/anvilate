@@ -686,3 +686,163 @@ def test_the_command_line_measures_a_file_and_lists_a_folder(tmp_path):
     assert code == 0 and "2 engineering files" in out and "export DXF" in out
     code, _out, err = run_cli("read", str(tmp_path / "old.dwg"))
     assert code == 3 and "does not read and does not convert" in err
+
+
+# --- starting a part from what was read ------------------------------------------------
+
+
+def _seeded(seed, **stated) -> dict:
+    """A whole spec from a seed, with the fields the file could not give stated by hand."""
+    params = {**seed.element_params, **stated}
+    assert set(seed.missing) <= set(stated), "the test must state everything the seed lacks"
+    return {
+        "name": stated["name"],
+        "description": "A part started from a measured file.",
+        "units": {"value": "SI", "origin": "user_stated"},
+        "material": {"ref": "ASTM-A36"},
+        "manufacturing": {"process": "cnc_milling"},
+        "element_type": seed.element_type,
+        "element_params": params,
+        "sources": [dict(source) for source in seed.sources],
+        "acceptance": {"tiers": ["T1_analytical"]},
+    }
+
+
+def test_a_drawing_of_a_plate_seeds_a_mounting_plate_that_builds_to_the_drawing(tmp_path):
+    pytest.importorskip("build123d")
+    from anvilate.context import seed_part
+    from anvilate.geometry import build_spec
+    from anvilate.screening import CITED_SOURCES_CHECK, screen_spec
+    from anvilate.spec import parse_spec
+
+    path = _plate_dxf(tmp_path / "plate.dxf")
+    # Only the plate is on this drawing: the tab and the stray line would make it two profiles.
+    ezdxf = pytest.importorskip("ezdxf")
+    document = ezdxf.readfile(path)
+    for entity in list(document.modelspace()):
+        if entity.dxftype() in ("LINE", "ARC", "DIMENSION"):
+            document.modelspace().delete_entity(entity)
+    document.saveas(path)
+    facts = read_cad_file(path)
+    seed = seed_part(facts)
+    assert seed.element_type == "mounting_plate" and seed.missing == ("name", "thickness")
+    assert seed.element_params["width"] == {"magnitude": 101.6, "unit": "mm"}
+    assert [hole["tag"] for hole in seed.element_params["holes"]] == ["h1", "h2", "h3", "h4"]
+    assert {source["sha256"] for source in seed.sources} == {facts.sha256}
+    assert {source["origin"] for source in seed.sources} == {"measured_from_file"}
+    assert "still needs name, thickness" in str(seed)
+    spec = parse_spec(
+        _seeded(seed, name="from-drawing", thickness={"magnitude": 6.0, "unit": "mm"})
+    )
+    built = build_spec(spec)
+    assert built.dimensions_mm["width"] == 101.6 and len(built.features) == 4
+    assert built.volume_mm3 == pytest.approx((101.6 * 76.2 - 4 * _disc(6.35)) * 6, rel=1e-6)
+    held = next(
+        entry
+        for entry in screen_spec(spec, source_roots=(tmp_path,)).entries
+        if entry.name == CITED_SOURCES_CHECK
+    )
+    assert "6 cited files match" in held.detail  # width, length and four hole diameters
+
+
+def test_a_drawing_of_a_flange_seeds_a_plate_flange(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+    from anvilate.context import seed_part
+
+    document = ezdxf.new()
+    document.header["$INSUNITS"] = 4
+    space = document.modelspace()
+    space.add_circle((0, 0), 60)
+    space.add_circle((0, 0), 25)
+    for k in range(6):
+        angle = math.radians(60 * k)
+        space.add_circle((45 * math.cos(angle), 45 * math.sin(angle)), 4.5)
+    document.saveas(tmp_path / "flange.dxf")
+    seed = seed_part(read_cad_file(tmp_path / "flange.dxf"))
+    assert seed.element_type == "plate_flange" and seed.missing == ("name", "thickness")
+    assert dict(seed.element_params) == {
+        "outer_diameter": {"magnitude": 120.0, "unit": "mm"},
+        "bore_diameter": {"magnitude": 50.0, "unit": "mm"},
+        "bolt_circle_diameter": {"magnitude": 90.0, "unit": "mm"},
+        "bolt_count": 6,
+        "bolt_hole_diameter": {"magnitude": 9.0, "unit": "mm"},
+    }
+
+
+@pytest.mark.parametrize(
+    ("example", "element_type", "missing"),
+    [
+        ("spacer", "spacer", ("name",)),
+        ("plate_flange", "plate_flange", ("name",)),
+    ],
+)
+def test_a_solid_seeds_the_part_it_is_and_the_part_builds_to_the_same_volume(
+    example, element_type, missing, tmp_path
+):
+    pytest.importorskip("build123d")
+    from anvilate.context import seed_part
+    from anvilate.geometry import build_spec
+    from anvilate.spec import parse_spec
+
+    original = _built(example)
+    facts = read_cad_file(_step(tmp_path, example))
+    seed = seed_part(facts)
+    assert (seed.element_type, seed.missing) == (element_type, missing)
+    rebuilt = build_spec(parse_spec(_seeded(seed, name="again")))
+    assert rebuilt.volume_mm3 == pytest.approx(original.volume_mm3, rel=1e-6)
+
+
+def test_a_plain_plate_with_holes_through_it_seeds_a_mounting_plate(tmp_path):
+    pytest.importorskip("build123d")
+    from build123d import Box, Cylinder, Pos, export_step
+
+    from anvilate.context import seed_part
+    from anvilate.geometry import build_spec
+    from anvilate.spec import parse_spec
+
+    plate = Box(100, 60, 8)
+    for x, y in ((-35, -20), (35, -20), (35, 20), (-35, 20)):
+        plate -= Pos(x, y, 0) * Cylinder(4, 8)
+    export_step(plate, str(tmp_path / "plate.step"))
+    seed = seed_part(read_cad_file(tmp_path / "plate.step"))
+    assert seed.element_type == "mounting_plate" and seed.missing == ("name",)
+    assert seed.element_params["thickness"] == {"magnitude": 8.0, "unit": "mm"}
+    built = build_spec(parse_spec(_seeded(seed, name="again")))
+    assert built.volume_mm3 == pytest.approx(float(plate.volume), rel=1e-6)
+    assert sorted((f.position_mm[0], f.position_mm[1]) for f in built.features) == [
+        (-35.0, -20.0),
+        (-35.0, 20.0),
+        (35.0, -20.0),
+        (35.0, 20.0),
+    ]
+
+
+def test_a_shape_no_pattern_matches_seeds_nothing(tmp_path):
+    """A shape is not forced into a pattern: rounded corners, a slot, a bracket, a mesh."""
+    pytest.importorskip("build123d")
+    from anvilate.context import seed_part
+
+    for example in ("mounting_plate", "angle_bracket", "stepped_shaft", "enclosure"):
+        assert seed_part(read_cad_file(_step(tmp_path, example))) is None, example
+    assert seed_part(read_cad_file(_cube_stl(tmp_path / "cube.stl"))) is None
+    # The whole drawing, with its tab beside the plate: two profiles, and no one part.
+    assert seed_part(read_cad_file(_plate_dxf(tmp_path / "two.dxf"))) is None
+
+
+def test_the_server_offers_the_seed_beside_the_facts_and_nothing_when_there_is_none(tmp_path):
+    pytest.importorskip("ezdxf")
+    import shutil
+
+    repo = Path(__file__).resolve().parents[1]
+    shutil.copy(repo / "examples" / "context" / "plate.dxf", tmp_path / "plate.dxf")
+    _cube_stl(tmp_path / "cube.stl")
+    context.set_context_roots([tmp_path])
+    body = _call("read_cad_file", {"source": "plate.dxf"})["result"]["structuredContent"]
+    assert body["seed"]["element_type"] == "mounting_plate"
+    assert body["seed"]["missing"] == ["name", "thickness"]
+    assert body["seed"]["sources"][0]["file"] == "plate.dxf"
+    assert len(body["seed"]["element_params"]["holes"]) == 4
+    mesh = _call("read_cad_file", {"source": "cube.stl", "unit": "mm"})["result"][
+        "structuredContent"
+    ]
+    assert "seed" not in mesh

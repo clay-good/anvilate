@@ -153,7 +153,7 @@ def test_a_description_names_the_fields_of_every_type_a_parameter_takes():
     part = _call("describe_part", {"element_type": "mounting_plate"})["result"][
         "structuredContent"
     ]["catalog"]["parts"][0]
-    assert part["outputs"] == ["views", "step", "3mf"]
+    assert part["outputs"] == ["views", "step", "3mf", "dxf"]
     takes = {parameter["name"]: parameter["takes"] for parameter in part["parameters"]}
     assert takes["holes"] == "list of Hole" and takes["hole_patterns"] == "list of HolePattern"
     assert set(part["types"]) == {"Hole", "HolePattern", "Slot"}

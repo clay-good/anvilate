@@ -263,6 +263,26 @@ def test_each_journey_completes_in_the_calls_the_audit_states(journey, tmp_path)
             state["subject"] = body["subject"]
         if tool == "describe_part":
             state["example"] = body["catalog"]["parts"][0]["example"]
+        if tool == "read_cad_file":
+            # The seed is the part's parameters and the sources that cite the drawing; the
+            # agent adds what the drawing cannot give and sends the spec.
+            seed = body["seed"]
+            assert seed["missing"] == ["name", "thickness"]
+            state["example"] = {
+                "name": "from-drawing",
+                "description": "A plate started from plate.dxf.",
+                "units": {"value": "SI", "origin": "user_stated"},
+                "material": {"ref": "ASTM-A36"},
+                "manufacturing": {"process": "cnc_milling"},
+                "element_type": seed["element_type"],
+                "element_params": {
+                    **seed["element_params"],
+                    "name": "from-drawing",
+                    "thickness": {"magnitude": 6.0, "unit": "mm"},
+                },
+                "sources": seed["sources"],
+                "acceptance": {"tiers": ["T1_analytical"]},
+            }
     if "export_artifact" in steps:
         assert [path.suffix for path in out.iterdir() if path.suffix == ".step"] == [".step"]
     if "render_viewport" in steps:

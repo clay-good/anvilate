@@ -1121,13 +1121,17 @@ def _combine(args: argparse.Namespace, *, out, err) -> int:
 
 def _read(args: argparse.Namespace, *, out, err) -> int:
     """Measure one CAD file, or list a folder's engineering files."""
-    from .context import ContextError, inventory, read_cad_file
+    from .context import ContextError, inventory, read_cad_file, seed_part
 
     try:
         if args.path.is_dir():
             print(inventory(args.path), file=out)
         else:
-            print(read_cad_file(args.path, unit=args.unit), file=out)
+            facts = read_cad_file(args.path, unit=args.unit)
+            print(facts, file=out)
+            seed = seed_part(facts)
+            if seed is not None:
+                print(f"  {seed}", file=out)
     except ContextError as refused:
         print(f"anvilate read: {refused}", file=err)
         return EXIT_BAD_REQUEST

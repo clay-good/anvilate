@@ -150,7 +150,7 @@ A lifting lug (pad eye): a plate with a round top concentric with its pin hole.
 
 - Required: `name` (text), `width` (quantity), `hole_diameter` (quantity), `thickness` (quantity), `load` (quantity), `material` (text)
 - Optional: `hole_height` (quantity)
-- Outputs: views, step, 3mf
+- Outputs: views, step, 3mf, dxf
 - Example: [`examples/parts/lifting_lug.spec.yaml`](../examples/parts/lifting_lug.spec.yaml)
 
 ### `mounting_plate`
@@ -161,7 +161,7 @@ A flat rectangular plate with holes, hole patterns and slots, and optional round
 
 - Required: `name` (text), `width` (quantity), `length` (quantity), `thickness` (quantity)
 - Optional: `corner_radius` (quantity), `holes` (list of Hole), `hole_patterns` (list of HolePattern), `slots` (list of Slot), `material` (text)
-- Outputs: views, step, 3mf
+- Outputs: views, step, 3mf, dxf
 - Example: [`examples/parts/mounting_plate.spec.yaml`](../examples/parts/mounting_plate.spec.yaml)
 
 ### `plate_flange`
@@ -172,7 +172,7 @@ A flat ring flange: a disc with a central bore and a circle of bolt holes. **dra
 
 - Required: `name` (text), `outer_diameter` (quantity), `bore_diameter` (quantity), `thickness` (quantity), `bolt_circle_diameter` (quantity), `bolt_count` (whole number), `bolt_hole_diameter` (quantity)
 - Optional: `material` (text)
-- Outputs: views, step, 3mf
+- Outputs: views, step, 3mf, dxf
 - Example: [`examples/parts/plate_flange.spec.yaml`](../examples/parts/plate_flange.spec.yaml)
 
 ### `pulley`
@@ -227,7 +227,7 @@ A bracket bent from one sheet (L, U or Z), with its developed flat length. **dra
 
 - Required: `name` (text), `thickness` (quantity), `inside_radius` (quantity), `width` (quantity), `flange_a` (quantity), `flange_b` (quantity)
 - Optional: `shape` (L | U | Z), `flange_c` (quantity), `k_factor` (number), `k_factor_source` (text), `material` (text)
-- Outputs: views, step, 3mf
+- Outputs: views, step, 3mf, flat_pattern
 - Example: [`examples/parts/sheet_metal_bracket.spec.yaml`](../examples/parts/sheet_metal_bracket.spec.yaml)
 
 ### `spacer`

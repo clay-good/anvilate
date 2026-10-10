@@ -141,6 +141,8 @@ _GDT_LAYER = "GDT"
 # A keepout is a protected volume, not part geometry: its own layer, named so no reader
 # takes it for a cut, and one a controller's layer filter can drop before it plans a path.
 _KEEPOUT_LAYER = "KEEPOUT_NON_MANUFACTURING"
+# Where a developed sheet-metal part is bent. Marked for the brake, never cut.
+_BEND_LAYER = "BEND"
 
 # A DXF polyline bulge is tan(theta/4) of the arc it spans; every rounded plate
 # corner is a quarter circle.
@@ -280,16 +282,18 @@ def render_geometry_dxf(
         if bore is not None:
             doc.layers.add(_HOLE_LAYER, color=1)
             msp.add_circle((0, 0), bore / 2, dxfattribs={"layer": _HOLE_LAYER})
+    elif geometry.profile is not None:
+        _draw_profile(doc, msp, geometry.profile)
     else:
         # A part with no flat cut profile is a capability not shipped, not a bad input: the
         # surfaces handle UnsupportedGeometry as one, where a plain refusal reached the CLI
         # as an internal error.
         raise UnsupportedGeometry(
-            f"DXF export draws a plate's cut profile, and geometry pattern "
-            f"{geometry.pattern!r} has none; DXF supports {BASE_PLATE_PATTERN!r} and "
-            f"{COVER_PLATE_PATTERN!r}, and `anvilate build` writes this part as STEP",
+            f"DXF export draws a flat part's cut profile, and geometry pattern "
+            f"{geometry.pattern!r} has none. Plates, flanges, lugs and a sheet-metal "
+            "bracket's flat pattern export as DXF; `anvilate build` writes this part as STEP",
             subject=f"the geometry pattern {geometry.pattern!r}",
-            source="the DXF exporter's supported plate patterns",
+            source="the patterns that state a flat cut profile",
         )
 
     if keepouts:
@@ -311,6 +315,50 @@ def render_geometry_dxf(
             )
 
     return _document_bytes(doc, authorization=authorization)
+
+
+def _draw_profile(doc, msp, profile) -> None:
+    """One flat profile: the outside on ``OUTLINE``, cuts on ``HOLES``, bend lines on ``BEND``."""
+    import math
+
+    if profile.diameter is not None:
+        msp.add_circle((0, 0), profile.diameter / 2, dxfattribs={"layer": _OUTLINE_LAYER})
+    else:
+        msp.add_lwpolyline(
+            list(profile.outline),
+            format="xyb",
+            close=True,
+            dxfattribs={"layer": _OUTLINE_LAYER},
+        )
+    if profile.circles or profile.slots:
+        doc.layers.add(_HOLE_LAYER, color=1)
+    for x, y, diameter in profile.circles:
+        msp.add_circle((x, y), diameter / 2, dxfattribs={"layer": _HOLE_LAYER})
+    for x, y, length, width, angle_deg in profile.slots:
+        # A round-ended slot is two straights and two half circles: four vertices, the two
+        # at the end of each straight carrying a bulge of 1.
+        half, radius = (length - width) / 2, width / 2
+        angle = math.radians(angle_deg)
+        along, across = (math.cos(angle), math.sin(angle)), (-math.sin(angle), math.cos(angle))
+
+        def at(a: float, b: float, x=x, y=y, along=along, across=across) -> tuple[float, float]:
+            return (x + a * along[0] + b * across[0], y + a * along[1] + b * across[1])
+
+        msp.add_lwpolyline(
+            [
+                (*at(-half, -radius), 0.0),
+                (*at(half, -radius), 1.0),
+                (*at(half, radius), 0.0),
+                (*at(-half, radius), 1.0),
+            ],
+            format="xyb",
+            close=True,
+            dxfattribs={"layer": _HOLE_LAYER},
+        )
+    if profile.bends:
+        doc.layers.add(_BEND_LAYER, color=3)
+        for start, end in profile.bends:
+            msp.add_line(start, end, dxfattribs={"layer": _BEND_LAYER})
 
 
 def _positive_length(value: Quantity, field: str) -> Quantity:

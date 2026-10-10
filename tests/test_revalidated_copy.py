@@ -498,6 +498,7 @@ def _any_field_probes():
     """One instance per ``Any``-typed field, holding the values that field really carries."""
     from anvilate.combination import CombinationPart
     from anvilate.compilation import CompilationTask
+    from anvilate.context import PartSeed
     from anvilate.mcp import tool_catalog
     from anvilate.patterns import describe_part
     from anvilate.screening import StructureMember
@@ -560,6 +561,12 @@ def _any_field_probes():
             id="lug", spec=spec.model_dump(mode="json")
         ),
         ("anvilate.compilation", "CompilationTask", "reference"): task,
+        ("anvilate.context", "PartSeed", "element_params"): PartSeed(
+            element_type="spacer",
+            element_params={"length": {"magnitude": 10.0, "unit": "mm"}},
+            sources=({"field": "element_params.length", "file": "spacer.step"},),
+            missing=("name",),
+        ),
         ("anvilate.patterns", "PartDescription", "example"): describe_part("spacer").parts[0],
         ("anvilate.mcp", "ToolDefinition", "input_schema"): tool,
         ("anvilate.mcp", "ToolDefinition", "output_schema"): tool,

@@ -159,6 +159,7 @@ context.ContextInventory
 context.CylinderFacts
 context.DimensionFacts
 context.HolePatternFacts
+context.PartSeed
 context.PlaneFacts
 context.ProfileFacts
 context.ProfileHole
@@ -167,6 +168,7 @@ context.context_roots
 context.inventory
 context.read_cad_file
 context.resolve_in_context
+context.seed_part
 context.set_context_roots
 contracts.CAD_FACTS_SCHEMA_VERSION
 contracts.COMBINATION_SUMMARY_SCHEMA_VERSION
@@ -295,6 +297,7 @@ gdt.position_stack_contribution
 geometry.BASE_PLATE_PATTERN
 geometry.COVER_PLATE_PATTERN
 geometry.FeatureSummary
+geometry.FlatProfile
 geometry.TRANSMISSION_SHAFT_PATTERN
 geometry.TIMBER_BEAM_PATTERN
 geometry.BuiltGeometry

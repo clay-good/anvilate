@@ -25,7 +25,7 @@
 ## 3. Using what was read
 
 - [x] 3.1 Folder inventory, bounded, with who reads what
-- [ ] 3.2 Seed a catalog pattern from a measured profile or part; "no pattern matches" result
+- [x] 3.2 Seed a catalog pattern from a measured profile or part; "no pattern matches" result
 - [ ] 3.3 Measured-versus-read disagreement report
 
 ## 4. Surfaces

@@ -257,8 +257,12 @@ are refused with `-32000` and say how to enable them.
 A session reads like this. The agent calls `list_context` with `folder: "."` and learns
 there is a `bracket.step`, a `plate.dxf` and a `sketch.png`. It calls `read_cad_file` with
 `source: "plate.dxf"` and gets a 101.6 x 76.2 mm rectangle with four 6.35 mm holes, each
-38.1 mm and 25.4 mm from the centre, and a note that the file was drawn in inches. It calls
-`describe_part` for a mounting plate, writes the spec from those numbers, and builds it.
+38.1 mm and 25.4 mm from the centre, and a note that the file was drawn in inches. Because
+that shape is one the catalog draws, the result also carries a `seed`: a mounting plate's
+parameters filled in from the drawing, the `sources` entries that cite the file for each
+value, and the fields the drawing cannot give (a name and a thickness). The agent asks the
+engineer for the thickness, adds it, and builds the part. A shape no pattern matches has
+no seed, and the measurements are what the agent works from.
 
 Three rules hold on every read. **Lengths are millimetres, and the result says which unit
 the file was written in.** **A file is measured and never returned:** the result carries

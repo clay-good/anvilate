@@ -39,8 +39,8 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `export_artifact` | pipeline | `subject`, `format` | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 673 characters | 2 s | export, combination |
 | `build_combination` | combination | `combination` | `combination`, `scorecard`, `subject` | yes | 668 characters | 15 s | combination |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
-| `read_cad_file` | reads the user's files | `source`, `unit` (optional) | `facts` | no | 589 characters | 10 s | context |
-| `describe_part` | catalog lookup | `element_type` (optional) | `catalog` | no | 384 characters | 1 s | check, draw, export, context |
+| `read_cad_file` | reads the user's files | `source`, `unit` (optional) | `facts`, `seed` | no | 791 characters | 10 s | context |
+| `describe_part` | catalog lookup | `element_type` (optional) | `catalog` | no | 384 characters | 1 s | check, draw, export |
 
 ## The journeys
 
@@ -51,7 +51,7 @@ What a user asks for, and the calls that answer it. Each is walked call by call 
 | check | Check a part I describe | 2 | `describe_part` → `run_validation` |
 | draw | Draw a part and show it to me | 3 | `describe_part` → `build_part` → `render_viewport` |
 | export | Give me the file for my CAD | 4 | `describe_part` → `build_part` → `render_viewport` → `export_artifact` |
-| context | Start from the drawings in my folder | 5 | `list_context` → `read_cad_file` → `describe_part` → `build_part` → `render_viewport` |
+| context | Start from the drawings in my folder | 4 | `list_context` → `read_cad_file` → `build_part` → `render_viewport` |
 | combination | Put these parts together | 3 | `build_combination` → `render_viewport` → `export_artifact` |
 
 ## The commands

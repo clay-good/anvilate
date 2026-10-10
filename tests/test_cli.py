@@ -2830,7 +2830,7 @@ def test_dxf_of_a_part_with_no_cut_profile_is_unbuilt_not_an_internal_error(exam
 
     assert code == EXIT_UNBUILT and out == "", err
     assert "internal error" not in err
-    assert "has none; DXF supports 'base_plate/1' and 'cover_plate/1'" in err
+    assert "has none. Plates, flanges, lugs and a sheet-metal bracket's flat pattern export" in err
 
 
 _GUSSET_SPEC = """

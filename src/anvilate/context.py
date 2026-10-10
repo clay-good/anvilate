@@ -34,7 +34,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field
 
-from ._models import Named, Provenance, StatableModel
+from ._models import FrozenMap, Named, Provenance, StatableModel
 from .refusal import RefusalError, Remedy
 
 __all__ = [
@@ -45,6 +45,7 @@ __all__ = [
     "CylinderFacts",
     "DimensionFacts",
     "HolePatternFacts",
+    "PartSeed",
     "PlaneFacts",
     "ProfileFacts",
     "ProfileHole",
@@ -53,6 +54,7 @@ __all__ = [
     "inventory",
     "read_cad_file",
     "resolve_in_context",
+    "seed_part",
     "set_context_roots",
 ]
 
@@ -940,12 +942,20 @@ def _arc_points(entity: Any, scale: float) -> list[tuple[float, float]]:
     sweep = (math.radians(float(entity.dxf.end_angle)) - start) % (2 * math.pi) or 2 * math.pi
     step = 2 * math.acos(max(-1.0, 1 - 0.001 / radius)) if radius > 0.001 else sweep
     count = min(2000, max(2, math.ceil(sweep / step)))
+    turned = [sweep * index / count for index in range(count + 1)]
+    # And the arc's own extremes, exactly: where it is farthest left, right, up and down.
+    # Without them a round end's box came out a micrometre short of the radius.
+    quarter = math.pi / 2
+    first = math.ceil(start / quarter)
+    turned += [
+        k * quarter - start for k in range(first, first + 5) if 0 < k * quarter - start < sweep
+    ]
     return [
         (
-            centre.x * scale + radius * math.cos(start + sweep * index / count),
-            centre.y * scale + radius * math.sin(start + sweep * index / count),
+            centre.x * scale + radius * math.cos(start + angle),
+            centre.y * scale + radius * math.sin(start + angle),
         )
-        for index in range(count + 1)
+        for angle in sorted(turned)
     ]
 
 
@@ -1287,3 +1297,239 @@ def _read_3mf(path: Path) -> tuple[list[tuple[Point3, Point3, Point3]], str]:
             if len(triangles) > _MAX_TRIANGLES:
                 raise _too_many(path, len(triangles))
     return _finite(path, triangles), unit
+
+
+# --- starting a part from what was read ------------------------------------------------
+
+
+class PartSeed(StatableModel):
+    """A catalog part's parameters, filled from a measured file, to finish and build.
+
+    ``element_params`` holds what the file gives, each quantity as it is written in a spec.
+    ``sources`` cite the file for each value, ready to go into the spec's ``sources``.
+    ``missing`` are the required fields a file of this kind cannot give: a drawing has no
+    thickness. They are the user's to state, and are never filled in.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    element_type: Named
+    element_params: FrozenMap[str, Any]
+    sources: tuple[FrozenMap[str, str], ...]
+    missing: tuple[Named, ...] = ()
+
+    def __str__(self) -> str:
+        need = f"; still needs {', '.join(self.missing)}" if self.missing else ""
+        return f"seeds a {self.element_type} with {', '.join(self.element_params)}{need}"
+
+
+def _mm(value: float) -> dict[str, Any]:
+    return {"magnitude": round(float(value), 6), "unit": "mm"}
+
+
+def seed_part(facts: CadFacts) -> PartSeed | None:
+    """The catalog part ``facts`` describes, with its parameters filled in, or ``None``.
+
+    A drawing of one rectangle with round holes seeds a mounting plate. A drawing of one
+    disc with a bore and a ring of equal holes seeds a plate flange. A solid that is a tube
+    seeds a spacer, and one that is a rectangular plate with holes through its thickness a
+    mounting plate. Anything else seeds nothing: a shape is not forced into a pattern it
+    does not match.
+    """
+
+    def cite(field: str, where: str) -> dict[str, str]:
+        return {
+            "field": f"element_params.{field}",
+            "origin": "measured_from_file",
+            "file": facts.file,
+            "sha256": facts.sha256,
+            "locator": where,
+        }
+
+    if facts.kind == "dxf" and len(facts.profiles) == 1:
+        (profile,) = facts.profiles
+        circles = [hole for hole in profile.holes if hole.kind == "circle"]
+        if len(circles) != len(profile.holes) or profile.holes_not_listed:
+            return None
+        layer = f"layer {profile.layer}"
+        if profile.kind == "rectangle":
+            holes = [
+                {
+                    "tag": f"h{number}",
+                    "x": _mm(hole.x_mm),
+                    "y": _mm(hole.y_mm),
+                    "diameter": _mm(hole.diameter_mm or 0.0),
+                }
+                for number, hole in enumerate(circles, start=1)
+            ]
+            params: dict[str, Any] = {
+                "width": _mm(profile.width_mm),
+                "length": _mm(profile.height_mm),
+            }
+            sources = [
+                cite("width", f"{layer}, the closed profile's width"),
+                cite("length", f"{layer}, the closed profile's height"),
+            ]
+            if holes:
+                params["holes"] = holes
+                sources += [
+                    cite(f"holes[{index}].diameter", f"circle {index + 1} inside the profile")
+                    for index in range(len(holes))
+                ]
+            return PartSeed(
+                element_type="mounting_plate",
+                element_params=params,
+                sources=tuple(sources),
+                missing=("name", "thickness"),
+            )
+        if profile.kind == "circle":
+            centred = [h for h in circles if math.hypot(h.x_mm, h.y_mm) <= 1e-6]
+            ring = [h for h in circles if math.hypot(h.x_mm, h.y_mm) > 1e-6]
+            radii = {round(math.hypot(h.x_mm, h.y_mm), 4) for h in ring}
+            sizes = {round(h.diameter_mm or 0.0, 4) for h in ring}
+            if len(centred) == 1 and len(ring) >= 2 and len(radii) == 1 and len(sizes) == 1:
+                return PartSeed(
+                    element_type="plate_flange",
+                    element_params={
+                        "outer_diameter": _mm(profile.width_mm),
+                        "bore_diameter": _mm(centred[0].diameter_mm or 0.0),
+                        "bolt_circle_diameter": _mm(2 * radii.pop()),
+                        "bolt_count": len(ring),
+                        "bolt_hole_diameter": _mm(sizes.pop()),
+                    },
+                    sources=(
+                        cite("outer_diameter", f"{layer}, the outer circle"),
+                        cite("bore_diameter", "the circle at the centre"),
+                        cite("bolt_circle_diameter", f"the {len(ring)} equal circles round it"),
+                        cite("bolt_hole_diameter", f"the {len(ring)} equal circles round it"),
+                    ),
+                    missing=("name", "thickness"),
+                )
+        return None
+
+    if facts.kind == "step" and len(facts.solids) == 1 and not facts.solids_not_listed:
+        (solid,) = facts.solids
+        if solid.unclassified_faces or solid.cylinders_not_listed:
+            return None
+        holes = [c for c in solid.cylinders if c.kind == "hole"]
+        bosses = [c for c in solid.cylinders if c.kind == "boss"]
+        partial = [c for c in solid.cylinders if c.kind in ("fillet", "round")]
+        if partial:
+            return None
+        if len(bosses) == 1 and len(holes) == 1 and len(solid.planes) == 2:
+            outer, bore = bosses[0], holes[0]
+            if outer.axis == bore.axis and math.dist(outer.position_mm, bore.position_mm) <= 1e-6:
+                return PartSeed(
+                    element_type="spacer",
+                    element_params={
+                        "outer_diameter": _mm(outer.diameter_mm),
+                        "inner_diameter": _mm(bore.diameter_mm),
+                        "length": _mm(outer.depth_mm),
+                    },
+                    sources=(
+                        cite("outer_diameter", "the outside cylinder"),
+                        cite("inner_diameter", "the bore"),
+                        cite("length", "the outside cylinder's length"),
+                    ),
+                    missing=("name",),
+                )
+        if len(bosses) == 1 and len(solid.planes) == 2 and len(holes) >= 3:
+            outer = bosses[0]
+            bore = [h for h in holes if math.dist(h.position_mm, outer.position_mm) <= 1e-6]
+            ring = [h for h in holes if h not in bore]
+            flat = [_drop_axis(h.position_mm, outer.axis) for h in ring]
+            middle = _drop_axis(outer.position_mm, outer.axis)
+            radii = {round(math.dist(point, middle), 4) for point in flat}
+            sizes = {round(h.diameter_mm, 4) for h in ring}
+            parallel = all(h.axis == outer.axis for h in holes)
+            if len(bore) == 1 and len(radii) == 1 and len(sizes) == 1 and parallel:
+                return PartSeed(
+                    element_type="plate_flange",
+                    element_params={
+                        "outer_diameter": _mm(outer.diameter_mm),
+                        "bore_diameter": _mm(bore[0].diameter_mm),
+                        "thickness": _mm(outer.depth_mm),
+                        "bolt_circle_diameter": _mm(2 * radii.pop()),
+                        "bolt_count": len(ring),
+                        "bolt_hole_diameter": _mm(sizes.pop()),
+                    },
+                    sources=(
+                        cite("outer_diameter", "the outside cylinder"),
+                        cite("bore_diameter", "the hole on the axis"),
+                        cite("thickness", "the outside cylinder's length"),
+                        cite("bolt_circle_diameter", f"the {len(ring)} equal holes round it"),
+                        cite("bolt_hole_diameter", f"the {len(ring)} equal holes round it"),
+                    ),
+                    missing=("name",),
+                )
+        if not bosses and len(solid.planes) == 6:
+            sizes = sorted(solid.size_mm)
+            thin = solid.size_mm.index(sizes[0])
+            axis = tuple(1.0 if index == thin else 0.0 for index in range(3))
+            # A plain plate: its box less its holes is its volume, and every hole runs
+            # through its thickness.
+            through = all(
+                hole.axis == axis and abs(hole.depth_mm - sizes[0]) <= 1e-6 for hole in holes
+            )
+            removed = sum(math.pi * hole.diameter_mm**2 / 4 * hole.depth_mm for hole in holes)
+            box = solid.size_mm[0] * solid.size_mm[1] * solid.size_mm[2]
+            if through and math.isclose(box - removed, solid.volume_mm3, rel_tol=1e-6):
+                first, second = (index for index in range(3) if index != thin)
+                if _off_centre(holes, solid, first, second):
+                    return None
+                return _plate_seed(solid, holes, first, second, thin, cite)
+    return None
+
+
+def _off_centre(holes: Sequence[CylinderFacts], solid: SolidFacts, first: int, second: int) -> bool:
+    """Whether the hole positions cannot be read as measured from the plate's middle.
+
+    The reader reports where a hole is in the file's coordinates and the size of the solid,
+    not where the solid sits. A plate modelled about its own middle is the only case in
+    which the two agree without the solid's position, so that is the only one seeded.
+    """
+    return any(
+        abs(hole.position_mm[first]) > solid.size_mm[first] / 2
+        or abs(hole.position_mm[second]) > solid.size_mm[second] / 2
+        for hole in holes
+    )
+
+
+def _plate_seed(
+    solid: SolidFacts,
+    holes: Sequence[CylinderFacts],
+    first: int,
+    second: int,
+    thin: int,
+    cite: Any,
+) -> PartSeed:
+    params: dict[str, Any] = {
+        "width": _mm(solid.size_mm[first]),
+        "length": _mm(solid.size_mm[second]),
+        "thickness": _mm(solid.size_mm[thin]),
+    }
+    sources = [
+        cite("width", "the solid's overall size"),
+        cite("length", "the solid's overall size"),
+        cite("thickness", "the solid's overall size"),
+    ]
+    if holes:
+        params["holes"] = [
+            {
+                "tag": f"h{number}",
+                "x": _mm(hole.position_mm[first]),
+                "y": _mm(hole.position_mm[second]),
+                "diameter": _mm(hole.diameter_mm),
+            }
+            for number, hole in enumerate(holes, start=1)
+        ]
+        sources += [
+            cite(f"holes[{index}].diameter", f"hole {index + 1} through the thickness")
+            for index in range(len(holes))
+        ]
+    return PartSeed(
+        element_type="mounting_plate",
+        element_params=params,
+        sources=tuple(sources),
+        missing=("name",),
+    )
