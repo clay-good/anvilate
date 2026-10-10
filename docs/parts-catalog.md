@@ -131,6 +131,17 @@ An open-topped box with a wall thickness, round corners and floor holes. **drawn
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/enclosure.spec.yaml`](../examples/parts/enclosure.spec.yaml)
 
+### `enclosure_lid`
+
+A flat lid for an enclosure, with holes and an optional lip that drops into the box. **drawn, not checked**.
+
+![enclosure_lid](parts/enclosure_lid.png)
+
+- Required: `name` (text), `width` (quantity), `length` (quantity), `thickness` (quantity)
+- Optional: `corner_radius` (quantity), `lip_inset` (quantity), `lip_wall` (quantity), `lip_height` (quantity), `holes` (list of Hole), `hole_patterns` (list of HolePattern), `material` (text)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/enclosure_lid.spec.yaml`](../examples/parts/enclosure_lid.spec.yaml)
+
 ### `helical_compression_spring`
 
 A helical compression spring, drawn as the tube it occupies at its free length. **envelope**.

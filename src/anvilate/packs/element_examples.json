@@ -442,6 +442,86 @@
    "unit": "mm"
   }
  },
+ "enclosure_lid": {
+  "corner_radius": {
+   "magnitude": 6.0,
+   "unit": "mm"
+  },
+  "hole_patterns": [
+   {
+    "centre_x": null,
+    "centre_y": null,
+    "circle_diameter": null,
+    "count": null,
+    "count_x": 2,
+    "count_y": 2,
+    "diameter": {
+     "magnitude": 3.4,
+     "unit": "mm"
+    },
+    "kind": "rectangular",
+    "pitch_x": {
+     "magnitude": 90.0,
+     "unit": "mm"
+    },
+    "pitch_y": {
+     "magnitude": 50.0,
+     "unit": "mm"
+    },
+    "start_angle_deg": 0.0,
+    "tag": "scr",
+    "thread": null
+   }
+  ],
+  "holes": [
+   {
+    "counterbore_depth": null,
+    "counterbore_diameter": null,
+    "diameter": {
+     "magnitude": 12.5,
+     "unit": "mm"
+    },
+    "head_diameter": null,
+    "kind": "through",
+    "tag": "gland",
+    "thread": null,
+    "x": {
+     "magnitude": 0.0,
+     "unit": "mm"
+    },
+    "y": {
+     "magnitude": 0.0,
+     "unit": "mm"
+    }
+   }
+  ],
+  "length": {
+   "magnitude": 80.0,
+   "unit": "mm"
+  },
+  "lip_height": {
+   "magnitude": 4.0,
+   "unit": "mm"
+  },
+  "lip_inset": {
+   "magnitude": 3.2,
+   "unit": "mm"
+  },
+  "lip_wall": {
+   "magnitude": 2.0,
+   "unit": "mm"
+  },
+  "material": null,
+  "name": "control-box-lid",
+  "thickness": {
+   "magnitude": 3.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 120.0,
+   "unit": "mm"
+  }
+ },
  "feeder": {
   "conductor_ampacity": {
    "magnitude": 115.0,

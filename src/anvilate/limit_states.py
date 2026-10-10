@@ -496,6 +496,7 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("parts.screen_bushing", "screening"),
             ("parts.screen_clevis", "screening"),
             ("parts.screen_enclosure", "screening"),
+            ("parts.screen_enclosure_lid", "screening"),
             ("parts.screen_mounting_plate", "screening"),
             ("parts.screen_plate_flange", "screening"),
             ("parts.screen_pulley", "screening"),

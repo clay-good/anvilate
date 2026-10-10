@@ -2,9 +2,9 @@
 
 These are the parts a catalog sells by the page and a designer redraws every week: a
 mounting plate, an angle bracket, a flange, a spacer, a stepped shaft, a sheet-metal bracket,
-an enclosure. Each is a typed element a document can declare, with unit-checked fields, and
-each has an audited geometry pattern in :mod:`anvilate.patterns`, so an agent asked for one
-returns a picture and a STEP file.
+an enclosure and its lid. Each is a typed element a document can declare, with unit-checked
+fields, and each has an audited geometry pattern in :mod:`anvilate.patterns`, so an agent
+asked for one returns a picture and a STEP file.
 
 **Drawn is not checked.** Most of these have no discipline screen yet, and each says so: its
 screen returns one *not evaluated* entry stating that the part was drawn and not checked, so
@@ -36,6 +36,7 @@ __all__ = [
     "Bushing",
     "Clevis",
     "Enclosure",
+    "EnclosureLid",
     "FlatPattern",
     "Hole",
     "HolePattern",
@@ -57,6 +58,7 @@ __all__ = [
     "screen_bushing",
     "screen_clevis",
     "screen_enclosure",
+    "screen_enclosure_lid",
     "screen_mounting_plate",
     "screen_plate_flange",
     "screen_pulley",
@@ -640,6 +642,47 @@ class Enclosure(_Part):
     material: str | None = None
 
 
+class EnclosureLid(_Part):
+    """A flat lid: a plate ``width`` by ``length``, with an optional lip under it.
+
+    The lip is a rectangular rim that drops into the box's opening and locates the lid. It
+    states three dimensions together: ``lip_inset``, how far its outside face sits in from
+    the plate's edge (the box's wall plus the clearance wanted); ``lip_wall``, its own
+    thickness; and ``lip_height``, how far it drops below the plate. Holes are positioned
+    from the centre of the top face and go through the plate.
+    """
+
+    positive_fields = (
+        "width",
+        "length",
+        "thickness",
+        "corner_radius",
+        "lip_inset",
+        "lip_wall",
+        "lip_height",
+    )
+
+    name: Named
+    width: Quantity
+    length: Quantity
+    thickness: Quantity
+    corner_radius: Quantity | None = None
+    lip_inset: Quantity | None = None
+    lip_wall: Quantity | None = None
+    lip_height: Quantity | None = None
+    holes: tuple[Hole, ...] = ()
+    hole_patterns: tuple[HolePattern, ...] = ()
+    material: str | None = None
+
+    @model_validator(mode="after")
+    def _a_lip_has_all_three_dimensions(self) -> EnclosureLid:
+        lip = ("lip_inset", "lip_wall", "lip_height")
+        missing = [name for name in lip if getattr(self, name) is None]
+        if missing and len(missing) < len(lip):
+            raise _refuse("a lip states lip_inset, lip_wall and lip_height", subject=missing[0])
+        return self
+
+
 def _drawn_not_checked(what: str, name: str) -> Scorecard:
     """The one entry a part with no screen carries: drawn, and not checked."""
     return Scorecard(
@@ -814,3 +857,8 @@ def _bend_radius_entry(bracket: SheetMetalBracket) -> ScorecardEntry:
 def screen_enclosure(enclosure: Enclosure) -> Scorecard:
     """An enclosure is drawn and not checked."""
     return _drawn_not_checked("enclosure", str(enclosure.name))
+
+
+def screen_enclosure_lid(lid: EnclosureLid) -> Scorecard:
+    """An enclosure lid is drawn and not checked."""
+    return _drawn_not_checked("enclosure lid", str(lid.name))

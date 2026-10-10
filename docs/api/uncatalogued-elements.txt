@@ -16,6 +16,7 @@ concrete_bearing
 cover_plate
 driven_pile
 enclosure
+enclosure_lid
 feeder
 gusset_plate
 infinite_slope

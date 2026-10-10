@@ -77,6 +77,7 @@ parts.screen_angle_bracket
 parts.screen_bushing
 parts.screen_clevis
 parts.screen_enclosure
+parts.screen_enclosure_lid
 parts.screen_mounting_plate
 parts.screen_plate_flange
 parts.screen_pulley

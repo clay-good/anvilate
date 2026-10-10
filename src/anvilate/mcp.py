@@ -1148,7 +1148,7 @@ take. Fix what a refusal names and call again; never report a check that did not
   "user_stated"}); max_safety_factor is only an explicit upper limit.
 - To screen or draw a part, set element_type to an element below and its fields in
   element_params. acceptance.tiers is ["T1_analytical"] for a check or screen.
-- Copy identifiers exactly as listed. A quantity is {"magnitude": 50, "unit": "kN"} in the
+- Copy ids exactly as listed. A quantity is {"magnitude": 50, "unit": "kN"} in the
   user's units; a product of units uses "*": "kN*m"."""
 
 # Claude Code 2.1 keeps the first 2,048 characters of a server's instructions and drops the

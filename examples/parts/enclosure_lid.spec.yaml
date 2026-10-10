@@ -1,0 +1,33 @@
+# A drawable part: A control-box lid with a lip, four screws and a gland hole.
+#   anvilate view examples/parts/enclosure_lid.spec.yaml
+anvilate_spec: 1.3.0
+name: control-box-lid
+description: A control-box lid with a lip, four screws and a gland hole.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: enclosure_lid
+element_params:
+  name: control-box-lid
+  width: {magnitude: 120.0, unit: mm}
+  length: {magnitude: 80.0, unit: mm}
+  thickness: {magnitude: 3.0, unit: mm}
+  corner_radius: {magnitude: 6.0, unit: mm}
+  lip_inset: {magnitude: 3.2, unit: mm}
+  lip_wall: {magnitude: 2.0, unit: mm}
+  lip_height: {magnitude: 4.0, unit: mm}
+  holes:
+  - tag: gland
+    x: {magnitude: 0.0, unit: mm}
+    y: {magnitude: 0.0, unit: mm}
+    diameter: {magnitude: 12.5, unit: mm}
+  hole_patterns:
+  - tag: scr
+    kind: rectangular
+    diameter: {magnitude: 3.4, unit: mm}
+    count_x: 2
+    count_y: 2
+    pitch_x: {magnitude: 90.0, unit: mm}
+    pitch_y: {magnitude: 50.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

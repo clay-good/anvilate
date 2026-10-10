@@ -494,8 +494,9 @@ def test_every_shipped_element_reaches_a_mode_or_is_recorded_as_debt() -> None:
     assert not gone, f"recorded elements the registry no longer ships: {gone}"
     # The ratchet: this may only go down. Lower it when a mode lands. It rose once, from 23,
     # when the fourteen everyday parts shipped: they are drawn and not checked, so each is
-    # debt by construction, and recording that is the point of the list.
-    assert len(recorded) <= 37, f"the uncatalogued list grew to {len(recorded)}"
+    # debt by construction, and recording that is the point of the list. And once more, to
+    # 38, with the enclosure lid, for the same reason.
+    assert len(recorded) <= 38, f"the uncatalogued list grew to {len(recorded)}"
     assert len(reached) >= 6
 
 
@@ -617,8 +618,8 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
     # applicability key can say "a part declaring a keepout" or "a part a beam passes".
     # Declaring a mode for either would be one the catalogue invented to shrink this.
     # It rose once, from 57, with the fourteen everyday parts: drawn and not checked, so
-    # each screen declares no mode by construction.
-    assert len(none) <= 71, f"the declares-none list grew to {len(none)}"
+    # each screen declares no mode by construction. The enclosure lid made it 72.
+    assert len(none) <= 72, f"the declares-none list grew to {len(none)}"
     # The page quotes both counts, and it said "five" while fourteen screens declared one.
     page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
     stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"

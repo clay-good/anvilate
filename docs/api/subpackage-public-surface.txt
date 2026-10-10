@@ -91,6 +91,7 @@ packs.parts.AngleBracket
 packs.parts.Bushing
 packs.parts.Clevis
 packs.parts.Enclosure
+packs.parts.EnclosureLid
 packs.parts.FlatPattern
 packs.parts.Hole
 packs.parts.HolePattern
@@ -112,6 +113,7 @@ packs.parts.screen_angle_bracket
 packs.parts.screen_bushing
 packs.parts.screen_clevis
 packs.parts.screen_enclosure
+packs.parts.screen_enclosure_lid
 packs.parts.screen_mounting_plate
 packs.parts.screen_plate_flange
 packs.parts.screen_pulley

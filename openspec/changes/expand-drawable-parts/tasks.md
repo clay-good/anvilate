@@ -46,7 +46,7 @@
 - [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
       developed blank with its bend lines
 - [x] 4.10b Minimum bend radius reported through the existing bend-radius screen
-- [ ] 4.11 Enclosure lid
+- [x] 4.11 Enclosure lid: a plate with holes and an optional lip that drops into the box
 
 ## 5. Catalog and honesty
 

@@ -831,6 +831,64 @@ def build_enclosure(box: parts.Enclosure) -> BuiltGeometry:
     return _built(box, tag, shape, dimensions, cut)
 
 
+def build_enclosure_lid(lid: parts.EnclosureLid) -> BuiltGeometry:
+    """A plate with its lip, if it has one, below it on z = 0; holes cut from the top."""
+    from build123d import Box, Pos
+
+    geometry._kernel()
+    tag = "enclosure_lid"
+    width, length = _mm(lid.width, "width", tag), _mm(lid.length, "length", tag)
+    thickness = _mm(lid.thickness, "thickness", tag)
+    dimensions = {"width": width, "length": length, "thickness": thickness}
+    radius = 0.0
+    if lid.corner_radius is not None:
+        radius = _mm(lid.corner_radius, "corner_radius", tag)
+        if radius >= min(width, length) / 2:
+            raise _refuse(
+                f"corner_radius ({radius:g} mm) must be below half the shorter side "
+                f"({min(width, length) / 2:g} mm)",
+                element=tag,
+                field="corner_radius",
+            )
+        dimensions["corner_radius"] = radius
+
+    def slab(inset: float, height: float) -> Any:
+        box = Box(width - 2 * inset, length - 2 * inset, height, align=_low())
+        return features.round_corners(box, radius - inset) if radius > inset else box
+
+    shape, drop = slab(0.0, thickness), 0.0
+    cuts = _cuts(tag, lid.holes, lid.hole_patterns)
+    if lid.lip_height is not None:
+        drop = _mm(lid.lip_height, "lip_height", tag)
+        inset = _mm(lid.lip_inset, "lip_inset", tag)
+        wall = _mm(lid.lip_wall, "lip_wall", tag)
+        if 2 * (inset + wall) >= min(width, length):
+            raise _refuse(
+                f"lip_inset ({inset:g} mm) and lip_wall ({wall:g} mm) on both sides leave no "
+                f"opening inside the lip across the shorter side ({min(width, length):g} mm)",
+                element=tag,
+                field="lip_wall",
+            )
+        # A hole is clear of the lip when it is wholly inside the lip's opening or wholly
+        # outside its outer rectangle; the lip's round corners are read as square, which
+        # refuses a little more than it must and never less.
+        for cut in cuts:
+            reach = [abs(cut.u) + cut.radius, abs(cut.v) + cut.radius]
+            clear = [abs(cut.u) - cut.radius, abs(cut.v) - cut.radius]
+            halves = [width / 2 - inset, length / 2 - inset]
+            inside = all(r < half - wall for r, half in zip(reach, halves, strict=True))
+            outside = any(c > half for c, half in zip(clear, halves, strict=True))
+            if not (inside or outside):
+                raise _refuse(f"{cut.tag} runs into the lip", element=tag, field="lip_inset")
+        shape = Pos(0, 0, drop) * shape + (slab(inset, drop) - slab(inset + wall, drop))
+        dimensions |= {"lip_inset": inset, "lip_wall": wall, "lip_height": drop}
+    host = features.Host(
+        "the lid's top face", (0.0, 0.0, drop + thickness), _X, _Y, _Z, thickness, width, length
+    )
+    shape, cut = features.apply(shape, host, cuts)
+    return _built(lid, tag, shape, dimensions, cut)
+
+
 def _register(element_type: str, model: type, builder: Any, summary: str, **options: Any) -> None:
     register(
         Pattern(
@@ -923,4 +981,10 @@ _register(
     parts.Enclosure,
     build_enclosure,
     "An open-topped box with a wall thickness, round corners and floor holes.",
+)
+_register(
+    "enclosure_lid",
+    parts.EnclosureLid,
+    build_enclosure_lid,
+    "A flat lid for an enclosure, with holes and an optional lip that drops into the box.",
 )

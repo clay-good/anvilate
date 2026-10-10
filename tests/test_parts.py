@@ -127,12 +127,18 @@ _VOLUMES = {
     # 120 x 80 x 40 outside with 6 mm corners, hollowed 114 x 74 with 3 mm corners above a
     # 3 mm floor, and four 4.5 holes in the floor.
     "enclosure": (120 * 80 - _corners(6)) * 40 - (114 * 74 - _corners(3)) * 37 - 4 * _disc(4.5) * 3,
+    # A 120 x 80 x 3 plate with 6 mm corners; under it a lip 4 deep, set in 3.2 (so 113.6 x
+    # 73.6 with 2.8 mm corners) and 2 thick (so 109.6 x 69.6 with 0.8 mm corners inside);
+    # four 3.4 holes and a 12.5 hole through the plate.
+    "enclosure_lid": (120 * 80 - _corners(6)) * 3
+    + ((113.6 * 73.6 - _corners(2.8)) - (109.6 * 69.6 - _corners(0.8))) * 4
+    - (4 * _disc(3.4) + _disc(12.5)) * 3,
 }
 
 
 def test_every_part_has_an_example_a_pattern_and_a_volume():
     """The floor: a part added without its example or its hand-derived volume fails here."""
-    assert len(_PARTS) == 14
+    assert len(_PARTS) == 15
     assert {path.name.removesuffix(".spec.yaml") for path in _EXAMPLES.glob("*.spec.yaml")} >= set(
         _PARTS
     )
@@ -173,6 +179,7 @@ _TAGS = {
     "t_slot_extrusion": {"top", "bottom", "left", "right", "front", "back"},
     "sheet_metal_bracket": {"top", "bottom", "left", "right", "front", "back", "round"},
     "enclosure": {"top", "bottom", "left", "right", "front", "back", "round"},
+    "enclosure_lid": {"top", "bottom", "left", "right", "front", "back", "round"},
 }
 
 
@@ -240,6 +247,11 @@ def test_a_part_with_no_screen_says_it_was_drawn_and_not_checked(element_type):
         ("enclosure", {"wall": _mm(40)}, "wall"),
         ("enclosure", {"floor": _mm(40)}, "floor"),
         ("enclosure", {"floor_patterns__0__pitch_x": _mm(112)}, "does not fit"),
+        ("enclosure_lid", {"corner_radius": _mm(40)}, "corner_radius"),
+        ("enclosure_lid", {"lip_wall": _mm(37)}, "leave no opening"),
+        ("enclosure_lid", {"hole_patterns__0__pitch_x": _mm(108)}, "scr_1_1 runs into the lip"),
+        ("enclosure_lid", {"hole_patterns__0__pitch_y": _mm(72)}, "scr_1_1 runs into the lip"),
+        ("enclosure_lid", {"hole_patterns__0__pitch_x": _mm(118)}, "does not fit"),
     ],
 )
 def test_a_dimension_that_cannot_be_made_is_refused_by_name(element_type, changes, reason):
@@ -428,3 +440,44 @@ def test_a_solid_that_carries_a_placement_is_refused_before_it_is_read_back(tmp_
             placed, tmp_path / "placed.step", authorization=authorize_export(None, override=True)
         )
     assert not (tmp_path / "placed.step").exists()
+
+
+def test_an_enclosure_lid_states_its_lip_whole_or_not_at_all():
+    """A lip is three dimensions; one or two of them describe no lip, and are refused."""
+    with pytest.raises(ValueError, match="lip_inset, lip_wall and lip_height"):
+        build_spec(_spec("enclosure_lid", lip_wall=None))
+    flat = build_spec(_spec("enclosure_lid", lip_inset=None, lip_wall=None, lip_height=None))
+    holes = (4 * _disc(3.4) + _disc(12.5)) * 3
+    assert flat.volume_mm3 == pytest.approx((120 * 80 - _corners(6)) * 3 - holes, rel=1e-9)
+    assert measure_geometry(flat, "feature:gland:z").value == 3.0
+
+
+def test_an_enclosure_lid_takes_a_hole_in_the_margin_outside_its_lip():
+    """Clear of the lip is inside its opening or outside it: a wide margin takes the screws."""
+    lid = build_spec(
+        _spec(
+            "enclosure_lid",
+            lip_inset=_mm(10),
+            hole_patterns__0__pitch_x=_mm(110),
+            hole_patterns__0__pitch_y=_mm(70),
+        )
+    )
+    assert measure_geometry(lid, "feature:scr_1_1:x").value == -55.0
+    assert measure_geometry(lid, "feature:scr_1_1:z").value == 7.0
+    assert measure_geometry(lid, "feature:scr_1_1:depth").value == 3.0
+    # 10 mm in, the lip starts at x = -50: a 3.4 hole at -51 stands on it, and is refused.
+    with pytest.raises(GeometryError, match="runs into the lip"):
+        build_spec(_spec("enclosure_lid", lip_inset=_mm(10), hole_patterns__0__pitch_x=_mm(102)))
+
+
+def test_an_enclosure_lid_drops_into_the_enclosure_it_is_drawn_for():
+    """The two examples are one box: the lid covers it, and its lip clears the walls."""
+    box, lid = (
+        _document("enclosure")["element_params"],
+        _document("enclosure_lid")["element_params"],
+    )
+    for side in ("width", "length", "corner_radius"):
+        assert lid[side] == box[side]
+    clearance = lid["lip_inset"]["magnitude"] - box["wall"]["magnitude"]
+    assert clearance == pytest.approx(0.2)
+    assert lid["lip_height"]["magnitude"] < box["height"]["magnitude"] - box["wall"]["magnitude"]
