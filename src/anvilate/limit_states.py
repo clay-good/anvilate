@@ -514,6 +514,12 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("parts.screen_sheet_metal_bracket", "flat pattern"),
         ),
         _state(
+            "sheetmetal.bend_cracking",
+            "a bend tighter than the sheet's ductility allows cracking its outer fibre",
+            ("parts.screen_sheet_metal_bracket", "bend radius"),
+            implementation="analysis.minimum_bend_radius",
+        ),
+        _state(
             "steel.tension_gross_yielding",
             "a tension member yielding along its gross section",
             ("structural.screen_tension_member", "gross yielding"),

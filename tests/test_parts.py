@@ -309,6 +309,42 @@ def test_a_k_factor_is_never_invented():
         build_spec(_spec("sheet_metal_bracket", k_factor_source=None))
 
 
+def _bend_radius(**changes):
+    spec = _spec("sheet_metal_bracket", **changes)
+    return next(entry for entry in screen_spec(spec).entries if "bend radius" in entry.name)
+
+
+def test_a_bend_tighter_than_the_sheet_takes_fails():
+    """2 mm sheet at 20 % reduction of area: R_min = 2 x (50/20 - 1) = 3 mm, over the R2 drawn."""
+    source = {"reduction_of_area_source": "mill certificate 4471"}
+    tight = _bend_radius(reduction_of_area_percent=20.0, **source)
+    assert tight.status is CheckStatus.FAIL
+    assert "minimum 3 mm" in tight.detail and "mill certificate 4471" in tight.detail
+    # 25 % puts the minimum exactly on the drawn 2 mm, which is not under it.
+    for percent, minimum in ((25.0, "2 mm"), (40.0, "0.5 mm")):
+        stated = _bend_radius(reduction_of_area_percent=percent, **source)
+        assert stated.status is CheckStatus.NOT_EVALUATED
+        assert f"minimum {minimum}" in stated.detail and "not a pass" in stated.detail
+
+
+def test_a_reduction_of_area_is_never_invented():
+    missing = _bend_radius()
+    assert missing.status is CheckStatus.NOT_EVALUATED
+    assert [need.declaration for need in missing.needs] == [
+        "element_params.reduction_of_area_percent"
+    ]
+    with pytest.raises(GeometryError, match="reduction_of_area_source"):
+        build_spec(_spec("sheet_metal_bracket", reduction_of_area_percent=20.0))
+    with pytest.raises(GeometryError, match="at most 100"):
+        build_spec(
+            _spec(
+                "sheet_metal_bracket",
+                reduction_of_area_percent=120.0,
+                reduction_of_area_source="mill certificate 4471",
+            )
+        )
+
+
 @pytest.mark.parametrize(
     ("shape", "flanges", "box"),
     [

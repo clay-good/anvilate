@@ -57,3 +57,4 @@ packs/parts.py:_drawn_not_checked | {name} screening | a capability gap: the par
 combination.py:_stack | {mate.id} bolt clearance | a data-coverage limit: the bundled ISO 273 table has no row for that thread size, which a table row fixes and no declaration does
 combination.py:_stack | {mate.id} bolt length | a capability gap: with no nut declared the bolt threads into a tapped hole, and thread engagement is not screened whatever else is declared
 combination.py:build_combination | {mate.id} weld | a capability gap: a weld is a declared joint here, and its strength is screened by a welded_connection element with its own load
+packs/parts.py:_bend_radius_entry | name | an answer at one site (the radius is at or over the empirical minimum, which the shop bend table decides); the other site states its need

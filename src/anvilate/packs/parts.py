@@ -26,7 +26,7 @@ from typing import ClassVar, Literal
 from pydantic import ConfigDict, Field, model_validator
 
 from .._models import Named
-from ..analysis.sheetmetal import bend_allowance
+from ..analysis.sheetmetal import bend_allowance, minimum_bend_radius
 from ..scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from ..units import Quantity
 from ._guarded import GuardedInputs, _guarded_pack_refusal
@@ -490,9 +490,12 @@ class SheetMetalBracket(_Part):
     ``k_factor`` locates the neutral axis for the flat pattern; it depends on the material,
     the thickness and the tooling, so it is an input with its ``k_factor_source`` and is
     never assumed. Without it the formed part is still drawn and the flat pattern is not.
+    ``reduction_of_area_percent`` is the sheet's tensile reduction of area, with its
+    ``reduction_of_area_source``; given one, the inside radius is compared with the smallest
+    the material bends to without cracking.
     """
 
-    not_lengths = ("k_factor",)
+    not_lengths = ("k_factor", "reduction_of_area_percent")
     positive_fields = (
         "thickness",
         "inside_radius",
@@ -501,8 +504,9 @@ class SheetMetalBracket(_Part):
         "flange_b",
         "flange_c",
         "k_factor",
+        "reduction_of_area_percent",
     )
-    at_most = MappingProxyType({"k_factor": 0.5})
+    at_most = MappingProxyType({"k_factor": 0.5, "reduction_of_area_percent": 100.0})
 
     name: Named
     shape: Literal["L", "U", "Z"] = "L"
@@ -514,6 +518,8 @@ class SheetMetalBracket(_Part):
     flange_c: Quantity | None = None
     k_factor: float | None = None
     k_factor_source: str | None = None
+    reduction_of_area_percent: float | None = None
+    reduction_of_area_source: str | None = None
     material: str | None = None
 
     @model_validator(mode="after")
@@ -535,6 +541,15 @@ class SheetMetalBracket(_Part):
             raise _refuse(
                 "k_factor needs k_factor_source: the bend table or test it was read from",
                 subject="k_factor_source",
+            )
+        if (
+            self.reduction_of_area_percent is not None
+            and not (self.reduction_of_area_source or "").strip()
+        ):
+            raise _refuse(
+                "reduction_of_area_percent needs reduction_of_area_source: the material "
+                "certificate or tensile test it was read from",
+                subject="reduction_of_area_source",
             )
         return self
 
@@ -716,15 +731,15 @@ def screen_sheet_metal_bracket(bracket: SheetMetalBracket) -> Scorecard:
 
     With a K-factor the developed length is stated beside the drawn part, with the K-factor
     and bend allowance behind it. Without one the flat pattern is not evaluated, and the
-    entry names the K-factor as what it needs.
+    entry names the K-factor as what it needs. The inside radius is compared with the
+    smallest the sheet bends to when its reduction of area is declared.
     """
-    card = _drawn_not_checked("sheet-metal bracket", str(bracket.name))
+    (drawn,) = _drawn_not_checked("sheet-metal bracket", str(bracket.name)).entries
+    radius = _bend_radius_entry(bracket)
     flat = flat_pattern(bracket)
     if flat is not None:
-        (drawn,) = card.entries
-        return Scorecard(
-            entries=(drawn.model_copy(update={"detail": f"{drawn.detail}. Its {flat}"}),)
-        )
+        stated = drawn.model_copy(update={"detail": f"{drawn.detail}. Its {flat}"})
+        return Scorecard(entries=(stated, radius))
     missing = ScorecardEntry(
         name=f"{bracket.name} flat pattern",
         status=CheckStatus.NOT_EVALUATED,
@@ -734,7 +749,66 @@ def screen_sheet_metal_bracket(bracket: SheetMetalBracket) -> Scorecard:
         ),
         needs=(_NEEDS_A_K_FACTOR,),
     )
-    return Scorecard(entries=(*card.entries, missing))
+    return Scorecard(entries=(drawn, missing, radius))
+
+
+_NEEDS_A_REDUCTION_OF_AREA = Need(
+    declaration="element_params.reduction_of_area_percent",
+    takes=(
+        "the sheet's tensile reduction of area in percent, from its material certificate "
+        "or a tensile test, with element_params.reduction_of_area_source naming it"
+    ),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+
+
+def _bend_radius_entry(bracket: SheetMetalBracket) -> ScorecardEntry:
+    """The inside radius against the smallest the sheet bends to without cracking.
+
+    The minimum is :func:`anvilate.analysis.sheetmetal.minimum_bend_radius`, an empirical
+    rule on the declared reduction of area. A radius under it fails. A radius over it is
+    stated and not passed: the rule is a screen for the outer fibre cracking, and grain
+    direction, edge condition and temper move the real limit.
+    """
+    name = f"{bracket.name} bend radius"
+    if bracket.reduction_of_area_percent is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — the smallest radius this sheet bends to needs its "
+                "reduction_of_area_percent, and none is assumed for a material"
+            ),
+            needs=(_NEEDS_A_REDUCTION_OF_AREA,),
+        )
+    minimum = minimum_bend_radius(
+        thickness=bracket.thickness,
+        reduction_of_area_percent=bracket.reduction_of_area_percent,
+    )
+    basis = (
+        f"minimum {minimum.to('mm').magnitude:g} mm = thickness x (50 / "
+        f"{bracket.reduction_of_area_percent:g} - 1), reduction of area from "
+        f"{bracket.reduction_of_area_source}"
+    )
+    if bracket.inside_radius.to("mm").magnitude < minimum.to("mm").magnitude:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.FAIL,
+            detail=(
+                f"inside_radius {bracket.inside_radius} is under the smallest this sheet "
+                f"bends to without cracking its outer fibre ({basis}). Raise inside_radius "
+                "to the minimum or more, or bend a more ductile sheet"
+            ),
+        )
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.NOT_EVALUATED,
+        detail=(
+            f"inside_radius {bracket.inside_radius} is at or over the empirical minimum "
+            f"({basis}) — which is not a pass: grain direction, edge condition and temper "
+            "move the real limit, and the shop's bend table decides it"
+        ),
+    )
 
 
 def screen_enclosure(enclosure: Enclosure) -> Scorecard:

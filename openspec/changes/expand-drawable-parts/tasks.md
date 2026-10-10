@@ -45,7 +45,7 @@
       shear and bearing), stepped shaft (stress at a shoulder)
 - [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
       developed blank with its bend lines
-- [ ] 4.10b Minimum bend radius reported through the existing bend-radius screen
+- [x] 4.10b Minimum bend radius reported through the existing bend-radius screen
 - [ ] 4.11 Enclosure lid
 
 ## 5. Catalog and honesty

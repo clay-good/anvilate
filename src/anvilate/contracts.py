@@ -588,6 +588,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     "shaft_key": "1.2.0",
     "shallow_footing": "1.3.0",
     "shear_plate": "1.3.0",
+    # 1.2.0 adds the bend-radius check's optional reduction of area and its source.
+    "sheet_metal_bracket": "1.2.0",
     "spur_gear_mesh": "1.2.0",
     "structure": "1.2.0",
     "tension_member": "1.3.0",

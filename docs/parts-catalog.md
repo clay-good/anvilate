@@ -226,7 +226,7 @@ A bracket bent from one sheet (L, U or Z), with its developed flat length. **dra
 ![sheet_metal_bracket](parts/sheet_metal_bracket.png)
 
 - Required: `name` (text), `thickness` (quantity), `inside_radius` (quantity), `width` (quantity), `flange_a` (quantity), `flange_b` (quantity)
-- Optional: `shape` (L | U | Z), `flange_c` (quantity), `k_factor` (number), `k_factor_source` (text), `material` (text)
+- Optional: `shape` (L | U | Z), `flange_c` (quantity), `k_factor` (number), `k_factor_source` (text), `reduction_of_area_percent` (number), `reduction_of_area_source` (text), `material` (text)
 - Outputs: views, step, 3mf, flat_pattern
 - Example: [`examples/parts/sheet_metal_bracket.spec.yaml`](../examples/parts/sheet_metal_bracket.spec.yaml)
 
