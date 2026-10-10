@@ -64,7 +64,14 @@ def _task_request(method: str, task_id: str, **params) -> dict:
     )
 
 
-def _poll_terminal(task_id: str, timeout: float = 5.0) -> dict:
+def _poll_terminal(task_id: str, timeout: float = 90.0) -> dict:
+    """The task's result once it is terminal.
+
+    The wait is patience, not a requirement: these tests hold that a task finishes, and a
+    worker is a fresh interpreter that has to import the library first. Five seconds was
+    enough on a quiet machine and failed three tests on one at load 15, twice. It returns
+    as soon as the task is terminal, so the generous bound costs a passing run nothing.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = _task_request("tasks/get", task_id)["result"]
