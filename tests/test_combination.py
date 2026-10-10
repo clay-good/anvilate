@@ -502,3 +502,101 @@ def test_each_balloon_sits_on_its_own_part_and_no_two_share_a_place():
             assert math.dist(centres[first], centres[second]) > 18, (first, second)
     # The two flanges' balloons are apart from top to bottom, as the flanges are.
     assert centres["1"][1] > centres["2"][1]
+
+
+def _doweled(pin: str = "ISO2338-4", length: float = 8.0, hole: float = 4.0):
+    """The bracket on its plate, with two dowel holes beside the bolts and a pin in each.
+
+    The bracket's holes sit 10 mm nearer its heel than the plate's are from its middle, as
+    its bolt holes do, so the two patterns place it in the same position.
+    """
+
+    def change(document: dict) -> None:
+        plate = document["parts"][0]["spec"]["element_params"]
+        bracket = document["parts"][1]["spec"]["element_params"]
+        for tag, y in (("d1", -12.0), ("d2", 12.0)):
+            plate["holes"].append({"tag": tag, "x": _mm(0.0), "y": _mm(y), "diameter": _mm(hole)})
+        for tag, y in (("p1", -12.0), ("p2", 12.0)):
+            bracket["base_holes"].append(
+                {"tag": tag, "x": _mm(-10.0), "y": _mm(y), "diameter": _mm(hole)}
+            )
+        document["mates"].append(
+            {
+                "id": "doweled",
+                "kind": "hole_pattern",
+                "place": {"part": "bracket", "face": "bottom", "holes": ["p1", "p2"]},
+                "on": {"part": "plate", "face": "top", "holes": ["d1", "d2"]},
+            }
+        )
+        document["hardware"].append({"mate": "doweled", "pin": pin, "length": _mm(length)})
+
+    return change
+
+
+def test_a_dowel_pin_sits_in_each_hole_half_each_side_of_the_mating_plane():
+    """Two 4 x 8 pins between a 5 mm bracket and a 6 mm plate that meet at z = 6."""
+    plain, built = _built("bracket_on_plate"), _built("bracket_on_plate", _doweled())
+    # The second pattern agrees with the first: the bracket is where the bolts put it.
+    assert _box(built.parts[1]) == _box(plain.parts[1])
+    pins = [body for body in built.hardware if body.kind == "pin"]
+    assert len(pins) == 2 and {body.designation for body in pins} == {"ISO2338-4x8"}
+    for pin, y in zip(pins, (-12.0, 12.0), strict=True):
+        box = pin.shape.bounding_box()
+        assert (box.min.Z, box.max.Z) == pytest.approx((2.0, 10.0), abs=1e-6)
+        assert ((box.min.X + box.max.X) / 2, (box.min.Y + box.max.Y) / 2) == pytest.approx(
+            (0.0, y), abs=1e-6
+        )
+        assert pin.shape.volume == pytest.approx(_disc(4) * 8, rel=1e-6)
+    assert str(built.bom[-1]) == " 6  2 x ISO2338-4x8: pin (envelope)"
+    assert _entry(built, "doweled pin fit").status is CheckStatus.PASS
+    assert _entry(built, "doweled pin length").status is CheckStatus.PASS
+    assert "held to a micrometre" in _entry(built, "doweled hole pattern").detail
+    # A pin filling its hole touches it and overlaps nothing.
+    assert _entry(built, "interference").status is CheckStatus.PASS
+    assert len(built.bodies) == len(plain.bodies) + 2
+
+
+@pytest.mark.parametrize(
+    ("change", "check", "said"),
+    [
+        # A pin in a clearance hole locates nothing.
+        ({"hole": 4.5}, "pin fit", "p1 is 4.5 mm, d1 is 4.5 mm, p2 is 4.5 mm, d2 is 4.5 mm"),
+        # Half of 12 is 6, and the bracket is 5 thick.
+        ({"length": 12.0}, "pin length", "stands 1 mm proud; 10 mm or less sits inside both"),
+        # ISO 2338 stocks a 4 mm pin from 8 mm.
+        ({"length": 6.0}, "pin length", "stocks this pin from 8 to 40 mm"),
+        # A 6 mm pin starts at 12 mm, which the 5 mm bracket cannot take either.
+        (
+            {"pin": "ISO2338-6", "hole": 6.0, "length": 10.0},
+            "pin length",
+            "stocks this pin from 12 to 60 mm",
+        ),
+    ],
+)
+def test_a_dowel_pin_that_cannot_locate_or_does_not_fit_fails_and_says_why(change, check, said):
+    built = _built("bracket_on_plate", _doweled(**change))
+    entry = _entry(built, f"doweled {check}")
+    assert entry.status is CheckStatus.FAIL and said in entry.detail
+    other = "pin length" if check == "pin fit" else "pin fit"
+    assert _entry(built, f"doweled {other}").status is CheckStatus.PASS
+    assert built.card.status is not CheckStatus.PASS
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        (lambda h: h.update(bolt="ISO4762-M4"), "a bolt and a pin"),
+        (lambda h: h.pop("pin"), "neither a bolt nor a pin"),
+        (lambda h: h.update(washer="ISO7089-M4"), "a pin locates and does not clamp"),
+        (lambda h: h.update(nut="ISO4032-M4"), "a pin locates and does not clamp"),
+        (lambda h: h.update(length=_mm(0)), "its pin length"),
+        (lambda h: h.update(pin="ISO2338-7"), "no bundled pin is designated 'ISO2338-7'"),
+    ],
+)
+def test_hardware_is_a_bolt_or_a_pin_and_a_pin_takes_nothing_else(change, reason):
+    def broken(document: dict) -> None:
+        _doweled()(document)
+        change(document["hardware"][-1])
+
+    with pytest.raises(CombinationError, match=reason):
+        _built("bracket_on_plate", broken)

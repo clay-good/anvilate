@@ -28,7 +28,7 @@ from the STEP file.
 | --- | --- |
 | `parts` | Each part: an `id`, and its `spec`, a whole Design Spec. The first part is the base and stays where it is. |
 | `mates` | How each later part meets a part before it. A mate has an `id`, a `kind`, the feature on the part being placed (`place`) and the feature on a part already placed (`on`). |
-| `hardware` | The fasteners in a hole-pattern mate: a `bolt` and its `length`, and optionally a `washer` and a `nut`, by designation. One stack goes in every hole. |
+| `hardware` | What goes in a hole-pattern mate's holes: a `bolt` and its `length`, and optionally a `washer` and a `nut`, by designation; or a dowel `pin` (`ISO2338-6`) and its `length`. One goes in every hole of the mate. |
 | `welds` | A weld on a face-to-face mate: its `type` and `size`. Declared, not drawn. |
 
 ### The four mates
@@ -59,16 +59,23 @@ Each of these is an entry on the combination's card.
 | hole pattern | Whether the mated holes line up, hole by hole. With a fastener in them, they may be out by the room the bolt has; with a declared `position_tolerance`, by that; otherwise they must agree. A mismatch fails and names the holes. |
 | bolt clearance | Whether the smallest mated hole admits the bolt at the ISO 273 class asked for (`close`, `normal` or `coarse`), and what to open it to when it does not. |
 | bolt length | Whether the bolt fills its nut through the clamped parts and washers, and how much longer it must be when it does not. |
+| pin fit | Whether every mated hole is the dowel pin's own diameter. A pin locates by filling its hole, so one in a clearance hole fails and names the holes to ream. |
+| pin length | Whether the pin is a length ISO 2338 stocks for its diameter, and sits inside both parts with half its length each side of the plane they meet on. |
 | weld | A declared weld, not evaluated: its strength is screened as a `welded_connection` element with its load. |
 | interference | Every pair of bodies whose boxes meet is intersected. An overlap fails, naming the pair and the volume they share. |
 
-Fasteners are **envelopes**: a bolt is a cylinder with a head, a nut a hexagon, each from
-its tabulated size. They show where the hardware goes and what it needs around it. They
+Fasteners are **envelopes**: a bolt is a cylinder with a head, a nut a hexagon, a dowel
+pin a plain cylinder, each from its tabulated size. They show where the hardware goes and what it needs around it. They
 carry no thread and are never offered as the fastener's geometry.
 
 A combination exports as validated when its card passes. One that holds parts drawn and
 not checked, or a declared weld, and nothing that failed, is written marked unvalidated.
 One with a failing entry is refused.
+
+Bolts clamp and dowel pins locate, so a joint that needs both has two hole-pattern mates
+between the same two parts: one through the clearance holes, with the bolts, and one
+through the reamed holes, with the pins. The two have to place the part in the same
+position, and a pattern with pins and no declared tolerance is held to a micrometre.
 
 ## Worked combinations
 

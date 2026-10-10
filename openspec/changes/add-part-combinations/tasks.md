@@ -12,7 +12,9 @@ Depends on `expand-drawable-parts` groups 1 and 2 (registry, shared features, pr
 ## 2. Hardware
 
 - [x] 2.1 Bolt, washer and nut envelopes from the standards data, labelled as envelopes
-- [ ] 2.1b Dowel pin and parallel key envelopes
+- [x] 2.1b Dowel pin envelopes: `pin` in a hardware entry, an ISO 2338 pin in every hole of
+      the mate, checked for fit and length (a parallel key is the `shaft_key` part; seating
+      it in a keyway is 3.2)
 - [x] 2.2 Hardware stacks placed into mated holes from the clamped thickness
 
 ## 3. Checks

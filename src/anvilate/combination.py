@@ -186,17 +186,22 @@ class Mate(StatableModel):
 
 
 class HardwareStack(StatableModel):
-    """The fasteners in one hole-pattern mate: a bolt in every hole, with washers and a nut.
+    """The hardware in one hole-pattern mate: a bolt in every hole, or a dowel pin in each.
 
     ``bolt`` is a bundled designation (``ISO4762-M6`` or ``ISO4014-M6``) and ``length`` the
     bolt's length under its head. ``washer`` goes under the head, and under the nut when
     there is one. ``clearance`` is the ISO 273 class the holes are held to.
+
+    ``pin`` is a parallel dowel pin instead (``ISO2338-6``), ``length`` long and centred on
+    the mating plane. A pin locates and does not clamp: it takes no washer and no nut, and
+    its holes are its own diameter, not a clearance class.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     mate: Named
-    bolt: Named
+    bolt: Named | None = None
+    pin: Named | None = None
     length: Quantity
     washer: Named | None = None
     nut: Named | None = None
@@ -204,10 +209,24 @@ class HardwareStack(StatableModel):
 
     @model_validator(mode="after")
     def _a_length(self) -> HardwareStack:
+        if (self.bolt is None) == (self.pin is None):
+            raise _refuse(
+                f"hardware in mate '{self.mate}' states "
+                + ("a bolt and a pin" if self.bolt is not None else "neither a bolt nor a pin")
+                + "; one mate takes one of them in every hole",
+                subject="hardware[].bolt",
+            )
+        what = "bolt" if self.bolt is not None else "pin"
         if not self.length.has_dimension("[length]") or self.length.to("mm").magnitude <= 0:
             raise _refuse(
-                f"hardware in mate '{self.mate}' states its bolt length as {self.length}",
+                f"hardware in mate '{self.mate}' states its {what} length as {self.length}",
                 subject="hardware[].length",
+            )
+        if self.pin is not None and (self.washer is not None or self.nut is not None):
+            raise _refuse(
+                f"hardware in mate '{self.mate}' gives a dowel pin a washer or a nut; a pin "
+                "locates and does not clamp",
+                subject="hardware[].washer" if self.washer is not None else "hardware[].nut",
             )
         return self
 
@@ -483,7 +502,7 @@ class HardwareBody:
     """One fastener envelope: what it is, the solid as tabulated, and where it goes."""
 
     designation: str
-    kind: Literal["bolt", "washer", "nut"]
+    kind: Literal["bolt", "washer", "nut", "pin"]
     mate: str
     solid: Any
     rotation: Matrix
@@ -848,6 +867,9 @@ def _stack(
     """The bolt, washers and nut in every hole of one mate, and what the stack is checked for."""
     from build123d import Align, Cylinder
 
+    if stack.pin is not None:
+        return _pins(stack, mate, moving, fixed)
+
     from ._patterns_parts import _low, _ring
     from .standards.hexnuts import default_hex_nut_table
     from .standards.threads import default_clearance_table
@@ -1016,6 +1038,101 @@ def _stack(
     return bodies, entries
 
 
+_PIN_REFERENCE = "ISO 2338:1997 parallel pins"
+
+
+def _pins(
+    stack: HardwareStack, mate: Mate, moving: PlacedPart, fixed: PlacedPart
+) -> tuple[list[HardwareBody], list[ScorecardEntry]]:
+    """A dowel pin in every hole of one mate, centred on the mating plane, and its checks.
+
+    A pin locates by filling its hole, so the holes are held to its own diameter: the fit
+    between them (H7 on the pin's m6) is the drawing's tolerance, and a clearance hole
+    locates nothing. Its length is held to what ISO 2338 stocks, and to the two parts it
+    sits in, half its length each side of the plane they meet on.
+    """
+    from build123d import Cylinder
+
+    from .standards.dowels import default_dowel_pin_table
+
+    table = default_dowel_pin_table()
+    try:
+        record = table.get(str(stack.pin))
+    except KeyError as unknown:
+        raise _unknown(str(stack.pin), table.designations(), "pin") from unknown
+    diameter = float(record.nominal_diameter.quantity.to("mm").magnitude)
+    shortest = float(record.length_min.quantity.to("mm").magnitude)
+    longest = float(record.length_max.quantity.to("mm").magnitude)
+    length = stack.length.to("mm").magnitude
+    solid = Cylinder(diameter / 2, length)  # centred, so half of it is each side of the plane
+
+    plane_point, on_normal = _face(fixed.id, fixed.built, str(mate.on.face))
+    outward = fixed.direction(on_normal)
+    upright = _turning((0.0, 0.0, 1.0), outward)
+    bodies: list[HardwareBody] = []
+    off_size: list[str] = []
+    shallowest = math.inf
+    for mine_tag, their_tag in zip(mate.place.holes, mate.on.holes, strict=True):
+        mine = _hole(mate, "place", moving.id, moving.built, mine_tag)
+        theirs = _hole(mate, "on", fixed.id, fixed.built, their_tag)
+        seat = fixed.point(tuple(theirs.position_mm))
+        seat = _add(seat, _scale(outward, _dot(outward, _sub(fixed.point(plane_point), seat))))
+        shallowest = min(shallowest, mine.depth_mm, theirs.depth_mm)
+        off_size += [
+            f"{tag} is {hole.diameter_mm:g} mm"
+            for tag, hole in ((mine_tag, mine), (their_tag, theirs))
+            if not math.isclose(hole.diameter_mm, diameter, rel_tol=0.0, abs_tol=EXACT_MM)
+        ]
+        bodies.append(HardwareBody(f"{stack.pin}x{length:g}", "pin", mate.id, solid, upright, seat))
+    entries = [
+        ScorecardEntry(
+            name=f"{mate.id} pin fit",
+            status=CheckStatus.FAIL if off_size else CheckStatus.PASS,
+            detail=(
+                f"the {diameter:g} mm pin ({record.tolerance_class}) locates in a "
+                f"{diameter:g} mm hole, and "
+                + (
+                    f"{', '.join(off_size)}; ream the holes to {diameter:g} mm, or use the "
+                    "pin they are sized for"
+                    if off_size
+                    else f"every mated hole is {diameter:g} mm"
+                )
+            ),
+            reference=_PIN_REFERENCE,
+            underived=_MEASURED,
+        )
+    ]
+    stocked = shortest - 1e-9 <= length <= longest + 1e-9
+    seated = length / 2 <= shallowest + 1e-9
+    problems = []
+    if not stocked:
+        problems.append(f"ISO 2338 stocks this pin from {shortest:g} to {longest:g} mm")
+    if not seated:
+        problems.append(
+            f"half of it is {length / 2:g} mm and the thinner part it sits in is "
+            f"{shallowest:g} mm, so it stands {length / 2 - shallowest:g} mm proud; "
+            f"{2 * shallowest:g} mm or less sits inside both"
+        )
+    entries.append(
+        ScorecardEntry(
+            name=f"{mate.id} pin length",
+            status=CheckStatus.PASS if not problems else CheckStatus.FAIL,
+            detail=(
+                f"the {length:g} mm pin, half each side of the mating plane"
+                + (
+                    f": {'; and '.join(problems)}"
+                    if problems
+                    else f", is a stocked length and sits inside both parts "
+                    f"(the thinner is {shallowest:g} mm)"
+                )
+            ),
+            reference=_PIN_REFERENCE,
+            underived=_MEASURED,
+        )
+    )
+    return bodies, entries
+
+
 # --- checks ---------------------------------------------------------------------------
 
 
@@ -1038,7 +1155,7 @@ def _pattern_entry(
     if mate.position_tolerance is not None:
         allowed = mate.position_tolerance.to("mm").magnitude
         basis = f"the declared tolerance of {allowed:g} mm"
-    elif stack is not None:
+    elif stack is not None and stack.bolt is not None:
         _head, _size, _height, diameter = _fastener(str(stack.bolt))
         allowed = max(0.0, room - diameter)
         basis = f"the {allowed:g} mm an M{diameter:g} bolt has to spare in the smallest hole"
