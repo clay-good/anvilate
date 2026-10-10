@@ -958,3 +958,67 @@ def test_a_failing_check_is_marked_on_the_part_it_is_about():
     both = _keyed(None, width=_mm(6), height=_mm(8))
     marks, rows = _failing(both, *_numbered(both))
     assert len(rows) >= 2 and [label for label, _i in marks].count("X") == 1
+
+
+def _spans(bodies) -> dict:
+    """Each body's label with its centre in x and y and its extent in z, in drawing order."""
+    out = []
+    for label, shape, _envelope in bodies:
+        box = shape.bounding_box()
+        centre = ((box.min.X + box.max.X) / 2, (box.min.Y + box.max.Y) / 2)
+        out.append((label, centre, (box.min.Z, box.max.Z)))
+    return out
+
+
+def test_an_exploded_view_takes_each_body_off_the_way_it_went_on():
+    """The bracket lifts off the plate, and the hardware comes out along its own holes.
+
+    The assembly is 120 mm at its longest, so a part moves 48 mm and one piece of hardware
+    14 x 1.2 = 16.8 mm more than the next. Nothing leaves its hole's axis, and along it
+    the order is the order of assembly: nut, washer, plate, bracket, washer, bolt.
+    """
+    from anvilate.combination import EXPLODED_PART, EXPLODED_STEP, _exploded, _numbered
+
+    built = _built("bracket_on_plate")
+    assert built.apart == (("bracket", "plate", (0.0, 0.0, 1.0)),)
+    bodies, _marks = _numbered(built)
+    before, after = _spans(bodies), _spans(_exploded(built, bodies, 120.0))
+    part, step = EXPLODED_PART * 120, EXPLODED_STEP * 120
+    lifted = {}
+    for (label, centre, (low, _h)), (_l, moved, (new_low, _nh)) in zip(before, after, strict=True):
+        assert moved == pytest.approx(centre, abs=1e-6), label  # still on its own axis
+        lifted.setdefault(label, set()).add(round(new_low - low, 6))
+    assert lifted["plate"] == {0.0} and lifted["bracket"] == {round(part, 6)}
+    assert lifted["ISO4762-M6x25"] == {round(part + 2 * step, 6)}
+    assert lifted["ISO7089-M6"] == {round(part + step, 6), round(-step, 6)}
+    assert lifted["ISO4032-M6"] == {round(-2 * step, 6)}
+    # In one hole, bottom to top, no body's span reaches into the next part's.
+    hole = sorted(
+        (span for label, centre, span in after if centre == pytest.approx((20.0, -15.0), abs=1e-6)),
+    )
+    assert len(hole) == 4 and hole[0][1] < hole[1][0] < 0 < 48 < hole[2][0] < hole[3][1]
+
+
+def test_a_collar_slides_off_the_end_of_the_shaft_it_is_nearer():
+    built = _collar()
+    ((part, onto, away),) = built.apart
+    assert (part, onto) == ("collar", "shaft") and away == pytest.approx((0.0, 0.0, 1.0))
+    low = _built("collar_on_shaft", lambda d: d["mates"][1].update(offset=_mm(-45.0)))
+    assert low.apart[0][2] == pytest.approx((0.0, 0.0, -1.0))
+
+
+def test_an_exploded_picture_is_drawn_and_says_so(tmp_path):
+    from cli_output import run_cli
+
+    built = _built("bracket_on_plate")
+    plain, _w, plain_height = render_combination(built, format="svg")
+    apart, _w, height = render_combination(built, format="svg", exploded=True)
+    assert height == plain_height and apart != plain
+    assert re.findall(r'data-balloon="(\d+)"', apart.decode("utf-8")) == ["1", "2", "3", "4", "5"]
+    assert render_combination(built, format="svg") == (plain, _w, plain_height)  # nothing kept
+    picture = tmp_path / "apart.png"
+    code, out, _err = run_cli(
+        "combine", str(_EXAMPLES / "bracket_on_plate.combination.yaml"),
+        "--picture", str(picture), "--exploded",
+    )  # fmt: skip
+    assert code == 2 and picture.read_bytes().startswith(b"\x89PNG") and f"wrote {picture}" in out

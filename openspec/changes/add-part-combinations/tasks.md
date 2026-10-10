@@ -35,12 +35,10 @@ Depends on `expand-drawable-parts` groups 1 and 2 (registry, shared features, pr
 - [x] 4.1 Assembly views: per-part tone, balloons, parts list
 - [x] 4.1b A failing mate marked on the picture: an X on the part it places, and a row under
       the parts list naming the check
-- [ ] 4.1c Exploded view; weld symbol
-      — tried 2026-10-10 and not shipped: moving each body away from the first part's middle
-      slides a bolt sideways out of its hole and carries a washer through the bolt's head.
-      An exploded view needs each body's own direction and order of assembly, which the
-      mates and hardware stacks know and the built combination does not yet carry. The weld
-      symbol needs the standard's symbol geometry, which is not recorded here.
+- [x] 4.1c Exploded view: `--exploded` draws each part off the part it goes onto, along its
+      mate, and hardware out along its hole in order (a first attempt that scaled from the
+      base part's middle slid bolts sideways and was not shipped)
+- [ ] 4.1d Weld symbol — needs the standard's symbol geometry, which is not recorded here
 - [x] 4.2 STEP AP242 assembly with named components and transforms; referee job reads it
 - [x] 4.3 Bill of materials (text, JSON, in the evidence bundle)
 - [x] 4.4 Export gated on the combination's card

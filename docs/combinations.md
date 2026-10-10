@@ -131,7 +131,9 @@ flush faces.
 - **A picture.** Four views on one sheet, each part in its own tone and numbered, with the
   parts list underneath. The numbers are the parts list's.
   A check that fails is marked with an X on the part it is about, and named in a row
-  under the parts list; the card has the reason.
+  under the parts list; the card has the reason. `anvilate combine --picture FILE
+  --exploded` draws the parts apart instead: each off the part it goes onto, the way its
+  mate takes it off, and the hardware out along its own holes in the order it goes in.
 - **A parts list.** Every part with its pattern, material and mass, and every fastener
   with its designation and count.
 - **A STEP assembly.** AP242, each part a named component with its own placement, each

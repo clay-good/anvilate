@@ -555,6 +555,7 @@ def render_assembly(
     marks: Sequence[tuple[str, int]],
     width_px: int,
     unit: str = "mm",
+    dimensions: bool = True,
 ) -> tuple[bytes, int]:
     """A combination on one image: four views, each body in its own tone, and a parts list.
 
@@ -598,7 +599,7 @@ def render_assembly(
             y,
             cell_w,
             cell_h,
-            dimensions=view != "iso",
+            dimensions=dimensions and view != "iso",
             unit=unit,
             palettes=palettes,
             marks=balloons if view == "iso" else (),

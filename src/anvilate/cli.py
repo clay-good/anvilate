@@ -593,6 +593,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--picture", type=Path, help="write the numbered drawing here (.png or .svg)"
     )
     combine.add_argument(
+        "--exploded",
+        action="store_true",
+        help="draw the picture with the parts apart, each off the part it goes onto",
+    )
+    combine.add_argument(
         "--unvalidated",
         action="store_true",
         help="write the STEP assembly marked unvalidated when the card does not pass",
@@ -1107,7 +1112,7 @@ def _combine(args: argparse.Namespace, *, out, err) -> int:
         print(f"  {'':<14} {entry.detail}", file=out)
     if args.picture is not None:
         image, _width, _height = render_combination(
-            built, format=args.picture.suffix.lower().lstrip(".")
+            built, format=args.picture.suffix.lower().lstrip("."), exploded=args.exploded
         )
         args.picture.write_bytes(image)
         print(f"wrote {args.picture}", file=out)

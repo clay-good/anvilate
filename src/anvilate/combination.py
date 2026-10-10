@@ -38,6 +38,8 @@ from .units import Quantity
 
 __all__ = [
     "COMBINATION_VERSION",
+    "EXPLODED_PART",
+    "EXPLODED_STEP",
     "BomLine",
     "BuiltCombination",
     "Combination",
@@ -59,6 +61,12 @@ __all__ = [
 ]
 
 COMBINATION_VERSION = "1.0.0"
+
+#: An exploded view's two distances, as fractions of the assembly's longest side: how far a
+#: part is drawn from the part it goes onto, and how far one piece of hardware is drawn
+#: from the next along its hole.
+EXPLODED_PART = 0.4
+EXPLODED_STEP = 0.14
 
 #: How far apart two mated holes may be when the document declares no tolerance and no
 #: fastener says how much room there is: a micrometre, which is to say they must agree.
@@ -640,6 +648,11 @@ class HardwareBody:
     solid: Any
     rotation: Matrix
     translation: Vec
+    # For an exploded view: the part this body moves with, the way it comes off, and how
+    # many steps along that way it is drawn, so a washer stays between its bolt and its part.
+    rides: str = ""
+    away: Vec = (0.0, 0.0, 0.0)
+    steps: float = 0.0
 
     @property
     def shape(self) -> Any:
@@ -720,6 +733,9 @@ class BuiltCombination:
     bom: tuple[BomLine, ...]
     # Each mate and the part it places, so a failing check can be marked where it is.
     placed_by: tuple[tuple[str, str], ...] = ()
+    # Each placed part, the part it goes onto and the way it comes off it, for an exploded
+    # view. The first part goes onto nothing.
+    apart: tuple[tuple[str, str, Vec], ...] = ()
 
     def summary(self) -> CombinationSummary:
         """The document the surfaces publish: each part's place, and the parts list."""
@@ -1079,6 +1095,9 @@ def _stack(
                     washer_solid,
                     upright,
                     _add(seat, _scale(outward, top)),
+                    moving.id,
+                    outward,
+                    1.0,
                 )  # fmt: skip
             )
         bodies.append(
@@ -1089,6 +1108,9 @@ def _stack(
                 bolt_solid,
                 upright,
                 _add(seat, _scale(outward, top + washer_thickness)),
+                moving.id,
+                outward,
+                2.0,
             )  # fmt: skip
         )
         if nut_solid is not None:
@@ -1101,6 +1123,9 @@ def _stack(
                         washer_solid,
                         inverted,
                         _add(seat, _scale(outward, -under)),
+                        fixed.id,
+                        _scale(outward, -1.0),
+                        1.0,
                     )  # fmt: skip
                 )
             bodies.append(
@@ -1111,6 +1136,9 @@ def _stack(
                     nut_solid,
                     inverted,
                     _add(seat, _scale(outward, -under - washer_thickness)),
+                    fixed.id,
+                    _scale(outward, -1.0),
+                    2.0,
                 )  # fmt: skip
             )
 
@@ -1267,6 +1295,10 @@ def _seated_key(
         solid,
         shaft.rotation,
         shaft.translation,
+        # A key lifts out of its keyway, square to the shaft, and moves with the shaft.
+        shaft.id,
+        shaft.direction((1.0, 0.0, 0.0)),
+        1.0,
     )
 
     seat_width, seat_depth = dims(hub).get("keyway_width"), dims(hub).get("keyway_depth")
@@ -1429,7 +1461,20 @@ def _pins(
             for tag, hole in ((mine_tag, mine), (their_tag, theirs))
             if not math.isclose(hole.diameter_mm, diameter, rel_tol=0.0, abs_tol=EXACT_MM)
         ]
-        bodies.append(HardwareBody(f"{stack.pin}x{length:g}", "pin", mate.id, solid, upright, seat))
+        # A pin comes out half way between the two parts it locates.
+        bodies.append(
+            HardwareBody(
+                f"{stack.pin}x{length:g}",
+                "pin",
+                mate.id,
+                solid,
+                upright,
+                seat,
+                fixed.id,
+                outward,
+                EXPLODED_PART / EXPLODED_STEP / 2,
+            )  # fmt: skip
+        )
     entries = [
         ScorecardEntry(
             name=f"{mate.id} pin fit",
@@ -1746,6 +1791,22 @@ def build_combination(combination: Combination) -> BuiltCombination:
         rotation, translation, turns_freely = _place(part.id, built, mates, placed)
         placed[part.id] = PlacedPart(part.id, built, spec, rotation, translation, turns_freely)
 
+    apart = []
+    for part in combination.parts[1:]:
+        mate = next(mate for mate in combination.mates if mate.place.part == part.id)
+        moving, fixed = placed[part.id], placed[mate.on.part]
+        if mate.kind == "shaft_in_bore":
+            local_point, local_axis = _axis(mate, "on", mate.on, fixed.built)
+            away = fixed.direction(local_axis)
+            # Off the end the part is nearer to.
+            box, other = moving.shape.bounding_box().center(), fixed.shape.bounding_box().center()
+            if _dot(_sub((box.X, box.Y, box.Z), (other.X, other.Y, other.Z)), away) < 0:
+                away = _scale(away, -1.0)
+        else:
+            _point, normal = _face(fixed.id, fixed.built, str(mate.on.face))
+            away = fixed.direction(normal)
+        apart.append((part.id, fixed.id, away))
+
     stacks = {stack.mate: stack for stack in combination.hardware}
     hardware: list[HardwareBody] = []
     for part in combination.parts:
@@ -1836,6 +1897,7 @@ def build_combination(combination: Combination) -> BuiltCombination:
         card=Scorecard(entries=tuple(entries)),
         bom=tuple(bom),
         placed_by=tuple((str(mate.id), str(mate.place.part)) for mate in combination.mates),
+        apart=tuple(apart),
     )
 
 
@@ -1886,15 +1948,44 @@ def _failing(
     return marks + [("X", number) for number in marked], rows
 
 
+def _exploded(
+    built: BuiltCombination, bodies: Sequence[tuple[str, Any, bool]], size: float
+) -> list[tuple[str, Any, bool]]:
+    """Every body moved to where an exploded view draws it, in the order ``bodies`` has them."""
+    from build123d import Location
+
+    moved: dict[str, Vec] = {built.parts[0].id: (0.0, 0.0, 0.0)}
+    for part, onto, away in built.apart:  # in placement order, so `onto` is already moved
+        moved[part] = _add(moved[onto], _scale(away, EXPLODED_PART * size))
+    shifts = [moved[part.id] for part in built.parts] + [
+        _add(
+            moved.get(body.rides, (0.0, 0.0, 0.0)),
+            _scale(body.away, EXPLODED_STEP * size * body.steps),
+        )
+        for body in built.hardware
+    ]
+    return [
+        (label, shape.moved(Location(shift)), envelope)
+        for (label, shape, envelope), shift in zip(bodies, shifts, strict=True)
+    ]
+
+
 def render_combination(
     built: BuiltCombination,
     *,
     width_px: int = 1100,
     format: str = "png",  # noqa: A002
+    exploded: bool = False,
 ) -> tuple[bytes, int, int]:
     """The combination as one picture: four views, each part numbered, the parts list below.
 
     Returns the image, its width and its height. ``format`` is ``png`` or ``svg``.
+
+    ``exploded`` draws the parts apart, each moved off the part it goes onto, the way its
+    mate takes it off: square to the mated face, or along the shared axis. Hardware comes
+    off along its own hole, in order, so a washer stays between its bolt and its part. The
+    stated size is the assembled one, the views carry no dimensions, and the picture says
+    it is exploded.
     """
     from . import projection
     from .raster import svg_to_png
@@ -1912,10 +2003,16 @@ def render_combination(
         max(tuple(shape.bounding_box().max)[axis] for _l, shape, _e in bodies) for axis in range(3)
     ]
     size = " x ".join(f"{high - low:.4g}" for low, high in zip(box_low, box_high, strict=True))
+    if exploded:
+        bodies = _exploded(
+            built, bodies, max(h - lo for lo, h in zip(box_low, box_high, strict=True))
+        )
     svg, height = projection.render_assembly(
         bodies,
         name=built.name,
-        lines=[f"{size} mm", built.card.status.value.replace("_", " ")],
+        lines=[f"{size} mm", built.card.status.value.replace("_", " ")]
+        + (["exploded"] if exploded else []),
+        dimensions=not exploded,
         parts_list=[str(line) for line in built.bom] + failing,
         marks=marks,
         width_px=width_px,

@@ -62,7 +62,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | --- | --- | --- |
 | `build` | build an audited Design Spec geometry pattern as STEP or 3MF | `--ap214`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |
 | `check` | compile a spec document and screen it, printing the scorecard | `--format`, `--module`, `--show-work` |
-| `combine` | place several parts by the features they share, and check where they meet | `--force`, `--output`, `--picture`, `--unvalidated` |
+| `combine` | place several parts by the features they share, and check where they meet | `--exploded`, `--force`, `--output`, `--picture`, `--unvalidated` |
 | `diff` | compare two spec documents and the verdicts they screen to | `--format`, `--module` |
 | `doctor` | check which Anvilate runtime capabilities are ready | `--format` |
 | `export` | write a downstream artifact from a screened spec | `--artifact`, `--format`, `--module` |

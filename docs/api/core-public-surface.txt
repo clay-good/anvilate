@@ -111,6 +111,8 @@ cli.run
 combination.BomLine
 combination.BuiltCombination
 combination.COMBINATION_VERSION
+combination.EXPLODED_PART
+combination.EXPLODED_STEP
 combination.Combination
 combination.CombinationError
 combination.CombinationPart
