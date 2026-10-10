@@ -361,6 +361,10 @@ def launch_task(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
     # The worker is a new process: the third-party modules the server was started with are
     # handed over by path and enabled again there, so a task screens with the same modules.
     environment["ANVILATE_TASK_MODULES"] = json.dumps([str(m.path) for m in mcp._MODULES])
+    from ._outputs import output_folder
+
+    if output_folder() is not None:
+        environment["ANVILATE_OUT"] = str(output_folder())
     with store.execution_lease(task_id) as lease:
         store.enable_recovery(task_id)
         try:

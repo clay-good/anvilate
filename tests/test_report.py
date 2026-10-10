@@ -2242,8 +2242,6 @@ _VISUAL_ELEMENTS = frozenset(
         "math", "mrow", "mi", "mn", "mo", "mfrac", "msqrt", "msub", "msup", "mspace",
         # drawings of the part on the part sheet: the geometry is information, not ornament
         "figure", "img", "figcaption",
-        # the optional 3D view (`anvilate view --3d`): the part as a canvas, its mesh as data
-        "canvas", "script",
     }
 )  # fmt: skip
 # Typography, spacing, rules and the scheme; nothing that paints an image or a shadow.
@@ -2268,7 +2266,6 @@ def _rendered_corpus() -> list[str]:
     ] + [
         _report().to_html(views=(("iso", drawing),)),
         _report().to_html(views_absent="no geometry pattern for this element"),
-        _report().to_html(model_3d={"v": [0, 0, 0, 1, 0, 0, 0, 1, 0], "t": [0, 1, 2], "e": [0, 1]}),
     ]
 
 
@@ -2524,64 +2521,3 @@ def test_a_sheet_with_no_checks_states_no_verdict():
     text = _sheet_verdict()
     assert "no checks ran, so this sheet states no verdict" in text
     assert "governing" not in text
-
-
-_TRIANGLE = {"v": [0, 0, 0, 1, 0, 0, 0, 1, 0], "t": [0, 1, 2], "e": [0, 1, 1, 2, 2, 0]}
-
-
-def test_the_3d_view_carries_numbers_and_a_viewer_that_reaches_nothing_outside_the_page():
-    """The one place the sheet runs script, so the script is held to the page: it fetches
-    nothing, stores nothing, and reads only the mesh, which is numbers and cannot close its
-    tag. A sheet without the 3D view still carries no script at all."""
-    from anvilate.report.document import _VIEWER_JS
-
-    html = _report().to_html(model_3d=_TRIANGLE)
-    scripts = re.findall(r"<script([^>]*)>(.*?)</script>", html, re.S)
-    assert [attributes for attributes, _ in scripts] == [
-        ' type="application/json" id="part3d-mesh"',
-        "",
-    ]
-    mesh = json.loads(scripts[0][1])
-    assert set(mesh) == {"v", "t", "e"}
-    assert all(isinstance(x, int | float) for values in mesh.values() for x in values)
-    for reach in (
-        "fetch",
-        "XMLHttpRequest",
-        "WebSocket",
-        "import(",
-        "Storage",
-        "cookie",
-        "http",
-        "src=",
-        "eval",
-        "Function(",
-        "postMessage",
-        "window.open",
-    ):
-        assert reach not in _VIEWER_JS, reach
-    assert '<canvas id="part3d"' in html and 'id="part3d-fallback" hidden' in html
-    assert "<script" not in _report().to_html(views_absent="not drawn")
-
-
-def test_the_mesh_of_every_drawn_example_is_whole():
-    """Indices inside the vertex list, whole triangles and edge pairs, and a box's twelve
-    edges found as outline rather than its triangles' diagonals."""
-    pytest.importorskip("build123d")
-    from pathlib import Path
-
-    from anvilate.geometry import build_spec, tessellate
-    from anvilate.spec import load_spec_yaml
-
-    root = Path(__file__).resolve().parents[1] / "examples"
-    for name in ("base_plate", "cover_plate", "transmission_shaft", "timber_joist"):
-        mesh = tessellate(build_spec(load_spec_yaml((root / f"{name}.spec.yaml").read_text())))
-        points = len(mesh["v"]) // 3
-        assert len(mesh["v"]) % 3 == 0 and len(mesh["t"]) % 3 == 0 and len(mesh["e"]) % 2 == 0
-        assert mesh["t"] and all(0 <= i < points for i in mesh["t"] + mesh["e"]), name
-    box = tessellate(build_spec(load_spec_yaml((root / "base_plate.spec.yaml").read_text())))
-    corners = {tuple(box["v"][3 * i : 3 * i + 3]) for i in range(len(box["v"]) // 3)}
-    segments = {
-        frozenset((tuple(box["v"][3 * a : 3 * a + 3]), tuple(box["v"][3 * b : 3 * b + 3])))
-        for a, b in zip(box["e"][::2], box["e"][1::2], strict=True)
-    }
-    assert len(corners) == 8 and len(segments) == 12

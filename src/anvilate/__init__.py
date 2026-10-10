@@ -74,6 +74,10 @@ that already ran and does one more thing with them:
   only by path, run confined, and marked unverified-origin on every result.
 - :mod:`anvilate._sandbox_child` — the private confined child process one third-party
   module call runs in.
+- :mod:`anvilate.sheet` — the one-page part sheet, one static HTML file, written by
+  ``anvilate view`` and by the MCP export tool alike.
+- :mod:`anvilate._outputs` — the private writer for the one output folder the MCP server
+  is started with; no tool names a path.
 - :mod:`anvilate.raster` — the viewport SVG rasterized to PNG with the standard library,
   because a model reads PNG and not SVG.
 - :mod:`anvilate.ingest` — requirement documents read into a draft spec, where an

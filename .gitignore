@@ -50,3 +50,6 @@ Thumbs.db
 /padeye.dxf
 /padeye.html
 /position_callout.dxf
+
+# What `anvilate-mcp` writes when started here with no --out: the agent's results.
+/anvilate-out/

@@ -224,22 +224,29 @@ def test_export_is_no_longer_a_divergence_and_the_bundles_are_identical():
     assert at_the_shell["status"] == CheckStatus.NOT_EVALUATED.value
 
 
-def test_dxf_is_local_and_the_remote_surface_names_its_delivery_boundary():
-    """The CLI can build DXF, while MCP has no approved CAD-content delivery contract."""
-    from anvilate.cli import _NEEDS_GEOMETRY, _NOT_YET_OVER_MCP, EXIT_NOT_EVALUATED
+def test_dxf_is_gated_the_same_way_at_the_shell_and_over_mcp(tmp_path, monkeypatch):
+    """Both doors write a DXF for a passing plate and refuse one for a card that does not
+    pass. The MCP tool used to refuse DXF outright, because it had no way to deliver a CAD
+    file; it writes to the server's output folder now, under the same gate."""
+    pytest.importorskip("build123d")
+    pytest.importorskip("ezdxf")
+    import yaml
 
-    handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
+    from anvilate.cli import _NEEDS_GEOMETRY, EXIT_NOT_EVALUATED
+
     assert _NEEDS_GEOMETRY == {}
-    reason = _NOT_YET_OVER_MCP["dxf"]
-    error = _mcp("export_artifact", {"subject": handle, "format": "dxf"})["error"]
-    assert error["code"] == -32000
-    assert reason in error["message"]
-
-    # Local DXF is built for a passing card, and gated for one that does not pass.
-    code, output, err = _cli(
-        "export", "--artifact", "dxf", str(_REPO / "examples" / "base_plate.spec.yaml")
-    )
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    plate = _REPO / "examples" / "base_plate.spec.yaml"
+    code, output, err = _cli("export", "--artifact", "dxf", str(plate))
     assert code == 0 and err == "" and "SECTION" in output
+    built = _mcp("build_part", {"spec": yaml.safe_load(plate.read_text(encoding="utf-8"))})
+    handle = built["result"]["structuredContent"]["subject"]
+    file = _mcp("export_artifact", {"subject": handle, "format": "dxf"})["result"][
+        "structuredContent"
+    ]["file"]
+    assert Path(file["path"]).parent == tmp_path.resolve()
+    assert Path(file["path"]).read_text(encoding="utf-8") == output
+
     code, output, err = _cli(
         "export", "--artifact", "dxf", str(_REPO / "examples" / "nema23_bracket.spec.yaml")
     )
@@ -374,36 +381,37 @@ def test_no_live_document_says_qif_results_need_built_geometry():
     )
 
 
-def test_the_surfaces_refuse_different_sets_and_each_says_why_it_refuses():
-    """The two are not obliged to serve the same artifacts — they are obliged to be honest.
+def test_every_mcp_export_format_is_one_the_shell_also_produces(tmp_path, monkeypatch):
+    """The two surfaces serve the same artifacts, and a refusal says what is true of it.
 
-    QIF was refused at both, in one sentence, saying it "carries measured characteristics
-    against a built part". That is false: `export_qif_results` takes a `BundleSections`. The
-    shell serves it now; the tool still does not, because its published result carries the
-    evidence bundle *document* and QIF results are XML. So the table is two tables, each
-    entry a true statement, and the MCP refusal for `qif` may not claim geometry — the
-    failure mode being guarded against is one surface inheriting the other's excuse.
+    The tool refused QIF and DXF for a reason of its own (its result could carry only the
+    bundle document). It writes files now, so nothing is refused for being undeliverable.
+    Each published format names the shell command that produces the same artifact, and a
+    file format asked of a server with no output folder says that, not something else.
     """
-    from anvilate.cli import _NEEDS_GEOMETRY, _NOT_YET_OVER_MCP, _UNSERVED_OVER_MCP
+    from anvilate.cli import _MCP_FORMAT_COMMAND
 
-    assert set(_UNSERVED_OVER_MCP) == set(_NEEDS_GEOMETRY) | set(_NOT_YET_OVER_MCP)
-    assert not set(_NEEDS_GEOMETRY) & set(_NOT_YET_OVER_MCP), "a reason cannot be both"
-
-    handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
-    message = _mcp("export_artifact", {"subject": handle, "format": "qif"})["error"]["message"]
-    assert _NOT_YET_OVER_MCP["qif"] in message
-    assert "geometry" not in message and "built part" not in message
-    # And it names the surface that does serve it, so the refusal is one a client can act on.
-    assert "anvilate export --artifact qif" in message
-
-    # The formats the enum publishes that are *not* refused over MCP are the served ones, so
-    # a new unbuilt format cannot be added without this failing.
     published = set(
         {t.name: t for t in tool_catalog()}["export_artifact"].input_schema["properties"]["format"][
             "enum"
         ]
     )
-    assert published - set(_UNSERVED_OVER_MCP) == {"evidence_bundle"}
+    assert published == set(_MCP_FORMAT_COMMAND)
+
+    handle = _mcp("run_validation", {"spec": _document()})["result"]["structuredContent"]["subject"]
+    monkeypatch.delenv("ANVILATE_OUT", raising=False)
+    message = _mcp("export_artifact", {"subject": handle, "format": "part_sheet"})["error"][
+        "message"
+    ]
+    assert "started without an output folder" in message and "--out" in message
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    # The card behind this handle does not pass, so QIF is refused by the gate, in the gate's
+    # words, while the sheet and the bundle are written whatever the verdict.
+    refused = _mcp("export_artifact", {"subject": handle, "format": "qif"})["error"]["message"]
+    assert "export is gated" in refused and "grants no override" in refused
+    sheet = _mcp("export_artifact", {"subject": handle, "format": "part_sheet"})["result"]
+    assert Path(sheet["structuredContent"]["file"]["path"]).read_text().startswith("<!DOCTYPE")
 
 
 def _hostile_documents():
@@ -586,7 +594,7 @@ def test_the_two_surfaces_name_the_same_artifacts_in_their_own_spelling():
     separator convention cannot excuse: an artifact added to one surface and not the other,
     or added to both under names that are not the same word.
     """
-    from anvilate.cli import _ARTIFACTS
+    from anvilate.cli import _ARTIFACTS, _MCP_FORMAT_COMMAND
 
     tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
     over_mcp = set(tool.input_schema["properties"]["format"]["enum"])
@@ -596,12 +604,21 @@ def test_the_two_surfaces_name_the_same_artifacts_in_their_own_spelling():
     def normalised(names: set[str]) -> set[str]:
         return {name.replace("-", "_") for name in names}
 
-    assert normalised(over_mcp) == normalised(at_the_shell), (
+    # The shell reaches three of the tool's formats through other commands (`build` writes
+    # STEP and 3MF, `view` writes the sheet), so the comparison is over `export` alone, and
+    # every other MCP format must name the command that makes it.
+    through_export = {
+        name for name, command in _MCP_FORMAT_COMMAND.items() if command.startswith("export")
+    }
+    assert set(_MCP_FORMAT_COMMAND) == over_mcp
+    assert normalised(through_export) == normalised(at_the_shell), (
         f"the surfaces offer different artifacts: only at the shell "
-        f"{sorted(normalised(at_the_shell) - normalised(over_mcp))}, only over MCP "
-        f"{sorted(normalised(over_mcp) - normalised(at_the_shell))}. Adding one to a single "
-        "surface is how a capability becomes reachable from one door and not the other"
+        f"{sorted(normalised(at_the_shell) - normalised(through_export))}, only over MCP "
+        f"{sorted(normalised(through_export) - normalised(at_the_shell))}. Adding one to a "
+        "single surface is how a capability becomes reachable from one door and not the other"
     )
+    parser_commands = {"build", "view", "export"}
+    assert {command.split()[0] for command in _MCP_FORMAT_COMMAND.values()} <= parser_commands
     # And each keeps its own spelling, so this is a parity check and not a rename waiting
     # to happen: `evidence-bundle` at the shell, `evidence_bundle` over MCP.
     assert "evidence-bundle" in at_the_shell and "evidence-bundle" not in over_mcp

@@ -56,17 +56,29 @@ def test_the_catalog_covers_exactly_the_specified_operations():
     assert len(set(names)) == len(names)
 
 
+# The tools whose result is an image. They publish no output schema and return no structured
+# content, because Claude Code and Codex forward only the structured content to the model
+# when a result carries both, and the picture then never arrives.
+_IMAGE_TOOLS = {"render_viewport"}
+
+
 def test_every_tool_returns_typed_output():
-    # "structuredContent, never prose-only" is the requirement. A tool with an empty
-    # output schema satisfies the letter of "has an outputSchema" and none of the point.
+    # "structuredContent, never prose-only" is the requirement, with one exception: a tool
+    # that returns an image. A tool with an empty output schema satisfies the letter of "has
+    # an outputSchema" and none of the point.
+    untyped = set()
     for tool in tool_catalog():
+        if tool.output_schema is None:
+            untyped.add(tool.name)
+            continue
         assert tool.output_schema["properties"], f"{tool.name} returns nothing typed"
+    assert untyped == _IMAGE_TOOLS
 
 
 def test_the_published_contracts_are_referenced_rather_than_paraphrased():
     refs = set()
     for tool in tool_catalog():
-        for schema in (tool.input_schema, tool.output_schema):
+        for schema in (tool.input_schema, tool.output_schema or {"properties": {}}):
             for subschema in schema["properties"].values():
                 if "$ref" in subschema:
                     refs.add(subschema["$ref"])
@@ -261,16 +273,16 @@ def test_the_wire_format_is_what_a_client_receives():
     definitions = wire_definitions()
     assert len(definitions) == len(tool_catalog())
     for definition in definitions:
+        image = definition["name"] in _IMAGE_TOOLS
         assert set(definition) == {
             "name",
             "title",
             "description",
             "inputSchema",
-            "outputSchema",
             "_meta",
-        }
+        } | (set() if image else {"outputSchema"})
         assert definition["inputSchema"]["$schema"] == JSON_SCHEMA_DIALECT
-        assert definition["outputSchema"]["$schema"] == JSON_SCHEMA_DIALECT
+        assert image or definition["outputSchema"]["$schema"] == JSON_SCHEMA_DIALECT
         # Namespaced, so nothing here can collide with a protocol key of the same name.
         assert all(key.startswith("dev.anvilate/") for key in definition["_meta"])
 
@@ -307,6 +319,8 @@ def test_both_schemas_of_every_tool_are_the_clients_own_copy():
     keys = (("inputSchema", "input_schema"), ("outputSchema", "output_schema"))
     for tool in catalog:
         for wire_key, field in keys:
+            if getattr(tool, field) is None:
+                continue
             payload = tool.to_wire()
             payload[wire_key]["additionalProperties"] = True
             payload[wire_key].pop("$schema", None)
@@ -334,7 +348,8 @@ def test_a_definition_a_caller_wrote_through_does_not_reach_the_next_catalog():
     poisoned = tool_catalog()
     for tool in poisoned:
         tool.input_schema["additionalProperties"] = True
-        tool.output_schema.pop("$schema", None)
+        if tool.output_schema is not None:
+            tool.output_schema.pop("$schema", None)
     # The mutation is a real defect and not merely a difference: fed to the catalog's own
     # checker, the poisoned schemas are reported. `catalog_issues()` cannot see them, and
     # that is the property under test — it rebuilds, so it never reads the poisoned objects.
@@ -346,7 +361,7 @@ def test_a_definition_a_caller_wrote_through_does_not_reach_the_next_catalog():
             f"{tool.name}: a definition handed to one caller is the same object the next "
             "caller gets, so an edit to it outlives the caller and reaches the gate"
         )
-        assert "$schema" in tool.output_schema, tool.name
+        assert tool.output_schema is None or "$schema" in tool.output_schema, tool.name
     assert catalog_issues() == []
     assert tool_catalog()[0] is not poisoned[0]
 
@@ -1094,39 +1109,57 @@ def test_render_viewport_returns_the_same_svg_as_structured_data_and_an_image_at
     result = _call(
         "render_viewport", {"subject": handle, "view": "iso", "width_px": 640, "format": "svg"}
     )["result"]
-    viewport = result["structuredContent"]["viewport"]
-    attachment = result["content"][1]
+    summary, attachment = result["content"]
 
     assert result["isError"] is False
-    assert (viewport["width_px"], viewport["height_px"]) == (640, 480)
-    assert viewport["mime_type"] == attachment["mimeType"] == "image/svg+xml"
-    assert viewport["image"] == attachment["data"]
+    assert "structuredContent" not in result, "an image result carries nothing structured"
+    assert summary["type"] == "text" and "iso view, 640x480 px, image/svg+xml" in summary["text"]
+    assert attachment["mimeType"] == "image/svg+xml"
     assert base64.b64decode(attachment["data"]).startswith(b'<?xml version="1.0"')
-    assert "image" not in json.loads(result["content"][0]["text"])["viewport"]
 
 
-def test_render_viewport_attaches_a_png_by_default_because_a_model_reads_png():
-    """An SVG attachment reached the model as an image it could not look at: model image
-    input is PNG, JPEG, GIF or WebP. The default is now a PNG of the same drawing."""
+def test_render_viewport_returns_a_png_the_model_can_see_and_writes_it(tmp_path, monkeypatch):
+    """Model image input is PNG, JPEG, GIF or WebP, and both target clients pass only the
+    structured content to the model when a result has it beside an image. So the result is a
+    sentence and the PNG, nothing structured, and the same bytes are written to the output
+    folder for the engineer to open."""
     import base64
+    import hashlib
     import struct
 
     pytest.importorskip("build123d")
+    out = tmp_path / "out"
+    monkeypatch.setenv("ANVILATE_OUT", str(out))
     built = _call("build_part", {"spec": _base_plate_document()})["result"]
     handle = built["structuredContent"]["subject"]
 
     result = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 640})["result"]
-    viewport = result["structuredContent"]["viewport"]
-    attachment = result["content"][1]
+    assert set(result) == {"content", "isError"}
+    summary, attachment = result["content"]
     png = base64.b64decode(attachment["data"])
 
-    assert viewport["mime_type"] == attachment["mimeType"] == "image/png"
-    assert viewport["image"] == attachment["data"]
+    assert attachment["type"] == "image" and attachment["mimeType"] == "image/png"
     assert png.startswith(b"\x89PNG\r\n\x1a\n")
     assert struct.unpack(">II", png[16:24]) == (640, 480)
-    # Deterministic, so the digest still names the drawing.
+    written = out / "bp1-iso.png"
+    assert written.read_bytes() == png
+    digest = hashlib.sha256(png).hexdigest()
+    assert f"sha256 {digest}" in summary["text"] and str(written.resolve()) in summary["text"]
+    # Deterministic, so the digest still names the drawing, and a rebuild replaces the file.
     again = _call("render_viewport", {"subject": handle, "view": "iso", "width_px": 640})
-    assert again["result"]["structuredContent"]["viewport"]["sha256"] == viewport["sha256"]
+    assert again["result"]["content"][1]["data"] == attachment["data"]
+    assert sorted(path.name for path in out.iterdir()) == ["bp1-iso.png"]
+
+
+def test_no_tool_pairs_an_image_with_structured_content():
+    """The gate behind the test above: a tool that can return an image publishes no output
+    schema, so it has nothing structured to return beside it."""
+    from anvilate.mcp import _DISPATCH
+
+    assert {tool.name for tool in tool_catalog() if tool.output_schema is None} == _IMAGE_TOOLS
+    assert _IMAGE_TOOLS <= set(_DISPATCH)
+    for definition in wire_definitions():
+        assert ("outputSchema" in definition) != (definition["name"] in _IMAGE_TOOLS)
 
 
 def test_render_viewport_refuses_a_screening_handle_instead_of_rendering_the_wrong_subject():
@@ -1728,6 +1761,11 @@ def test_a_dispatched_result_validates_against_the_released_schemas(tool_name):
     jsonschema = pytest.importorskip("jsonschema")
     result = _call(tool_name, _dispatched_arguments(tool_name))["result"]
     tool = {tool.name: tool for tool in tool_catalog()}[tool_name]
+    if tool_name in _IMAGE_TOOLS:
+        # An image result publishes no schema to hold it to; what it must be is checked in
+        # `test_render_viewport_returns_a_png_the_model_can_see_and_writes_it`.
+        assert "structuredContent" not in result and tool.output_schema is None
+        return
     registry = _released_registry()
     validator = jsonschema.Draft202012Validator(tool.output_schema, registry=registry)
     errors = [
@@ -2748,6 +2786,9 @@ def test_every_tool_schema_compiles_offline_from_its_own_definition():
 
     for tool in wire_definitions():
         for label in ("inputSchema", "outputSchema"):
+            if label not in tool:
+                assert tool["name"] in _IMAGE_TOOLS
+                continue
             schema = tool[label]
             # A registry holding nothing but this definition, its embedded `$id`s crawled.
             registry = (

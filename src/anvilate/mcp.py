@@ -47,6 +47,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from enum import StrEnum
 from functools import cache
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, TextIO
 
@@ -54,6 +55,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from ._mcp_tasks import TASKS_EXTENSION
 from ._models import Named, RevalidatedModel, _reason, _refusal_line, parse_json
+from ._outputs import output_folder, safe_stem, set_output_folder, write_output
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .evidence import provenance_for
@@ -199,6 +201,30 @@ _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.4.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.2.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
 
+# The size a tool result may reach, in characters of its JSON. Claude Code warns at about
+# 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
+# result stays well under both, and anything larger is a file in the output folder that the
+# result names. Held over every document in the spec corpus by tests/test_mcp_outputs.py.
+RESULT_BUDGET_CHARS = 60_000
+
+# What `export_artifact` produces, and which handle each is made from: a screening result
+# (the card and its spec) or a built part.
+_FROM_SCREENING = ("evidence_bundle", "qif", "part_sheet")
+_FROM_BUILT_PART = ("step", "3mf", "dxf")
+_EXPORT_FORMATS = (*_FROM_SCREENING, *_FROM_BUILT_PART)
+
+# One file written to the output folder, as every tool that writes one reports it.
+_FILE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "path": {"type": "string"},
+        "bytes": {"type": "integer"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    },
+    "required": ["path", "bytes", "sha256"],
+    "additionalProperties": False,
+}
+
 # What a tool takes to say *what* it acts on: a handle into the content-addressed store, not
 # a memory of the last call. This was chosen over carrying whole payloads and over a session
 # in `openspec/changes/archive/2026-09-01-resolve-mcp-tool-subjects`; `anvilate.store` states
@@ -272,7 +298,11 @@ class ToolDefinition(RevalidatedModel):
     title: str = Field(min_length=1)
     description: str = Field(min_length=1)
     input_schema: dict[str, Any]
-    output_schema: dict[str, Any]
+    # ``None`` for a tool whose result is an image. The target clients (Claude Code, Codex)
+    # forward only `structuredContent` to the model when a result carries it beside an image,
+    # so the picture never arrived. A tool that returns an image therefore declares no output
+    # schema and returns the image with a text summary and nothing structured.
+    output_schema: dict[str, Any] | None
     cost: Cost
     tiers: tuple[ValidationTier, ...] = ()
     executes_caller_code: bool = False
@@ -364,7 +394,11 @@ class ToolDefinition(RevalidatedModel):
             "title": self.title,
             "description": self.description,
             "inputSchema": _with_embedded(self.input_schema),
-            "outputSchema": _with_embedded(self.output_schema),
+            **(
+                {}
+                if self.output_schema is None
+                else {"outputSchema": _with_embedded(self.output_schema)}
+            ),
             "_meta": {
                 "dev.anvilate/dispatch": self.dispatch.value,
                 "dev.anvilate/cost": self.cost.value,
@@ -486,9 +520,10 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Render a viewport image",
             description=(
                 "Render the built part from a named view, so an agent can see what it made "
-                "before proposing the next edit. Returns the image as an attachment "
-                "alongside the structured view metadata: PNG by default, which a model can "
-                "look at, or the SVG drawing with format svg."
+                "before proposing the next edit. Returns the image and one line of text "
+                "(view, size, digest, where the file was written): PNG by default, which a "
+                "model can look at, or the SVG drawing with format svg. The image is also "
+                "written to the server's output folder for the engineer to open."
             ),
             input_schema=_object_schema(
                 {
@@ -506,10 +541,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 },
                 required=["subject", "view"],
             ),
-            output_schema=_object_schema(
-                {"viewport": {"$ref": _VIEWPORT_REF}},
-                required=["viewport"],
-            ),
+            output_schema=None,
             cost=Cost.BOUNDED,
             subject="subject",
             backing="anvilate.geometry:render_viewport",
@@ -638,17 +670,18 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             name="export_artifact",
             title="Export an artifact",
             description=(
-                "Return a downstream document — an evidence bundle today, a QIF results "
-                "file or a DXF once its result contract is published — for the scorecard a handle "
-                "names. The document is returned, not written: this surface names no path "
-                "and touches no filesystem the caller chose, so a client saves it or does "
-                "not. Export is gated on validation and the result carries the screening "
-                "watermark; the MCP surface grants no bypass of either."
+                "Export what the engineer takes away. From a run_validation handle: the "
+                "evidence bundle (returned, and written), a QIF results file, or the one-page "
+                "part sheet. From a build_part handle: the STEP file to open in CAD, a 3MF "
+                "mesh, or a DXF profile for a flat part. Files are written to the server's "
+                "output folder and the result names each path, size and SHA-256; no tool "
+                "takes a destination. STEP, 3MF, DXF and QIF are written only when the "
+                "part's checks pass, and this surface grants no override."
             ),
             input_schema=_object_schema(
                 {
                     "subject": _SUBJECT_SCHEMA,
-                    "format": {"type": "string", "enum": ["qif", "dxf", "evidence_bundle"]},
+                    "format": {"type": "string", "enum": list(_EXPORT_FORMATS)},
                 },
                 required=["subject", "format"],
             ),
@@ -657,15 +690,14 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "format": {"type": "string"},
                     # The bundle itself, as the primitives `BundleSections.to_document_dict`
                     # produces — the roll-up *and* the card, because a bundle whose checks a
-                    # reviewer cannot read is not evidence. It was `{"type": "object"}`: the
-                    # one thing this tool exists to hand a client was the one thing its
-                    # published schema said nothing about, because there was no bundle
-                    # contract to `$ref`. There is now, generated from
-                    # `anvilate.bundle.BundleDocument`.
+                    # reviewer cannot read is not evidence. Present for `evidence_bundle`.
                     "bundle": {"$ref": _BUNDLE_REF},
                     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    # The file a call wrote: where, how big, and its digest. Absent only
+                    # for a bundle returned by a server with no output folder.
+                    "file": _FILE_SCHEMA,
                 },
-                required=["format", "bundle", "sha256"],
+                required=["format", "sha256"],
             ),
             cost=Cost.BOUNDED,
             emits_artifacts=True,
@@ -781,8 +813,9 @@ def catalog_issues() -> list[str]:
     referenced: set[str] = set()
     for tool in catalog:
         issues.extend(_schema_issues(tool, "input_schema", tool.input_schema))
-        issues.extend(_schema_issues(tool, "output_schema", tool.output_schema))
-        referenced |= _refs(tool.input_schema) | _refs(tool.output_schema)
+        if tool.output_schema is not None:
+            issues.extend(_schema_issues(tool, "output_schema", tool.output_schema))
+        referenced |= _refs(tool.input_schema) | _refs(tool.output_schema or {})
     for contract in (_SPEC_REF, _SCORECARD_REF):
         if contract not in referenced:
             issues.append(
@@ -1003,6 +1036,10 @@ def result_issues(tool: ToolDefinition, structured: Mapping[str, Any]) -> list[s
     validates a real result of every dispatched tool — a check with a network-shaped
     dependency does not belong on the path a caller waits on.
     """
+    if tool.output_schema is None:
+        # An image result has no published shape to hold it to; the image document it is
+        # built from was validated by its own model when it was rendered.
+        return []
     return _object_issues(tool.name, structured, tool.output_schema, noun="result property")
 
 
@@ -1504,20 +1541,39 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
 def _task_call_result(structured: Mapping[str, Any]) -> dict[str, Any]:
     """The CallToolResult shared by synchronous calls and completed task calls."""
     document = dict(structured)
-    text_document = deepcopy(document)
-    content: list[dict[str, Any]] = []
     viewport = document.get("viewport")
-    if isinstance(viewport, Mapping):
-        data = viewport.get("image")
-        mime_type = viewport.get("mime_type")
-        if isinstance(data, str) and isinstance(mime_type, str):
-            text_document["viewport"].pop("image", None)
-            content.append({"type": "image", "data": data, "mimeType": mime_type})
-    content.insert(0, {"type": "text", "text": json.dumps(text_document, sort_keys=True)})
+    if isinstance(viewport, Mapping) and isinstance(viewport.get("image"), str):
+        return _image_call_result(viewport, document.get("file"))
     return {
-        "content": content,
+        "content": [{"type": "text", "text": json.dumps(document, sort_keys=True)}],
         "structuredContent": document,
         "isError": bool(document.get("errors")),
+    }
+
+
+def _image_call_result(viewport: Mapping[str, Any], file: Any) -> dict[str, Any]:
+    """A rendered view as the model can see it: one sentence, then the image, nothing else.
+
+    No ``structuredContent``. Claude Code and Codex both pass only the structured content to
+    the model when a result has it beside an image, and a render the agent cannot look at
+    is not a render. The sentence carries what the structured document used to: the view,
+    the size, the digest and where the file was written.
+    """
+    where = (
+        f"written to {file['path']}"
+        if isinstance(file, Mapping)
+        else "not written to disk (the server has no output folder)"
+    )
+    summary = (
+        f"{viewport['view']} view, {viewport['width_px']}x{viewport['height_px']} px, "
+        f"{viewport['mime_type']}, sha256 {viewport['sha256']}; {where}."
+    )
+    return {
+        "content": [
+            {"type": "text", "text": summary},
+            {"type": "image", "data": viewport["image"], "mimeType": viewport["mime_type"]},
+        ],
+        "isError": False,
     }
 
 
@@ -1713,6 +1769,13 @@ def _built_geometry(handle: str):
     return built
 
 
+def _written(name: str, data: bytes) -> dict[str, Any] | None:
+    """Write one result into the output folder, or ``None`` when the server has none."""
+    if output_folder() is None:
+        return None
+    return write_output(name, data)
+
+
 def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """Render a built-geometry subject as a schema-backed MCP image attachment."""
     from .geometry import GeometryError, GeometryUnavailable, UnsupportedGeometry, render_viewport
@@ -1733,7 +1796,9 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _Unavailable(str(failure)) from failure
     except GeometryError as failure:
         raise _InvalidArguments([str(failure)], operation="render_viewport") from failure
-    return {"viewport": rendered.document().model_dump(mode="json")}
+    extension = "png" if rendered.format == "png" else "svg"
+    file = _written(f"{safe_stem(built.name)}-{rendered.view}.{extension}", rendered.data)
+    return {"viewport": rendered.document().model_dump(mode="json"), "file": file}
 
 
 def _measure_geometry(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -1834,63 +1899,114 @@ def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
         ) from unknown
 
 
+def _no_override(artifact: str, unmet: str) -> _Unavailable:
+    return _Unavailable(
+        f"export_artifact cannot write {artifact}: {unmet}. This surface grants no "
+        "override. The evidence bundle and the part sheet are written whatever the verdict "
+        "and carry it; `anvilate build --unvalidated` at the shell writes a watermarked file"
+    )
+
+
+def _needs_output_folder(artifact: str) -> None:
+    if output_folder() is None:
+        raise _Unavailable(
+            f"export_artifact cannot write {artifact}: this server was started without an "
+            "output folder. Start it as `anvilate-mcp --out DIR`; no tool takes a path"
+        )
+
+
+def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
+    """STEP, 3MF or DXF for a built part, written to the output folder when its card passes.
+
+    The handle names the spec that was built, so the gate screens that spec, as
+    `anvilate build` does: a CAD file is written for a part whose acceptance checks pass.
+    """
+    import tempfile
+
+    from .export.gate import ExportRefused, authorize_export
+    from .geometry import (
+        GeometryError,
+        GeometryUnavailable,
+        UnsupportedGeometry,
+        render_3mf,
+        write_step,
+    )
+    from .screening import screen_spec
+    from .spec import parse_spec
+
+    _needs_output_folder(artifact)
+    try:
+        built = _built_geometry(handle)
+        spec = parse_spec(subject_store().resolve(handle, kind=_BUILT_GEOMETRY)["spec"])
+    except UnknownSubject as unknown:
+        raise _InvalidArguments(
+            [f"subject: {unknown.args[0]}"], operation="export_artifact"
+        ) from unknown
+    except GeometryUnavailable as failure:
+        raise _Unavailable(str(failure)) from failure
+    try:
+        authorization = authorize_export(
+            screen_spec(spec, **({"modules": _MODULES} if _MODULES else {}))
+        )
+    except ExportRefused as refused:
+        raise _no_override(artifact, refused.unmet) from refused
+    stem = safe_stem(built.name)
+    try:
+        if artifact == "step":
+            with tempfile.TemporaryDirectory(prefix="anvilate-step-") as scratch:
+                staged = Path(scratch) / "part.step"
+                write_step(
+                    built,
+                    staged,
+                    authorization=authorization,
+                    tolerances=tuple(spec.geometric_tolerances),
+                )
+                data = staged.read_bytes()
+            name = f"{stem}.step"
+        elif artifact == "3mf":
+            data, name = render_3mf(built, authorization=authorization), f"{stem}.3mf"
+        else:
+            from .export.dxf import render_geometry_dxf
+
+            data = render_geometry_dxf(geometry=built, authorization=authorization)
+            name = f"{stem}.dxf"
+    except (UnsupportedGeometry, ImportError) as failure:
+        raise _Unavailable(f"export_artifact cannot write {artifact}: {failure}") from failure
+    except GeometryError as failure:
+        raise _InvalidArguments([f"subject: {failure}"], operation="export_artifact") from failure
+    file = write_output(name, data)
+    return {"format": artifact, "sha256": file["sha256"], "file": file}
+
+
 def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
-    """``export_artifact``, dispatched to :class:`anvilate.bundle.BundleSections`.
+    """``export_artifact``: what the engineer takes away, written where they can open it.
 
-    **The document is returned and nothing is written.** That was the open question —
-    `openspec/changes/archive/2026-09-01-export-over-mcp` sets out the three shapes — and
-    the answer is the one that grants no capability: the tool has no ``destination``, names
-    no path, and creates no file. A client that wants one saves what it was handed. The
-    alternatives each asked an operator to decide how far to trust an MCP client with the
-    server's filesystem, and this asks nobody anything.
+    **Files go to the server's output folder, and no tool names a path.** The first shape of
+    this tool returned the bundle and wrote nothing, because a server writing to a path a
+    caller names is a capability. That reasoning stands: the folder is chosen once, by the
+    user, when the server starts, and a call can only add a file named after the part to it.
+    A CAD file is never relayed through the model.
 
-    **The subject is a scorecard, not a spec.** A bundle is a document *about a screening
-    result*, and ``BundleSections`` takes exactly that — the card is its one required
-    section. Taking a spec handle instead would mean re-screening, and a re-screen is a
-    second answer: the same document, run against tables that may have moved, can produce a
-    bundle that disagrees with the card the client was already holding. So this exports the
-    card that was screened.
+    **From a screening handle:** the evidence bundle (also returned as structured content,
+    identical to the one `anvilate export` prints), QIF results, and the one-page part
+    sheet. The bundle and the sheet are produced whatever the verdict, because a document
+    reporting that a part failed is the one a refusal would withhold. QIF is a statement
+    about a part that may be built from it, so it is gated on the card.
 
-    **A failing card still gets a bundle, and that is the gate working rather than being
-    skipped.** ``artifact-export`` gates *CAD artifacts* on the acceptance checks passing —
-    a DXF somebody cuts from, a QIF somebody measures against. The evidence bundle is the
-    evidence, including the evidence that a part did not pass: it renders ``status: fail``
-    and carries ``SCREENING_DISCLAIMER`` unconditionally, which is what the watermark rule
-    asks of it. ``anvilate export`` does the same thing at the shell — it prints the bundle
-    and reports the verdict in its exit code — and a surface that refused here would answer
-    a question the other surface answers.
+    **From a built-part handle:** STEP, 3MF and DXF, gated the same way
+    (:func:`_export_built_part`).
     """
     from .bundle import BundleSections, combinations_for
-
-    # The CLI's own table of what each artifact waits on, imported rather than restated.
-    # Two surfaces cannot report an artifact as unbuilt in one place and buildable in the
-    # other if they read the same dict, and the keys are already the format names this
-    # tool's enum publishes.
-    #
-    # It is `_UNSERVED_OVER_MCP` and not `_UNBUILT_ARTIFACTS` because the two surfaces do
-    # not refuse the same set, and they never did — what changed is that the difference is
-    # now stated. DXF and QIF are both served locally; here they wait on an approved result
-    # and disclosure contract because this tool's published payload is the evidence bundle
-    # *document*. Naming that as the reason keeps the parity test honest: the surfaces still
-    # read one table, and it now says a true thing about each.
-    from .cli import _UNSERVED_OVER_MCP as _UNBUILT_ARTIFACTS
+    from .export.gate import ExportRefused, authorize_export
     from .scorecard import Scorecard
     from .screening import carbon_estimate_for
     from .spec import parse_spec
     from .standards.datasets import bundled_datasets
 
     artifact = arguments["format"]
-    if artifact in _UNBUILT_ARTIFACTS:
-        raise _Unavailable(
-            # The tail names what this tool does serve. It used to say "the evidence bundle
-            # needs no geometry and is served", which read as the reason rather than as the
-            # alternative — true of a DXF and wrong about QIF, whose own reason is nothing to
-            # do with geometry.
-            f"export_artifact cannot produce {artifact}: {_UNBUILT_ARTIFACTS[artifact]} "
-            f"The evidence bundle is the format this tool serves."
-        )
-
     handle = arguments["subject"]
+    if artifact in _FROM_BUILT_PART:
+        return _export_built_part(artifact, handle)
     try:
         record = _screening(handle)
     except UnknownSubject as unknown:
@@ -1900,28 +2016,24 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
 
     try:
         spec = parse_spec(record["spec"])
-        document = BundleSections(
-            scorecard=Scorecard.model_validate(record["scorecard"]),
+        card = Scorecard.model_validate(record["scorecard"])
+        sections = BundleSections(
+            scorecard=card,
             # Never `None` on this path. The record holds the pair, so the bundle a client
             # gets over MCP carries its inputs exactly as the one `anvilate export` prints
             # does — the parity is by construction rather than by both surfaces remembering.
             spec=spec,
-            # And the same for the provenance trail, through the same one function, for the
-            # same reason: two surfaces building one document must not differ in what they
-            # put in it.
             citations=provenance_for(spec),
             combinations=combinations_for(spec),
             carbon=carbon_estimate_for(spec),
             datasets=bundled_datasets(),
-        ).to_document_dict()
+        )
+        document = sections.to_document_dict()
     except (ValueError, TypeError, KeyError) as unreadable:
         # A handle that resolves to a record this build cannot read is the same fact as one
-        # the store does not hold — the client gets no bundle either way — and it is the
-        # third layer of the trap `store.resolve` guards at the first two. `run_validation`
-        # writes these records, so the shapes that reach here are a store an *older* release
-        # populated, or an entry something outside this library wrote. Unguarded, pydantic's
-        # `ValidationError` left the tool dispatch entirely: it is not `_InvalidArguments`,
-        # and nothing above catches a plain `ValueError`.
+        # the store does not hold. `run_validation` writes these records, so the shapes that
+        # reach here are a store an older release populated, or an entry something outside
+        # this library wrote.
         raise _InvalidArguments(
             [
                 f"subject: {handle} resolves to a screening record this build cannot read "
@@ -1930,16 +2042,41 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
             ],
             operation="export_artifact",
         ) from unreadable
-    # The digest of the bundle's own canonical JSON, which is the same content addressing
-    # the store and the attestation layer use — so the sha256 a client is handed names the
-    # bytes it was handed, and two calls that produce the same bundle produce the same
-    # digest. The published output declared one when the tool wrote a file; it means the
-    # document rather than the file now, and it still means the same kind of thing.
-    return {
-        "format": artifact,
-        "bundle": document,
-        "sha256": sha256_hex(canonical_json(document).encode("utf-8")),
-    }
+    stem = safe_stem(str(spec.name))
+    if artifact == "evidence_bundle":
+        # The digest of the bundle's own canonical JSON, the same content addressing the
+        # store and the attestation layer use, so the sha256 names the document returned.
+        canonical = canonical_json(document).encode("utf-8")
+        file = _written(f"{stem}.bundle.json", canonical)
+        return {
+            "format": artifact,
+            "bundle": document,
+            "sha256": sha256_hex(canonical),
+            **({"file": file} if file is not None else {}),
+        }
+    _needs_output_folder(artifact)
+    if artifact == "part_sheet":
+        from .sheet import part_sheet
+
+        file = write_output(f"{stem}.html", part_sheet(spec, card).html.encode("utf-8"))
+        return {"format": artifact, "sha256": file["sha256"], "file": file}
+    from .attestation import EnvironmentBOM
+    from .export.qif import export_qif_results
+
+    try:
+        authorization = authorize_export(card)
+    except ExportRefused as refused:
+        raise _no_override(artifact, refused.unmet) from refused
+    text = export_qif_results(
+        sections,
+        part_name=spec.name,
+        spec_digest="sha256:"
+        + sha256_hex(canonical_json(spec.model_dump(mode="json")).encode("utf-8")),
+        bom=EnvironmentBOM.of_this_environment(),
+        authorization=authorization,
+    )
+    file = write_output(f"{stem}.qif", text.encode("utf-8"))
+    return {"format": artifact, "sha256": file["sha256"], "file": file}
 
 
 def _cancelled_fea_result() -> dict[str, Any]:
@@ -2116,7 +2253,14 @@ def main(argv: list[str] | None = None) -> None:
 
     parser = argparse.ArgumentParser(prog="anvilate-mcp", description="Anvilate's MCP server.")
     parser.add_argument("--module", action="append", default=[], metavar="PATH")
+    parser.add_argument(
+        "--out",
+        metavar="DIR",
+        help="the one folder results are written to (default: ./anvilate-out, or ANVILATE_OUT)",
+    )
     options = parser.parse_args(argv)
+    # Decided once, here, by whoever starts the server. No tool takes a destination.
+    set_output_folder(options.out or os.environ.get("ANVILATE_OUT") or Path.cwd() / "anvilate-out")
     if options.module:
         from .thirdparty import ThirdPartyModuleError, enable_module
 

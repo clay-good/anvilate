@@ -16,7 +16,7 @@ has not shipped exits 4 naming that gap.
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
-| `view` | a spec | `--output`, `--no-open`, `--force`, `--3d`, `--module` | the part sheet was written, whatever its verdict |
+| `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -681,20 +681,18 @@ The spec digest in the document's header is over the spec's own canonical JSON, 
 file's bytes: two YAML files differing only in whitespace are one revision, and the MCP
 surface holds the parsed document rather than the file it came from.
 
-The three artifact names are the same three `export_artifact`'s published MCP schema
-declares, held equal by a test — a CLI offering a fourth, or silently dropping one, is a
-surface saying something different from the contract. The two surfaces agree on the names,
-and on the bundle: `export_artifact` returns the same bundle document for the same spec, and
-the two are compared by value in `tests/test_surface_parity.py`. Where the document goes
-differs — the CLI prints it, the tool returns it and writes nothing at all, because a path
-an MCP client names is a capability the server does not grant.
+`export_artifact` over MCP produces the same artifacts, held equal by a test: the three
+`export` names above, plus STEP and 3MF (which `build` writes here) and the part sheet
+(which `view` writes). The two surfaces agree on the bundle by value: `export_artifact`
+returns the same bundle document for the same spec, compared in
+`tests/test_surface_parity.py`. Where a document goes differs. The CLI prints it or writes
+the path you name. The MCP tool writes into the one output folder the server was started
+with (`anvilate-mcp --out DIR`) and names the file in its reply, because a path an MCP
+client names is a capability the server does not grant.
 
-**They no longer refuse the same set, and each says why *it* refuses.** The shell serves
-QIF and DXF. The tool does not yet serve either because its published result carries the
-evidence-bundle document and has no approved delivery contract for QIF XML or CAD geometry.
-Those are protocol and disclosure decisions, not missing local implementations. Both
-refusal reasons live in `anvilate.cli` and are read from there rather than restated, and
-tests assert that each refusal names the local command that already works.
+**Both gate the same way.** A CAD or QIF file is written only for a card that passes, at
+either surface, and the MCP surface has no override. The bundle and the part sheet are
+produced whatever the verdict.
 
 **The bundle goes to stdout, and that is deliberate.** Every artifact-emitting entry point
 in the package takes a mandatory `ExportAuthorization` ([export gating](export-gating.md)),
@@ -1121,12 +1119,6 @@ and the sheet says why the part is not drawn instead of leaving a gap. The brows
 only when you run it at a terminal, or never with `--no-open`. Like `build`, it will not
 replace an existing file without `--force`. Exit 0 means the sheet was written; the verdict
 is on the sheet, and `anvilate check` is the command whose exit code is the verdict.
-
-`--3d` adds a view of the part you can turn: drag to rotate, scroll to zoom, double-click
-to reset, with Z up as in CAD. It is the one option that puts script in the sheet. The
-script is a small inline WebGL viewer that reads only the part's mesh, embedded as numbers,
-and fetches and stores nothing, so the file is still all there is. A browser without WebGL
-says so and the four drawings stand in for it.
 
 For the solid itself, `anvilate build` writes STEP, which opens in the CAD tools you
 already use.

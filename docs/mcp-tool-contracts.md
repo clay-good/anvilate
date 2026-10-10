@@ -170,7 +170,7 @@ instead of needing an edit.
 | `render_viewport` | `subject` | yes, and dispatched for built geometry |
 | `measure_geometry` | `subject` | yes, and dispatched for built geometry |
 | `read_scorecard` | `subject` | yes, and dispatched |
-| `export_artifact` | `subject` | yes, and dispatched for the evidence bundle |
+| `export_artifact` | `subject` | yes, and dispatched for every format it publishes |
 
 **The documents land on disk, and that is worth knowing.** Publishing a handle writes the
 document it names — a compiled spec, a screened scorecard — under the store root. A spec is
@@ -283,25 +283,22 @@ stable while preventing an internal raised refusal from existing with an empty r
 - **`-32000`, not dispatched yet.** Empty today. The census remains in both directions: a
   future tool that is neither dispatched nor given a reason fails, and so does a reason left
   behind for a tool that has since been wired.
-- **`-32000`, that format is not served here.** New with the export ruling, and the reason
-  it is separate: `export_artifact` is dispatched and two of the three formats it publishes
-  are not served. Their local implementations exist, but returning XML or CAD geometry to
-  a remote caller needs an approved result and disclosure contract beyond the bundle-shaped
-  result published today. A per-tool refusal could not express that, and answering
-  `-32602` would tell a client its argument was wrong, which invites a retry with a
-  different one.
+- **`-32000`, the export cannot be written.** No output folder, a card that does not pass
+  (CAD and QIF files are gated, with no override here), or a part with no such artifact.
+  Answering `-32602` would tell a client its argument was wrong, which invites a retry
+  with a different one.
 - **`-32000`, no geometry runtime.** `build_part`, `render_viewport` and
   `measure_geometry` without the `anvilate[geometry]` extra. Until 2026-10-08 this
   arrived as `-32602` "invalid element_params" (or, for a handle, "call `build_part`
   again"), because the missing-extra refusal is a `ValueError` and was re-worded by the
   handler that catches bad parameters. The CLI's `EXIT_UNBUILT` (4) is the same fact.
 
-`export_artifact` answers with the evidence bundle for the scorecard its handle names, and
-**writes nothing**. That was the open decision — three shapes were considered, and the one
-chosen is the only one that grants no capability: the tool publishes no `destination`, names
-no path and creates no file, so a client saves the document or does not. The reply is
-`{format, bundle, sha256}`, where the digest is over the bundle's own canonical JSON, so it
-names the bytes the client was handed and two calls for the same card agree.
+`export_artifact` writes what the engineer takes away into the server's output folder and
+names each file's path, size and SHA-256. From a `run_validation` handle it produces the
+evidence bundle (also returned as `{format, bundle, sha256}`, the digest over the bundle's
+canonical JSON), QIF results and the part sheet. From a `build_part` handle it produces
+STEP, 3MF and, for a flat part, DXF. The tool publishes no `destination` and names no
+path: the folder is chosen once, by whoever starts the server.
 
 Three things about it are decisions rather than details:
 

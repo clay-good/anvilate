@@ -22,9 +22,8 @@ diff between two reports is an engineering change, never rendering noise.
 from __future__ import annotations
 
 import base64
-import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from html import escape
 from math import isfinite
 from typing import NamedTuple
@@ -506,7 +505,6 @@ class CalculationReport(StatableModel):
         views: Sequence[tuple[str, bytes]] = (),
         views_absent: str | None = None,
         views_note: str | None = None,
-        model_3d: Mapping[str, Sequence[float]] | None = None,
     ) -> str:
         """The report as a self-contained HTML document (no external assets).
 
@@ -521,7 +519,7 @@ class CalculationReport(StatableModel):
         looks at the top of it first. With none of these, the document is byte-identical to
         the report.
         """
-        drawn = bool(views) or views_absent is not None or views_note is not None or bool(model_3d)
+        drawn = bool(views) or views_absent is not None or views_note is not None
         out: list[str] = [
             "<!DOCTYPE html>",
             '<html lang="en">',
@@ -558,8 +556,6 @@ class CalculationReport(StatableModel):
                 out.append(f'<p class="source">{escape(views_note)}</p>')
             if views_absent is not None:
                 out.append(f'<p class="fallback">Not drawn: {escape(views_absent)}</p>')
-            if model_3d:
-                out.extend(_html_model_3d(model_3d))
             out.append("</section>")
         out.extend(self._html_list("Standards relied upon", self.standards))
         out.extend(self._html_list("Assumptions", tuple(self._assumption_lines())))
@@ -1120,144 +1116,4 @@ figcaption { font-size: 0.9em; color: var(--ink-muted); }
 @media print {
   section.views { break-inside: avoid; page-break-inside: avoid; }
 }
-""".strip()
-
-
-def _html_model_3d(model: Mapping[str, Sequence[float]]) -> list[str]:
-    """The part as a rotatable 3D view: a canvas, the mesh as numbers, and a small viewer.
-
-    Optional (``anvilate view --3d``), because it is the one place the sheet runs script.
-    The mesh is JSON of numbers only, so nothing in it can close its tag or run, and the
-    viewer touches nothing outside the page: no network, no storage. Without WebGL the
-    sheet says so and the four drawings above stand in for it.
-    """
-    mesh = {key: [round(float(x), 4) for x in model[key]] for key in ("v", "t", "e")}
-    data = json.dumps(mesh, separators=(",", ":"))
-    return [
-        '<div class="model3d">',
-        '<canvas id="part3d" width="680" height="420" '
-        'aria-label="the part in 3D: drag to rotate, scroll to zoom, double-click to reset">'
-        "</canvas>",
-        '<p class="source">3D: drag to rotate, scroll to zoom, double-click to reset. Z is up.</p>',
-        '<p class="fallback" id="part3d-fallback" hidden>This browser cannot draw the 3D view; '
-        "the drawings above are the same part.</p>",
-        f'<script type="application/json" id="part3d-mesh">{data}</script>',
-        f"<script>{_VIEWER_JS}</script>",
-        "</div>",
-    ]
-
-
-# The whole viewer. Flat-shaded faces with both sides lit, the outline and crease edges in
-# ink, an orthographic camera, Z up as in CAD. It reads only the mesh above and the page's
-# own ink colour, and writes only the canvas.
-_VIEWER_JS = """
-(function () {
-  var canvas = document.getElementById("part3d");
-  var gl = canvas.getContext("webgl", { antialias: true });
-  if (!gl) {
-    canvas.hidden = true;
-    document.getElementById("part3d-fallback").hidden = false;
-    return;
-  }
-  var m = JSON.parse(document.getElementById("part3d-mesh").textContent);
-  var n = m.v.length / 3, lo = [1e30, 1e30, 1e30], hi = [-1e30, -1e30, -1e30];
-  var p = new Float32Array(m.v.length);
-  for (var i = 0; i < n; i++) {
-    // Z up: model (x, y, z) to screen (x, z, -y).
-    var q = [m.v[3 * i], m.v[3 * i + 2], -m.v[3 * i + 1]];
-    for (var k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], q[k]); hi[k] = Math.max(hi[k], q[k]); }
-    p.set(q, 3 * i);
-  }
-  var c = [0, 1, 2].map(function (k) { return (lo[k] + hi[k]) / 2; });
-  var r = Math.max(1e-9, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);
-  for (i = 0; i < n; i++) for (k = 0; k < 3; k++) p[3 * i + k] = (p[3 * i + k] - c[k]) / r;
-  var tri = new Float32Array(m.t.length * 6);
-  for (i = 0; i < m.t.length; i += 3) {
-    var a = m.t[i] * 3, b = m.t[i + 1] * 3, d = m.t[i + 2] * 3;
-    var u = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
-    var w = [p[d] - p[a], p[d + 1] - p[a + 1], p[d + 2] - p[a + 2]];
-    var f = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
-    var s = Math.hypot(f[0], f[1], f[2]) || 1;
-    [a, b, d].forEach(function (o, j) {
-      tri.set([p[o], p[o + 1], p[o + 2], f[0] / s, f[1] / s, f[2] / s], (i + j) * 6);
-    });
-  }
-  var line = new Float32Array(m.e.length * 6);
-  for (i = 0; i < m.e.length; i++) {
-    var e = 3 * m.e[i];
-    line.set([p[e], p[e + 1], p[e + 2], 0, 0, 0], i * 6);
-  }
-  function shader(type, source) {
-    var x = gl.createShader(type); gl.shaderSource(x, source); gl.compileShader(x); return x;
-  }
-  var prog = gl.createProgram();
-  gl.attachShader(prog, shader(gl.VERTEX_SHADER,
-    "attribute vec3 p; attribute vec3 n; uniform mat3 R; uniform vec2 s; varying float l;" +
-    "void main() { vec3 q = R * p; vec3 m = R * n;" +
-    " l = 0.35 + 0.65 * abs(dot(normalize(m), normalize(vec3(0.4, 0.6, 1.0))));" +
-    " gl_Position = vec4(q.x * s.x, q.y * s.y, -q.z * 0.5, 1.0); }"));
-  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER,
-    "precision mediump float; uniform vec3 k; uniform float lit; varying float l;" +
-    "void main() { gl_FragColor = vec4(k * mix(1.0, l, lit), 1.0); }"));
-  gl.linkProgram(prog); gl.useProgram(prog);
-  function buffer(data) {
-    var x = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, x);
-    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    return x;
-  }
-  var faces = buffer(tri), edges = buffer(line);
-  var ap = gl.getAttribLocation(prog, "p"), an = gl.getAttribLocation(prog, "n");
-  gl.enableVertexAttribArray(ap); gl.enableVertexAttribArray(an);
-  var ink = getComputedStyle(document.body).color.match(/\\d+/g).slice(0, 3)
-    .map(function (x) { return x / 255; });
-  function attributes() {
-    gl.vertexAttribPointer(ap, 3, gl.FLOAT, false, 24, 0);
-    gl.vertexAttribPointer(an, 3, gl.FLOAT, false, 24, 12);
-  }
-  function colour(rgb, lit) {
-    gl.uniform3f(gl.getUniformLocation(prog, "k"), rgb[0], rgb[1], rgb[2]);
-    gl.uniform1f(gl.getUniformLocation(prog, "lit"), lit);
-  }
-  var yaw = -0.6, pitch = 0.45, zoom = 0.9;
-  function draw() {
-    var cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-    gl.uniformMatrix3fv(gl.getUniformLocation(prog, "R"), false,
-      [cy, sy * sp, -sy * cp, 0, cp, sp, sy, -cy * sp, cy * cp]);
-    var aspect = canvas.width / canvas.height;
-    gl.uniform2f(gl.getUniformLocation(prog, "s"), zoom / aspect, zoom);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0, 0, 0, 0); gl.enable(gl.DEPTH_TEST);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1, 1);
-    gl.bindBuffer(gl.ARRAY_BUFFER, faces);
-    attributes();
-    colour([0.58, 0.77, 0.99], 1);
-    gl.drawArrays(gl.TRIANGLES, 0, tri.length / 6);
-    gl.bindBuffer(gl.ARRAY_BUFFER, edges);
-    attributes();
-    colour(ink, 0);
-    gl.drawArrays(gl.LINES, 0, line.length / 6);
-  }
-  var drag = null;
-  canvas.addEventListener("pointerdown", function (e) {
-    drag = [e.clientX, e.clientY];
-    canvas.setPointerCapture(e.pointerId);
-  });
-  canvas.addEventListener("pointerup", function () { drag = null; });
-  canvas.addEventListener("pointermove", function (e) {
-    if (!drag) return;
-    yaw += (e.clientX - drag[0]) * 0.01; pitch += (e.clientY - drag[1]) * 0.01;
-    pitch = Math.max(-1.55, Math.min(1.55, pitch)); drag = [e.clientX, e.clientY]; draw();
-  });
-  canvas.addEventListener("wheel", function (e) {
-    e.preventDefault();
-    zoom = Math.max(0.2, Math.min(8, zoom * Math.exp(-e.deltaY * 0.001)));
-    draw();
-  }, { passive: false });
-  canvas.addEventListener("dblclick", function () {
-    yaw = -0.6; pitch = 0.45; zoom = 0.9; draw();
-  });
-  draw();
-})();
 """.strip()

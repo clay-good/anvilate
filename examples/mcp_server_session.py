@@ -10,8 +10,9 @@ The build and refusal are different statements:
 1. **``build_part`` synchronously builds the audited ``base_plate`` primitive.** It executes
    no caller code and returns a published geometry summary with volume and semantic faces.
 2. **``render_viewport`` takes the build handle and returns a deterministic PNG,** the
-   format a model can look at (``format: "svg"`` returns the drawing). The same bytes cross
-   as schema-backed structured data and as an MCP image attachment.
+   format a model can look at (``format: "svg"`` returns the drawing), with one line of
+   text beside it and no structured content. A server started with an output folder also
+   writes the image there.
 
 The session also does the thing subjects exist for: ``run_validation`` returns a handle to
 the card it screened, and ``read_scorecard`` reads that card back by handle. No memory
@@ -34,8 +35,10 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _SRC = str(Path(__file__).resolve().parent.parent / "src")
@@ -113,8 +116,11 @@ def session() -> list[dict]:
     subject handle consumed by a later call. A client that writes its whole script up front
     cannot do that, which is the difference between a transcript and a session.
     """
+    # The server writes what it renders into its output folder. A user names theirs
+    # (`anvilate-mcp --out DIR`); a demonstration should leave nothing behind.
+    out = tempfile.mkdtemp(prefix="anvilate-example-out-")
     server = subprocess.Popen(  # noqa: S603 - our own module, no shell, fixed argv
-        [sys.executable, "-m", "anvilate.mcp"],
+        [sys.executable, "-m", "anvilate.mcp", "--out", out],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         text=True,
@@ -178,6 +184,7 @@ def session() -> list[dict]:
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait()
+        shutil.rmtree(out, ignore_errors=True)
     return responses
 
 
@@ -213,11 +220,10 @@ def main() -> None:
         f"\nbuild_part -> {geometry['pattern']}, {geometry['volumeMm3']:g} mm³, "
         f"faces: {', '.join(geometry['faceTags'])}"
     )
-    viewport = by_id[7]["result"]["structuredContent"]["viewport"]
-    print(
-        f"render_viewport -> {viewport['view']} {viewport['width_px']}×{viewport['height_px']} "
-        f"{viewport['mime_type']}, image attachment included"
-    )
+    summary, image = by_id[7]["result"]["content"]
+    # A render is a sentence and the image, and nothing structured: the two clients this
+    # server targets hand the model only the structured content when a result has both.
+    print(f"render_viewport -> {summary['text'].split(', sha256')[0]}, {image['type']} attached")
     measured = by_id[9]["result"]["structuredContent"]["measurement"]
     pretty_unit = measured["unit"].replace("^2", "²").replace("^3", "³")
     print(f"measure_geometry -> {measured['query']} = {measured['value']:g} {pretty_unit}")

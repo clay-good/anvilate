@@ -70,3 +70,26 @@ than 11 KB), accepted in exchange for schemas that resolve offline in every clie
 
 - **Held by:** `test_every_tool_schema_compiles_offline_from_its_own_definition`
   (tests/test_mcp.py) and the `anvilate doctor` MCP server check.
+
+## D5. No interface of our own: a picture, files, and the user's CAD.
+
+**Decided 2026-10-09.** Anvilate is driven by the user's agent, so it ships no web app, no
+server and no viewer. What it produces is a rendered image the agent can see, files the
+engineer can open, and exchange formats (STEP, DXF, 3MF) for the CAD system they already
+own. Rotating, sectioning and measuring a part is that CAD system's job. The workbench
+specification and the `view --3d` viewer were removed.
+
+Two consequences are in the code:
+
+- **A render is an image and one line of text, with no structured content.** Claude Code
+  and Codex both pass only `structuredContent` to the model when a result carries it beside
+  an image, so the picture never arrived. `render_viewport` publishes no output schema.
+- **The MCP server writes into one output folder, named when it starts**
+  (`anvilate-mcp --out DIR`, default `./anvilate-out`). No tool takes a destination path,
+  and a CAD file never passes through the model. This replaces the earlier ruling that the
+  export tool writes nothing; the reason behind that ruling (a path a caller names is a
+  capability) still holds, because no caller names one.
+
+- **Held by:** tests/test_mcp_outputs.py, `test_no_tool_pairs_an_image_with_structured_content`
+  (tests/test_mcp.py), and a recorded session per client under
+  `tools/client-checks/results/` in which the model answers a question only the image can.

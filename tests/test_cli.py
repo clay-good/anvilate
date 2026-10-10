@@ -870,12 +870,15 @@ def test_the_artifact_list_is_the_mcp_tools_own():
     """`export_artifact`'s published input schema names the three formats. The CLI offering
     a fourth, or silently dropping one, is a surface saying something different from the
     contract — and dropping one is how "refused whole" happened in the first place."""
+    from anvilate.cli import _MCP_FORMAT_COMMAND
     from anvilate.mcp import tool_catalog
 
     tool = {tool.name: tool for tool in tool_catalog()}["export_artifact"]
     published = set(tool.input_schema["properties"]["format"]["enum"])
     offered = {name.replace("-", "_") for name in _ARTIFACTS}
-    assert offered == published, (offered, published)
+    # The tool also writes what `build` and `view` write at the shell; `export` offers the rest.
+    through_export = {n for n, c in _MCP_FORMAT_COMMAND.items() if c.startswith("export")}
+    assert published == set(_MCP_FORMAT_COMMAND) and offered == through_export, (offered, published)
     assert set(_UNBUILT_ARTIFACTS) < offered, "an unbuilt artifact is not even offered"
 
 
@@ -2826,18 +2829,6 @@ def test_dxf_of_a_part_with_no_cut_profile_is_unbuilt_not_an_internal_error(exam
     assert code == EXIT_UNBUILT and out == "", err
     assert "internal error" not in err
     assert "has none; DXF supports 'base_plate/1' and 'cover_plate/1'" in err
-
-
-def test_view_adds_a_rotatable_3d_view_only_when_asked(tmp_path):
-    pytest.importorskip("build123d")
-    spec = _REPO / "examples" / "transmission_shaft.spec.yaml"
-    plain, solid = tmp_path / "plain.html", tmp_path / "solid.html"
-    assert _run("view", str(spec), "--output", str(plain), "--no-open")[0] == EXIT_OK
-    assert _run("view", str(spec), "--output", str(solid), "--no-open", "--3d")[0] == EXIT_OK
-    assert "<script" not in plain.read_text(encoding="utf-8")
-    sheet = solid.read_text(encoding="utf-8")
-    assert '<canvas id="part3d"' in sheet and 'id="part3d-mesh"' in sheet
-    assert not re.search(r"(?:src|href)=\"(?!data:)", sheet), "the sheet fetches nothing"
 
 
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):

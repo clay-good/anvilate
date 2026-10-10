@@ -7786,13 +7786,10 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     geometry = built["geometry"]
     assert geometry["pattern"] == "base_plate/1" and geometry["valid"] is True
     viewport_result = by_id[7]["result"]
-    viewport = viewport_result["structuredContent"]["viewport"]
-    assert (viewport["width_px"], viewport["height_px"]) == (640, 480)
-    assert viewport_result["content"][1] == {
-        "type": "image",
-        "data": viewport["image"],
-        "mimeType": "image/png",
-    }
+    assert "structuredContent" not in viewport_result
+    summary, image = viewport_result["content"]
+    assert summary["text"].startswith("iso view, 640x480 px, image/png")
+    assert image["type"] == "image" and image["mimeType"] == "image/png"
     assert by_id[9]["result"]["structuredContent"]["measurement"] == {
         "query": "area:top",
         "value": 72_000,

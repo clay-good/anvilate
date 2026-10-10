@@ -101,3 +101,11 @@ def test_a_refused_operation_is_not_timed(measure, monkeypatch):
     monkeypatch.setattr(measure.subprocess, "run", lambda *a, **k: Done())
     with pytest.raises(SystemExit, match="did not succeed"):
         measure._cli("build", "x.yaml")
+
+
+def test_every_budgeted_call_fits_the_shortest_client_timeout():
+    """Codex stops a tool call at 60 seconds by default, and neither target client supports
+    the Tasks extension, so the documented path cannot depend on a long call. Every budget
+    is at most 20 seconds, which leaves a slow machine room inside the client's limit."""
+    operations = _budget()["operations"]
+    assert all(entry["seconds"] <= 20.0 for entry in operations.values()), operations

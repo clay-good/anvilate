@@ -417,7 +417,7 @@ def test_migrated_geometry_refusals_require_explicit_structured_fields():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 93
+    assert len(sites) == 92
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         required = {"subject"}

@@ -122,6 +122,15 @@ def _subject_store_stays_out_of_the_users_cache(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("ANVILATE_SUBJECT_STORE", str(tmp_path / "subjects"))
     monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path / "datasets"))
+    # The MCP server's output folder is process state set by `main()`. A test that starts the
+    # server (even one that expects it to refuse) left it pointing at ./anvilate-out, and
+    # every later test that rendered or exported wrote into the repository.
+    from anvilate import _outputs
+
+    monkeypatch.delenv("ANVILATE_OUT", raising=False)
+    _outputs.set_output_folder(None)
+    yield
+    _outputs.set_output_folder(None)
 
 
 class NetworkInTest(AssertionError):

@@ -18,7 +18,7 @@ patterns are callable today:
 | --- | --- | --- |
 | Compile the spec | `compile_spec` | **Dispatched.** |
 | Build the part | `build_part` | **Dispatched synchronously** for `base_plate`, rectangular/circular/annular `cover_plate`, prismatic solid `transmission_shaft`, and a sawn timber beam between its supports; returns the published geometry summary. |
-| Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic PNG (or the SVG drawing with `format: "svg"`) as structured data and an image attachment, so the agent can look at what it built. |
+| Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic PNG (or the SVG drawing with `format: "svg"`) with one line of text and no structured content, so the model actually sees it, and writes the image to the server's output folder. |
 | Inspect the part | `measure_geometry` | **Dispatched synchronously.** Reads dimensions, volume, face count, or tagged-face area from the regenerated B-Rep. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |
 | Run T3 | `run_fea_validation` | **Task-dispatched.** Returns a durable handle; poll with `tasks/get`. Until a solver lands, the typed result is `not_evaluated`. |
@@ -126,6 +126,16 @@ Claude Code:
 claude mcp add anvilate -- /path/to/anvilate/.venv/bin/anvilate-mcp
 ```
 
+OpenAI Codex (the CLI, IDE extension and desktop app share one configuration):
+
+```bash
+codex mcp add anvilate -- /path/to/anvilate/.venv/bin/anvilate-mcp
+```
+
+Codex stops a tool call at 60 seconds by default (its per-server tool timeout setting
+raises it). Anvilate's calls are designed to finish well inside
+that; the [responsiveness budget](../tools/responsiveness/README.md) measures them.
+
 Claude Desktop (`claude_desktop_config.json`) or Cursor (`.cursor/mcp.json`), the same shape:
 
 ```json
@@ -193,6 +203,35 @@ description naming where the object comes from. A model writes the call from wha
 read, and a bare URN is not that: measured through Claude Code 2.1, every agent sent `spec`
 as a string holding the JSON and was refused, until the type was stated inline. A string
 that does hold a JSON object is refused with that reason, so the retry is the right one.
+
+## Where results go, and opening them in your CAD
+
+The server writes what the agent produces into one folder: `./anvilate-out` under the
+directory it was started in, or the one you name.
+
+```bash
+claude mcp add anvilate -- /path/to/anvilate/.venv/bin/anvilate-mcp --out ~/parts/out
+```
+
+| The agent calls | You find |
+| --- | --- |
+| `render_viewport` | `<part>-<view>.png`, the same picture the model looked at |
+| `export_artifact` `step`, `3mf`, `dxf` | the solid, a print mesh, a flat profile |
+| `export_artifact` `part_sheet` | `<part>.html`, the drawings and every check on one page |
+| `export_artifact` `evidence_bundle`, `qif` | the evidence document and the QIF results |
+
+No tool takes a path, a rebuild replaces its files, and a CAD or QIF file is written only
+when the part's checks pass. Anvilate has no viewer of its own. To turn the part over,
+section it or measure it, open the STEP file:
+
+| Tool | Import | Worth knowing |
+| --- | --- | --- |
+| SolidWorks | File > Open, `.step` | Units come from the file (mm). An assembly imports as an assembly unless you choose to collapse it. |
+| Fusion | Upload or File > Open, `.step` | Components keep their structure. DXF inserts into a sketch. |
+| Onshape | Import, `.step` | Geometry and names only; pick "Z up" if the part arrives on its side. DXF imports into a drawing or sketch. |
+| FreeCAD | File > Open, `.step` | The most faithful open route. DXF is 2D. |
+
+Anvilate writes millimetres with Z up, and says so in the file.
 
 ## Step one: compile the document
 
@@ -409,20 +448,12 @@ task-dispatched: run_fea_validation
   nothing (Claude Code does not) and the same result comes back in the reply. Until
   2026-10-09 the second case was refused with `-32021`, which left Claude Code with no
   T3 tier at all. This release ships no FEA solver, so either way T3 is not evaluated.
-- **`-32000`, that format is not served here.** The narrower version of the same fact, and
-  the one place a tool is dispatched while part of what it publishes is not: `export_artifact`
-  serves `evidence_bundle` and refuses `dxf` and `qif`. Both local implementations exist:
-  `anvilate export --artifact dxf` builds an audited plate profile, and `--artifact qif`
-  maps the screened card. What they wait on *here* is an approved result and disclosure
-  contract for returning XML or CAD content to a remote caller; the existing result carries
-  an evidence-bundle document. This is not `-32602`, so do not retry with a different
-  argument — use `evidence_bundle`, run the local command, or do not export.
-
-  This used to be a different refusal. Four tools named nothing in their input to act on, so
-  they could not be served by a server with no memory between calls — an open contract
-  question rather than an outage. It is closed: every tool now takes a **subject**, a handle
-  returned by an earlier call, and `stateless_gaps()` is empty as a consequence rather than
-  as an edit. See [what a subject is](#subjects-a-handle-not-a-memory).
+- **`-32000`, the export cannot be written.** Three true reasons, each stated: the server
+  was started without an output folder (`anvilate-mcp --out DIR`); the part's checks do not
+  pass, so a CAD or QIF file is withheld and there is no override on this surface; or the
+  part has no such artifact (a shaft has no flat DXF profile). This is not `-32602`, so do
+  not retry with a different argument. The evidence bundle and the part sheet are written
+  whatever the verdict.
 - **`-32000`, this install has no geometry runtime.** `build_part`, `render_viewport` and
   `measure_geometry` need the optional `anvilate[geometry]` extra. Without it they say so
   and name the extra. Your spec is not at fault, so do not edit it; ask the user to install

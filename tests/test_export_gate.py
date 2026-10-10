@@ -491,7 +491,9 @@ def test_an_exempt_entry_point_is_one_that_really_emits_nothing():
             )
 
 
-def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format():
+def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format(
+    tmp_path, monkeypatch
+):
     """``export_artifact`` declares the validation and watermark gates. This is the parity.
 
     The MCP surface "grants no bypass" is a sentence in the headless-automation spec and a
@@ -506,10 +508,10 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
 
     Asked per format, which is what the surface actually publishes:
 
-    * ``dxf`` and ``qif`` are CAD artifacts, and ``artifact-export`` gates those on the
-      acceptance checks passing. Both are served locally and withheld over MCP pending an
-      approved content-delivery contract. Their exporters take a mandatory
-      ``authorization``, including the built-geometry DXF renderer the CLI actually calls.
+    * ``step``, ``3mf``, ``dxf`` and ``qif`` are CAD artifacts, and ``artifact-export``
+      gates those on the acceptance checks passing. Each is written to the server's output
+      folder only after ``authorize_export`` accepts the card, and their exporters take a
+      mandatory ``authorization``, so none can be wired without one.
     * ``evidence_bundle`` is the evidence, including the evidence that a part did **not**
       pass, so it is served whatever the verdict. Its watermark is ``SCREENING_DISCLAIMER``
       and it is not a field a caller can omit — there is no argument to ``to_json_dict``
@@ -517,7 +519,6 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
       rather than the model being taken at its word.
     """
     from anvilate.bundle import SCREENING_DISCLAIMER
-    from anvilate.cli import _UNSERVED_OVER_MCP
     from anvilate.mcp import Gate, handle_request, tool_catalog
 
     emitting = [tool for tool in tool_catalog() if Gate.WATERMARK in tool.gates]
@@ -530,8 +531,11 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
     )
 
     published = set(tool.input_schema["properties"]["format"]["enum"])
-    gated_cad = published & set(_UNSERVED_OVER_MCP)
-    assert gated_cad == {"dxf", "qif"}, published
+    from anvilate.mcp import _FROM_BUILT_PART
+
+    gated_cad = (published & set(_FROM_BUILT_PART)) | (published & {"qif"})
+    assert gated_cad == {"step", "3mf", "dxf", "qif"}, published
+    assert published - gated_cad == {"evidence_bundle", "part_sheet"}
 
     # The CAD half over *this* surface: refused here, and each exporter takes the
     # authorization as a required keyword, so neither can be wired here without one. QIF is
@@ -542,6 +546,8 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
         "anvilate.export.dxf:export_plate_dxf",
         "anvilate.export.dxf:render_geometry_dxf",
         "anvilate.export.qif:export_qif_results",
+        "anvilate.geometry:write_step",
+        "anvilate.geometry:render_3mf",
     ):
         module_path, _, symbol = symbol_path.partition(":")
         module = __import__(module_path, fromlist=[symbol])
@@ -570,11 +576,26 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
         "acceptance": {"tiers": ["T1_analytical"]},
     }
     handle = call("run_validation", {"spec": spec})["result"]["structuredContent"]["subject"]
-    for artifact in sorted(gated_cad):
-        assert (
-            call("export_artifact", {"subject": handle, "format": artifact})["error"]["code"]
-            == -32000
-        )
+    # With somewhere to write, so the refusal below is the gate's and not "no output folder".
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path / "out"))
+    refused = call("export_artifact", {"subject": handle, "format": "qif"})["error"]
+    assert refused["code"] == -32000 and "export is gated" in refused["message"]
+    try:
+        import build123d  # noqa: F401
+    except ImportError:
+        build123d = None
+    if build123d is not None:
+        # A plate that draws and does not pass: ten times the load its bearing check allows.
+        import yaml
+
+        examples = Path(__file__).resolve().parents[1] / "examples"
+        failing = yaml.safe_load((examples / "base_plate.spec.yaml").read_text(encoding="utf-8"))
+        failing["element_params"]["axial_load"]["magnitude"] *= 100
+        built = call("build_part", {"spec": failing})["result"]["structuredContent"]["subject"]
+        for artifact in sorted(gated_cad - {"qif"}):
+            error = call("export_artifact", {"subject": built, "format": artifact})["error"]
+            assert error["code"] == -32000 and "export is gated" in error["message"], artifact
+    assert not (tmp_path / "out").exists() or list((tmp_path / "out").iterdir()) == []
     bundle = call("export_artifact", {"subject": handle, "format": "evidence_bundle"})["result"][
         "structuredContent"
     ]["bundle"]

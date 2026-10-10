@@ -218,28 +218,20 @@ _DIFF_NEEDS_GEOMETRY = (
 # `export` being refused whole for.
 _NEEDS_GEOMETRY: dict[str, str] = {}
 
-# Served here and not yet over MCP, with the reason it waits on stated as the thing it
-# really is. `export_artifact` publishes a result whose payload is the evidence bundle
-# *document* — a JSON object with its own schema — and a QIF results file is XML. Serving it
-# there is a change to a published tool result, which is a decision to make in a diff about
-# the protocol surface rather than one to arrive at by removing a line here.
-_NOT_YET_OVER_MCP = {
-    "dxf": (
-        "the export tool has no approved CAD-content delivery contract: returning a DXF "
-        "would disclose built design geometry to the remote caller. "
-        "`anvilate export --artifact dxf` produces the document locally today."
-    ),
-    "qif": (
-        "the export tool's published result carries the evidence bundle document, and QIF "
-        "results are an XML file, so serving them here is a change to the tool's result "
-        "shape. `anvilate export --artifact qif` produces the document at the shell today."
-    ),
-}
-
-# What each surface refuses. The shell refuses what cannot be produced at all; the tool
-# refuses that, plus what its own published result cannot yet carry.
+# What the shell refuses: what cannot be produced at all. The MCP tool used to refuse DXF and
+# QIF on top of that, because its result could carry only the bundle document; it now writes
+# files to the server's output folder (`simplify-visual-output`), so the two surfaces serve
+# the same artifacts. The shell reaches STEP and 3MF through `build` and the part sheet
+# through `view`; `_MCP_FORMAT_COMMAND` says which command each MCP format corresponds to.
 _UNBUILT_ARTIFACTS = _NEEDS_GEOMETRY
-_UNSERVED_OVER_MCP = {**_NEEDS_GEOMETRY, **_NOT_YET_OVER_MCP}
+_MCP_FORMAT_COMMAND = {
+    "evidence_bundle": "export --artifact evidence-bundle",
+    "qif": "export --artifact qif",
+    "dxf": "export --artifact dxf",
+    "step": "build --output part.step",
+    "3mf": "build --output part.3mf",
+    "part_sheet": "view",
+}
 _ARTIFACTS = ("evidence-bundle", "dxf", "qif")
 
 _COMMAND_EXAMPLES = {
@@ -646,13 +638,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-open", action="store_true", help="write the sheet without opening a browser"
     )
     view.add_argument(
-        "--3d",
-        dest="three_d",
-        action="store_true",
-        help="add a rotatable 3D view of the part (the sheet then carries a small inline "
-        "viewer script; still one file, nothing fetched)",
-    )
-    view.add_argument(
         "--force", action="store_true", help="replace an existing output file deliberately"
     )
 
@@ -965,7 +950,8 @@ def _mcp_server() -> dict[str, Any]:
         f"{tool['name']}.{label} -> {ref}"
         for tool in wire_definitions()
         for label in ("inputSchema", "outputSchema")
-        for ref in _external_refs(tool[label])
+        # A tool that returns an image publishes no output schema.
+        for ref in _external_refs(tool.get(label, {}))
     ]
     if issues or unresolved:
         return {
@@ -2979,15 +2965,8 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
     if isinstance(modules, int):
         return modules
     from .export.dxf import _atomic_path
-    from .geometry import (
-        GeometryError,
-        GeometryUnavailable,
-        UnsupportedGeometry,
-        build_spec,
-        render_viewport,
-    )
-    from .report import CalculationReport, ReportSection
     from .screening import screen_spec
+    from .sheet import part_sheet
 
     output = args.output or args.spec.with_suffix(".html")
     if output.suffix.lower() not in (".html", ".htm"):
@@ -3016,42 +2995,15 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
 
     _progress(err, f"drawing and screening {args.spec}")
     card = screen_spec(spec, **_with_modules(modules))
-    views: list[tuple[str, bytes]] = []
-    model: dict[str, list] | None = None
-    absent: str | None = None
-    note: str | None = None
-    try:
-        built = build_spec(spec)
-        views = [(name, render_viewport(built, view=name, width_px=680).data) for name in _VIEWS]
-        if args.three_d:
-            from .geometry import tessellate
-
-            model = tessellate(built)
-        note = "As built: " + ", ".join(
-            f"{name.replace('_', ' ')} {value:g} mm"
-            for name, value in sorted(built.dimensions_mm.items())
-        )
-    except (GeometryUnavailable, UnsupportedGeometry, GeometryError) as failure:
-        # The checks do not need the drawing, so the sheet is still written, saying why the
-        # part is not drawn rather than leaving a gap where it would be.
-        absent = str(failure)
-    report = CalculationReport(
-        title=f"{spec.name} — part sheet",
-        project=spec.description,
-        unit_system=spec.units.value if spec.units else None,
-        sections=tuple(ReportSection(entry=entry) for entry in card.entries),
-    )
+    sheet = part_sheet(spec, card)
     try:
         with _atomic_path(output) as staging:
-            staging.write_text(
-                report.to_html(views=views, views_absent=absent, views_note=note, model_3d=model),
-                "utf-8",
-            )
+            staging.write_text(sheet.html, "utf-8")
     except OSError as failure:
         print(f"anvilate view: could not write {output} ({failure.strerror or failure})", file=err)
         return EXIT_BAD_REQUEST
 
-    drawn = f"{len(views)} views" if views else "not drawn"
+    drawn = f"{sheet.views} views" if sheet.views else "not drawn"
     print(f"{spec.name}: {card.status.value} ({drawn}) — wrote {output}", file=out)
     if not args.no_open and _is_terminal(out):
         import webbrowser
