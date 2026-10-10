@@ -1,0 +1,19 @@
+# A drawable part: A lifting lug with its pin hole 90 mm above its base.
+#   anvilate view examples/parts/lifting_lug.spec.yaml
+anvilate_spec: 1.3.0
+name: padeye-drawn
+description: A lifting lug with its pin hole 90 mm above its base.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: lifting_lug
+element_params:
+  hole_diameter: {magnitude: 25.0, unit: mm}
+  hole_height: {magnitude: 90.0, unit: mm}
+  load: {magnitude: 50.0, unit: kN}
+  material: ASTM-A36
+  name: padeye-drawn
+  thickness: {magnitude: 12.0, unit: mm}
+  width: {magnitude: 80.0, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

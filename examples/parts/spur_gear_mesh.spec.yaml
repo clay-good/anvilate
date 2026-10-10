@@ -1,0 +1,31 @@
+# A drawable part: An 18 to 54 tooth spur pair, drawn as its tip cylinders.
+#   anvilate view examples/parts/spur_gear_mesh.spec.yaml
+anvilate_spec: 1.3.0
+name: reduction-pair
+description: An 18 to 54 tooth spur pair, drawn as its tip cylinders.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: spur_gear_mesh
+element_params:
+  allowable_bending_stress: {magnitude: 250.0, unit: MPa}
+  allowable_contact_stress: {magnitude: 1100.0, unit: MPa}
+  bending_geometry_factor: 0.34
+  contact_geometry_factor: 0.115
+  dynamic_factor: 1.3
+  face_width: {magnitude: 40.0, unit: mm}
+  gear_modulus: {magnitude: 207.0, unit: GPa}
+  gear_teeth: 54
+  load_distribution_factor: 1.2
+  minimum_contact_ratio: 1.2
+  module: {magnitude: 2.0, unit: mm}
+  overload_factor: 1.25
+  pinion_modulus: {magnitude: 207.0, unit: GPa}
+  pinion_teeth: 18
+  pinion_torque: {magnitude: 180.0, unit: m * N}
+  pressure_angle: 20.0
+  rim_thickness_factor: 1.0
+  size_factor: 1.0
+  surface_condition_factor: 1.0
+acceptance:
+  tiers: [T1_analytical]

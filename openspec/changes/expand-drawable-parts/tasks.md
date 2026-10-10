@@ -20,13 +20,16 @@
 
 ## 3. Parts that are already screened
 
-- [ ] 3.1 Lifting lug / padeye
-- [ ] 3.2 Gusset plate, shear plate, tension member
-- [ ] 3.3 Structural members from the section tables (I, channel, angle, HSS, tube, flat)
-- [ ] 3.4 Shaft key; stepped shaft with shoulders and keyways (extends transmission shaft)
-- [ ] 3.5 Pipe run
-- [ ] 3.6 Catalog envelopes: rolling bearing, helical compression spring
-- [ ] 3.7 Spur gear and gear pair (pitch, root, tip circles)
+- [x] 3.1 Lifting lug / padeye (takes an optional `hole_height`, refused by name without it)
+- [ ] 3.2 Gusset plate, shear plate, tension member: each declares areas and no outline, so
+      each needs outline fields before it can be drawn
+- [x] 3.3 Structural members from the section tables: beam, column and beam-column from a
+      named rolled I or H profile
+- [ ] 3.3b Channel, angle, HSS and flat-bar members (no bundled table yet)
+- [x] 3.4 Shaft key; stepped shaft with shoulders and keyways
+- [ ] 3.5 Pipe run (declares a bore and no wall; needs a schedule designation)
+- [x] 3.6 Catalog envelopes: rolling bearing (by designation), helical compression spring
+- [x] 3.7 Spur gear pair as tip cylinders, with pitch, root and tip circles stated
 
 ## 4. New everyday parts (element, schema, pattern, example each)
 

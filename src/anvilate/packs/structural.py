@@ -1987,11 +1987,15 @@ class LiftingLug(GuardedInputs):
     ``thickness`` the plate thickness, and ``load`` the lifted force. Two limit
     states are screened: net-section tension across the reduced width (W−d)·t and
     bearing on the pin d·t, both against the lug material's yield (ASME BTH-1).
+
+    ``hole_height`` is the height of the pin hole's centre above the lug's base. No check
+    reads it; it is what a drawing of the lug needs and the screen never did, so it is
+    optional and a lug without it screens exactly as before and is not drawn.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields = ("load",)
-    positive_fields = ("thickness", "hole_diameter")
+    positive_fields = ("thickness", "hole_diameter", "hole_height")
 
     name: Named
     width: Quantity
@@ -1999,6 +2003,7 @@ class LiftingLug(GuardedInputs):
     thickness: Quantity
     load: Quantity
     material: str
+    hole_height: Quantity | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> LiftingLug:
@@ -2006,8 +2011,9 @@ class LiftingLug(GuardedInputs):
             (self.width, "width"),
             (self.hole_diameter, "hole_diameter"),
             (self.thickness, "thickness"),
+            (self.hole_height, "hole_height"),
         ):
-            if not value.has_dimension("[length]"):
+            if value is not None and not value.has_dimension("[length]"):
                 raise _structural_pack_refusal(
                     f"{name} must be a [length] quantity; got {value}",
                     subject=name,

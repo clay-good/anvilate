@@ -111,3 +111,26 @@ def test_every_character_a_label_can_carry_has_a_glyph():
     needed = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_/:()+ x,")
     missing = sorted(c for c in needed if c != " " and c not in projection._GLYPHS)
     assert not missing, missing
+
+
+@pytest.mark.parametrize("size", [(100, 4000, 200), (4000, 100, 200), (10, 10, 4000)])
+@pytest.mark.parametrize("view", projection.VIEWS)
+def test_a_dimension_label_never_leaves_the_view(size, view):
+    """On a 4 m beam the right view's "200 MM" ran off the edge and read "200 M".
+
+    Every stroke of a dimensioned view, the labels included, is held inside the image, at
+    the narrow width one cell of the overview has.
+    """
+    from build123d import Box
+
+    width = 360
+    svg, height = projection.render_view(
+        Box(*size), {}, name="beam", view=view, width_px=width, dimensions=True
+    )
+    drawn = svg.decode("utf-8")
+    assert drawn.count("<path") >= 4  # the edges, two dimension lines and two labels
+    for path in re.findall(r'<path[^>]* d="([^"]+)"', drawn):
+        points = re.findall(r"(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)", path)
+        assert points
+        for x, y in points:
+            assert 0 <= float(x) <= width and 0 <= float(y) <= height, (view, size, x, y)

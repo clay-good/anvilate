@@ -2602,7 +2602,7 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
     if pattern is not None:
         try:
             element = pattern.model(**dict(spec.element_params))
-            return pattern.build(element, str(spec.name))
+            return pattern.build(element, str(spec.name), spec.element_params)
         except GeometryUnavailable:
             # A ValueError too, but the remedy is to install the extra, not to edit the spec.
             raise

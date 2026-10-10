@@ -1125,6 +1125,10 @@ class RollingBearing(GuardedInputs):
     required_life_hours: Quantity
     life_exponent: float = BALL_BEARING_LIFE_EXPONENT
     required_static_factor: float = 1.0
+    # The catalog designation, such as 6204. No check reads it: the ratings above are the
+    # caller's, from the manufacturer. It is what a drawing needs, the ISO 15 boundary
+    # dimensions the designation names, so it is optional and only the drawing asks for it.
+    designation: str | None = None
 
 
 def _bearing_life_entry(unit: RollingBearing, required_safety_factor: float) -> ScorecardEntry:

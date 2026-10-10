@@ -133,7 +133,7 @@ _VOLUMES = {
 def test_every_part_has_an_example_a_pattern_and_a_volume():
     """The floor: a part added without its example or its hand-derived volume fails here."""
     assert len(_PARTS) == 14
-    assert {path.name.removesuffix(".spec.yaml") for path in _EXAMPLES.glob("*.spec.yaml")} == set(
+    assert {path.name.removesuffix(".spec.yaml") for path in _EXAMPLES.glob("*.spec.yaml")} >= set(
         _PARTS
     )
     assert set(_VOLUMES) == set(_PARTS)

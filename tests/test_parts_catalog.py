@@ -37,7 +37,7 @@ def test_the_page_on_disk_is_what_the_registry_generates():
 def test_every_pattern_is_on_the_page_with_its_picture_and_nothing_else_is():
     page = (_REPO / "docs" / "parts-catalog.md").read_text(encoding="utf-8")
     headed = re.findall(r"^### `(\w+)`$", page, flags=re.MULTILINE)
-    assert len(headed) >= 18 and headed == sorted(patterns())
+    assert len(headed) >= 26 and headed == sorted(patterns())
     pictured = {path.stem for path in (_REPO / "docs" / "parts").glob("*.png")}
     assert pictured == set(patterns())
     for name in headed:
@@ -64,7 +64,12 @@ def test_the_catalog_says_what_is_checked_and_what_is_an_envelope():
     by_type = {entry["element_type"]: entry for entry in drawable_catalog()}
     drawn_only = {name.removeprefix("screen_") for name in parts.__all__ if "screen_" in name}
     assert {name for name, entry in by_type.items() if not entry["screened"]} == drawn_only
-    assert {name for name, entry in by_type.items() if entry["envelope"]} == {"t_slot_extrusion"}
+    assert {name for name, entry in by_type.items() if entry["envelope"]} == {
+        "helical_compression_spring",
+        "rolling_bearing",
+        "spur_gear_mesh",
+        "t_slot_extrusion",
+    }
     page = (_REPO / "docs" / "parts-catalog.md").read_text(encoding="utf-8")
     assert page.count("**drawn, not checked**") == len(drawn_only) + 1  # and the legend
     takes = {p["name"]: p["takes"] for p in by_type["sheet_metal_bracket"]["parameters"]}
@@ -109,9 +114,9 @@ def test_an_agent_can_ask_what_it_can_declare_and_what_draws():
     listed = {part["element_type"]: part for part in catalog["parts"]}
     assert set(listed) == set(element_registry()) and len(listed) >= 44
     assert {name for name, part in listed.items() if part["drawable"]} == set(patterns())
-    assert listed["lifting_lug"] == {
-        "element_type": "lifting_lug",
-        "summary": listed["lifting_lug"]["summary"],
+    assert listed["gusset_plate"] == {
+        "element_type": "gusset_plate",
+        "summary": listed["gusset_plate"]["summary"],
         "drawable": False,
         "screened": True,
     }

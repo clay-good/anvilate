@@ -248,11 +248,21 @@ _GLYPHS: Mapping[str, tuple[tuple[tuple[float, float], ...], ...]] = {
 }
 
 
+# How far a dimension line stands off the part, in pixels.
+_DIMENSION_OFFSET = 26.0
+
+
+def _text_width(text: str, height: float) -> float:
+    """How wide ``text`` is drawn at ``height`` px."""
+    unit = height / 6
+    return len(text) * 5.6 * unit - 1.6 * unit
+
+
 def _text(text: str, x: float, y: float, height: float, *, anchor: str = "start") -> str:
     """``text`` as one SVG path of strokes, its baseline at ``y``, ``height`` px tall."""
     unit = height / 6
     advance = 5.6 * unit
-    width = len(text) * advance - 1.6 * unit
+    width = _text_width(text, height)
     left = x - (width / 2 if anchor == "middle" else width if anchor == "end" else 0)
     segments = []
     for index, raw in enumerate(text):
@@ -328,9 +338,17 @@ def _view_markup(
     faces = _faces(shape, tags, camera)
     outline = [p for line in visible + hidden for p in line] + [p for f in faces for p in f[3]]
     margin = 0.2 if dimensions else 0.08
-    sheet = _Sheet(
-        outline, x + w * margin, y + h * margin, w * (1 - 2 * margin), h * (1 - 2 * margin)
-    )
+    left = right = w * margin
+    if dimensions:
+        xs, ys = [p[0] for p in outline], [p[1] for p in outline]
+        factor = 1 / 25.4 if unit == "in" else 1.0
+        height = max(9.0, min(13.0, w / 48))
+        width_mm, height_mm = max(xs) - min(xs), max(ys) - min(ys)
+        across, upward = f"{width_mm * factor:.4g} {unit}", f"{height_mm * factor:.4g} {unit}"
+        # The upright dimension's label stands to the right of the part, so the part gives
+        # up the room it needs: on a long thin part "200 MM" ran off the view as "200 M".
+        right = max(right, _DIMENSION_OFFSET + 10 + _text_width(upward, height))
+    sheet = _Sheet(outline, x + left, y + h * margin, w - left - right, h * (1 - 2 * margin))
     out = []
     for _depth, tone, tag, corners in faces:
         points = " ".join(f"{px:.2f},{py:.2f}" for px, py in (sheet.at(c) for c in corners))
@@ -347,18 +365,12 @@ def _view_markup(
         f'<path data-edges="visible" d="{solid}" fill="none" stroke="{_INK}" stroke-width="1.5"/>'
     )
     if dimensions:
-        xs, ys = [p[0] for p in outline], [p[1] for p in outline]
-        factor = 1 / 25.4 if unit == "in" else 1.0
-        height = max(9.0, min(13.0, w / 48))
-        width_mm, height_mm = max(xs) - min(xs), max(ys) - min(ys)
         out += _dimension(
-            sheet, (min(xs), min(ys)), (max(xs), min(ys)),
-            f"{width_mm * factor:.4g} {unit}", 26, height,
-        )  # fmt: skip
+            sheet, (min(xs), min(ys)), (max(xs), min(ys)), across, _DIMENSION_OFFSET, height
+        )
         out += _dimension(
-            sheet, (max(xs), min(ys)), (max(xs), max(ys)),
-            f"{height_mm * factor:.4g} {unit}", 26, height,
-        )  # fmt: skip
+            sheet, (max(xs), min(ys)), (max(xs), max(ys)), upward, _DIMENSION_OFFSET, height
+        )
     return out
 
 

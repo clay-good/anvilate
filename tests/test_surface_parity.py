@@ -161,6 +161,15 @@ def test_build_gates_the_same_part_the_same_way_on_both_surfaces(example, tmp_pa
         assert "no audited geometry pattern" in error["message"]
         assert "no audited geometry pattern" in json.loads(out)["diagnostics"][0]
         return
+    if example == "padeye":
+        # A lug screens without saying how high its hole stands, and is not drawn without
+        # it. Both doors ask for that one field, in the same words.
+        from anvilate.cli import EXIT_BAD_REQUEST
+
+        asked = "add element_params.hole_height"
+        assert code == EXIT_BAD_REQUEST and asked in json.loads(out)["diagnostics"][0]
+        assert response["error"]["code"] == -32602 and asked in response["error"]["message"]
+        return
     assert code == 0, err
     artifact = json.loads(out)["artifact"]
     geometry = response["result"]["structuredContent"]["geometry"]

@@ -1,0 +1,19 @@
+# A drawable part: A parallel key for a 40 mm shaft.
+#   anvilate view examples/parts/shaft_key.spec.yaml
+anvilate_spec: 1.3.0
+name: drive-key
+description: A parallel key for a 40 mm shaft.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: shaft_key
+element_params:
+  allowable_bearing: {magnitude: 180.0, unit: MPa}
+  allowable_shear: {magnitude: 100.0, unit: MPa}
+  key_height: {magnitude: 20.0, unit: mm}
+  key_length: {magnitude: 40.0, unit: mm}
+  key_width: {magnitude: 4.0, unit: mm}
+  shaft_diameter: {magnitude: 40.0, unit: mm}
+  torque: {magnitude: 400.0, unit: m * N}
+acceptance:
+  tiers: [T1_analytical]

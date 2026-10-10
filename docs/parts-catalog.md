@@ -54,6 +54,28 @@ A rectangular column base plate: width, depth and thickness.
 - Outputs: views, step, 3mf, dxf
 - Example: [`examples/base_plate.spec.yaml`](../examples/base_plate.spec.yaml)
 
+### `beam_column_member`
+
+A beam-column cut to length from a named rolled I or H profile.
+
+![beam_column_member](parts/beam_column_member.png)
+
+- Required: `name` (text), `section` (CrossSection), `length` (quantity), `axial_load` (quantity), `moment` (quantity), `material` (text)
+- Optional: `end_condition` (pinned_pinned | fixed_fixed | fixed_pinned | fixed_free)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/beam_column_member.spec.yaml`](../examples/parts/beam_column_member.spec.yaml)
+
+### `beam_member`
+
+A beam cut to length from a named rolled I or H profile.
+
+![beam_member](parts/beam_member.png)
+
+- Required: `name` (text), `section` (CrossSection), `length` (quantity), `support` (cantilever | simply_supported | fixed_fixed | fixed_pinned | overhang), `load` (quantity), `load_type` (point | distributed | triangular | moment), `material` (text)
+- Optional: `deflection_limit` (quantity), `load_position` (quantity), `pair_offset` (quantity), `loaded_length` (quantity), `overhang_length` (quantity), `mass_per_length` (quantity), `min_frequency` (quantity), `patch_centered` (true or false), `triangle_mirrored` (true or false)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/beam_member.spec.yaml`](../examples/parts/beam_member.spec.yaml)
+
 ### `bushing`
 
 A sleeve bushing, plain or with a flange at one end. **drawn, not checked**.
@@ -76,6 +98,17 @@ A fork: a base and two ears with a pin hole through both. **drawn, not checked**
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/clevis.spec.yaml`](../examples/parts/clevis.spec.yaml)
 
+### `column_member`
+
+A column cut to length from a named rolled I or H profile.
+
+![column_member](parts/column_member.png)
+
+- Required: `name` (text), `section` (CrossSection), `length` (quantity), `axial_load` (quantity), `material` (text)
+- Optional: `end_condition` (pinned_pinned | fixed_fixed | fixed_pinned | fixed_free)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/column_member.spec.yaml`](../examples/parts/column_member.spec.yaml)
+
 ### `cover_plate`
 
 A flat cover: rectangular, round, or round with a central bore.
@@ -97,6 +130,28 @@ An open-topped box with a wall thickness, round corners and floor holes. **drawn
 - Optional: `floor` (quantity), `corner_radius` (quantity), `floor_holes` (list of Hole), `floor_patterns` (list of HolePattern), `material` (text)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/enclosure.spec.yaml`](../examples/parts/enclosure.spec.yaml)
+
+### `helical_compression_spring`
+
+A helical compression spring, drawn as the tube it occupies at its free length. **envelope**.
+
+![helical_compression_spring](parts/helical_compression_spring.png)
+
+- Required: `wire_diameter` (quantity), `mean_coil_diameter` (quantity), `active_coils` (number), `total_coils` (number), `free_length` (quantity), `operating_force` (quantity), `shear_modulus` (quantity), `elastic_modulus` (quantity), `allowable_shear_stress` (quantity)
+- Optional: `end_condition_constant` (number)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/helical_compression_spring.spec.yaml`](../examples/parts/helical_compression_spring.spec.yaml)
+
+### `lifting_lug`
+
+A lifting lug (pad eye): a plate with a round top concentric with its pin hole.
+
+![lifting_lug](parts/lifting_lug.png)
+
+- Required: `name` (text), `width` (quantity), `hole_diameter` (quantity), `thickness` (quantity), `load` (quantity), `material` (text)
+- Optional: `hole_height` (quantity)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/lifting_lug.spec.yaml`](../examples/parts/lifting_lug.spec.yaml)
 
 ### `mounting_plate`
 
@@ -131,6 +186,17 @@ A V-belt pulley: a disc with a bore and one V groove in its rim. **drawn, not ch
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/pulley.spec.yaml`](../examples/parts/pulley.spec.yaml)
 
+### `rolling_bearing`
+
+A deep-groove ball bearing, drawn as a ring from its ISO 15 boundary dimensions. **envelope**.
+
+![rolling_bearing](parts/rolling_bearing.png)
+
+- Required: `dynamic_load_rating` (quantity), `static_load_rating` (quantity), `radial_load` (quantity), `axial_load` (quantity), `radial_factor` (number), `axial_factor` (number), `speed` (quantity), `required_life_hours` (quantity)
+- Optional: `life_exponent` (number), `required_static_factor` (number), `designation` (text)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/rolling_bearing.spec.yaml`](../examples/parts/rolling_bearing.spec.yaml)
+
 ### `shaft_collar`
 
 A plain shaft collar: a ring on a shaft. **drawn, not checked**.
@@ -141,6 +207,17 @@ A plain shaft collar: a ring on a shaft. **drawn, not checked**.
 - Optional: `material` (text)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/shaft_collar.spec.yaml`](../examples/parts/shaft_collar.spec.yaml)
+
+### `shaft_key`
+
+A parallel shaft key: a bar of its width and height.
+
+![shaft_key](parts/shaft_key.png)
+
+- Required: `shaft_diameter` (quantity), `key_width` (quantity), `key_height` (quantity), `key_length` (quantity), `torque` (quantity), `allowable_shear` (quantity), `allowable_bearing` (quantity)
+- Optional: none
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/shaft_key.spec.yaml`](../examples/parts/shaft_key.spec.yaml)
 
 ### `sheet_metal_bracket`
 
@@ -163,6 +240,17 @@ A plain round spacer: a ring of one length. **drawn, not checked**.
 - Optional: `material` (text)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/spacer.spec.yaml`](../examples/parts/spacer.spec.yaml)
+
+### `spur_gear_mesh`
+
+A spur gear pair, drawn as its two tip cylinders at their centre distance. **envelope**.
+
+![spur_gear_mesh](parts/spur_gear_mesh.png)
+
+- Required: `pinion_teeth` (whole number), `gear_teeth` (whole number), `module` (quantity), `face_width` (quantity), `pressure_angle` (number), `pinion_torque` (quantity), `bending_geometry_factor` (number), `contact_geometry_factor` (number), `allowable_bending_stress` (quantity), `allowable_contact_stress` (quantity), `pinion_modulus` (quantity), `gear_modulus` (quantity)
+- Optional: `minimum_contact_ratio` (number), `overload_factor` (number), `dynamic_factor` (number), `size_factor` (number), `load_distribution_factor` (number), `rim_thickness_factor` (number), `surface_condition_factor` (number)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/spur_gear_mesh.spec.yaml`](../examples/parts/spur_gear_mesh.spec.yaml)
 
 ### `standoff`
 

@@ -2876,13 +2876,15 @@ def test_what_a_client_keeps_of_the_instructions_is_enough_to_write_a_spec():
     kept = agent_instructions()[:CLIENT_INSTRUCTIONS_LIMIT]
     assert CLIENT_INSTRUCTIONS_LIMIT == 2048
     assert _AGENT_RULES in kept
-    (elements,) = [line for line in kept.splitlines() if line.startswith("Elements (")]
-    listed = elements.partition(": ")[2].split(", ")
-    assert [name.rstrip("*") for name in listed] == sorted(element_registry())
-    # And which of them build_part draws, marked where the model reads the names.
-    from anvilate.patterns import patterns
-
-    assert {name.rstrip("*") for name in listed if name.endswith("*")} == set(patterns())
+    (elements,) = [line for line in kept.splitlines() if line.startswith("Elements: ")]
+    assert elements.partition(": ")[2].split(", ") == sorted(element_registry())
+    # Which of them draw, and what each takes, is one call away, and the kept part says so.
+    # The names used to carry a star each where build_part draws them; twenty-six stars
+    # left the material ids one character from the limit.
+    said = " ".join(kept.split())
+    assert "describe_part gives an element's fields and an example spec" in said
+    needed = agent_instructions().index("\n\nDetail (")
+    assert needed <= CLIENT_INSTRUCTIONS_LIMIT - 20, "no room left for the next element"
     (materials,) = [line for line in kept.splitlines() if line.startswith("Materials: ")]
     assert materials.removeprefix("Materials: ").split(", ") == list(
         default_standards_resolver().known_materials()

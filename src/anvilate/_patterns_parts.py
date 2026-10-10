@@ -79,6 +79,7 @@ def _built(
     cut: Sequence[features.Feature] = (),
     *,
     envelope: bool = False,
+    name: str | None = None,
 ) -> BuiltGeometry:
     tags = [feature.tag for feature in cut]
     repeated = sorted({tag for tag in tags if tags.count(tag) > 1})
@@ -87,7 +88,7 @@ def _built(
             f"these feature tags are used twice: {repeated}", element=element_type, field="holes"
         )
     built = BuiltGeometry(
-        name=str(element.name),
+        name=str(name if name is not None else element.name),
         pattern=f"{element_type}/1",
         shape=shape,
         faces=_tag_faces(shape),
@@ -762,7 +763,7 @@ def _register(element_type: str, model: type, builder: Any, summary: str, **opti
             name=f"{element_type}/1",
             element_type=element_type,
             model=model,
-            build=lambda element, name: builder(element),
+            build=lambda element, name, params: builder(element),
             summary=summary,
             example=f"parts/{element_type}.spec.yaml",
             screened=False,

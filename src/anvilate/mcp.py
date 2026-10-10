@@ -947,9 +947,9 @@ def _for_revision(response: dict[str, Any] | None, revision: str) -> dict[str, A
 # asked for every validation tier, and named no element, so nothing would have screened. The
 # schema says what is legal; these say what a request means and which identifiers exist.
 _AGENT_RULES = """Anvilate is a local, deterministic engineering checker: you write the
-Design Spec, it validates and screens it. run_validation and build_part each return a
-subject handle the other tools take; compile_spec checks a document and names remedies.
-Fix what a refusal names and call again; never report a check that did not run.
+Design Spec, it validates and screens it. describe_part gives an element's fields and an
+example spec; run_validation and build_part each return a subject handle the other tools
+take. Fix what a refusal names and call again; never report a check that did not run.
 - Write only what the user stated: no invented interfaces, dimensions, exports or loads. Ask
   for a missing load, material or interface; do not guess it.
 - A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0, "origin":
@@ -993,18 +993,15 @@ def agent_instructions() -> str:
     context. Generated from the resolver and the element registry, never hand-written, so it
     cannot name a material the database lacks or a field a screen does not read.
     """
-    from .patterns import patterns
     from .screening import element_registry
     from .standards import default_standards_resolver
     from .standards.profiles import default_profile_table
 
     resolver = default_standards_resolver()
-    drawn = set(patterns())
     lines = [
         _AGENT_RULES,
         "",
-        "Elements (* = drawable): "
-        + ", ".join(name + ("*" if name in drawn else "") for name in sorted(element_registry())),
+        "Elements: " + ", ".join(sorted(element_registry())),
         "Materials: " + ", ".join(resolver.known_materials()),
         "",
         "Detail (a client may cut what follows; refusals name the same fields and ids):",

@@ -1,0 +1,22 @@
+# A drawable part: An IPE 200 beam cut to 4 m.
+#   anvilate view examples/parts/beam_member.spec.yaml
+anvilate_spec: 1.3.0
+name: floor-beam
+description: An IPE 200 beam cut to 4 m.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: beam_member
+element_params:
+  deflection_limit: {magnitude: 16.0, unit: mm}
+  length: {magnitude: 4.0, unit: m}
+  load: {magnitude: 5.0, unit: kN / m}
+  load_type: distributed
+  material: ASTM-A36
+  name: floor-beam
+  patch_centered: false
+  section: IPE 200
+  support: simply_supported
+  triangle_mirrored: false
+acceptance:
+  tiers: [T1_analytical]

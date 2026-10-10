@@ -542,6 +542,10 @@
    "magnitude": 25.0,
    "unit": "mm"
   },
+  "hole_height": {
+   "magnitude": 90.0,
+   "unit": "mm"
+  },
   "load": {
    "magnitude": 50.0,
    "unit": "kN"
@@ -823,6 +827,7 @@
    "magnitude": 1.1,
    "unit": "kN"
   },
+  "designation": "6204",
   "dynamic_load_rating": {
    "magnitude": 35.1,
    "unit": "kN"

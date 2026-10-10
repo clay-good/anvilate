@@ -1,0 +1,23 @@
+# A drawable part: A 6204 ball bearing, drawn as an envelope from ISO 15.
+#   anvilate view examples/parts/rolling_bearing.spec.yaml
+anvilate_spec: 1.3.0
+name: bearing-6204
+description: A 6204 ball bearing, drawn as an envelope from ISO 15.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: rolling_bearing
+element_params:
+  axial_factor: 1.45
+  axial_load: {magnitude: 1.1, unit: kN}
+  designation: '6204'
+  dynamic_load_rating: {magnitude: 35.1, unit: kN}
+  life_exponent: 3.0
+  radial_factor: 0.56
+  radial_load: {magnitude: 4.2, unit: kN}
+  required_life_hours: {magnitude: 20000.0, unit: h}
+  required_static_factor: 1.5
+  speed: {magnitude: 1450.0, unit: rpm}
+  static_load_rating: {magnitude: 19.3, unit: kN}
+acceptance:
+  tiers: [T1_analytical]

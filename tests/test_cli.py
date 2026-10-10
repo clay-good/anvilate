@@ -2833,14 +2833,45 @@ def test_dxf_of_a_part_with_no_cut_profile_is_unbuilt_not_an_internal_error(exam
     assert "has none; DXF supports 'base_plate/1' and 'cover_plate/1'" in err
 
 
+_GUSSET_SPEC = """
+anvilate_spec: "1.3.0"
+name: gusset
+description: A gusset plate, which declares areas and no outline.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: sheet_metal}
+acceptance: {tiers: [T1_analytical]}
+element_type: gusset_plate
+element_params:
+  name: gusset
+  material: ASTM-A36
+  net_shear_area: {magnitude: 3000.0, unit: "mm ** 2"}
+  net_tension_area: {magnitude: 1200.0, unit: "mm ** 2"}
+  load: {magnitude: 400.0, unit: kN}
+"""
+
+
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
+    spec = tmp_path / "gusset.yaml"
+    spec.write_text(_GUSSET_SPEC, encoding="utf-8")
+
+    code, out, err = _run("build", str(spec), "--output", str(tmp_path / "gusset.step"))
+
+    assert code == EXIT_UNBUILT and out == ""
+    assert "gusset_plate" in err and "supported: angle_bracket, base_plate" in err
+    assert "starting from the STEP export of the closest part" in err
+
+
+def test_build_asks_for_the_one_dimension_a_drawing_needs_and_a_screen_did_not(tmp_path):
+    """A lug screens without saying how high its hole stands. It is not drawn without it,
+    and the refusal names the field instead of calling the element unsupported."""
     spec = tmp_path / "lug.yaml"
     spec.write_text(_LUG_SPEC, encoding="utf-8")
 
     code, out, err = _run("build", str(spec), "--output", str(tmp_path / "lug.step"))
 
-    assert code == EXIT_UNBUILT and out == ""
-    assert "lifting_lug" in err and "supported: angle_bracket, base_plate" in err
+    assert code == EXIT_BAD_REQUEST and out == ""
+    assert "add element_params.hole_height" in err and not (tmp_path / "lug.step").exists()
 
 
 def test_build_does_not_replace_an_artifact_without_force(tmp_path):

@@ -17,7 +17,7 @@ register(
         element_type="base_plate",
         example="base_plate.spec.yaml",
         model=BasePlate,
-        build=lambda element, name: geometry.build_base_plate(element),
+        build=lambda element, name, params: geometry.build_base_plate(element),
         summary="A rectangular column base plate: width, depth and thickness.",
         outputs=("views", "step", "3mf", "dxf"),
     )
@@ -28,7 +28,7 @@ register(
         element_type="cover_plate",
         example="cover_plate.spec.yaml",
         model=CoverPlate,
-        build=lambda element, name: geometry.build_cover_plate(element),
+        build=lambda element, name, params: geometry.build_cover_plate(element),
         summary="A flat cover: rectangular, round, or round with a central bore.",
         outputs=("views", "step", "3mf", "dxf"),
     )
@@ -39,7 +39,7 @@ register(
         element_type="transmission_shaft",
         example="transmission_shaft.spec.yaml",
         model=TransmissionShaft,
-        build=lambda element, name: geometry.build_transmission_shaft(element, name=name),
+        build=lambda element, name, params: geometry.build_transmission_shaft(element, name=name),
         summary="A plain solid round shaft of one diameter and length.",
     )
 )
@@ -49,7 +49,7 @@ register(
         element_type="timber_beam",
         example="timber_joist.spec.yaml",
         model=TimberBeam,
-        build=lambda element, name: geometry.build_timber_beam(element),
+        build=lambda element, name, params: geometry.build_timber_beam(element),
         summary="A sawn timber beam between its supports: dressed width and depth over a span.",
     )
 )

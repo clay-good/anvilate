@@ -13,7 +13,7 @@ function that builds it, and :func:`build` calls that function.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import cache
 from types import MappingProxyType
@@ -98,8 +98,13 @@ def _refuse(message: str, *, subject: str) -> GeometryError:
 class Pattern:
     """One drawable archetype: its name, the element it draws, and how it is built.
 
-    ``build`` takes the validated element and the part's name and returns the built
-    geometry. ``example`` is its worked spec, a path under the repository's ``examples``.
+    ``build`` takes the validated element, the part's name and the element parameters as
+    the document wrote them, and returns the built geometry. The parameters are there for
+    what validation resolves away: a member's ``section: IPE 200`` reaches the model as
+    section properties, and only the document still says which profile it was.
+    ``example`` is its worked spec, a path under the repository's ``examples``, and
+    ``example_params`` are merged into the element's shipped example, for a pattern that
+    draws from a field the screen does not need.
     ``outputs`` are what the pattern supports beyond the solid itself.
     ``envelope`` marks a catalog component drawn from its tabulated size: where it goes, not
     how it is made. ``screened`` is false for a part that is drawn and not checked.
@@ -108,12 +113,13 @@ class Pattern:
     name: str
     element_type: str
     model: type
-    build: Callable[[Any, str], Any]
+    build: Callable[[Any, str, Mapping[str, Any]], Any]
     summary: str
     example: str
     outputs: tuple[str, ...] = ("views", "step", "3mf")
     envelope: bool = False
     screened: bool = True
+    example_params: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         if self.name != f"{self.element_type}/{self.name.rpartition('/')[2]}":
@@ -150,7 +156,7 @@ def patterns() -> Mapping[str, Pattern]:
         _LOADED = True
         # Imported for their registrations. Here rather than at module import, because the
         # builders import this module's `register`.
-        from . import _patterns_core, _patterns_parts  # noqa: F401
+        from . import _patterns_core, _patterns_parts, _patterns_screened  # noqa: F401
 
     return MappingProxyType(_REGISTRY)
 
@@ -160,9 +166,11 @@ def pattern_for(element_type: str | None) -> Pattern | None:
     return patterns().get(element_type) if element_type is not None else None
 
 
-def build(element_type: str, element: Any, name: str) -> Any:
+def build(
+    element_type: str, element: Any, name: str, params: Mapping[str, Any] | None = None
+) -> Any:
     """Build the registered pattern for ``element_type`` from its validated ``element``."""
-    return patterns()[element_type].build(element, name)
+    return patterns()[element_type].build(element, name, params or {})
 
 
 def _one(annotation: Any) -> str:
@@ -290,6 +298,9 @@ def example_spec(element_type: str) -> dict[str, Any]:
         for key, value in copy.deepcopy(dict(_examples()[element_type])).items()
         if value is not None
     }
+    pattern = pattern_for(element_type)
+    if pattern is not None:
+        params |= copy.deepcopy(dict(pattern.example_params))
     material = next(
         (params[key] for key in ("material", "plate_material") if isinstance(params.get(key), str)),
         "ASTM-A36",
