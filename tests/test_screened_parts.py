@@ -310,3 +310,32 @@ def test_holes_count_against_a_net_section_only_where_one_line_crosses_them():
     outline["holes"][1]["y"] = _mm(150)
     with pytest.raises(GeometryError, match="the outline has 640 mm² there"):
         build_spec(load_spec_yaml(yaml.safe_dump(document)))
+
+
+def test_a_member_may_be_a_flat_bar_named_by_its_two_dimensions():
+    """`FLAT 50x10` is 50 across the load and 10 along it; `FLAT 10x50` stands on edge.
+
+    A flat bar is its two dimensions and needs no table. The section the screen uses and
+    the solid that is drawn are the same rectangle.
+    """
+    from anvilate.packs.structural import BeamMember, _flat_bar
+
+    assert _flat_bar("FLAT 50x10") == (50.0, 10.0) and _flat_bar("FLAT 12.5x6") == (12.5, 6.0)
+    assert _flat_bar("IPE 200") is None and _flat_bar("FLAT 0x10") is None
+    flat = build_spec(_spec("beam_member", section="FLAT 50x10"))
+    box = flat.shape.bounding_box().size
+    assert (box.X, box.Y, box.Z) == pytest.approx((50.0, 4000.0, 10.0), abs=1e-6)
+    assert flat.volume_mm3 == pytest.approx(50 * 10 * 4000, rel=1e-9)
+    assert flat.dimensions_mm["section_area"] == 500.0
+    on_edge = build_spec(_spec("beam_member", section="FLAT 10x50")).shape.bounding_box().size
+    assert (on_edge.X, on_edge.Z) == pytest.approx((10.0, 50.0), abs=1e-6)
+    column = build_spec(_spec("column_member", section="FLAT 50x10")).shape.bounding_box().size
+    assert (column.X, column.Y, column.Z) == pytest.approx((50.0, 10.0, 3000.0), abs=1e-6)
+    # The screen's section is that rectangle: I = b h^3 / 12 about the bending axis.
+    document = yaml.safe_load((_EXAMPLES / "beam_member.spec.yaml").read_text("utf-8"))
+    params = {**document["element_params"], "section": "FLAT 10x50"}
+    section = BeamMember.model_validate(params).section
+    assert section.area.to("mm**2").magnitude == pytest.approx(500.0)
+    assert section.second_moment.to("mm**4").magnitude == pytest.approx(10 * 50**3 / 12)
+    with pytest.raises(ValueError, match="FLAT 0x10"):
+        BeamMember.model_validate({**params, "section": "FLAT 0x10"})

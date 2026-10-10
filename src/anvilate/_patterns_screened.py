@@ -374,12 +374,23 @@ def _rolled_section(tag: str, params: Mapping[str, Any]) -> tuple[Any, dict[str,
     named = params.get("section")
     if not isinstance(named, str):
         raise GeometryError(
-            f"{tag} is drawn from a named rolled profile, such as `section: IPE 200`; this "
-            "one states its section properties, which do not say its shape",
+            f"{tag} is drawn from a named rolled profile, such as `section: IPE 200`, or a "
+            "flat bar, `section: FLAT 50x10`; this one states its section properties, "
+            "which do not say its shape",
             action="declare",
             subject=f"the {tag} element_params.section",
             source="the bundled rolled-profile table, by designation",
         )
+    from .packs.structural import _flat_bar
+
+    flat = _flat_bar(named)
+    if flat is not None:
+        breadth, bar_depth = flat
+        return Rectangle(breadth, bar_depth), {
+            "width": breadth,
+            "depth": bar_depth,
+            "section_area": breadth * bar_depth,
+        }
     profile = resolve_profile(named)
     depth, flange, web, thick, root = (
         float(getattr(profile, field).quantity.to("mm").magnitude)
@@ -515,20 +526,20 @@ _register(
     "beam_member",
     BeamMember,
     _member("beam_member", upright=False),
-    "A beam cut to length from a named rolled I or H profile.",
+    "A beam cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).",
     example_params={"section": "IPE 200"},
 )
 _register(
     "column_member",
     ColumnMember,
     _member("column_member", upright=True),
-    "A column cut to length from a named rolled I or H profile.",
+    "A column cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).",
     example_params={"section": "IPE 200"},
 )
 _register(
     "beam_column_member",
     BeamColumnMember,
     _member("beam_column_member", upright=True),
-    "A beam-column cut to length from a named rolled I or H profile.",
+    "A beam-column cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).",
     example_params={"section": "IPE 200"},
 )

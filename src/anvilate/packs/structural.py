@@ -249,13 +249,36 @@ __all__ = [
 _BLOCK_SHEAR_SHEAR_FRACTION = 0.6
 
 
+def _flat_bar(designation: str) -> tuple[float, float] | None:
+    """The breadth and depth in mm of a flat bar written ``FLAT 50x10``, or ``None``.
+
+    A flat bar is its two dimensions and needs no table: the first is its breadth across the
+    load and the second its depth along it, so ``FLAT 50x10`` lies flat under a transverse
+    load and ``FLAT 10x50`` stands on edge.
+    """
+    import re
+
+    matched = re.fullmatch(r"FLAT (\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)", designation.strip())
+    if matched is None:
+        return None
+    breadth, depth = float(matched[1]), float(matched[2])
+    return (breadth, depth) if breadth > 0 and depth > 0 else None
+
+
 def _named_section(value: object) -> object:
     """A profile designation such as ``IPE 200`` or ``W12x26`` resolves to its section.
 
     EN profiles are bundled. AISC W-shapes resolve only from the verified local cache; this
     validator never downloads implicitly. A name no table holds is refused with near misses.
+    A flat bar, ``FLAT 50x10``, is its own two dimensions.
     """
     if isinstance(value, str):
+        flat = _flat_bar(value)
+        if flat is not None:
+            return CrossSection.rectangular(
+                width=Quantity(magnitude=flat[0], unit="mm"),
+                height=Quantity(magnitude=flat[1], unit="mm"),
+            )
         try:
             return resolve_profile(value).section()
         except LookupError as unknown:
@@ -266,7 +289,8 @@ def _named_section(value: object) -> object:
 
 
 #: A member's section: its properties, or the designation of a rolled profile the library
-#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape (``W12x26``).
+#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape (``W12x26``), or a flat bar
+#: by its breadth and depth in millimetres (``FLAT 50x10``).
 MemberSection = Annotated[
     CrossSection, BeforeValidator(_named_section, json_schema_input_type=str | CrossSection)
 ]

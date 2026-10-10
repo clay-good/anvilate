@@ -56,7 +56,7 @@ A rectangular column base plate: width, depth and thickness.
 
 ### `beam_column_member`
 
-A beam-column cut to length from a named rolled I or H profile.
+A beam-column cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).
 
 ![beam_column_member](parts/beam_column_member.png)
 
@@ -67,7 +67,7 @@ A beam-column cut to length from a named rolled I or H profile.
 
 ### `beam_member`
 
-A beam cut to length from a named rolled I or H profile.
+A beam cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).
 
 ![beam_member](parts/beam_member.png)
 
@@ -100,7 +100,7 @@ A fork: a base and two ears with a pin hole through both, screened under a pin l
 
 ### `column_member`
 
-A column cut to length from a named rolled I or H profile.
+A column cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).
 
 ![column_member](parts/column_member.png)
 

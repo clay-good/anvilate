@@ -31,7 +31,8 @@
       the areas the element was screened on
 - [x] 3.3 Structural members from the section tables: beam, column and beam-column from a
       named rolled I or H profile
-- [ ] 3.3b Channel, angle, HSS and flat-bar members (no bundled table yet)
+- [x] 3.3b Flat-bar members: `section: FLAT 50x10`, breadth by depth, screened and drawn
+- [ ] 3.3c Channel, angle and HSS members (no bundled table yet)
 - [x] 3.4 Shaft key; stepped shaft with shoulders and keyways
 - [x] 3.5 Pipe run: drawn straight from an optional `designation` (NPS and schedule), and
       refused when the declared bore is not that pipe's

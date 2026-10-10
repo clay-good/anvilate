@@ -72,7 +72,7 @@ build: {tag}: {field} is {declared} mm² and the outline has {drawn} mm² there,
 build_pipe_run: <built elsewhere>
 build_pipe_run: pipe_run: no bundled pipe is designated {pipe.designation}; closest: {', '.join(near)} | ; write it as NPS 2 SCH 40
 build_pipe_run: pipe_run: diameter is {declared} mm and the bore of {pipe.designation} is {bore} mm, more than {_BORE_AGREEMENT} apart; the head loss was worked from one pipe and this would draw another. State the bore of the pipe named, or name the pipe with that bore
-_rolled_section: {tag} is drawn from a named rolled profile, such as `section: IPE 200`; this one states its section properties, which do not say its shape
+_rolled_section: {tag} is drawn from a named rolled profile, such as `section: IPE 200`, or a flat bar, `section: FLAT 50x10`; this one states its section properties, which do not say its shape
 
 [_sandbox_child.py]
 refuse: <built elsewhere>
