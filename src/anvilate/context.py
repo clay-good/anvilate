@@ -38,6 +38,7 @@ from ._models import FrozenMap, Named, Provenance, StatableModel
 from .refusal import RefusalError, Remedy
 
 __all__ = [
+    "AssemblyOccurrence",
     "CadFacts",
     "ContextError",
     "ContextFile",
@@ -396,6 +397,44 @@ class DimensionFacts(StatableModel):
     disagrees: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
+class AssemblyOccurrence(StatableModel):
+    """One component of a STEP assembly: what it is, what it is placed in, and where.
+
+    ``name`` is the component's product name and ``parent`` the product it is used in.
+    ``occurrence`` is the name the file gives this use of it, where it gives one: two of one
+    bolt are two occurrences of one product. ``translation_mm`` and ``rotation`` (three
+    rows) take the component's own coordinates into its parent's, as the file states them.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Provenance
+    parent: Provenance
+    occurrence: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    translation_mm: tuple[float, float, float] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    rotation: tuple[tuple[float, float, float], ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @property
+    def turned(self) -> bool:
+        """Whether the component is rotated in its parent, and not only moved."""
+        return self.rotation is not None and any(
+            abs(value - (row == column)) > 1e-9
+            for row, values in enumerate(self.rotation)
+            for column, value in enumerate(values)
+        )
+
+    def __str__(self) -> str:
+        where = ""
+        if self.translation_mm is not None:
+            at = ", ".join(f"{value:g}" for value in self.translation_mm)
+            where = f" at ({at})" + (", turned" if self.turned else "")
+        return f"{self.name} in {self.parent}{where}"
+
+
 class CadFacts(StatableModel):
     """What one CAD file holds, measured. Lengths are millimetres unless the file had no unit."""
 
@@ -421,6 +460,10 @@ class CadFacts(StatableModel):
     products: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
     solids: tuple[SolidFacts, ...] = Field(default=(), exclude_if=lambda value: not value)
     solids_not_listed: int = Field(default=0, exclude_if=lambda value: not value)
+    # A STEP assembly's components, each in the product it is placed in, as the file's
+    # own structure states them. Empty for a file that is one part.
+    assembly: tuple[AssemblyOccurrence, ...] = Field(default=(), exclude_if=lambda value: not value)
+    assembly_not_listed: int = Field(default=0, exclude_if=lambda value: not value)
     # A DXF drawing.
     layers: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
     profiles: tuple[ProfileFacts, ...] = Field(default=(), exclude_if=lambda value: not value)
@@ -473,6 +516,11 @@ class CadFacts(StatableModel):
                 )
         if self.solids_not_listed:
             lines.append(f"  and {self.solids_not_listed} more solids")
+        if self.assembly:
+            lines.append(f"  assembly of {len(self.assembly) + self.assembly_not_listed}:")
+            lines += [f"    {occurrence}" for occurrence in self.assembly]
+            if self.assembly_not_listed:
+                lines.append(f"    and {self.assembly_not_listed} more")
         for profile in self.profiles:
             lines.append(
                 f"  {profile.kind} {profile.width_mm:g} x {profile.height_mm:g} mm on layer "
@@ -640,6 +688,148 @@ def _step_products(text: str) -> tuple[str, ...]:
     return tuple(list(seen)[:LISTED])
 
 
+# One STEP entity: `#12 = NAME(arguments);`, its strings allowed to hold a semicolon.
+_STEP_ENTITY = r"#(\d+)\s*=\s*({names})\s*\(((?:'(?:[^']|'')*'|[^;'])*)\)\s*;"
+
+
+def _step_arguments(text: str) -> list[str]:
+    """An entity's arguments, split at its top-level commas; a string loses its quotes."""
+    parts, depth, quoted, current = [], 0, False, ""
+    for char in text:
+        if char == "'":
+            quoted = not quoted
+        if not quoted and char == "," and depth == 0:
+            parts.append(current.strip())
+            current = ""
+            continue
+        if not quoted:
+            depth += (char == "(") - (char == ")")
+        current += char
+    parts.append(current.strip())
+    return [
+        part[1:-1].replace("''", "'") if len(part) >= 2 and part[0] == part[-1] == "'" else part
+        for part in parts
+    ]
+
+
+def _step_assembly(text: str, to_mm: float) -> list[AssemblyOccurrence]:
+    """Each use of one product in another, from the file's own structure entities.
+
+    Read from the text and not through the kernel: the names and the tree are a handful of
+    entities, and the kernel's assembly reader is the one that ended the process on an
+    assembly of one part. A placement is the transformation the file states between the
+    component's frame and its parent's, ``A2 · A1⁻¹`` of the two axis placements an
+    ``ITEM_DEFINED_TRANSFORMATION`` names, with lengths taken to millimetres.
+    """
+    import re
+
+    if "NEXT_ASSEMBLY_USAGE_OCCURRENCE" not in text:
+        return []
+
+    def entities(*names: str) -> dict[str, list[str]]:
+        pattern = _STEP_ENTITY.format(names="|".join(names))
+        return {f"#{m[1]}": _step_arguments(m[3]) for m in re.finditer(pattern, text)}
+
+    def some(ids: set[str], name: str) -> dict[str, list[str]]:
+        wanted = "|".join(sorted(identifier[1:] for identifier in ids))
+        if not wanted:
+            return {}
+        pattern = _STEP_ENTITY.format(names=name).replace("(\\d+)", f"({wanted})", 1)
+        return {f"#{m[1]}": _step_arguments(m[3]) for m in re.finditer(pattern, text)}
+
+    product_of = {}  # a product definition's product name
+    names = {key: arguments[1] or arguments[0] for key, arguments in entities("PRODUCT").items()}
+    formations = entities(
+        "PRODUCT_DEFINITION_FORMATION", "PRODUCT_DEFINITION_FORMATION_WITH_SPECIFIED_SOURCE"
+    )
+    for key, arguments in entities("PRODUCT_DEFINITION").items():
+        formation = formations.get(arguments[2])
+        if formation is not None and formation[2] in names:
+            product_of[key] = names[formation[2]]
+    uses = entities("NEXT_ASSEMBLY_USAGE_OCCURRENCE")
+    # The shape that carries a use's placement: PRODUCT_DEFINITION_SHAPE(.., .., #use).
+    shape_of = {
+        arguments[2]: key
+        for key, arguments in entities("PRODUCT_DEFINITION_SHAPE").items()
+        if arguments[2] in uses
+    }
+    relationship_of = {
+        arguments[1]: arguments[0]
+        for arguments in entities("CONTEXT_DEPENDENT_SHAPE_REPRESENTATION").values()
+    }
+    # A relationship is a complex entity; the one fact wanted from it is its transformation.
+    transformation_of = {
+        f"#{m[1]}": f"#{m[2]}"
+        for m in re.finditer(
+            r"#(\d+)\s*=\s*\((?:'(?:[^']|'')*'|[^;'])*?"
+            r"REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION\s*\(\s*#(\d+)\s*\)",
+            text,
+        )
+    }
+    transformations = entities("ITEM_DEFINED_TRANSFORMATION")
+    axes = some({ref for t in transformations.values() for ref in t[2:4]}, "AXIS2_PLACEMENT_3D")
+    points = some({a[1] for a in axes.values()}, "CARTESIAN_POINT")
+    directions = some({ref for a in axes.values() for ref in a[2:4] if ref != "$"}, "DIRECTION")
+
+    def triple(arguments: list[str] | None) -> Point3 | None:
+        if arguments is None:
+            return None
+        try:
+            x, y, z = (float(value) for value in arguments[1].strip("()").split(","))
+        except ValueError:
+            return None
+        return (x, y, z)
+
+    def frame(key: str) -> tuple[Point3, tuple[Point3, Point3, Point3]] | None:
+        """An axis placement as its origin and its x, y and z axes."""
+        placement = axes.get(key)
+        if placement is None:
+            return None
+        origin = triple(points.get(placement[1]))
+        z = triple(directions.get(placement[2])) or (0.0, 0.0, 1.0)
+        x = triple(directions.get(placement[3])) or (1.0, 0.0, 0.0)
+        if origin is None:
+            return None
+        z = _unit(z)
+        along = sum(a * b for a, b in zip(x, z, strict=True))
+        x = _unit((x[0] - along * z[0], x[1] - along * z[1], x[2] - along * z[2]))
+        return origin, (x, _cross(z, x), z)
+
+    found = []
+    for key, arguments in uses.items():
+        parent, child = product_of.get(arguments[3]), product_of.get(arguments[4])
+        if parent is None or child is None:
+            continue
+        placed: dict[str, Any] = {}
+        transformation = transformations.get(
+            transformation_of.get(relationship_of.get(shape_of.get(key, ""), ""), "")
+        )
+        if transformation is not None:
+            first, second = frame(transformation[2]), frame(transformation[3])
+            if first is not None and second is not None:
+                (origin_1, axes_1), (origin_2, axes_2) = first, second
+                # R = A2 · A1ᵀ, with each frame's axes as the columns of its matrix.
+                rotation = tuple(
+                    tuple(
+                        sum(axes_2[k][row] * axes_1[k][column] for k in range(3))
+                        for column in range(3)
+                    )
+                    for row in range(3)
+                )
+                moved = tuple(
+                    origin_2[row] - sum(rotation[row][k] * origin_1[k] for k in range(3))
+                    for row in range(3)
+                )
+                placed = {
+                    "translation_mm": _rounded(value * to_mm for value in moved),
+                    "rotation": tuple(_rounded(row, 9) for row in rotation),
+                }
+        found.append(
+            AssemblyOccurrence(name=child, parent=parent, occurrence=arguments[1] or None, **placed)
+        )
+    return found
+
+
 def _step_facts(
     path: Path, unit: str | None, material: str | None = None, density: float | None = None
 ) -> dict[str, Any]:
@@ -700,6 +890,7 @@ def _step_facts(
             f"{len(solids)} solids: an assembly or a multi-body part, each measured separately"
         )
     products = _step_products(text)
+    occurrences = _step_assembly(text, _TO_MM.get(written or "mm", 1.0))
     volume = sum(float(solid.volume) for solid in solids)
     listed = [_solid_facts(solid) for solid in solids[:LISTED]]
     # One solid and one product name each other. With more of either, which name belongs to
@@ -733,6 +924,8 @@ def _step_facts(
         "products": products,
         "solids": tuple(listed),
         "solids_not_listed": max(0, len(solids) - LISTED),
+        "assembly": tuple(occurrences[:LISTED]),
+        "assembly_not_listed": max(0, len(occurrences) - LISTED),
     }
 
 

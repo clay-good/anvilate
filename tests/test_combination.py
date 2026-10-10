@@ -696,3 +696,31 @@ def test_parts_that_only_share_an_axis_have_no_seat_to_check():
     assert not [e for e in _collar(aligned).card.entries if e.name == "seated fit"]
     seat = _entry(_collar(beyond), "seated fit")
     assert seat.status is CheckStatus.FAIL and "no bore of one part has the other" in seat.detail
+
+
+def test_a_part_that_is_a_bare_primitive_goes_out_under_its_own_name(tmp_path):
+    """The lug's base plate is a plain box standing on z = 0, and that is a location.
+
+    The document stored the located box as an unnamed prototype, the product went out
+    under the kernel's placeholder name, and the writer refused its own file: this worked
+    combination could not be exported at all, and no test had tried. The part is where it
+    was put, at the size it was built.
+    """
+    from anvilate.context import read_cad_file
+    from anvilate.export.gate import authorize_export
+
+    built = _built("lug_on_base_plate")
+    path = write_step_assembly(
+        built, tmp_path / "lug.step", authorization=authorize_export(built.card, override=True)
+    )
+    text = path.read_text(encoding="utf-8")
+    assert re.findall(r"PRODUCT\('([^']*)'", text) == ["lug-on-base-plate", "base", "lug"]
+    facts = read_cad_file(path)
+    assert [(o.name, o.translation_mm) for o in facts.assembly][0] == ("base", (0.0, 0.0, 0.0))
+    assert facts.volume_mm3 == pytest.approx(
+        sum(part.built.volume_mm3 for part in built.parts), rel=1e-9
+    )
+    low, high = _box(built.parts[0])
+    assert facts.solids[0].size_mm == pytest.approx(
+        [h - lo for lo, h in zip(low, high, strict=True)]
+    )

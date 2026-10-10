@@ -220,7 +220,7 @@ _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
 _PART_CATALOG_REF = "urn:anvilate:schema:part-catalog:1.0.0"
 _CONTEXT_INVENTORY_REF = "urn:anvilate:schema:context-inventory:1.0.0"
-_CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.1.0"
+_CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.2.0"
 _COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about

@@ -15,7 +15,8 @@
 - [x] 2.1b STEP: mass when a material is supplied; a file of one solid and one product names
       the solid (names for the solids of an assembly come with its tree, 2.3)
 - [x] 2.2 STEP: planes, cylinders, holes (split faces merged), hole patterns, unclassified count
-- [ ] 2.3 STEP: assembly tree with names and placements
+- [x] 2.3 STEP: assembly tree with names and placements, read from the file's structure
+      entities and held to the five assemblies this library writes (other writers: 2.8)
 - [x] 2.4 DXF: unit stated or refused, layers, closed profiles from chained entities, blocks
 - [x] 2.5 DXF: dimension entities with override disagreement (existing requirement)
 - [x] 2.6 STL and 3MF as meshes: size, volume, count, labelled

@@ -1571,6 +1571,7 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
     import re
     from pathlib import Path
 
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform  # type: ignore[import-untyped]
     from OCP.IFSelect import IFSelect_ReturnStatus  # type: ignore[import-untyped]
     from OCP.Interface import Interface_Static  # type: ignore[import-untyped]
     from OCP.Message import Message, Message_Gravity  # type: ignore[import-untyped]
@@ -1620,7 +1621,18 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
         def component(key: str, product: str, solid: Any, rotation: Matrix, shift: Vec) -> None:
             nonlocal instances
             if key not in prototypes:
-                prototypes[key] = tool.AddShape(solid.solids()[0].wrapped, False)
+                # A primitive built off its own origin (a base plate is a box standing on
+                # z = 0) carries that as a location, and the document stores a located shape
+                # as an unnamed prototype with a named instance of it: the product then
+                # went out under the kernel's placeholder name, and the check below refused
+                # the file. The location is worked into the geometry first, so the product
+                # is the part in its own coordinates and its placement is the part's.
+                wrapped = solid.solids()[0].wrapped
+                own = wrapped.Location()
+                if not own.IsIdentity():
+                    bare = wrapped.Located(TopLoc_Location())
+                    wrapped = BRepBuilderAPI_Transform(bare, own.Transformation(), True).Shape()
+                prototypes[key] = tool.AddShape(wrapped, False)
                 named(prototypes[key], product)
                 products.append(product)
             placed = tool.AddComponent(

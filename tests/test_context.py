@@ -704,6 +704,106 @@ def test_the_command_line_measures_a_file_and_lists_a_folder(tmp_path):
     assert code == 3 and "does not read and does not convert" in err
 
 
+# --- a STEP assembly's tree ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["bracket_on_plate", "collar_on_shaft", "flange_pair", "lug_on_base_plate", "portal_frame"],
+)
+def test_an_assembly_is_read_back_as_the_parts_and_places_that_wrote_it(name, tmp_path):
+    """The tree is read from the file's text and held to the combination that wrote it.
+
+    Every part and every fastener comes back under the assembly's name, where it was put:
+    the same translation, and the same rotation for the nuts and washers turned over.
+    """
+    pytest.importorskip("build123d")
+    import yaml
+
+    from anvilate.combination import build_combination, parse_combination, write_step_assembly
+    from anvilate.export.gate import authorize_export
+
+    combinations = _EXAMPLES.parent / "combinations"
+    built = build_combination(
+        parse_combination(
+            yaml.safe_load((combinations / f"{name}.combination.yaml").read_text("utf-8"))
+        )
+    )
+    # A card that passes takes no override: there is nothing to override.
+    authorization = authorize_export(built.card, override=not built.card.passed)
+    path = write_step_assembly(built, tmp_path / "assembly.step", authorization=authorization)
+    facts = read_cad_file(path)
+    wrote = [(part.id, part.rotation, part.translation) for part in built.parts] + [
+        (f"{body.designation} (envelope)", body.rotation, body.translation)
+        for body in built.hardware
+    ]
+    assert len(facts.assembly) == len(wrote) and not facts.assembly_not_listed
+    assert {occurrence.parent for occurrence in facts.assembly} == {built.name}
+    for occurrence, (label, rotation, translation) in zip(facts.assembly, wrote, strict=True):
+        assert occurrence.name == label
+        assert occurrence.translation_mm == pytest.approx(translation, abs=1e-6), label
+        for read, written in zip(occurrence.rotation, rotation, strict=True):
+            assert read == pytest.approx(written, abs=1e-6), label
+    assert f"assembly of {len(wrote)}:" in str(facts)
+    assert f"    {built.parts[0].id} in {built.name} at (" in str(facts)
+    assert type(facts).model_validate_json(facts.model_dump_json()) == facts
+
+
+def test_a_file_that_is_one_part_has_no_assembly(tmp_path):
+    facts = read_cad_file(_step(tmp_path, "spacer"))
+    assert facts.assembly == () and "assembly" not in facts.model_dump(mode="json")
+    assert "assembly of" not in str(facts)
+
+
+_TWO_LEVELS = """
+#1 = PRODUCT('top','gearbox; rev ''B'' ','',(#90));
+#2 = PRODUCT_DEFINITION_FORMATION('','',#1);
+#3 = PRODUCT_DEFINITION('design','',#2,#91);
+#11 = PRODUCT('s','shaft','',(#90));
+#12 = PRODUCT_DEFINITION_FORMATION_WITH_SPECIFIED_SOURCE('','',#11,.NOT_KNOWN.);
+#13 = PRODUCT_DEFINITION('design','',#12,#91);
+#21 = PRODUCT('k','key','',(#90));
+#22 = PRODUCT_DEFINITION_FORMATION('','',#21);
+#23 = PRODUCT_DEFINITION('design','',#22,#91);
+#30 = NEXT_ASSEMBLY_USAGE_OCCURRENCE('1','shaft:1','',#3,#13,$);
+#31 = NEXT_ASSEMBLY_USAGE_OCCURRENCE('2','','',#13,#23,$);
+#40 = PRODUCT_DEFINITION_SHAPE('','',#30);
+#41 = CONTEXT_DEPENDENT_SHAPE_REPRESENTATION(#42,#40);
+#42 = ( REPRESENTATION_RELATIONSHIP('','',#80,#81)
+REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#43)
+SHAPE_REPRESENTATION_RELATIONSHIP() );
+#43 = ITEM_DEFINED_TRANSFORMATION('','',#50,#60);
+#50 = AXIS2_PLACEMENT_3D('',#51,#52,#53);
+#51 = CARTESIAN_POINT('',(0.,0.,0.));
+#52 = DIRECTION('',(0.,0.,1.));
+#53 = DIRECTION('',(1.,0.,0.));
+#60 = AXIS2_PLACEMENT_3D('',#61,#62,#63);
+#61 = CARTESIAN_POINT('',(1.,2.,-0.5));
+#62 = DIRECTION('',(1.,0.,0.));
+#63 = DIRECTION('',(0.,1.,0.));
+"""
+
+
+def test_a_tree_two_levels_deep_is_read_in_the_files_own_unit_and_names():
+    """A shaft in a gearbox and a key in the shaft, from a file written in inches.
+
+    The shaft's frame has its z along the gearbox's x and its x along the gearbox's y, at
+    (1, 2, -0.5) in: 25.4, 50.8 and -12.7 mm. The key states no placement, and has none.
+    A product's name may hold a semicolon and a doubled quote.
+    """
+    from anvilate.context import _step_assembly
+
+    shaft, key = _step_assembly(_TWO_LEVELS, 25.4)
+    assert (shaft.name, shaft.parent, shaft.occurrence) == ("shaft", "gearbox; rev 'B' ", "shaft:1")
+    assert shaft.translation_mm == (25.4, 50.8, -12.7) and shaft.turned
+    # Columns are where the shaft's own x, y and z point in the gearbox.
+    assert shaft.rotation == ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    assert (key.name, key.parent, key.occurrence) == ("key", "shaft", None)
+    assert key.translation_mm is None and key.rotation is None and not key.turned
+    assert str(key) == "key in shaft"
+    assert _step_assembly("#1 = PRODUCT('a','a','',(#2));", 1.0) == []
+
+
 # --- mass from a named material --------------------------------------------------------
 
 

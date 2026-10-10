@@ -152,6 +152,7 @@ compilation.field_value
 compilation.score_candidate
 compilation.score_task_set
 compilation.task_set_issues
+context.AssemblyOccurrence
 context.CadFacts
 context.ContextError
 context.ContextFile
