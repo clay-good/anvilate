@@ -165,7 +165,7 @@ _LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "urn:anvilate:schema:design-spec:1.19.0"
+_SPEC_REF = "urn:anvilate:schema:design-spec:1.20.0"
 # 1.6.0 adds a counterbore locator kind and its required through diameter.
 # 1.5.0 adds an optional concentric circular locator: a confirmed pilot bore or boss with
 # its diameter and axial extent. Existing interface contracts remain valid unchanged.
@@ -209,7 +209,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.27.0"
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.28.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
@@ -774,8 +774,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "reading its text. Returns its size, volume, holes with diameters and "
                 "positions, hole patterns, and for a DXF its closed profiles and "
                 "dimensions, in millimetres, with the unit the file was written in and "
-                "its SHA-256. A DXF or STL that states no unit needs unit. Use these "
-                "numbers, and name the file, when a spec value comes from it."
+                "its SHA-256. A DXF or STL that states no unit needs unit. A spec value "
+                "taken from a file cites it in the spec's sources (field, origin, file, "
+                "sha256, locator): measured_from_file for these numbers, agent_read for "
+                "one you read off a picture or PDF yourself. Leave confirmed_by empty; "
+                "that is the engineer's to fill."
             ),
             input_schema=_object_schema(
                 {
@@ -1912,7 +1915,7 @@ def _title_block(handle: str, built: Any) -> tuple[str, ...]:
     box = built.shape.bounding_box()
     size = " x ".join(f"{extent:.4g}" for extent in (box.size.X, box.size.Y, box.size.Z)) + " mm"
     spec = parse_spec(subject_store().resolve(handle, kind=_BUILT_GEOMETRY)["spec"])
-    verdict = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {})).status.value
+    verdict = screen_spec(spec, **_screening_options(spec)).status.value
     return (size, str(spec.material.ref), verdict.replace("_", " "))
 
 
@@ -2069,7 +2072,7 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [f"spec: {_reason(failure)}"], operation="run_validation"
         ) from failure
-    card = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {})).model_dump(mode="json")
+    card = screen_spec(spec, **_screening_options(spec)).model_dump(mode="json")
     # The card is returned *and* published: returned because it is closed-form and the answer
     # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
     # for it that is not "the last thing you asked me".
@@ -2113,17 +2116,42 @@ def _no_override(artifact: str, unmet: str) -> _Unavailable:
     )
 
 
+def _screening_options(spec: Any) -> dict[str, Any]:
+    """The keywords a screen takes here: enabled modules, and where cited files are looked for.
+
+    Empty for an ordinary spec, so the call is the one a caller of the library would make.
+    A spec that cites source files has them held to their recorded digests wherever the
+    server was started with a context folder to find them in.
+    """
+    options: dict[str, Any] = {"modules": _MODULES} if _MODULES else {}
+    if spec.sources:
+        from .context import context_roots
+
+        roots = context_roots()
+        if roots:
+            options["source_roots"] = roots
+    return options
+
+
 def _drawn_and_not_checked(spec: Any, card: Any) -> bool:
-    """Whether ``spec`` is a part the catalog draws with no screen, and nothing on it failed."""
+    """Whether ``spec`` may be written marked unvalidated: a draft, with nothing failed.
+
+    Two kinds of part can never pass and are not failures. One the catalog draws with no
+    screen, and one whose only open entry is the confirmation of values an agent read from
+    a file. Either is written with the unvalidated mark. A check that failed, or a
+    screened part with a check that could not run, is still refused.
+    """
     from .patterns import pattern_for
     from .scorecard import CheckStatus
+    from .screening import SOURCE_CONFIRMATION_CHECK
 
+    if any(entry.status is CheckStatus.FAIL for entry in card.entries):
+        return False
     pattern = pattern_for(spec.element_type)
-    return (
-        pattern is not None
-        and not pattern.screened
-        and not any(entry.status is CheckStatus.FAIL for entry in card.entries)
-    )
+    if pattern is not None and not pattern.screened:
+        return True
+    open_entries = [e for e in card.entries if e.status is CheckStatus.NOT_EVALUATED]
+    return bool(open_entries) and all(e.name == SOURCE_CONFIRMATION_CHECK for e in open_entries)
 
 
 def _needs_output_folder(artifact: str) -> None:
@@ -2164,7 +2192,7 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
         ) from unknown
     except GeometryUnavailable as failure:
         raise _Unavailable(str(failure)) from failure
-    card = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {}))
+    card = screen_spec(spec, **_screening_options(spec))
     try:
         authorization = authorize_export(card)
     except ExportRefused as refused:
@@ -2202,9 +2230,14 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
     result = {"format": artifact, "sha256": file["sha256"], "file": file}
     if not authorization.validated:
         result["validated"] = False
+        waiting = [source.field for source in spec.sources if not source.confirmed]
         result["note"] = (
-            f"{spec.element_type} is drawn and not checked: no screen ships for it, so the "
-            "file carries the unvalidated mark. Say so when you hand it over"
+            f"{len(waiting)} value(s) were read by an agent and no person has confirmed "
+            f"them ({', '.join(waiting)}), so the file carries the unvalidated mark. Say so "
+            "when you hand it over, and ask the engineer to confirm them"
+            if waiting
+            else f"{spec.element_type} is drawn and not checked: no screen ships for it, so "
+            "the file carries the unvalidated mark. Say so when you hand it over"
         )
     return result
 
@@ -2359,7 +2392,7 @@ def _run_fea_validation_task(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [f"spec: {_reason(failure)}"], operation="run_fea_validation"
         ) from failure
-    card = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {}))
+    card = screen_spec(spec, **_screening_options(spec))
     entries = tuple(
         entry.model_copy(
             update={

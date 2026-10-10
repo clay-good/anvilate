@@ -3038,6 +3038,14 @@ def _with_modules(modules: tuple[Any, ...]) -> dict[str, Any]:
     return {"modules": modules} if modules else {}
 
 
+def _beside(path: Path, spec: Any) -> dict[str, Any]:
+    """Where a spec's cited source files are looked for: the folder the spec itself is in.
+
+    Empty for a spec that cites none, so its screen is called exactly as before.
+    """
+    return {"source_roots": (path.resolve().parent,)} if spec.sources else {}
+
+
 def _modules(args: argparse.Namespace, *, err, command: str) -> tuple[Any, ...] | int:
     """The third-party modules named with --module, enabled; or the exit code once refused."""
     if not args.module:
@@ -3388,7 +3396,9 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                 total=len(paths),
             )
         try:
-            results.append((path, spec, screen_spec(spec, **_with_modules(modules))))
+            results.append(
+                (path, spec, screen_spec(spec, **_with_modules(modules), **_beside(path, spec)))
+            )
             durations.append(time.monotonic() - started)
         except KeyboardInterrupt:
             raise _Cancelled(

@@ -1,0 +1,34 @@
+# A part started from a drawing: plate.dxf, beside this file, was drawn in inches.
+# `anvilate read examples/context/plate.dxf` measured it, and each value taken from it
+# names the file, its SHA-256 and where in it. The thickness is the engineer's.
+#   anvilate check examples/context/plate_from_drawing.spec.yaml
+anvilate_spec: 1.3.0
+name: plate-from-drawing
+description: A mounting plate measured from plate.dxf, 6 mm thick.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: mounting_plate
+element_params:
+  name: plate-from-drawing
+  width: {magnitude: 101.6, unit: mm}
+  length: {magnitude: 76.2, unit: mm}
+  thickness: {magnitude: 6.0, unit: mm}
+  hole_patterns:
+  - tag: corner
+    kind: rectangular
+    diameter: {magnitude: 6.35, unit: mm}
+    count_x: 2
+    count_y: 2
+    pitch_x: {magnitude: 76.2, unit: mm}
+    pitch_y: {magnitude: 50.8, unit: mm}
+sources:
+- {field: element_params.width, origin: measured_from_file, file: plate.dxf, sha256: 2909a2e29e62d4bf0dbf39577e51fbb73b6f7e5c84eb40b0f0431605e469e981,
+  locator: 'layer OUTLINE, the closed profile''s width'}
+- {field: element_params.length, origin: measured_from_file, file: plate.dxf, sha256: 2909a2e29e62d4bf0dbf39577e51fbb73b6f7e5c84eb40b0f0431605e469e981,
+  locator: 'layer OUTLINE, the closed profile''s height'}
+- {field: 'element_params.hole_patterns[0].diameter', origin: measured_from_file, file: plate.dxf,
+  sha256: 2909a2e29e62d4bf0dbf39577e51fbb73b6f7e5c84eb40b0f0431605e469e981, locator: 'layer HOLES,
+    four equal circles'}
+acceptance:
+  tiers: [T1_analytical]

@@ -190,6 +190,7 @@ spec.Constraints
 spec.AssemblyDeclaration
 spec.ConstraintDeclaration
 spec.Keepout
+spec.SourceReference
 spec.KeepoutRule
 spec.PrismKeepout
 spec.CylinderKeepout
@@ -234,6 +235,7 @@ spec.ir.CircularLocator
 spec.ir.AssemblyDeclaration
 spec.ir.ConstraintDeclaration
 spec.ir.Keepout
+spec.ir.SourceReference
 spec.ir.KeepoutRule
 spec.ir.PrismKeepout
 spec.ir.CylinderKeepout

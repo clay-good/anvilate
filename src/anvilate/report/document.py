@@ -104,6 +104,8 @@ _ORIGIN_LABEL = {
     Origin.DATABASE_RESOLVED: "resolved from bundled data",
     Origin.DEFAULT: "library default",
     Origin.PROFILE_SUPPLIED: "supplied by a profile",
+    Origin.MEASURED_FROM_FILE: "measured from a file",
+    Origin.AGENT_READ: "read by an agent",
 }
 
 _STATUS_LABEL: dict[CheckStatus, str] = {

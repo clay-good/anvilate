@@ -93,7 +93,9 @@ from .topology import ConstraintTally, tally
 from .units import Quantity, spoken
 
 __all__ = [
+    "CITED_SOURCES_CHECK",
     "DEPTH_ORDER",
+    "SOURCE_CONFIRMATION_CHECK",
     "Structure",
     "StructureMember",
     "carbon_estimate_for",
@@ -166,6 +168,25 @@ _NEEDS_A_SEISMIC_BASIS = Need(
     ),
     sources=(ValueSource.STANDARD, ValueSource.USER),
 )
+#: The entry a card carries while a value an agent read from a file is unconfirmed, and the
+#: entry that holds each cited file to the digest the document recorded. Named, because the
+#: export surfaces read the first to tell a draft from a failure.
+SOURCE_CONFIRMATION_CHECK = "source confirmation"
+CITED_SOURCES_CHECK = "cited sources"
+
+_NEEDS_A_CONFIRMATION = Need(
+    declaration="sources[].confirmed_by",
+    takes=(
+        "the name of the person who checked each agent-read value against its source file, "
+        "with sources[].confirmed_on, the date they did"
+    ),
+    sources=(ValueSource.USER,),
+)
+_A_DIGEST_MATCHES_OR_IT_DOES_NOT = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="each cited file is hashed and compared with the SHA-256 the document recorded",
+)
+
 _NEEDS_THE_T1_TIER = Need(
     declaration="acceptance.tiers",
     takes="T1_analytical among the demanded tiers, so the element's pack screen runs",
@@ -660,6 +681,108 @@ def _on_the_declared_load_path(
         return entries
     counted = _topology(spec)
     return [counted.qualify(entry) for entry in entries]
+
+
+def _unconfirmed(spec: DesignSpec) -> list[Any]:
+    """The sources an agent read and no person has confirmed."""
+    return [source for source in spec.sources if not source.confirmed]
+
+
+def _resting_on_readings(spec: DesignSpec, entries: list[ScorecardEntry]) -> list[ScorecardEntry]:
+    """The element's checks, each saying so when an input is an unconfirmed reading.
+
+    A check computed from a width an agent read off a sketch is a check of that reading. The
+    number is real and the verdict is kept, and the entry says what it rests on, in the
+    sentence every surface prints.
+    """
+    read = [
+        source.field.removeprefix("element_params.")
+        for source in _unconfirmed(spec)
+        if source.field.startswith("element_params.")
+    ]
+    if not read:
+        return entries
+    note = (
+        f"rests on {len(read)} unconfirmed reading{'s' if len(read) != 1 else ''} "
+        f"({', '.join(read)}): an agent read "
+        f"{'them' if len(read) != 1 else 'it'} from a file and no person has confirmed "
+        f"{'them' if len(read) != 1 else 'it'}"
+    )
+    return [entry.model_copy(update={"detail": f"{entry.detail} — {note}"}) for entry in entries]
+
+
+def _source_entries(spec: DesignSpec, roots: Sequence[Any]) -> list[ScorecardEntry]:
+    """What the card says about the files the document's values cite.
+
+    An unconfirmed agent reading is a draft: one not-evaluated entry counts them and names
+    each with its file, so the card cannot pass and nothing exports as validated until a
+    person confirms them. And where a cited file can be found under ``roots``, it is hashed:
+    a file that has changed since the value was taken from it fails, naming the value.
+    """
+    import hashlib
+    from pathlib import Path
+
+    entries = []
+    waiting = _unconfirmed(spec)
+    if waiting:
+        listed = "; ".join(
+            f"{source.field} from {source.file}"
+            + (f" ({source.locator})" if source.locator else "")
+            for source in waiting
+        )
+        entries.append(
+            ScorecardEntry(
+                name=SOURCE_CONFIRMATION_CHECK,
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"{len(waiting)} value{'s were' if len(waiting) != 1 else ' was'} read "
+                    f"by an agent from a file and no person has confirmed "
+                    f"{'them' if len(waiting) != 1 else 'it'}: {listed}. The part is drawn "
+                    "and screened as a first look, and exports only as unvalidated"
+                ),
+                needs=(_NEEDS_A_CONFIRMATION,),
+            )
+        )
+    found, changed = 0, []
+    for source in spec.sources:
+        located = next(
+            (Path(root) / source.file for root in roots if (Path(root) / source.file).is_file()),
+            None,
+        )
+        if located is None:
+            continue
+        found += 1
+        digest = hashlib.sha256(located.read_bytes()).hexdigest()
+        if digest != source.sha256:
+            changed.append(
+                f"{source.file} has changed since {source.field} was taken from it "
+                f"(recorded {source.sha256[:12]}, now {digest[:12]})"
+            )
+    if changed:
+        entries.append(
+            ScorecardEntry(
+                name=CITED_SOURCES_CHECK,
+                status=CheckStatus.FAIL,
+                detail="; ".join(changed)
+                + ". Read the file again and update the value and its sha256",
+                underived=_A_DIGEST_MATCHES_OR_IT_DOES_NOT,
+            )
+        )
+    elif found:
+        missing = len(spec.sources) - found
+        entries.append(
+            ScorecardEntry(
+                name=CITED_SOURCES_CHECK,
+                status=CheckStatus.PASS,
+                detail=(
+                    f"{found} cited file{'s match' if found != 1 else ' matches'} the SHA-256 "
+                    "the document recorded"
+                    + (f"; {missing} could not be found to check" if missing else "")
+                ),
+                underived=_A_DIGEST_MATCHES_OR_IT_DOES_NOT,
+            )
+        )
+    return entries
 
 
 def _attributed(
@@ -1956,6 +2079,7 @@ def screen_spec(
     *,
     resolver: ReferenceResolver | None = None,
     modules: Sequence[Any] = (),
+    source_roots: Sequence[Any] = (),
 ) -> Scorecard:
     """Screen ``spec`` on the tiers its acceptance criteria demand.
 
@@ -1977,6 +2101,10 @@ def screen_spec(
     ``modules`` are third-party modules enabled by name through
     :func:`anvilate.thirdparty.enable_module`. One screens the element when it covers the
     declared tag, confined, and every entry it contributes is marked unverified-origin.
+
+    ``source_roots`` are folders to look in for the files the document's ``sources`` cite.
+    A cited file found there is hashed and held to the digest the document recorded; with
+    no folder given, or a file not found, nothing is said about it.
 
     See the module docstring for what is and is not screened, and why the T1 analytical
     tier reports a gap on every spec.
@@ -2000,7 +2128,11 @@ def screen_spec(
             )
         )
     if ValidationTier.T1_ANALYTICAL in tiers:
-        entries.extend(_on_the_declared_load_path(spec, _element_entries(spec, modules)))
+        entries.extend(
+            _resting_on_readings(
+                spec, _on_the_declared_load_path(spec, _element_entries(spec, modules))
+            )
+        )
     elif spec.element_type is not None:
         # An element is a declaration the *document* makes, like a reference or a chain, and
         # the note below says what this library does with those. Before the tag existed this
@@ -2066,6 +2198,7 @@ def screen_spec(
     entries.extend(_keepout_entries(spec))
     entries.extend(_assembly_entries(spec))
     entries.extend(_carbon_entries(spec))
+    entries.extend(_source_entries(spec, source_roots))
     entries.extend(_declared_bound_entries(spec, entries))
     geometric = None if concept else _geometric_tolerance_entry(spec)
     if geometric is not None:

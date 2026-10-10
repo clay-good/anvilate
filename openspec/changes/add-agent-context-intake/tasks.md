@@ -2,12 +2,12 @@
 
 ## 1. Sources on values
 
-- [ ] 1.1 Source reference on a provenanced value: file, digest, locator, method, confirmation
-- [ ] 1.2 Origins `measured_from_file` and `agent_read`; schema, round-trip, diff, bundle
-- [ ] 1.3 Unconfirmed count on the scorecard; dependent checks say so
-- [ ] 1.4 Export gate: unconfirmed readings export only watermarked
-- [ ] 1.5 Confirmation as an explicit act naming a person; refused without one
-- [ ] 1.6 Stale-source report when a cited file's digest no longer matches
+- [x] 1.1 Source reference on a provenanced value: file, digest, locator, method, confirmation
+- [x] 1.2 Origins `measured_from_file` and `agent_read`; schema, round-trip, diff, bundle
+- [x] 1.3 Unconfirmed count on the scorecard; dependent checks say so
+- [x] 1.4 Export gate: unconfirmed readings export only watermarked
+- [x] 1.5 Confirmation as an explicit act naming a person; refused without one
+- [x] 1.6 Stale-source report when a cited file's digest no longer matches
 
 ## 2. Readers
 

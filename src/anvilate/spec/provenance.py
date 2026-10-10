@@ -58,6 +58,12 @@ class Origin(StrEnum):
     # names which one — a profile-supplied number that governs a verdict must never read as
     # one the engineer stated.
     PROFILE_SUPPLIED = "profile_supplied"
+    # Taken from a file. Measured: Anvilate read a CAD file and this is what it measured.
+    # Agent-read: the user's agent read it off a picture, a scan or a PDF. Either way the
+    # document's `sources` names the file, and an agent-read value is a draft until a
+    # named person confirms it. Neither is something the engineer stated.
+    MEASURED_FROM_FILE = "measured_from_file"
+    AGENT_READ = "agent_read"
 
 
 class Provenanced(StatableModel, Generic[T]):

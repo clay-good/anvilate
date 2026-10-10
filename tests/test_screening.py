@@ -1710,6 +1710,10 @@ _ANSWERED_BY_A_CHECK = {
     "keepouts": "one keepout entry each, not evaluated until intrusion is measured on geometry",
     "assembly": "the build order, each adjustment's reach in its state, and inspectability",
     "carbon": "one embodied carbon entry, judged against the declared budget",
+    "sources": (
+        "an unconfirmed agent reading is one entry and a note on each check that used it; a "
+        "cited file that is found is held to its recorded digest"
+    ),
 }
 _NOT_A_CLAIM_ABOUT_THE_PART = {
     "anvilate_spec": "the schema version the document was written against",
@@ -2391,6 +2395,7 @@ def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
         "keepouts",
         "assembly",
         "carbon",
+        "sources",
     }
     missing = sorted(fields - probed - set(_NOTHING_TO_SCREEN))
     assert not missing, (

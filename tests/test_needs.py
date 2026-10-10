@@ -531,7 +531,14 @@ def test_the_page_counts_are_the_sweeps_own() -> None:
         11: "Eleven",
         12: "Twelve",
     }
-    tens = {30: "thirty", 32: "thirty-two", 33: "thirty-three", 35: "thirty-five", 40: "forty"}
+    tens = {
+        30: "thirty",
+        32: "thirty-two",
+        33: "thirty-three",
+        34: "thirty-four",
+        35: "thirty-five",
+        40: "forty",
+    }
     assert f"{words[wired]} of the screening module's {tens[len(sites)]} refusals" in page
     assert f"the {words[wired].lower()} screening refusals that state a need today" in page
 

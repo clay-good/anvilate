@@ -473,7 +473,9 @@ scorecard.AppliedFactor
 scorecard.UnverifiedOrigin
 scorecard.ScorecardEntry
 scorecard.Scorecard
+screening.CITED_SOURCES_CHECK
 screening.DEPTH_ORDER
+screening.SOURCE_CONFIRMATION_CHECK
 screening.Structure
 screening.StructureMember
 screening.carbon_estimate_for

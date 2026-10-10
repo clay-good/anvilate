@@ -189,7 +189,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 protocol: 2026-07-28
 server: anvilate
 tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, list_context, read_cad_file, describe_part
-compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.19.0"}
+compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.20.0"}
 ```
 
 **Read the `$ref`, not the property name.** A tool that consumes a spec or returns a
@@ -267,6 +267,29 @@ the folders are never written to.
 
 At the shell, `anvilate read FILE` prints the same facts and `anvilate read FOLDER` the
 same listing.
+
+### A value that came from a file says so
+
+A spec's `sources` list records where a value came from. Each entry names the value by its
+path in the document (`field`, such as `element_params.width`), how it was obtained
+(`origin`), the `file` and its `sha256`, and a `locator` saying where in the file.
+[`examples/context/plate_from_drawing.spec.yaml`](../examples/context/plate_from_drawing.spec.yaml)
+is a plate whose width, length and hole size each cite the DXF beside it.
+
+| Origin | Who obtained it | What the card does |
+| --- | --- | --- |
+| measured from file | Anvilate, with `read_cad_file` | Nothing more: a measurement is used as it is. |
+| agent read | The agent, off a picture, a scan or a PDF | The part is drawn and screened, every check that used the value says it rests on an unconfirmed reading, one entry counts the readings and names each with its file, and nothing exports as validated. |
+
+The two origins are written in the document with underscores, as the example shows. An
+agent's reading becomes a confirmed value when the engineer adds who confirmed it and on
+what date to its source: the two fields are named confirmed-by and confirmed-on, with
+underscores. That is the engineer's act. An agent must not fill it in for them, and a
+confirmation without a named person is refused.
+
+When the server can find a cited file in its context folders (or `anvilate check` finds it
+beside the spec), it hashes it. A file that has changed since the value was taken from it
+fails the `cited sources` check and names the value to read again.
 
 ## Step one: compile the document
 

@@ -45,7 +45,7 @@ This table is checked against `tool_catalog()` row by row.
 ## Referenced, not paraphrased
 
 A tool that consumes a spec does not describe a spec. It `$ref`s
-`urn:anvilate:schema:design-spec:1.19.0`, the artifact
+`urn:anvilate:schema:design-spec:1.20.0`, the artifact
 [published as JSON Schema 2020-12](published-contracts.md); a tool that returns a scorecard
 `$ref`s the scorecard at its version. `build_part` returns the standalone geometry-summary
 contract, `render_viewport` returns the viewport-image contract, and `measure_geometry`

@@ -9,6 +9,9 @@ origin recorded via :class:`Provenanced`.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
+from datetime import date
 from enum import StrEnum
 from math import sqrt
 from typing import Annotated, Any, Literal
@@ -53,7 +56,7 @@ from ..tolerance import (
 )
 from ..topology import Constraint, Frame, IntendedFreedom, tally
 from ..units import Quantity, UnitSystem, require_dimension
-from .provenance import Provenanced
+from .provenance import Origin, Provenanced
 
 _DRAWING_SOURCE = "the part drawing and the mating interface's published geometry"
 _LOAD_SOURCE = "the design basis load cases and the site's seismic parameters"
@@ -76,6 +79,7 @@ def _ir_refusal(message: str, *, subject: str, source: str) -> _IrInputError:
 
 __all__ = [
     "DesignSpec",
+    "SourceReference",
     "ConstraintDeclaration",
     "AssemblyDeclaration",
     "Keepout",
@@ -1105,6 +1109,78 @@ class AcceptanceCriteria(_Base):
         return self
 
 
+# --- Where a value came from ---
+
+_SOURCE_SOURCE = "the file a value was taken from: its name, its SHA-256 and where in it"
+_CONFIRMATION_SOURCE = "the person who checked the value against its source, and the date"
+_PATH_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)((?:\[\d+\])*)$")
+
+
+class SourceReference(_Base):
+    """Where one value in the document came from: a file, and who read it out of it.
+
+    ``field`` is the value's path in the document, written the way the document writes it:
+    ``element_params.width``, ``element_params.holes[0].diameter``,
+    ``constraints.min_safety_factor``. ``file`` and ``sha256`` name the exact file, and
+    ``locator`` says where in it: a face or a feature, an entity handle, a page and a
+    region, a sheet and a cell.
+
+    ``origin`` says how the value was obtained. ``measured_from_file`` is a measurement
+    Anvilate made of a CAD file. ``agent_read`` is the user's agent reading a picture, a
+    scan or a PDF, which is a draft: it is used to draw and to screen, the result says it
+    rests on it, and nothing exports as validated until ``confirmed_by`` names the person
+    who checked it and ``confirmed_on`` the date. A confirmation is a person's act. It is
+    never filled in by the agent that made the reading.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    field: Provenance
+    origin: Literal["measured_from_file", "agent_read"]
+    file: Named
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    locator: str | None = None
+    confirmed_by: Named | None = None
+    confirmed_on: date | None = None
+
+    @model_validator(mode="after")
+    def _a_confirmation_names_a_person_and_a_date(self) -> SourceReference:
+        if (self.confirmed_by is None) != (self.confirmed_on is None):
+            missing = "confirmed_by" if self.confirmed_by is None else "confirmed_on"
+            raise _ir_refusal(
+                f"the source for '{self.field}' is confirmed without {missing}; a "
+                "confirmation names the person who checked the value and the date they did",
+                subject=f"sources[].{missing}",
+                source=_CONFIRMATION_SOURCE,
+            )
+        for part in self.field.split("."):
+            if _PATH_SEGMENT.match(part) is None:
+                raise _ir_refusal(
+                    f"'{self.field}' is not a path to a value in the document; write it as "
+                    "element_params.width or element_params.holes[0].diameter",
+                    subject="sources[].field",
+                    source=_SOURCE_SOURCE,
+                )
+        return self
+
+    @property
+    def confirmed(self) -> bool:
+        """Whether the value may be relied on: measured, or read and confirmed by a person."""
+        return self.origin == "measured_from_file" or self.confirmed_by is not None
+
+    def __str__(self) -> str:
+        how = "measured from" if self.origin == "measured_from_file" else "read by an agent from"
+        where = f", {self.locator}" if self.locator else ""
+        state = (
+            f"; confirmed by {self.confirmed_by} on {self.confirmed_on}"
+            if self.confirmed_by is not None
+            else ""
+            if self.origin == "measured_from_file"
+            else "; unconfirmed"
+        )
+        return f"{self.field}: {how} {self.file}{where}{state}"
+
+
 # --- The spec ---
 
 # 1.1.0 added the optional LoadCase.nature classification, the DesignSpec
@@ -1123,12 +1199,13 @@ class AcceptanceCriteria(_Base):
 # how the part is located, 1.15.0 keepouts, the volumes it must leave empty, 1.16.0 a
 # keepout's offset from its anchor face, 1.17.0 assembly, how the build goes together, and
 # 1.18.0 carbon, the embodied-carbon inputs and their budget. 1.19.0 changes no field:
-# the schema's identifier became a URN (urn:anvilate:schema:design-spec:1.19.0).
+# the schema's identifier became a URN (urn:anvilate:schema:design-spec:1.19.0). 1.20.0 adds
+# sources, the file each value came from, and the origins measured_from_file and agent_read.
 # All
 # additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.19.0"
+SCHEMA_VERSION = "1.20.0"
 
 
 class DesignSpec(_Base):
@@ -1195,8 +1272,77 @@ class DesignSpec(_Base):
     # budget the estimate is judged against. A factor carries its source, so one copied from
     # a product's EPD keeps naming that declaration on the card and in the bundle.
     carbon: CarbonDeclaration | None = None
+    # Where values came from, when they came from a file: the file, where in it, whether
+    # Anvilate measured it or an agent read it, and who confirmed an agent's reading.
+    sources: tuple[SourceReference, ...] = ()
     constraints: Constraints = Field(default_factory=Constraints)
     acceptance: AcceptanceCriteria
+
+    @model_validator(mode="after")
+    def _a_source_cites_a_value_the_document_states(self) -> DesignSpec:
+        fields = [source.field for source in self.sources]
+        repeated = sorted({field for field in fields if fields.count(field) > 1})
+        if repeated:
+            raise _ir_refusal(
+                f"sources cite {repeated} more than once; a value has one source",
+                subject="sources[].field",
+                source=_SOURCE_SOURCE,
+            )
+        cited = {source.field: source for source in self.sources}
+        for source in self.sources:
+            try:
+                value = self._at(source.field)
+            except (KeyError, IndexError, TypeError, AttributeError):
+                raise _ir_refusal(
+                    f"sources cite '{source.field}', and the document states no such value",
+                    subject="sources[].field",
+                    source=_SOURCE_SOURCE,
+                ) from None
+            if isinstance(value, Provenanced) and value.origin.value != source.origin:
+                raise _ir_refusal(
+                    f"'{source.field}' states its origin as {value.origin.value} and its "
+                    f"source says {source.origin}; they are one fact and must agree",
+                    subject=f"{source.field}.origin",
+                    source=_SOURCE_SOURCE,
+                )
+        # And the other way: a value that says it came from a file names the file.
+        for path in (
+            "units",
+            "constraints.max_mass",
+            "constraints.min_safety_factor",
+            "constraints.max_safety_factor",
+            "constraints.max_cost",
+        ):
+            value = self._at(path)
+            from_a_file = (Origin.MEASURED_FROM_FILE, Origin.AGENT_READ)
+            if isinstance(value, Provenanced) and value.origin in from_a_file and path not in cited:
+                raise _ir_refusal(
+                    f"'{path}' states its origin as {value.origin.value} and no source names "
+                    f"the file; add a sources entry with field: {path}",
+                    subject="sources",
+                    source=_SOURCE_SOURCE,
+                )
+        return self
+
+    def _at(self, path: str) -> Any:
+        """The value at ``path``, as a source reference writes it."""
+        node: Any = self
+        for part in path.split("."):
+            matched = _PATH_SEGMENT.match(part)
+            if matched is None:
+                raise KeyError(part)
+            name, indices = matched.group(1), re.findall(r"\d+", matched.group(2))
+            if isinstance(node, Mapping):
+                node = node[name]
+            elif name in getattr(type(node), "model_fields", {}):
+                node = getattr(node, name)
+            else:
+                raise KeyError(name)
+            for index in indices:
+                if isinstance(node, str | Mapping):
+                    raise TypeError(part)
+                node = node[int(index)]
+        return node
 
     @field_validator("element_params", mode="before")
     @classmethod
