@@ -2466,6 +2466,7 @@ def build_cover_plate(plate: CoverPlate) -> BuiltGeometry:
     """Build an audited rectangular, circular, or annular cover-plate solid."""
     thickness = _positive_mm(plate.thickness, "thickness", element="cover_plate")
     Align, Box, Cylinder, _export_step = _kernel()
+    bore: tuple[Any, ...] = ()
     if plate.diameter is None:
         width = _positive_mm(plate.width, "width", element="cover_plate")
         length = _positive_mm(plate.length, "length", element="cover_plate")
@@ -2501,6 +2502,22 @@ def build_cover_plate(plate: CoverPlate) -> BuiltGeometry:
                 align=(Align.CENTER, Align.CENTER, Align.MIN),
             )
             dimensions["hole_diameter"] = hole
+            # The bore is a feature in the vocabulary every drawn part uses, tagged and
+            # measurable the same way. It is still cut here and not by the feature library:
+            # that tool starts a millimetre outside the face, which moves the bore surface's
+            # origin, and this pattern's STEP file is held to its bytes.
+            from .features import Feature
+
+            bore = (
+                Feature(
+                    tag="bore",
+                    kind="through_hole",
+                    diameter_mm=hole,
+                    depth_mm=thickness,
+                    position_mm=(0.0, 0.0, thickness),
+                    axis=(0.0, 0.0, 1.0),
+                ),
+            )
         faces = _tag_round_faces(shape, has_bore=plate.hole_diameter is not None)
     built = BuiltGeometry(
         name=str(plate.name),
@@ -2508,6 +2525,7 @@ def build_cover_plate(plate: CoverPlate) -> BuiltGeometry:
         shape=shape,
         faces=faces,
         dimensions_mm=MappingProxyType(dimensions),
+        features=bore,
     )
     if not built.is_valid:  # pragma: no cover - guarded primitives are valid
         raise GeometryError(

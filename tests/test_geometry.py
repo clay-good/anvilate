@@ -1570,3 +1570,46 @@ def test_a_step_export_stopped_before_its_stamp_leaves_no_file_at_the_target(tmp
         write_step(build_base_plate(_plate()), fresh, authorization=_STEP_AUTH)
     assert not fresh.exists()
     assert sorted(p.name for p in tmp_path.iterdir()) == ["base.step"]
+
+
+def _round_cover(**changes) -> CoverPlate:
+    values = {
+        "name": "access-cover",
+        "pressure": Quantity.parse("15 kPa"),
+        "thickness": Quantity.parse("8 mm"),
+        "material": "ASTM-A36",
+        "diameter": Quantity.parse("300 mm"),
+    }
+    values.update(changes)
+    return CoverPlate(**values)
+
+
+def test_a_cover_plates_bore_is_a_feature_like_any_other_parts_and_its_step_is_untouched(tmp_path):
+    """expand-drawable-parts 1.4: the last of the first four patterns with a feature.
+
+    The bore answers the same queries a mounting plate's hole does. It is still cut the way
+    it was, since the feature library's tool would move the bore surface's origin and this
+    pattern's STEP file is held to its bytes: the file written with the feature recorded is
+    the file written without it.
+    """
+    import dataclasses
+
+    from anvilate.export.gate import authorize_export
+    from anvilate.geometry import measure_geometry, write_step
+
+    built = build_cover_plate(_round_cover(hole_diameter=Quantity.parse("80 mm")))
+    (bore,) = built.features
+    assert (bore.tag, bore.kind, bore.diameter_mm, bore.depth_mm) == ("bore", "through_hole", 80, 8)
+    assert bore.position_mm == (0.0, 0.0, 8.0) and bore.axis == (0.0, 0.0, 1.0)
+    assert measure_geometry(built, "feature:bore:diameter").value == 80.0
+    assert measure_geometry(built, "feature_count").value == 1
+    assert [feature.tag for feature in built.summary().features] == ["bore"]
+    authorization = authorize_export(None, override=True)
+    with_it = write_step(built, tmp_path / "a.step", authorization=authorization)
+    without = write_step(
+        dataclasses.replace(built, features=()), tmp_path / "b.step", authorization=authorization
+    )
+    assert with_it.read_bytes() == without.read_bytes()
+    # A solid cover, and a rectangular one, have no bore and no feature.
+    assert build_cover_plate(_round_cover()).features == ()
+    assert build_cover_plate(_cover()).features == ()
