@@ -59,7 +59,7 @@ from ._outputs import output_folder, safe_stem, set_output_folder, write_output
 from .attestation import canonical_json, sha256_hex
 from .contracts import JSON_SCHEMA_DIALECT, scorecard_json_schema, spec_json_schema
 from .evidence import provenance_for
-from .geometry import _DRAWN_ELEMENT_TYPES, GeometrySummary
+from .geometry import GeometrySummary
 from .refusal import RefusalError, Remedy
 from .spec import ValidationTier
 from .store import SUBJECT_PATTERN, UnknownSubject, _WrongKind, subject_store
@@ -197,9 +197,9 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
 _BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.27.0"
-_GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.4.0"
+_GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
-_MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
+_MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -493,8 +493,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Build or regenerate the part",
             description=(
                 "Build the audited pattern selected by the Design Spec and return its B-Rep "
-                "geometry summary. The current registry supports "
-                f"{', '.join(_DRAWN_ELEMENT_TYPES[:-1])}, and {_DRAWN_ELEMENT_TYPES[-1]}. "
+                "geometry summary. The drawable element types are listed in the server "
+                "instructions; an element type outside them is refused with the list. "
                 "No caller code "
                 "is executed, so the bounded primitive build replies synchronously."
             ),
@@ -946,15 +946,18 @@ def agent_instructions() -> str:
     context. Generated from the resolver and the element registry, never hand-written, so it
     cannot name a material the database lacks or a field a screen does not read.
     """
+    from .patterns import patterns
     from .screening import element_registry
     from .standards import default_standards_resolver
     from .standards.profiles import default_profile_table
 
     resolver = default_standards_resolver()
+    drawn = set(patterns())
     lines = [
         _AGENT_RULES,
         "",
-        "Elements: " + ", ".join(sorted(element_registry())),
+        "Elements (* = build_part draws it): "
+        + ", ".join(name + ("*" if name in drawn else "") for name in sorted(element_registry())),
         "Materials: " + ", ".join(resolver.known_materials()),
         "",
         "Detail (a client may cut what follows; refusals name the same fields and ids):",

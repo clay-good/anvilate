@@ -80,6 +80,11 @@ that already ran and does one more thing with them:
   is started with; no tool names a path.
 - :mod:`anvilate.projection` — hidden-line views of any built solid, with shaded faces,
   dimension callouts and an overview sheet, as the SVG vocabulary the rasterizer reads.
+- :mod:`anvilate.patterns` — the registry of drawable patterns: one table that building,
+  the drawable catalog and the "supported" list in a refusal all read.
+- :mod:`anvilate._patterns_core` — the private registrations for the first four patterns.
+- :mod:`anvilate.features` — the shared holes, slots and hole patterns every drawable part
+  cuts the same way, each tagged, measurable and refused when it does not fit.
 - :mod:`anvilate.raster` — the viewport SVG rasterized to PNG with the standard library,
   because a model reads PNG and not SVG.
 - :mod:`anvilate.ingest` — requirement documents read into a draft spec, where an

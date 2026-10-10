@@ -259,7 +259,8 @@ jobs:
           # example fails the step rather than shrinking it.
           specs=$(python - <<'PY'
           import pathlib, yaml
-          from anvilate.geometry import _DRAWN_ELEMENT_TYPES
+          from anvilate.geometry import _drawn_element_types
+          _DRAWN_ELEMENT_TYPES = _drawn_element_types()
           found = {}
           for path in sorted(pathlib.Path("examples").glob("*.spec.yaml")):
               kind = yaml.safe_load(path.read_text()).get("element_type")

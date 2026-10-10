@@ -128,7 +128,7 @@ SCORECARD_SCHEMA_VERSION = "1.14.0"
 BUNDLE_SCHEMA_VERSION = "1.27.0"
 
 # The kernel-independent geometry summary shared by CLI and MCP build results.
-GEOMETRY_SCHEMA_VERSION = "1.4.0"
+GEOMETRY_SCHEMA_VERSION = "1.5.0"
 
 # Planar faces and through-hole patterns measured from imported mating STEP solids.
 INTERFACE_CANDIDATES_SCHEMA_VERSION = "1.16.0"
@@ -161,7 +161,7 @@ CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION = "1.1.0"
 VIEWPORT_SCHEMA_VERSION = "1.3.0"
 
 # A scalar read directly from a built B-Rep by ``measure_geometry``.
-MEASUREMENT_SCHEMA_VERSION = "1.1.0"
+MEASUREMENT_SCHEMA_VERSION = "1.2.0"
 
 
 def _artifact(

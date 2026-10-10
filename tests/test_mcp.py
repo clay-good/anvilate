@@ -1220,12 +1220,12 @@ def test_the_supported_list_is_exactly_what_build_spec_draws(element_type):
     and any other refuses the type, read without the geometry extra installed.
     """
     from anvilate.geometry import (
-        _DRAWN_ELEMENT_TYPES,
         GeometryError,
         GeometryUnavailable,
         UnsupportedGeometry,
         build_spec,
     )
+    from anvilate.patterns import patterns
     from anvilate.spec import DesignSpec
 
     spec = DesignSpec.model_validate(
@@ -1240,27 +1240,32 @@ def test_the_supported_list_is_exactly_what_build_spec_draws(element_type):
 
     assert not isinstance(refused.value, GeometryUnavailable)
     drawn = not isinstance(refused.value, UnsupportedGeometry)
-    assert drawn == (element_type in _DRAWN_ELEMENT_TYPES), str(refused.value)
+    assert drawn == (element_type in patterns()), str(refused.value)
 
 
 def test_every_geometry_pattern_has_a_publishable_summary():
     """`timber_beam/1` shipped without joining the summary's pattern type, so MCP
     `build_part` raised an internal error on every timber beam and `anvilate build
-    --format json` printed output its own published schema refused."""
-    from typing import get_args
+    --format json` printed output its own published schema refused. The pattern type is
+    now any name the registry holds, so a registered pattern is publishable by construction,
+    and a name the registry does not hold is refused."""
+    from pydantic import ValidationError
 
     from anvilate import geometry
     from anvilate._cli_output import BuildArtifact
+    from anvilate.patterns import patterns
 
-    patterns = {
+    names = {pattern.name for pattern in patterns().values()}
+    constants = {
         value
         for name, value in vars(geometry).items()
         if name.endswith("_PATTERN") and isinstance(value, str)
     }
-    assert patterns and set(get_args(geometry.GeometryPattern)) == patterns
-    assert set(get_args(BuildArtifact.model_fields["pattern"].annotation)) == patterns
-    for pattern in sorted(patterns):
-        summary = geometry.GeometrySummary(
+    assert constants and constants <= names
+    assert "pattern" in BuildArtifact.model_fields
+
+    def summary(pattern: str):
+        return geometry.GeometrySummary(
             name="probe",
             pattern=pattern,
             valid=True,
@@ -1268,7 +1273,11 @@ def test_every_geometry_pattern_has_a_publishable_summary():
             dimensionsMm={"x": 1.0},
             faceTags=("top",),
         )
-        assert summary.pattern == pattern
+
+    for pattern in sorted(names):
+        assert summary(pattern).pattern == pattern
+    with pytest.raises(ValidationError, match="not a registered geometry pattern"):
+        summary("freeform/1")
 
 
 def test_build_part_without_the_geometry_extra_says_install_not_correct_the_spec(monkeypatch):
@@ -2853,8 +2862,13 @@ def test_what_a_client_keeps_of_the_instructions_is_enough_to_write_a_spec():
     kept = agent_instructions()[:CLIENT_INSTRUCTIONS_LIMIT]
     assert CLIENT_INSTRUCTIONS_LIMIT == 2048
     assert _AGENT_RULES in kept
-    (elements,) = [line for line in kept.splitlines() if line.startswith("Elements: ")]
-    assert elements.removeprefix("Elements: ").split(", ") == sorted(element_registry())
+    (elements,) = [line for line in kept.splitlines() if line.startswith("Elements (")]
+    listed = elements.partition(": ")[2].split(", ")
+    assert [name.rstrip("*") for name in listed] == sorted(element_registry())
+    # And which of them build_part draws, marked where the model reads the names.
+    from anvilate.patterns import patterns
+
+    assert {name.rstrip("*") for name in listed if name.endswith("*")} == set(patterns())
     (materials,) = [line for line in kept.splitlines() if line.startswith("Materials: ")]
     assert materials.removeprefix("Materials: ").split(", ") == list(
         default_standards_resolver().known_materials()

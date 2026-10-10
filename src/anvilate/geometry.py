@@ -24,7 +24,7 @@ from threading import Lock
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, model_validator
 
 from ._models import FrozenMap, Named, Provenance, StatableModel
 from .derivation import DerivationAbsence, Underived
@@ -65,6 +65,7 @@ __all__ = [
     "BuiltGeometry",
     "GeometryError",
     "GeometryPattern",
+    "FeatureSummary",
     "GeometrySummary",
     "GeometryMeasurement",
     "GeometryUnavailable",
@@ -117,19 +118,35 @@ BASE_PLATE_PATTERN = "base_plate/1"
 COVER_PLATE_PATTERN = "cover_plate/1"
 TRANSMISSION_SHAFT_PATTERN = "transmission_shaft/1"
 TIMBER_BEAM_PATTERN = "timber_beam/1"
-# The element types `build_spec` draws, named once so a refusal's list cannot drift from it.
-_DRAWN_ELEMENT_TYPES = tuple(
-    pattern.split("/")[0]
-    for pattern in (
-        BASE_PLATE_PATTERN,
-        COVER_PLATE_PATTERN,
-        TRANSMISSION_SHAFT_PATTERN,
-        TIMBER_BEAM_PATTERN,
-    )
-)
-# Every pattern above, as the type the published summaries carry; a test holds the two
-# together, since timber_beam/1 shipped without it and every timber summary then raised.
-GeometryPattern = Literal["base_plate/1", "cover_plate/1", "transmission_shaft/1", "timber_beam/1"]
+
+
+def _drawn_element_types() -> tuple[str, ...]:
+    """The element types `build_spec` draws, read from the pattern registry."""
+    from .patterns import patterns
+
+    return tuple(sorted(patterns()))
+
+
+def _a_registered_pattern(name: str) -> str:
+    from .patterns import patterns
+
+    names = {pattern.name for pattern in patterns().values()}
+    if name not in names:
+        raise GeometryError(
+            f"{name!r} is not a registered geometry pattern; known: {sorted(names)}",
+            action="select",
+            subject="pattern",
+            source="the audited geometry pattern registry",
+        )
+    return name
+
+
+# A pattern's name, as the published summaries carry it. It was a `Literal` of the names,
+# which a new pattern had to be added to by hand, and `timber_beam/1` shipped without it.
+# It is now any name the registry holds, so a pattern is published by being registered.
+GeometryPattern = Annotated[
+    str, Field(pattern=r"^[a-z][a-z0-9_]*/[0-9]+$"), AfterValidator(_a_registered_pattern)
+]
 _COUNT_UNIT = "count"
 _AP242_SCHEMA = "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF"
 _AP214_SCHEMA = "AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }"
@@ -177,6 +194,19 @@ class _ExchangeGeometryError(GeometryError):
     """An imported or exported exchange-geometry artifact cannot be used."""
 
 
+class FeatureSummary(StatableModel):
+    """One cut feature of a built part: what it is, how big, and where."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    tag: Named
+    kind: Literal["through_hole", "blind_hole", "counterbore", "countersink", "slot"]
+    diameter_mm: Annotated[float, Field(alias="diameterMm", gt=0)]
+    depth_mm: Annotated[float, Field(alias="depthMm", gt=0)]
+    position_mm: tuple[FiniteFloat, FiniteFloat, FiniteFloat] = Field(alias="positionMm")
+    thread: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
 class GeometrySummary(StatableModel):
     """The serializable identity and kernel checks for one built solid."""
 
@@ -194,13 +224,21 @@ class GeometrySummary(StatableModel):
         json_schema_extra={"additionalProperties": {"type": "number", "exclusiveMinimum": 0}},
     )
     face_tags: tuple[Named, ...] = Field(alias="faceTags", min_length=1)
+    # Holes, slots and recesses cut by the shared feature library, each under its tag.
+    # Absent from the dump when a part has none, so earlier summaries read as before.
+    features: tuple[FeatureSummary, ...] = Field(default=(), exclude_if=lambda value: not value)
+    # True for a catalog component drawn from its tabulated size: where it goes, not how it
+    # is made. Absent from the dump when false.
+    envelope: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class GeometryMeasurement(StatableModel):
     """One value read from built geometry rather than repeated from its spec."""
 
     query: Named
-    value: Annotated[float, Field(gt=0)]
+    # Any finite number: a size is positive, and a feature's position along an axis is
+    # signed and may be zero.
+    value: FiniteFloat
     unit: Literal["count", "mm", "mm^2", "mm^3"]
     feature: Named
 
@@ -246,6 +284,10 @@ class BuiltGeometry:
     shape: Any
     faces: Mapping[str, tuple[Any, ...]]
     dimensions_mm: Mapping[str, float]
+    # The cut features, as :class:`anvilate.features.Feature`, and whether this is a catalog
+    # envelope. Both default to "none", which is what the first four patterns are.
+    features: tuple[Any, ...] = ()
+    envelope: bool = False
 
     @property
     def volume_mm3(self) -> float:
@@ -271,6 +313,18 @@ class BuiltGeometry:
             volumeMm3=self.volume_mm3,
             dimensionsMm=dict(self.dimensions_mm),
             faceTags=tuple(sorted(self.faces)),
+            features=tuple(
+                FeatureSummary(
+                    tag=feature.tag,
+                    kind=feature.kind,
+                    diameterMm=feature.diameter_mm,
+                    depthMm=feature.depth_mm,
+                    positionMm=tuple(round(value, 6) for value in feature.position_mm),
+                    thread=feature.thread,
+                )
+                for feature in self.features
+            ),
+            envelope=self.envelope,
         )
 
 
@@ -2537,29 +2591,31 @@ def build_timber_beam(beam: TimberBeam) -> BuiltGeometry:
 
 
 def build_spec(spec: DesignSpec) -> BuiltGeometry:
-    """Build the audited geometry pattern selected by a Design Spec."""
-    try:
-        if spec.element_type == "base_plate":
-            return build_base_plate(BasePlate(**dict(spec.element_params)))
-        if spec.element_type == "cover_plate":
-            return build_cover_plate(CoverPlate(**dict(spec.element_params)))
-        if spec.element_type == "transmission_shaft":
-            return build_transmission_shaft(
-                TransmissionShaft(**dict(spec.element_params)), name=str(spec.name)
-            )
-        if spec.element_type == "timber_beam":
-            return build_timber_beam(TimberBeam(**dict(spec.element_params)))
-    except GeometryUnavailable:
-        # A ValueError too, but the remedy is to install the extra, not to edit the spec.
-        raise
-    except ValueError as failure:
-        raise GeometryError(
-            f"invalid {spec.element_type} element_params: {failure}",
-            action="correct",
-            subject=f"the {spec.element_type} element_params mapping",
-            source="the selected audited pattern's parameter schema",
-        ) from failure
-    supported = ", ".join(_DRAWN_ELEMENT_TYPES)
+    """Build the audited geometry pattern selected by a Design Spec.
+
+    The pattern comes from :mod:`anvilate.patterns`, the one registry, so an element type
+    draws when it is registered and the refusal below lists exactly what is.
+    """
+    from .patterns import pattern_for
+
+    pattern = pattern_for(spec.element_type)
+    if pattern is not None:
+        try:
+            element = pattern.model(**dict(spec.element_params))
+            return pattern.build(element, str(spec.name))
+        except GeometryUnavailable:
+            # A ValueError too, but the remedy is to install the extra, not to edit the spec.
+            raise
+        except GeometryError:
+            raise
+        except ValueError as failure:
+            raise GeometryError(
+                f"invalid {spec.element_type} element_params: {failure}",
+                action="correct",
+                subject=f"the {spec.element_type} element_params mapping",
+                source="the selected audited pattern's parameter schema",
+            ) from failure
+    supported = ", ".join(_drawn_element_types())
     if spec.element_type is None:
         # Said as what to declare: quoted as a placeholder name, the absence read as an
         # element type the registry lacked.
@@ -2572,7 +2628,7 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
         )
     raise UnsupportedGeometry(
         f"no audited geometry pattern is registered for element_type {spec.element_type!r}; "
-        f"supported: {supported}",
+        f"supported: {supported}. A shape outside the catalog belongs in your own CAD",
         subject=f"the element_type {spec.element_type!r}",
         source="the audited geometry pattern registry",
     )
@@ -2717,6 +2773,26 @@ def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:
             unit="mm",
             feature="bore",
         )
+    extents = {"extent_x": bounds.size.X, "extent_y": bounds.size.Y, "extent_z": bounds.size.Z}
+    if query in extents:
+        return GeometryMeasurement(
+            query=query, value=float(extents[query]), unit="mm", feature="bounding box"
+        )
+    if query == "feature_count" and built.features:
+        return GeometryMeasurement(
+            query=query, value=float(len(built.features)), unit=_COUNT_UNIT, feature="features"
+        )
+    if query.startswith("feature:"):
+        _, _, rest = query.partition(":")
+        tag, _, quantity = rest.partition(":")
+        match = next((f for f in built.features if f.tag == tag), None)
+        if match is not None:
+            return GeometryMeasurement(
+                query=query,
+                value=match.measure(quantity or "diameter"),
+                unit="mm",
+                feature=tag,
+            )
     if query.startswith("area:"):
         tag = query.removeprefix("area:")
         faces = built.faces.get(tag)
@@ -2727,7 +2803,12 @@ def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:
                 unit="mm^2",
                 feature=tag,
             )
-    supported = "volume, a declared dimension, face_count, hole_diameter, or area:<semantic-face>"
+    supported = (
+        "volume, a declared dimension, extent_x/y/z, face_count, hole_diameter, "
+        "area:<semantic-face>, feature_count, or feature:<tag>:<diameter|depth|x|y|z>"
+    )
+    if built.features:
+        supported += "; features: " + ", ".join(f.tag for f in built.features[:24])
     raise GeometryError(
         f"unsupported geometry query {query!r}; choose {supported}",
         action="select",

@@ -421,7 +421,7 @@ def test_migrated_geometry_refusals_require_explicit_structured_fields():
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 92
+    assert len(sites) == 93
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         required = {"subject"}
@@ -1516,7 +1516,9 @@ def _drawn_examples() -> list:
 
     import yaml
 
-    from anvilate.geometry import _DRAWN_ELEMENT_TYPES
+    from anvilate.geometry import _drawn_element_types
+
+    _DRAWN_ELEMENT_TYPES = _drawn_element_types()
 
     root = Path(__file__).resolve().parents[1] / "examples"
     return [

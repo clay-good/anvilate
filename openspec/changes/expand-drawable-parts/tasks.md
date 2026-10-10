@@ -2,11 +2,11 @@
 
 ## 1. Foundations (everything else depends on these)
 
-- [ ] 1.1 Pattern registry: one table of pattern, element type, parameter model, builder,
+- [x] 1.1 Pattern registry: one table of pattern, element type, parameter model, builder,
       tags and outputs; `build_spec`, the supported list and the catalog all read it
-- [ ] 1.2 Shared feature library: through/blind hole, counterbore, countersink, slot,
+- [x] 1.2 Shared feature library: through/blind hole, counterbore, countersink, slot,
       rectangular and bolt-circle patterns, fillet, chamfer; tagged and measurable
-- [ ] 1.3 Refusals for features that do not fit (edge distance, overlap, oversize)
+- [x] 1.3 Refusals for features that do not fit (edge distance, overlap, oversize)
 - [ ] 1.4 Move the four existing patterns onto the registry and feature library; volumes,
       tags and STEP bytes unchanged
 

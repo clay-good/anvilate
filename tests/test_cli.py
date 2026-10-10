@@ -2805,7 +2805,9 @@ def test_every_drawn_example_builds_to_json_the_schema_accepts(tmp_path, example
     """Each drawn example through `build --format json`; `_run` holds the document to the
     published schema. The joist's pattern was the one the schema did not list."""
     pytest.importorskip("build123d")
-    from anvilate.geometry import _DRAWN_ELEMENT_TYPES
+    from anvilate.geometry import _drawn_element_types
+
+    _DRAWN_ELEMENT_TYPES = _drawn_element_types()
 
     spec = _REPO / "examples" / f"{example}.spec.yaml"
     code, raw, err = _run(
