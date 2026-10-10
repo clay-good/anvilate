@@ -13,6 +13,7 @@ import json
 import math
 import os
 import struct
+import warnings
 import zipfile
 from pathlib import Path
 
@@ -58,6 +59,21 @@ def _cube_stl(path: Path, side: float = 10.0, *, drop: int = 0) -> Path:
     return path
 
 
+def _linear_dim(space, **dimension) -> None:
+    """Draw one linear dimension into ``space``.
+
+    ezdxf 1.4's pure-Python Matrix44 sets ``.shape`` on an array while it draws a
+    dimension's arrows, which NumPy 2.5 deprecates. Under ``filterwarnings = error`` that
+    warning, raised inside ezdxf and by nothing here, failed every test drawing a dimension
+    on Python 3.14. Only that message is ignored, and only while the dimension is rendered.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", "Setting the shape on a NumPy array", DeprecationWarning, r"ezdxf\."
+        )
+        space.add_linear_dim(**dimension).render()
+
+
 def _plate_dxf(path: Path, *, units: int = 1) -> Path:
     """A 4 x 3 plate with four 0.25 holes 0.5 in from each edge, and a slot drawn as lines."""
     ezdxf = pytest.importorskip("ezdxf")
@@ -75,8 +91,8 @@ def _plate_dxf(path: Path, *, units: int = 1) -> Path:
     space.add_line((8, 0), (8, 1))
     space.add_arc((7, 1), 1, 0, 180)
     space.add_line((6, 1), (6, 0))
-    space.add_linear_dim(base=(2, -1), p1=(0, 0), p2=(4, 0)).render()
-    space.add_linear_dim(base=(2, 4), p1=(0, 3), p2=(4, 3), text="4.25").render()
+    _linear_dim(space, base=(2, -1), p1=(0, 0), p2=(4, 0))
+    _linear_dim(space, base=(2, 4), p1=(0, 3), p2=(4, 3), text="4.25")
     space.add_line((20, 20), (21, 21))
     document.saveas(path)
     return path
@@ -319,9 +335,9 @@ def test_an_override_that_says_what_the_geometry_says_is_not_flagged(tmp_path):
     document = ezdxf.new()
     document.header["$INSUNITS"] = 1
     space = document.modelspace()
-    space.add_linear_dim(base=(2, -1), p1=(0, 0), p2=(4, 0), text="4.000 TYP").render()
-    space.add_linear_dim(base=(2, -2), p1=(0, 0), p2=(4, 0), text="101.6 mm").render()
-    space.add_linear_dim(base=(2, -3), p1=(0, 0), p2=(4, 0), text="SEE NOTE").render()
+    _linear_dim(space, base=(2, -1), p1=(0, 0), p2=(4, 0), text="4.000 TYP")
+    _linear_dim(space, base=(2, -2), p1=(0, 0), p2=(4, 0), text="101.6 mm")
+    _linear_dim(space, base=(2, -3), p1=(0, 0), p2=(4, 0), text="SEE NOTE")
     document.saveas(tmp_path / "dims.dxf")
     dimensions = read_cad_file(tmp_path / "dims.dxf").dimensions
     assert [d.override for d in dimensions] == ["4.000 TYP", "101.6 mm", "SEE NOTE"]
