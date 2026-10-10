@@ -408,3 +408,21 @@ def test_the_docs_page_inventory_is_current_and_no_page_names_something_gone():
     finally:
         (tool.DOCS / "zz-probe.md").unlink()
     assert probe == ["link gone.md", "command frobnicate", "option --sideways", "tool make_part"]
+
+
+def test_no_refusal_is_written_longer_than_a_short_paragraph():
+    """A length limit over every listed refusal, as its author wrote it (audit 4.1).
+
+    Half of them are under 70 characters and the longest is 415. A refusal is read by an
+    agent between two calls: past a short paragraph it is a page, and the part that says
+    what to do is at the end of it. The values a message fills in add to this; the two-door
+    corpus in `tests/test_refusal_parity.py` holds what is actually shown to 2,000.
+    """
+    listed, _analysis = _refusal_list().refusals()
+    long = {
+        f"{module}:{function}": len(text)
+        for module, rows in listed.items()
+        for function, text in rows
+        if len(text) > 450
+    }
+    assert not long, f"refusals written past 450 characters: {long}"

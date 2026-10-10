@@ -41,7 +41,8 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 - [ ] 4.1 Each refusal names the field, the reason and a valid example, within a length limit
       — held today for twenty mistakes through both doors (`tests/test_refusal_parity.py`:
       no library internals, 2,000 characters) and for every refusal that offers a value. Not
-      yet a rule over all 1,239 listed messages: most name a field and a reason, few an example
+      yet a rule over all listed messages for the field and the example: most name a field and
+      a reason, few an example. The length limit is: none is written past 450 characters
 - [x] 4.2 No suggestion less conservative than what was refused; near-match only when unambiguous
       (finding 23; every refusal that offers a value is listed and read in
       `tests/test_agent_surface.py`)
