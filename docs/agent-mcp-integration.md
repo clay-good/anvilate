@@ -248,7 +248,7 @@ are refused with `-32000` and say how to enable them.
 
 | What is in the folder | Who reads it | How |
 | --- | --- | --- |
-| STEP (`.step`, `.stp`) | Anvilate | `read_cad_file`: each solid's size and volume, its holes and bosses with diameter, depth and position, hole patterns with their pitch and bolt circle, and the unit the file was written in. |
+| STEP (`.step`, `.stp`) | Anvilate | `read_cad_file`: each solid's size and volume, its holes and bosses with diameter, depth and position, hole patterns with their pitch and bolt circle, and the unit the file was written in. With `material` set to a material id, each solid's mass at that material's density: the file states no material, so none is assumed. |
 | DXF (`.dxf`) | Anvilate | `read_cad_file`: layers, closed profiles with their size and the holes inside them, and dimension entities, flagging one whose text disagrees with what it measures. A drawing that states no unit needs `unit`. |
 | STL, 3MF | Anvilate | `read_cad_file`: overall size, volume when the mesh is closed, triangle count. A mesh has no holes or faces to report, and says so. |
 | Images, PDFs, text, spreadsheets | The agent | With its own file tools. A number it reads from one is the agent's reading, not a measurement: say which file it came from, and ask the engineer to confirm it. |

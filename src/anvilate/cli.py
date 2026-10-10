@@ -615,6 +615,10 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("mm", "cm", "m", "in", "ft"),
         help="the unit of a DXF or STL that states none",
     )
+    read.add_argument(
+        "--material",
+        help="what a STEP file's solids are made of, as a material id; adds each solid's mass",
+    )
 
     fetch = commands.add_parser(
         "fetch",
@@ -1127,7 +1131,7 @@ def _read(args: argparse.Namespace, *, out, err) -> int:
         if args.path.is_dir():
             print(inventory(args.path), file=out)
         else:
-            facts = read_cad_file(args.path, unit=args.unit)
+            facts = read_cad_file(args.path, unit=args.unit, material=args.material)
             print(facts, file=out)
             seed = seed_part(facts)
             if seed is not None:

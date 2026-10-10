@@ -704,6 +704,77 @@ def test_the_command_line_measures_a_file_and_lists_a_folder(tmp_path):
     assert code == 3 and "does not read and does not convert" in err
 
 
+# --- mass from a named material --------------------------------------------------------
+
+
+def test_a_step_file_is_weighed_when_the_call_names_its_material(tmp_path):
+    """A file states no material. Named, each solid is its volume at that density.
+
+    The example plate is 55,027.9 mm^3, and bundled 6061-T6 is 2,700 kg/m^3: 0.1486 kg.
+    """
+    from anvilate.standards.materials import default_materials_db
+
+    path = _step(tmp_path, "mounting_plate")
+    bare = read_cad_file(path)
+    assert (bare.material, bare.density_kg_m3, bare.mass_kg) == (None, None, None)
+    assert not {"material", "density_kg_m3", "mass_kg"} & set(bare.model_dump(mode="json"))
+    assert "mass" not in str(bare) and bare.solids[0].mass_kg is None
+
+    density = default_materials_db().get("AA-6061-T6").density.quantity.to("kg/m**3").magnitude
+    assert density == pytest.approx(2700.0)
+    weighed = read_cad_file(path, material="AA-6061-T6")
+    assert weighed.material == "AA-6061-T6" and weighed.density_kg_m3 == pytest.approx(2700.0)
+    assert weighed.mass_kg == pytest.approx(weighed.volume_mm3 * 1e-9 * 2700.0, rel=1e-9)
+    assert weighed.mass_kg == pytest.approx(0.148575, rel=1e-4)
+    assert [solid.mass_kg for solid in weighed.solids] == [weighed.mass_kg]
+    assert "mass 0.1486 kg as AA-6061-T6, at 2700 kg/m^3" in str(weighed)
+    assert any("the file states no material" in note for note in weighed.notes)
+    assert type(weighed).model_validate_json(weighed.model_dump_json()) == weighed
+    # The same file in steel weighs in proportion, and nothing else about it moves.
+    steel = read_cad_file(path, material="ASTM-A36")
+    assert steel.mass_kg / weighed.mass_kg == pytest.approx(steel.density_kg_m3 / 2700.0)
+    assert steel.volume_mm3 == bare.volume_mm3
+    assert steel.solids[0].planes == bare.solids[0].planes
+
+
+def test_one_solid_with_one_product_is_named_by_it(tmp_path):
+    facts = read_cad_file(_step(tmp_path, "mounting_plate"))
+    (product,) = facts.products
+    assert facts.solids[0].name == product
+    assert f"solid 1 ({product}): " in str(facts)
+
+
+def test_a_material_nobody_bundles_or_a_file_with_no_solid_is_refused(tmp_path):
+    path = _step(tmp_path, "mounting_plate")
+    with pytest.raises(ContextError, match="no bundled material has the id 'steel'") as refused:
+        read_cad_file(path, material="steel")
+    assert refused.value.remedies[0].subject == "material" and "ASTM-A36" in str(refused.value)
+    with pytest.raises(ContextError, match="this is a mesh file") as refused:
+        read_cad_file(_cube_stl(tmp_path / "cube.stl"), unit="mm", material="ASTM-A36")
+    assert refused.value.remedies[0].subject == "material"
+    with pytest.raises(ContextError, match="this is a dxf file"):
+        read_cad_file(_plate_dxf(tmp_path / "plate.dxf"), material="ASTM-A36")
+
+
+def test_the_mass_is_asked_for_the_same_way_over_mcp_and_on_the_command_line(tmp_path):
+    from cli_output import run_cli
+
+    path = _step(tmp_path, "mounting_plate")
+    context.set_context_roots([tmp_path])
+    facts = _call("read_cad_file", {"source": path.name, "material": "AA-6061-T6"})["result"][
+        "structuredContent"
+    ]["facts"]
+    assert facts["material"] == "AA-6061-T6"
+    assert facts["mass_kg"] == pytest.approx(0.148575, rel=1e-4)
+    assert facts["solids"][0]["mass_kg"] == facts["mass_kg"]
+    unknown = _call("read_cad_file", {"source": path.name, "material": "steel"})["error"]
+    assert unknown["code"] == -32602 and unknown["message"].startswith("material: no bundled")
+    code, out, _err = run_cli("read", str(path), "--material", "AA-6061-T6")
+    assert code == 0 and "mass 0.1486 kg as AA-6061-T6" in out
+    code, _out, err = run_cli("read", str(path), "--material", "steel")
+    assert code == 3 and "no bundled material has the id 'steel'" in err
+
+
 # --- starting a part from what was read ------------------------------------------------
 
 

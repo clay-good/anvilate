@@ -9,6 +9,11 @@
 - [x] 1.3 Refusals for features that do not fit (edge distance, overlap, oversize)
 - [ ] 1.4 Move the four existing patterns onto the registry and feature library; volumes,
       tags and STEP bytes unchanged
+      — all four are on the registry. Only the cover plate has a feature, its bore. Cut
+      through the feature library it is the same solid at the same volume and tags, but
+      five lines of its STEP differ (the bore surface's origin sits 1 mm below the plate,
+      where the shared tool starts). Held open: "STEP bytes unchanged" has to give, or the
+      bore stays its own cut. Measured 2026-10-10.
 
 ## 2. General drawing
 

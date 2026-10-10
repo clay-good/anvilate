@@ -178,7 +178,9 @@ PART_CATALOG_SCHEMA_VERSION = "1.0.0"
 # What ``list_context`` and ``read_cad_file`` return: a folder's engineering files and whose
 # each is to read, and the measured facts of one CAD file.
 CONTEXT_INVENTORY_SCHEMA_VERSION = "1.0.0"
-CAD_FACTS_SCHEMA_VERSION = "1.0.0"
+# 1.1.0 adds what a call naming a material gets back: the material, its density and each
+# solid's mass, and the name of a file's one solid. All optional, so 1.0.0 documents hold.
+CAD_FACTS_SCHEMA_VERSION = "1.1.0"
 
 # What ``build_combination`` returns beside the scorecard: where each part landed, and the
 # parts list.

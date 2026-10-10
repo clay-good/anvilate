@@ -12,7 +12,8 @@
 ## 2. Readers
 
 - [x] 2.1 STEP: units as written and as read, solids, product names, size, volume
-- [ ] 2.1b STEP: mass when a material is supplied; a name per solid
+- [x] 2.1b STEP: mass when a material is supplied; a file of one solid and one product names
+      the solid (names for the solids of an assembly come with its tree, 2.3)
 - [x] 2.2 STEP: planes, cylinders, holes (split faces merged), hole patterns, unclassified count
 - [ ] 2.3 STEP: assembly tree with names and placements
 - [x] 2.4 DXF: unit stated or refused, layers, closed profiles from chained entities, blocks

@@ -336,6 +336,10 @@ class SolidFacts(StatableModel):
 
     size_mm: tuple[float, float, float]
     volume_mm3: float = Field(gt=0)
+    # The file's product name, where it has one solid and one product and so says which is
+    # which; and the solid's mass, where the call named the material it is made of.
+    name: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    mass_kg: float | None = Field(default=None, exclude_if=lambda value: value is None)
     faces: int = Field(ge=1)
     planes: tuple[PlaneFacts, ...] = ()
     cylinders: tuple[CylinderFacts, ...] = ()
@@ -404,6 +408,11 @@ class CadFacts(StatableModel):
     unit_reported: Literal["mm", "file units"]
     size_mm: tuple[float, float, float]
     volume_mm3: float | None = Field(default=None, exclude_if=lambda value: value is None)
+    # The material the call named for a STEP file, its density from the bundled materials
+    # database, and the mass of every solid at that density. A file never states these.
+    material: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    density_kg_m3: float | None = Field(default=None, exclude_if=lambda value: value is None)
+    mass_kg: float | None = Field(default=None, exclude_if=lambda value: value is None)
     notes: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
     # A STEP file.
     products: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
@@ -429,13 +438,19 @@ class CadFacts(StatableModel):
         ]
         if self.volume_mm3 is not None:
             lines.append(f"  volume {self.volume_mm3:g} {unit}^3")
+        if self.mass_kg is not None:
+            lines.append(
+                f"  mass {self.mass_kg:.4g} kg as {self.material}, at {self.density_kg_m3:g} kg/m^3"
+            )
         if self.products:
             lines.append(f"  products: {', '.join(self.products)}")
         for number, solid in enumerate(self.solids, start=1):
             box = " x ".join(f"{value:g}" for value in solid.size_mm)
+            named = f" ({solid.name})" if solid.name is not None else ""
+            mass = f", {solid.mass_kg:.4g} kg" if solid.mass_kg is not None else ""
             lines.append(
-                f"  solid {number}: {box} mm, {solid.volume_mm3:g} mm^3, {solid.faces} faces, "
-                f"{solid.unclassified_faces} unclassified"
+                f"  solid {number}{named}: {box} mm, {solid.volume_mm3:g} mm^3{mass}, "
+                f"{solid.faces} faces, {solid.unclassified_faces} unclassified"
             )
             for cylinder in solid.cylinders:
                 at = ", ".join(f"{value:g}" for value in cylinder.position_mm)
@@ -523,12 +538,18 @@ def _kind_of(path: Path) -> str:
     )
 
 
-def read_cad_file(path: str | Path, *, unit: str | None = None) -> CadFacts:
+def read_cad_file(
+    path: str | Path, *, unit: str | None = None, material: str | None = None
+) -> CadFacts:
     """Measure one STEP, DXF, STL or 3MF file and return what it holds.
 
     ``unit`` states the drawing unit of a DXF that declares none (``mm``, ``cm``, ``m``,
     ``in`` or ``ft``), and the unit of an STL, which never has one. It is refused for a
     file that states its own and disagrees.
+
+    ``material`` names what a STEP file's solids are made of, by its id in the bundled
+    materials database. Each solid's mass is then its volume at that material's density.
+    A STEP file carries no material this reader trusts, so none is ever assumed.
     """
     source = Path(path)
     if not source.is_file():
@@ -555,13 +576,39 @@ def read_cad_file(path: str | Path, *, unit: str | None = None) -> CadFacts:
             subject="path",
             source="a smaller export: one part or one sheet rather than the whole project",
         )
+    density = _density(material, kind)
     sha256, counted = _digest(source)
     common = {"file": source.name, "sha256": sha256, "bytes": counted, "kind": kind}
     if kind == "step":
-        return CadFacts(**common, **_step_facts(source, unit))
+        return CadFacts(**common, **_step_facts(source, unit, material, density))
     if kind == "dxf":
         return CadFacts(**common, **_dxf_facts(source, unit))
     return CadFacts(**common, **_mesh_facts(source, unit))
+
+
+def _density(material: str | None, kind: str) -> float | None:
+    """The named material's density in kg/m^3, refused for a file with no solid to weigh."""
+    if material is None:
+        return None
+    if kind != "step":
+        raise _refuse(
+            f"material gives a STEP file's solids a mass, and this is a {kind} file",
+            action="remove",
+            subject="material",
+            source="a STEP file of the solid, whose volume the mass is worked from",
+        )
+    from .standards.materials import default_materials_db
+
+    materials = default_materials_db()
+    if not materials.has_material(material):
+        raise _refuse(
+            f"no bundled material has the id {material!r}; the ids are "
+            f"{', '.join(materials.known_materials())}",
+            action="select",
+            subject="material",
+            source="an id in the bundled materials database",
+        )
+    return float(materials.get(material).density.quantity.to("kg/m**3").magnitude)
 
 
 # --- STEP ------------------------------------------------------------------------------
@@ -590,7 +637,9 @@ def _step_products(text: str) -> tuple[str, ...]:
     return tuple(list(seen)[:LISTED])
 
 
-def _step_facts(path: Path, unit: str | None) -> dict[str, Any]:
+def _step_facts(
+    path: Path, unit: str | None, material: str | None = None, density: float | None = None
+) -> dict[str, Any]:
     from . import geometry
 
     try:
@@ -647,14 +696,39 @@ def _step_facts(path: Path, unit: str | None) -> dict[str, Any]:
         notes.append(
             f"{len(solids)} solids: an assembly or a multi-body part, each measured separately"
         )
+    products = _step_products(text)
+    volume = sum(float(solid.volume) for solid in solids)
+    listed = [_solid_facts(solid) for solid in solids[:LISTED]]
+    # One solid and one product name each other. With more of either, which name belongs to
+    # which solid is the assembly structure's to say, and this reader does not read it.
+    if len(solids) == 1 and len(products) == 1:
+        listed[0] = listed[0].model_copy(update={"name": products[0]})
+    weighed: dict[str, Any] = {}
+    if density is not None:
+        # mm^3 to m^3 is 1e-9. Each solid is weighed from its unrounded volume.
+        listed = [
+            facts.model_copy(update={"mass_kg": float(solid.volume) * 1e-9 * density})
+            for facts, solid in zip(listed, solids, strict=False)
+        ]
+        weighed = {
+            "material": material,
+            "density_kg_m3": density,
+            "mass_kg": volume * 1e-9 * density,
+        }
+        notes.append(
+            f"mass is each solid's volume at the density of {material} in the bundled "
+            "materials database; the file states no material, and every solid is taken "
+            "to be that one"
+        )
     return {
         "unit_written": written,
         "unit_reported": "mm",
         "size_mm": _rounded((box.size.X, box.size.Y, box.size.Z)),
-        "volume_mm3": round(sum(float(solid.volume) for solid in solids), 6),
+        "volume_mm3": round(volume, 6),
+        **weighed,
         "notes": tuple(notes),
-        "products": _step_products(text),
-        "solids": tuple(_solid_facts(solid) for solid in solids[:LISTED]),
+        "products": products,
+        "solids": tuple(listed),
         "solids_not_listed": max(0, len(solids) - LISTED),
     }
 

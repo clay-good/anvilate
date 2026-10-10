@@ -220,7 +220,7 @@ _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
 _PART_CATALOG_REF = "urn:anvilate:schema:part-catalog:1.0.0"
 _CONTEXT_INVENTORY_REF = "urn:anvilate:schema:context-inventory:1.0.0"
-_CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.0.0"
+_CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.1.0"
 _COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
@@ -890,6 +890,14 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                         "type": "string",
                         "enum": ["mm", "cm", "m", "in", "ft"],
                         "description": "the unit of a DXF or STL that states none",
+                    },
+                    "material": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": (
+                            "what a STEP file's solids are made of, as a material id; "
+                            "adds each solid's mass"
+                        ),
                     },
                 },
                 required=["source"],
@@ -2218,7 +2226,11 @@ def _read_cad_file(arguments: Mapping[str, Any]) -> dict[str, Any]:
     from .context import ContextError, read_cad_file, resolve_in_context, seed_part
 
     try:
-        facts = read_cad_file(resolve_in_context(arguments["source"]), unit=arguments.get("unit"))
+        facts = read_cad_file(
+            resolve_in_context(arguments["source"]),
+            unit=arguments.get("unit"),
+            material=arguments.get("material"),
+        )
     except ContextError as refused:
         raise _context_refusal(refused, "source", "read_cad_file") from refused
     result = {"facts": facts.model_dump(mode="json")}
