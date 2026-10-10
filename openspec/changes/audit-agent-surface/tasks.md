@@ -9,7 +9,9 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 - [x] 1.2 Every CLI command and flag: purpose, default, overlap with another
 - [x] 1.3 Every refusal message on both surfaces, collected into one reviewable list
       (`docs/api/refusal-messages.txt`, from `tools/audit/refusals.py`; finding 21)
-- [ ] 1.4 Every docs page: who it is for, whether it is still true, what links to it
+- [x] 1.4 Every docs page: who it is for, whether it is still true, what links to it
+      (`docs/api/docs-pages.txt`, from `tools/audit/pages.py`; finding 24. "Still true" is
+      held for what a page names; its prose is a person's reading)
 - [x] 1.5 Client limits table for Claude Code and Codex, each with source and date
 
 ## 2. Tool set

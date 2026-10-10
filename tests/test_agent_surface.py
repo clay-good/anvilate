@@ -373,3 +373,38 @@ def test_every_refusal_that_offers_a_value_has_been_read_for_what_it_offers():
     }
     assert offers == set(_OFFERS_A_VALUE), sorted(offers ^ set(_OFFERS_A_VALUE))
     assert all(len(cause.split()) >= 6 for cause in _OFFERS_A_VALUE.values())
+
+
+def test_the_docs_page_inventory_is_current_and_no_page_names_something_gone():
+    """Each page with its index section, what links to it and what it names (audit 1.4).
+
+    A page that names a command, an option or an MCP tool that no longer exists, or links
+    to a file that is gone, fails here by name. The attack below holds that it would.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "audit_pages", _REPO / "tools" / "audit" / "pages.py"
+    )
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    assert tool.PAGE.read_text(encoding="utf-8") == tool.page() and tool.main(["--check"]) == 0
+    rows = tool.inventory()
+    assert len(rows) >= 60
+    assert not [name for name, section, _l, _g in rows if section == "not in the index"]
+    assert not {name: gone for name, _s, _l, gone in rows if gone}
+    by_name = {name: linked for name, _s, linked, _g in rows}
+    assert "README" in by_name["parts-catalog.md"] and "combinations" in by_name["parts-catalog.md"]
+    # The attack: a page naming a command, an option, a tool and a file that do not exist.
+    commands, options, tools = tool._surface()
+    assert {"check", "build", "read"} <= commands and "--unvalidated" in options
+    assert "build_part" in tools and "frobnicate" not in commands
+    (tool.DOCS / "zz-probe.md").write_text(
+        "Run `anvilate frobnicate --sideways`, call the `make_part` tool, see [x](gone.md).\n",
+        encoding="utf-8",
+    )
+    try:
+        (probe,) = [gone for name, _s, _l, gone in tool.inventory() if name == "zz-probe.md"]
+    finally:
+        (tool.DOCS / "zz-probe.md").unlink()
+    assert probe == ["link gone.md", "command frobnicate", "option --sideways", "tool make_part"]
