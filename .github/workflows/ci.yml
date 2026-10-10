@@ -288,7 +288,7 @@ jobs:
           from anvilate.patterns import patterns
           found = [pathlib.Path("examples") / pattern.example for pattern in patterns().values()]
           missing = sorted(str(path) for path in found if not path.is_file())
-          assert len(found) >= 28 and not missing, f"pattern examples missing: {missing}"
+          assert len(found) >= 31 and not missing, f"pattern examples missing: {missing}"
           print(" ".join(str(path) for path in found))
           PY
           )

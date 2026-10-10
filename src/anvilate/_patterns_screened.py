@@ -13,7 +13,18 @@ from collections.abc import Mapping
 from typing import Any
 
 from . import features, geometry
-from ._patterns_parts import _X, _Y, _built, _low, _mm, _refuse, _ring
+from ._patterns_parts import (
+    _X,
+    _Y,
+    _built,
+    _cuts,
+    _flat_cuts,
+    _low,
+    _mm,
+    _refuse,
+    _ring,
+    _rounded_rectangle,
+)
 from .geometry import BuiltGeometry, FlatProfile, GeometryError
 from .packs.hydraulics import PipeRun
 from .packs.machinery import (
@@ -22,7 +33,15 @@ from .packs.machinery import (
     ShaftKey,
     SpurGearMesh,
 )
-from .packs.structural import BeamColumnMember, BeamMember, ColumnMember, LiftingLug
+from .packs.structural import (
+    BeamColumnMember,
+    BeamMember,
+    ColumnMember,
+    GussetPlate,
+    LiftingLug,
+    ShearPlate,
+    TensionMember,
+)
 from .patterns import Pattern, register
 
 __all__: list[str] = []
@@ -152,6 +171,104 @@ def build_rolling_bearing(
     width = float(record.width.quantity.to("mm").magnitude)
     dimensions = {"bore": bore, "outer_diameter": outer, "width": width}
     return _built(bearing, tag, _ring(outer, bore, width), dimensions, envelope=True, name=name)
+
+
+# How far an area the element was screened on may sit from the one its outline has before
+# the picture is of another plate: the same half percent a pipe's bore is held to.
+_AREA_AGREEMENT = 0.005
+
+
+def _cut_by_a_line(cut: Any, across: int) -> float:
+    """The most hole a straight line along the plate removes, in mm of its length.
+
+    ``across`` is the coordinate the line holds constant: 0 for a line along y, 1 for one
+    along x. Every hole's own centreline is tried, and it takes every hole it passes
+    through, so staggered holes are counted only where one line does cross them.
+    """
+    worst = 0.0
+    for through in cut:
+        at = through.position_mm[across]
+        worst = max(
+            worst,
+            sum(
+                other.diameter_mm
+                for other in cut
+                if abs(other.position_mm[across] - at) < other.diameter_mm / 2
+            ),
+        )
+    return worst
+
+
+def _outlined(tag: str, areas: Any) -> Any:
+    """A builder for a plate element drawn from its ``outline``, held to its own areas.
+
+    ``areas`` takes the element and the outline's width, length, thickness and cut holes,
+    and yields ``(field, declared mm², drawn mm², exact)``: an exact area has to be the
+    drawn one, and any other may be smaller than it (a net area carries a hole allowance
+    the drawing does not) and never larger.
+    """
+
+    def build(element: Any, name: str, params: Mapping[str, Any]) -> BuiltGeometry:
+        from build123d import Box
+
+        geometry._kernel()
+        outline = element.outline
+        if outline is None:
+            raise _needs(tag, "outline", "its outline: a width, a length and a thickness")
+        width, length = _mm(outline.width, "width", tag), _mm(outline.length, "length", tag)
+        thickness = _mm(outline.thickness, "thickness", tag)
+        host = features.Host(
+            "the plate's top face", (0.0, 0.0, thickness), _X, _Y, (0.0, 0.0, 1.0), thickness,
+            width, length,
+        )  # fmt: skip
+        shape, cut = features.apply(
+            Box(width, length, thickness, align=_low()),
+            host,
+            _cuts(tag, outline.holes, outline.hole_patterns),
+        )
+        for field, declared, drawn, exact in areas(element, width, length, thickness, cut):
+            apart = declared - drawn
+            if apart > _AREA_AGREEMENT * drawn or (exact and -apart > _AREA_AGREEMENT * drawn):
+                raise GeometryError(
+                    f"{tag}: {field} is {declared:g} mm² and the outline has {drawn:g} mm² "
+                    f"there, {'more than' if exact else 'less by more than'} "
+                    f"{_AREA_AGREEMENT:.1%}{' apart' if exact else ''}; the element was "
+                    "screened on one plate and this would draw another. State the area "
+                    "this outline has, or the outline that area came from",
+                    action="replace",
+                    subject=f"the {tag} element_params.{field}",
+                    source=f"the area of the declared outline, {drawn:g} mm²",
+                )
+        circles, slots = _flat_cuts(cut)
+        dimensions = {"width": width, "length": length, "thickness": thickness}
+        profile = FlatProfile(
+            outline=_rounded_rectangle(width, length, 0.0), circles=circles, slots=slots
+        )
+        return _built(element, tag, shape, dimensions, cut, name=name, profile=profile)
+
+    return build
+
+
+def _mm2(value: Any) -> float:
+    return float(value.to("mm**2").magnitude)
+
+
+def _shear_plate_areas(plate: ShearPlate, width: float, length: float, t: float, cut: Any):
+    """Sheared along its length: the gross plane is length x t, the net one less its holes."""
+    yield "gross_shear_area", _mm2(plate.gross_shear_area), length * t, True
+    yield "net_shear_area", _mm2(plate.net_shear_area), (length - _cut_by_a_line(cut, 0)) * t, False
+
+
+def _tension_member_areas(member: TensionMember, width: float, length: float, t: float, cut: Any):
+    """Pulled along its length: the gross section is width x t, the net one less its holes."""
+    yield "gross_area", _mm2(member.gross_area), width * t, True
+    yield "net_area", _mm2(member.net_area), (width - _cut_by_a_line(cut, 1)) * t, False
+
+
+def _gusset_plate_areas(plate: GussetPlate, width: float, length: float, t: float, cut: Any):
+    """A block tears out on one tension plane across and two shear planes along, at most."""
+    yield "net_tension_area", _mm2(plate.net_tension_area), width * t, False
+    yield "net_shear_area", _mm2(plate.net_shear_area), 2 * length * t, False
 
 
 # How far a declared bore may sit from its designation's before the two are different pipes.
@@ -354,6 +471,35 @@ _register(
     "A spur gear pair, drawn as its two tip cylinders at their centre distance.",
     envelope=True,
 )
+_OUTLINE = {
+    "width": {"magnitude": 100.0, "unit": "mm"},
+    "length": {"magnitude": 240.0, "unit": "mm"},
+    "thickness": {"magnitude": 10.0, "unit": "mm"},
+}
+_register(
+    "shear_plate",
+    ShearPlate,
+    _outlined("shear_plate", _shear_plate_areas),
+    "A shear plate drawn from its outline: a rectangle sheared along its length, with holes.",
+    outputs=("views", "step", "3mf", "dxf"),
+    example_params={"outline": _OUTLINE},
+)
+_register(
+    "tension_member",
+    TensionMember,
+    _outlined("tension_member", _tension_member_areas),
+    "A flat tension member drawn from its outline: a bar pulled along its length, with holes.",
+    outputs=("views", "step", "3mf", "dxf"),
+    example_params={"outline": {**_OUTLINE, "width": {"magnitude": 200.0, "unit": "mm"}}},
+)
+_register(
+    "gusset_plate",
+    GussetPlate,
+    _outlined("gusset_plate", _gusset_plate_areas),
+    "A gusset plate drawn from its outline: a rectangle with its bolt holes.",
+    outputs=("views", "step", "3mf", "dxf"),
+    example_params={"outline": {**_OUTLINE, "width": {"magnitude": 300.0, "unit": "mm"}}},
+)
 _register(
     "pipe_run",
     PipeRun,
@@ -386,4 +532,3 @@ _register(
     "A beam-column cut to length from a named rolled I or H profile.",
     example_params={"section": "IPE 200"},
 )
-del _Y

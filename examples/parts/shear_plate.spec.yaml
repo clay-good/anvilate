@@ -1,0 +1,29 @@
+# A drawable part: A shear tab 240 mm deep with three 22 mm bolt holes on one line.
+#   anvilate view examples/parts/shear_plate.spec.yaml
+name: shear-tab
+description: A shear tab 240 mm deep with three 22 mm holes on one line.
+anvilate_spec: 1.3.0
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+constraints: {min_safety_factor: {value: 1.5, origin: user_stated}}
+acceptance:
+  tiers: [T1_analytical]
+element_type: shear_plate
+element_params:
+  name: shear-tab
+  material: ASTM-A36
+  load: {magnitude: 150.0, unit: kN}
+  gross_shear_area: {magnitude: 2400.0, unit: mm**2}
+  net_shear_area: {magnitude: 1680.0, unit: mm**2}
+  outline:
+    width: {magnitude: 100.0, unit: mm}
+    length: {magnitude: 240.0, unit: mm}
+    thickness: {magnitude: 10.0, unit: mm}
+    hole_patterns:
+    - tag: bolt
+      kind: rectangular
+      diameter: {magnitude: 22.0, unit: mm}
+      count_x: 1
+      count_y: 3
+      pitch_y: {magnitude: 75.0, unit: mm}

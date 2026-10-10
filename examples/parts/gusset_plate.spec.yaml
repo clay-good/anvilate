@@ -1,0 +1,30 @@
+# A drawable part: A 300 x 250 gusset plate, 10 mm thick, with four 22 mm bolt holes.
+#   anvilate view examples/parts/gusset_plate.spec.yaml
+name: gusset
+description: A 300 x 250 gusset plate, 10 mm thick, with four 22 mm holes.
+anvilate_spec: 1.3.0
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+constraints: {min_safety_factor: {value: 1.5, origin: user_stated}}
+acceptance:
+  tiers: [T1_analytical]
+element_type: gusset_plate
+element_params:
+  name: gusset
+  material: ASTM-A36
+  load: {magnitude: 250.0, unit: kN}
+  net_shear_area: {magnitude: 3000.0, unit: mm**2}
+  net_tension_area: {magnitude: 1200.0, unit: mm**2}
+  outline:
+    width: {magnitude: 300.0, unit: mm}
+    length: {magnitude: 250.0, unit: mm}
+    thickness: {magnitude: 10.0, unit: mm}
+    hole_patterns:
+    - tag: bolt
+      kind: rectangular
+      diameter: {magnitude: 22.0, unit: mm}
+      count_x: 2
+      count_y: 2
+      pitch_x: {magnitude: 75.0, unit: mm}
+      pitch_y: {magnitude: 75.0, unit: mm}

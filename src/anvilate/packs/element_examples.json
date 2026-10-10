@@ -585,7 +585,8 @@
   "net_tension_area": {
    "magnitude": 1200.0,
    "unit": "mm ** 2"
-  }
+  },
+  "outline": null
  },
  "helical_compression_spring": {
   "active_coils": 20.0,
@@ -1040,7 +1041,8 @@
   "net_shear_area": {
    "magnitude": 1800.0,
    "unit": "mm ** 2"
-  }
+  },
+  "outline": null
  },
  "sheet_metal_bracket": {
   "flange_a": {
@@ -1259,6 +1261,7 @@
    "magnitude": 1500.0,
    "unit": "mm ** 2"
   },
+  "outline": null,
   "shear_lag_factor": 1.0
  },
  "timber_beam": {

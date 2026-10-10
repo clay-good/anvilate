@@ -132,6 +132,7 @@ packs.structural.ColumnMember
 packs.structural.ConcreteBearing
 packs.structural.GussetPlate
 packs.structural.LiftingLug
+packs.structural.PlateOutline
 packs.structural.LoadType
 packs.structural.ShearPlate
 packs.structural.StructuralMember

@@ -142,6 +142,17 @@ A flat lid for an enclosure, with holes and an optional lip that drops into the 
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/enclosure_lid.spec.yaml`](../examples/parts/enclosure_lid.spec.yaml)
 
+### `gusset_plate`
+
+A gusset plate drawn from its outline: a rectangle with its bolt holes.
+
+![gusset_plate](parts/gusset_plate.png)
+
+- Required: `name` (text), `net_shear_area` (quantity), `net_tension_area` (quantity), `load` (quantity), `material` (text)
+- Optional: `outline` (PlateOutline)
+- Outputs: views, step, 3mf, dxf
+- Example: [`examples/parts/gusset_plate.spec.yaml`](../examples/parts/gusset_plate.spec.yaml)
+
 ### `helical_compression_spring`
 
 A helical compression spring, drawn as the tube it occupies at its free length. **envelope**.
@@ -241,6 +252,17 @@ A parallel shaft key: a bar of its width and height.
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/shaft_key.spec.yaml`](../examples/parts/shaft_key.spec.yaml)
 
+### `shear_plate`
+
+A shear plate drawn from its outline: a rectangle sheared along its length, with holes.
+
+![shear_plate](parts/shear_plate.png)
+
+- Required: `name` (text), `gross_shear_area` (quantity), `net_shear_area` (quantity), `load` (quantity), `material` (text)
+- Optional: `outline` (PlateOutline)
+- Outputs: views, step, 3mf, dxf
+- Example: [`examples/parts/shear_plate.spec.yaml`](../examples/parts/shear_plate.spec.yaml)
+
 ### `sheet_metal_bracket`
 
 A bracket bent from one sheet (L, U or Z), with its developed flat length. **drawn, not checked**.
@@ -306,6 +328,17 @@ A T-slot aluminium extrusion cut to length, drawn as an envelope from its design
 - Optional: none
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/t_slot_extrusion.spec.yaml`](../examples/parts/t_slot_extrusion.spec.yaml)
+
+### `tension_member`
+
+A flat tension member drawn from its outline: a bar pulled along its length, with holes.
+
+![tension_member](parts/tension_member.png)
+
+- Required: `name` (text), `gross_area` (quantity), `net_area` (quantity), `load` (quantity), `material` (text)
+- Optional: `shear_lag_factor` (number), `outline` (PlateOutline)
+- Outputs: views, step, 3mf, dxf
+- Example: [`examples/parts/tension_member.spec.yaml`](../examples/parts/tension_member.spec.yaml)
 
 ### `timber_beam`
 

@@ -48,7 +48,7 @@ def _built(element_type: str):
 
 def test_the_registry_is_the_population():
     """The floor: a sweep over an emptied registry would pass every test below."""
-    assert len(_PATTERNS) >= 28
+    assert len(_PATTERNS) >= 31
     assert all(patterns()[name].element_type == name for name in _PATTERNS)
 
 

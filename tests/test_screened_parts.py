@@ -28,12 +28,15 @@ _DRAWN = (
     "beam_column_member",
     "beam_member",
     "column_member",
+    "gusset_plate",
     "helical_compression_spring",
     "lifting_lug",
     "pipe_run",
     "rolling_bearing",
     "shaft_key",
+    "shear_plate",
     "spur_gear_mesh",
+    "tension_member",
 )
 
 
@@ -51,6 +54,10 @@ def _spec(element_type: str, **changes):
 
 def _mm(value: float) -> dict:
     return {"magnitude": value, "unit": "mm"}
+
+
+def _mm2(value: float) -> dict:
+    return {"magnitude": value, "unit": "mm**2"}
 
 
 def _disc(diameter: float) -> float:
@@ -77,6 +84,11 @@ _VOLUMES = {
     "beam_column_member": _IPE_200 * 3000,
     "beam_member": _IPE_200 * 4000,
     "column_member": _IPE_200 * 3000,
+    # 300 x 250 x 10 with four 22 mm holes.
+    "gusset_plate": (300 * 250 - 4 * _disc(22)) * 10,
+    # 100 x 240 x 10 with three 22 mm holes; 100 x 400 x 10 with two 18 mm holes.
+    "shear_plate": (100 * 240 - 3 * _disc(22)) * 10,
+    "tension_member": (100 * 400 - 2 * _disc(18)) * 10,
     # A 3 mm wire on a 24 mm mean coil occupies the tube from 21 to 27 mm, 200 long.
     "helical_compression_spring": (_disc(27) - _disc(21)) * 200,
     # 80 wide and 12 thick, the hole 90 up, a half disc above it, less the 25 mm pin hole.
@@ -112,6 +124,9 @@ def test_being_drawn_changes_nothing_on_the_card():
         ("lifting_lug", "hole_height"),
         ("rolling_bearing", "designation"),
         ("pipe_run", "designation"),
+        ("shear_plate", "outline"),
+        ("tension_member", "outline"),
+        ("gusset_plate", "outline"),
     ):
         with_it = screen_spec(_spec(element_type))
         without = screen_spec(_spec(element_type, **{field: None}))
@@ -131,6 +146,27 @@ def test_being_drawn_changes_nothing_on_the_card():
             "no bundled bearing is designated .6240.; closest: 62",
         ),
         ("pipe_run", {"designation": None}, "add element_params.designation"),
+        ("shear_plate", {"outline": None}, "add element_params.outline"),
+        ("tension_member", {"outline": None}, "add element_params.outline"),
+        ("gusset_plate", {"outline": None}, "add element_params.outline"),
+        # 240 x 10 is 2,400 mm2 of gross shear plane, and three 22 mm holes leave 1,740.
+        (
+            "shear_plate",
+            {"gross_shear_area": _mm2(2500)},
+            "gross_shear_area is 2500 mm² and the outline has 2400 mm² there, more than 0.5%",
+        ),
+        ("shear_plate", {"gross_shear_area": _mm2(2300)}, "gross_shear_area is 2300 mm²"),
+        (
+            "shear_plate",
+            {"net_shear_area": _mm2(1800)},
+            "net_shear_area is 1800 mm² and the outline has 1740 mm² there, less by more",
+        ),
+        # 100 x 10 is 1,000 mm2 across the bar, and two 18 mm holes on one line leave 640.
+        ("tension_member", {"gross_area": _mm2(1100)}, "gross_area is 1100 mm²"),
+        ("tension_member", {"net_area": _mm2(700)}, "the outline has 640 mm² there"),
+        # A gusset's block cannot tear on more than its width, or twice its length.
+        ("gusset_plate", {"net_tension_area": _mm2(3100)}, "the outline has 3000 mm² there"),
+        ("gusset_plate", {"net_shear_area": _mm2(5100)}, "the outline has 5000 mm² there"),
         (
             "pipe_run",
             {"designation": "NPS 2 SCH 41"},
@@ -242,3 +278,35 @@ def test_the_end_of_a_long_pipe_is_drawn_round():
             radius = math.hypot(*first)
             middle = math.hypot((first[0] + second[0]) / 2, (first[1] + second[1]) / 2)
             assert radius - middle < 0.001 * camera.seen
+
+
+def test_a_net_area_may_be_smaller_than_the_drawn_one_and_a_gross_area_may_not():
+    """A net area carries a hole allowance the drawing does not; a gross area carries none.
+
+    The shear tab's holes are drawn at 22 mm and its net area is worked at 24, so 1,680
+    against a drawn 1,740 is the same plate. Half a percent either way is the same too.
+    """
+    for changes in (
+        {},
+        {"net_shear_area": _mm2(900)},
+        {"net_shear_area": _mm2(1740 * 1.004)},
+        {"gross_shear_area": _mm2(2400 * 1.004)},
+        {"gross_shear_area": _mm2(2400 * 0.996)},
+    ):
+        assert build_spec(_spec("shear_plate", **changes)).is_valid, changes
+
+
+def test_holes_count_against_a_net_section_only_where_one_line_crosses_them():
+    """Two 18 mm holes side by side take 36 mm of the bar's width; staggered, 18."""
+    document = yaml.safe_load((_EXAMPLES / "tension_member.spec.yaml").read_text("utf-8"))
+    outline = document["element_params"]["outline"]
+    outline.pop("hole_patterns")
+    outline["holes"] = [
+        {"tag": "a", "x": _mm(-25), "y": _mm(150), "diameter": _mm(18)},
+        {"tag": "b", "x": _mm(25), "y": _mm(100), "diameter": _mm(18)},
+    ]
+    document["element_params"]["net_area"] = _mm2(820)  # (100 - 18) x 10
+    assert build_spec(load_spec_yaml(yaml.safe_dump(document))).is_valid
+    outline["holes"][1]["y"] = _mm(150)
+    with pytest.raises(GeometryError, match="the outline has 640 mm² there"):
+        build_spec(load_spec_yaml(yaml.safe_dump(document)))

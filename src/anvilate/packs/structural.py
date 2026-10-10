@@ -103,6 +103,7 @@ from ._guarded import (
     design_allowable,
     disclosed,
 )
+from .parts import Hole, HolePattern
 
 _GEOMETRY_SOURCE = "the member's or connection's fabrication drawing"
 _SECTION_SOURCE = "the rolled-section table or the section drawing (properties, mass per length)"
@@ -228,6 +229,7 @@ __all__ = [
     "BasePlate",
     "screen_base_plate",
     "LiftingLug",
+    "PlateOutline",
     "screen_lifting_lug",
     "GussetPlate",
     "screen_gusset_plate",
@@ -2228,6 +2230,38 @@ def screen_lifting_lug(
     )
 
 
+class PlateOutline(GuardedInputs):
+    """The outline a plate element is drawn from: a rectangle of one thickness, with holes.
+
+    ``width`` runs along x and ``length`` along y, which is the direction the element's
+    load acts in: a shear plate is sheared along its length and a tension member pulled
+    along it. Holes are positioned from the centre of the face, in the vocabulary every
+    drawn part uses. No check reads an outline. The drawing does, and it is refused when
+    the outline cannot have the areas the element was screened on.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    positive_fields = ("width", "length", "thickness")
+
+    width: Quantity
+    length: Quantity
+    thickness: Quantity
+    holes: tuple[Hole, ...] = ()
+    hole_patterns: tuple[HolePattern, ...] = ()
+
+    @model_validator(mode="after")
+    def _lengths(self) -> PlateOutline:
+        for name in type(self).positive_fields:
+            value = getattr(self, name)
+            if not value.has_dimension("[length]"):
+                raise _structural_pack_refusal(
+                    f"outline.{name} must be a [length] quantity; got {value}",
+                    subject=f"outline.{name}",
+                    source=_GEOMETRY_SOURCE,
+                )
+        return self
+
+
 class GussetPlate(GuardedInputs):
     """A gusset (or connection element) checked for block-shear rupture.
 
@@ -2245,6 +2279,7 @@ class GussetPlate(GuardedInputs):
     net_tension_area: Quantity
     load: Quantity
     material: str
+    outline: PlateOutline | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> GussetPlate:
@@ -2388,6 +2423,7 @@ class TensionMember(GuardedInputs):
     load: Quantity
     material: str
     shear_lag_factor: float = 1.0
+    outline: PlateOutline | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> TensionMember:
@@ -3039,6 +3075,7 @@ class ShearPlate(GuardedInputs):
     net_shear_area: Quantity
     load: Quantity
     material: str
+    outline: PlateOutline | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> ShearPlate:

@@ -58,10 +58,13 @@ def test_the_patterns_that_say_they_export_dxf_are_the_ones_with_a_profile():
     assert claimed == {
         "base_plate",
         "cover_plate",
+        "gusset_plate",
         "lifting_lug",
         "mounting_plate",
         "plate_flange",
+        "shear_plate",
         "sheet_metal_bracket",
+        "tension_member",
     }
     for name in sorted(claimed - {"base_plate", "cover_plate"}):
         assert _built(name).profile is not None, name

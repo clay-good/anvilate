@@ -116,9 +116,9 @@ def test_an_agent_can_ask_what_it_can_declare_and_what_draws():
     listed = {part["element_type"]: part for part in catalog["parts"]}
     assert set(listed) == set(element_registry()) and len(listed) >= 44
     assert {name for name, part in listed.items() if part["drawable"]} == set(patterns())
-    assert listed["gusset_plate"] == {
-        "element_type": "gusset_plate",
-        "summary": listed["gusset_plate"]["summary"],
+    assert listed["welded_connection"] == {
+        "element_type": "welded_connection",
+        "summary": listed["welded_connection"]["summary"],
         "drawable": False,
         "screened": True,
     }

@@ -2852,13 +2852,15 @@ element_params:
 
 
 def test_build_refuses_an_unsupported_pattern_by_name(tmp_path):
-    spec = tmp_path / "gusset.yaml"
-    spec.write_text(_GUSSET_SPEC, encoding="utf-8")
+    # A weld is screened and not drawn. The gusset plate this used was, until it took an
+    # outline; the element is refused by its type before its parameters are read.
+    spec = tmp_path / "weld.yaml"
+    spec.write_text(_GUSSET_SPEC.replace("gusset_plate", "welded_connection"), encoding="utf-8")
 
-    code, out, err = _run("build", str(spec), "--output", str(tmp_path / "gusset.step"))
+    code, out, err = _run("build", str(spec), "--output", str(tmp_path / "weld.step"))
 
     assert code == EXIT_UNBUILT and out == ""
-    assert "gusset_plate" in err and "supported: angle_bracket, base_plate" in err
+    assert "welded_connection" in err and "supported: angle_bracket, base_plate" in err
     assert "starting from the STEP export of the closest part" in err
 
 

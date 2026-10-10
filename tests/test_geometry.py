@@ -455,11 +455,11 @@ def test_pattern_refuses_a_base_plate_without_thickness():
 def test_registry_refuses_an_element_without_an_audited_pattern():
     from anvilate.refusal import RefusalError
 
-    with pytest.raises(UnsupportedGeometry, match="gusset_plate") as refused:
-        build_spec(_spec(element_type="gusset_plate"))
+    with pytest.raises(UnsupportedGeometry, match="welded_connection") as refused:
+        build_spec(_spec(element_type="welded_connection"))
     assert isinstance(refused.value, RefusalError)
     assert isinstance(refused.value, ValueError), "the public exception hierarchy changed"
-    assert refused.value.remedies[0].subject == "the element_type 'gusset_plate'"
+    assert refused.value.remedies[0].subject == "the element_type 'welded_connection'"
 
 
 def test_rectangular_cover_plate_is_one_tagged_solid_with_exact_volume():

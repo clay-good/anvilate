@@ -26,8 +26,9 @@
 ## 3. Parts that are already screened
 
 - [x] 3.1 Lifting lug / padeye (takes an optional `hole_height`, refused by name without it)
-- [ ] 3.2 Gusset plate, shear plate, tension member: each declares areas and no outline, so
-      each needs outline fields before it can be drawn
+- [x] 3.2 Gusset plate, shear plate, tension member: each takes an optional `outline` (width,
+      length, thickness, holes) and is drawn from it, refused when the outline cannot have
+      the areas the element was screened on
 - [x] 3.3 Structural members from the section tables: beam, column and beam-column from a
       named rolled I or H profile
 - [ ] 3.3b Channel, angle, HSS and flat-bar members (no bundled table yet)

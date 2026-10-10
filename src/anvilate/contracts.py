@@ -579,7 +579,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     "cover_plate": "1.3.0",
     "driven_pile": "1.3.0",
     "feeder": "1.3.0",
-    "gusset_plate": "1.3.0",
+    # 1.4.0 adds the optional outline a gusset, a shear plate and a tension member draw from.
+    "gusset_plate": "1.4.0",
     "helical_compression_spring": "1.2.0",
     "infinite_slope": "1.3.0",
     "lifting_lug": "1.4.0",
@@ -592,12 +593,12 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     "rolling_bearing": "1.3.0",
     "shaft_key": "1.2.0",
     "shallow_footing": "1.3.0",
-    "shear_plate": "1.3.0",
+    "shear_plate": "1.4.0",
     # 1.2.0 adds the bend-radius check's optional reduction of area and its source.
     "sheet_metal_bracket": "1.2.0",
     "spur_gear_mesh": "1.2.0",
     "structure": "1.2.0",
-    "tension_member": "1.3.0",
+    "tension_member": "1.4.0",
     # 1.1.0 adds the support bearing check's optional fields.
     "timber_beam": "1.2.0",
     "transmission_shaft": "1.2.0",
