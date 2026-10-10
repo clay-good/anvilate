@@ -117,6 +117,10 @@ def _mcp_pass() -> dict[str, float]:
         timings["mcp describe_part"], _ = session.tool(
             "describe_part", {"element_type": "mounting_plate"}
         )
+        worked = _ROOT / "examples" / "combinations" / "collar_on_shaft.combination.yaml"
+        timings["mcp build_combination"], _ = session.tool(
+            "build_combination", {"combination": yaml.safe_load(worked.read_text("utf-8"))}
+        )
         _, exported = session.tool("export_artifact", {"subject": part, "format": "step"})
         written = Path(exported["structuredContent"]["file"]["path"]).name
         timings["mcp list_context"], _ = session.tool("list_context", {"folder": "."})

@@ -1653,7 +1653,12 @@ def test_the_depth_bound_is_far_above_the_documents_this_repository_ships():
         return level
 
     root = Path(__file__).resolve().parent.parent
-    specs = sorted((root / "examples").rglob("*.yaml"))
+    # A combination is several specs and the mates between them, not one of these.
+    specs = sorted(
+        path
+        for path in (root / "examples").rglob("*.yaml")
+        if not path.name.endswith(".combination.yaml")
+    )
     assert len(specs) >= 2, f"only {len(specs)} shipped specs were measured"
     deepest = max(_depth(load_spec_yaml(s.read_text()).model_dump(mode="json")) for s in specs)
     assert deepest * 4 < _MAX_DOCUMENT_DEPTH, (
@@ -1936,7 +1941,13 @@ def test_no_yaml_document_this_package_ships_is_misread_by_the_strict_loader():
     examples = sorted((root / "examples").rglob("*.yaml"))
     assert len(examples) >= 2, f"only {len(examples)} example specs were swept"
     for path in examples:
-        load_spec_yaml(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        if path.name.endswith(".combination.yaml"):
+            # A combination holds a spec for each part; each is read by the same loader.
+            for part in yaml.load(text, Loader=_StrictSpecLoader)["parts"]:
+                load_spec_yaml(yaml.safe_dump(part["spec"]))
+        else:
+            load_spec_yaml(text)
 
 
 def test_the_versionless_default_is_only_safe_while_nothing_migrates():

@@ -17,6 +17,7 @@ has not shipped exits 4 naming that gap.
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
+| `combine` | a combination document | `--output`, `--picture`, `--unvalidated`, `--force` | the combination's card passes |
 | `read` | a CAD file, or a folder | `--unit` | the file was measured, or the folder listed |
 | `parts` | an element type, or none to list them | none | the catalog, or that element's fields and example, was printed |
 
@@ -1124,6 +1125,19 @@ is on the sheet, and `anvilate check` is the command whose exit code is the verd
 
 For the solid itself, `anvilate build` writes STEP, which opens in the CAD tools you
 already use.
+
+## Put parts together: `anvilate combine`
+
+`anvilate combine FILE` builds a combination document: catalog parts placed by the features
+they share, with the bolts, washers and nuts in them. It prints where each part landed, the
+parts list, and the card. `--picture` writes the numbered drawing and `--output` the STEP
+assembly, which is written only when the card passes unless `--unvalidated` is given. The
+exit code is the card's, as it is for `check`. The [combinations guide](combinations.md)
+has the document format and five worked examples.
+
+```bash
+anvilate combine examples/combinations/portal_frame.combination.yaml --picture frame.png --output frame.step
+```
 
 ## Measure a CAD file: `anvilate read`
 

@@ -83,6 +83,7 @@ __all__ = [
     "Dispatch",
     "Gate",
     "CATALOG_OPERATIONS",
+    "COMBINATION_OPERATIONS",
     "CONTEXT_OPERATIONS",
     "REQUIRED_OPERATIONS",
     "ToolDefinition",
@@ -158,7 +159,11 @@ CATALOG_OPERATIONS = frozenset({"describe_part"})
 # measured facts of one CAD file in it. They act on files inside folders named at launch
 # (`--context DIR`), never on server memory, and return measurements, never contents.
 CONTEXT_OPERATIONS = frozenset({"list_context", "read_cad_file"})
-_LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS
+
+# Several parts placed by the features they share. Its handle is rendered by
+# render_viewport and exported by export_artifact, the verbs a single part uses.
+COMBINATION_OPERATIONS = frozenset({"build_combination"})
+_LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
 
 # Written out, not read from `contracts`. Deriving these would make the check below
 # vacuous: a reference computed from the same call it is compared against agrees with
@@ -216,6 +221,7 @@ _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
 _PART_CATALOG_REF = "urn:anvilate:schema:part-catalog:1.0.0"
 _CONTEXT_INVENTORY_REF = "urn:anvilate:schema:context-inventory:1.0.0"
 _CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.0.0"
+_COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -544,7 +550,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "before proposing the next edit. Returns the image and one line of text "
                 "(view, size, digest, where the file was written): PNG by default, which a "
                 "model can look at, or the SVG drawing with format svg. The image is also "
-                "written to the server's output folder for the engineer to open."
+                "written to the server's output folder for the engineer to open. A "
+                "build_combination handle draws the whole combination on one sheet: four "
+                "views, each part numbered, and the parts list."
             ),
             input_schema=_object_schema(
                 {
@@ -701,7 +709,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "Export what the engineer takes away. From a run_validation handle: the "
                 "evidence bundle (returned, and written), a QIF results file, or the one-page "
                 "part sheet. From a build_part handle: the STEP file to open in CAD, a 3MF "
-                "mesh, or a DXF profile for a flat part. Files are written to the server's "
+                "mesh, or a DXF profile for a flat part. From a build_combination handle: "
+                "step, an assembly with each part a named component. Files are written to "
+                "the server's "
                 "output folder and the result names each path, size and SHA-256; no tool "
                 "takes a destination. STEP, 3MF, DXF and QIF are written only when the "
                 "part's checks pass, and this surface grants no override. A part that is "
@@ -737,6 +747,54 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             emits_artifacts=True,
             backing="anvilate.bundle:BundleSections",
             subject="subject",
+        ),
+        ToolDefinition(
+            name="build_combination",
+            title="Build a combination of parts",
+            description=(
+                "Place two or more catalog parts by the features they share, and check "
+                "where they meet. The document names its parts, each with its own Design "
+                "Spec, and the mates that place each one on a part before it: "
+                "hole_pattern, face_to_face, edge_flush or shaft_in_bore. No coordinates "
+                "are written. hardware puts a bolt, washers and a nut in every hole of a "
+                "hole_pattern mate. Returns where each part landed, the parts list, and a "
+                "scorecard: each part's own verdict, whether mated holes line up, bolt "
+                "clearance and length, and interference between every pair. The subject "
+                "handle goes to render_viewport for the picture and to export_artifact "
+                "with format step for a STEP assembly."
+            ),
+            input_schema=_object_schema(
+                {
+                    "combination": {
+                        "type": "object",
+                        "description": (
+                            "{name, parts: [{id, spec}], mates: [{id, kind, place: {part, "
+                            "face, holes, axis, feature}, on: {...}, offset, "
+                            "rotation_deg}], hardware: [{mate, bolt, length, washer, "
+                            "nut}], welds: [{mate, type, size}]}. The first part is the "
+                            "base. face is top, bottom, left, right, front or back; holes "
+                            "are feature tags from build_part, paired in order; axis is "
+                            'x, y or z. Example mate: {"id": "bolted", "kind": '
+                            '"hole_pattern", "place": {"part": "bracket", '
+                            '"face": "bottom", "holes": ["b1", "b2"]}, '
+                            '"on": {"part": "plate", "face": "top", '
+                            '"holes": ["a1", "a2"]}}'
+                        ),
+                    },
+                },
+                required=["combination"],
+            ),
+            output_schema=_object_schema(
+                {
+                    "combination": {"$ref": _COMBINATION_REF},
+                    "scorecard": {"$ref": _SCORECARD_REF},
+                    "subject": _SUBJECT_SCHEMA,
+                },
+                required=["combination", "scorecard", "subject"],
+            ),
+            cost=Cost.BOUNDED,
+            subject="combination",
+            backing="anvilate.combination:build_combination",
         ),
         ToolDefinition(
             name="list_context",
@@ -896,6 +954,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _PART_CATALOG_REF,
             _CONTEXT_INVENTORY_REF,
             _CAD_FACTS_REF,
+            _COMBINATION_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -1723,7 +1782,12 @@ _BUILT_GEOMETRY = "built-geometry"
 # Which operation publishes each kind a tool can ask for. A handle of the wrong kind was
 # refused with the two kind names and nothing else, and in the 2026-10-09 measurement agents
 # that passed compile_spec's handle to read_scorecard or render_viewport gave up there.
-_PUBLISHED_BY = {_SCREENING: "run_validation", _BUILT_GEOMETRY: "build_part"}
+_BUILT_COMBINATION = "built-combination"
+_PUBLISHED_BY = {
+    _SCREENING: "run_validation",
+    _BUILT_GEOMETRY: "build_part",
+    _BUILT_COMBINATION: "build_combination",
+}
 
 
 def _producer_named(wrong: _WrongKind, kind: str) -> _WrongKind:
@@ -1930,6 +1994,9 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
     )
 
     try:
+        combination = _built_combination(arguments["subject"])
+        if combination is not None:
+            return _render_combination(combination, arguments)
         built = _built_geometry(arguments["subject"])
         if arguments["view"] == "overview":
             rendered = render_overview(
@@ -1957,6 +2024,127 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
     extension = "png" if rendered.format == "png" else "svg"
     file = _written(f"{safe_stem(built.name)}-{rendered.view}.{extension}", rendered.data)
     return {"viewport": rendered.document().model_dump(mode="json"), "file": file}
+
+
+def _build_combination(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``build_combination``: parts placed by their mates, checked, counted, and named."""
+    from .combination import CombinationError, build_combination, parse_combination
+    from .geometry import GeometryUnavailable
+
+    try:
+        combination = parse_combination(arguments["combination"])
+        built = build_combination(combination)
+    except GeometryUnavailable as failure:
+        raise _Unavailable(str(failure)) from failure
+    except CombinationError as refused:
+        raise _InvalidArguments(
+            [f"combination: {refused}"], operation="build_combination"
+        ) from refused
+    handle = subject_store().publish(
+        _BUILT_COMBINATION, {"combination": combination.model_dump(mode="json")}
+    )
+    return {
+        "combination": built.summary().model_dump(mode="json"),
+        "scorecard": built.card.model_dump(mode="json"),
+        "subject": handle,
+    }
+
+
+def _built_combination(handle: str) -> Any:
+    """The combination ``handle`` names, rebuilt; ``None`` when the handle is another kind."""
+    from .combination import build_combination, parse_combination
+
+    try:
+        record = subject_store().resolve(handle, kind=_BUILT_COMBINATION)
+    except _WrongKind:
+        return None
+    return build_combination(parse_combination(record["combination"]))
+
+
+def _render_combination(built: Any, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """The combination's one picture: four views, each part numbered, the parts list below."""
+    from .combination import render_combination
+    from .geometry import RenderedViewport
+
+    data, width, height = render_combination(
+        built,
+        width_px=arguments.get("width_px", 1100),
+        format=arguments.get("format", "png"),
+    )
+    rendered = RenderedViewport(
+        view="overview",
+        width_px=width,
+        height_px=height,
+        data=data,
+        format=arguments.get("format", "png"),
+    )
+    extension = "png" if rendered.format == "png" else "svg"
+    file = _written(f"{safe_stem(built.name)}-assembly.{extension}", rendered.data)
+    return {"viewport": rendered.document().model_dump(mode="json"), "file": file}
+
+
+def _a_draft_combination(built: Any) -> bool:
+    """Whether a combination that does not pass may be written marked unvalidated.
+
+    Nothing may have failed, and every open entry must be a part that is itself a draft (one
+    the catalog draws with no screen, or one resting on unconfirmed readings) or a weld that
+    is declared and not screened here.
+    """
+    from .scorecard import CheckStatus
+    from .screening import screen_spec
+
+    if any(entry.status is CheckStatus.FAIL for entry in built.card.entries):
+        return False
+    drafts = {
+        f"{part.id} part"
+        for part in built.parts
+        if _drawn_and_not_checked(part.spec, screen_spec(part.spec))
+    }
+    open_entries = [e for e in built.card.entries if e.status is CheckStatus.NOT_EVALUATED]
+    return all(e.name in drafts or e.name.endswith(" weld") for e in open_entries)
+
+
+def _export_combination(artifact: str, built: Any) -> dict[str, Any]:
+    """A combination as a STEP assembly in the output folder, gated on its own card."""
+    import tempfile
+
+    from .combination import CombinationError, write_step_assembly
+    from .export.gate import ExportRefused, authorize_export
+
+    if artifact != "step":
+        raise _Unavailable(
+            f"export_artifact cannot write {artifact} for a combination: a combination "
+            "exports as step, a STEP assembly with each part a named component"
+        )
+    _needs_output_folder(artifact)
+    try:
+        authorization = authorize_export(built.card)
+    except ExportRefused as refused:
+        if not _a_draft_combination(built):
+            raise _Unavailable(
+                f"export_artifact cannot write {artifact}: {refused.unmet}. This surface "
+                "grants no override; `anvilate combine --unvalidated` at the shell writes a "
+                "watermarked assembly"
+            ) from refused
+        authorization = authorize_export(built.card, override=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="anvilate-step-") as scratch:
+            staged = write_step_assembly(
+                built, Path(scratch) / "assembly.step", authorization=authorization
+            )
+            data = staged.read_bytes()
+    except CombinationError as failure:
+        raise _Unavailable(f"export_artifact cannot write step: {failure}") from failure
+    file = write_output(f"{safe_stem(built.name)}.step", data)
+    result = {"format": artifact, "sha256": file["sha256"], "file": file}
+    if not authorization.validated:
+        result["validated"] = False
+        result["note"] = (
+            "the combination's card does not pass, and nothing on it failed: it holds parts "
+            "that are drawn and not checked, unconfirmed readings, or a declared weld. The "
+            "file carries the unvalidated mark. Say so when you hand it over"
+        )
+    return result
 
 
 def _list_context(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -2182,6 +2370,14 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
     from .screening import screen_spec
     from .spec import parse_spec
 
+    try:
+        combination = _built_combination(handle)
+    except UnknownSubject as unknown:
+        raise _InvalidArguments(
+            [f"subject: {unknown.args[0]}"], operation="export_artifact"
+        ) from unknown
+    if combination is not None:
+        return _export_combination(artifact, combination)
     _needs_output_folder(artifact)
     try:
         built = _built_geometry(handle)
@@ -2439,6 +2635,7 @@ _TASK_DISPATCH: dict[str, Any] = {
 # The operations wired to real code today. A tool absent from this map is refused with the
 # reason rather than answered — see the refusal above.
 _DISPATCH: dict[str, Any] = {
+    "build_combination": _build_combination,
     "build_part": _build_part,
     "compile_spec": _compile_spec,
     "describe_part": _describe_part,

@@ -29,13 +29,15 @@ is empty. The worked table is
 | `run_fea_validation` | task | — | `anvilate.screening:screen_spec` |
 | `read_scorecard` | synchronous | — | `anvilate.store:SubjectStore` |
 | `export_artifact` | synchronous | validation, watermark | `anvilate.bundle:BundleSections` |
+| `build_combination` | synchronous | — | `anvilate.combination:build_combination` |
 | `list_context` | synchronous | — | `anvilate.context:inventory` |
 | `read_cad_file` | synchronous | — | `anvilate.context:read_cad_file` |
 | `describe_part` | synchronous | — | `anvilate.patterns:describe_part` |
 
-All eleven run today: the eight pipeline operations; `describe_part`, which looks up what
-an agent can declare and draw; and `list_context` and `read_cad_file`, which read the
-user's own files inside the folders the server was started with. Each backed tool names a dotted path CI resolves against
+All twelve run today: the eight pipeline operations; `build_combination`, which places
+several parts by the features they share; `describe_part`, which looks up what an agent
+can declare and draw; and `list_context` and `read_cad_file`, which read the user's own
+files inside the folders the server was started with. Each backed tool names a dotted path CI resolves against
 the live importable surface — so a rename fails the build instead of shipping as a promise.
 Resolving is not enough on its own: `run_validation` named the bundle assembler for as long
 as nothing was wired and went on resolving after it was dispatched to the screen, so each
@@ -176,6 +178,7 @@ instead of needing an edit.
 | `measure_geometry` | `subject` | yes, and dispatched for built geometry |
 | `read_scorecard` | `subject` | yes, and dispatched |
 | `export_artifact` | `subject` | yes, and dispatched for every format it publishes |
+| `build_combination` | `combination` | yes, and dispatched; its handle is rendered and exported by the tools a single part uses |
 | `list_context` | `folder` | yes, and dispatched when the server was started with `--context` |
 | `read_cad_file` | `source` | yes, and dispatched when the server was started with `--context` |
 | `describe_part` | `none` | yes, and dispatched: it reads only the shipped element catalog, which no call changes |

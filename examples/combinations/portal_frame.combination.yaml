@@ -1,0 +1,95 @@
+# A worked combination: Two IPE 200 columns carrying an IPE 200 beam across their tops.
+#   anvilate combine examples/combinations/portal_frame.combination.yaml
+anvilate_combination: 1.0.0
+name: portal-frame
+description: Two IPE 200 columns carrying an IPE 200 beam across their tops.
+parts:
+- id: left_column
+  spec:
+    anvilate_spec: 1.3.0
+    name: left_column
+    description: The left_column of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: column_member
+    element_params:
+      axial_load: {magnitude: 40.0, unit: kN}
+      end_condition: pinned_pinned
+      length: {magnitude: 3000.0, unit: mm}
+      material: ASTM-A36
+      name: left_column
+      section: IPE 200
+    acceptance:
+      tiers: [T1_analytical]
+    constraints:
+      min_safety_factor: {value: 1.5, origin: user_stated}
+- id: beam
+  spec:
+    anvilate_spec: 1.3.0
+    name: beam
+    description: The beam of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: beam_member
+    element_params:
+      deflection_limit: {magnitude: 16.0, unit: mm}
+      length: {magnitude: 2.0, unit: m}
+      load: {magnitude: 5.0, unit: kN / m}
+      load_type: distributed
+      material: ASTM-A36
+      name: beam
+      patch_centered: false
+      section: IPE 200
+      support: simply_supported
+      triangle_mirrored: false
+    acceptance:
+      tiers: [T1_analytical]
+    constraints:
+      min_safety_factor: {value: 1.5, origin: user_stated}
+- id: right_column
+  spec:
+    anvilate_spec: 1.3.0
+    name: right_column
+    description: The right_column of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: column_member
+    element_params:
+      axial_load: {magnitude: 40.0, unit: kN}
+      end_condition: pinned_pinned
+      length: {magnitude: 3000.0, unit: mm}
+      material: ASTM-A36
+      name: right_column
+      section: IPE 200
+    acceptance:
+      tiers: [T1_analytical]
+    constraints:
+      min_safety_factor: {value: 1.5, origin: user_stated}
+mates:
+- id: left_seat
+  kind: face_to_face
+  place: {part: beam, face: bottom}
+  'on': {part: left_column, face: top}
+- id: left_end
+  kind: edge_flush
+  place: {part: beam, face: front}
+  'on': {part: left_column, face: front}
+- id: left_side
+  kind: edge_flush
+  place: {part: beam, face: left}
+  'on': {part: left_column, face: left}
+- id: right_seat
+  kind: face_to_face
+  place: {part: right_column, face: top}
+  'on': {part: beam, face: bottom}
+- id: right_end
+  kind: edge_flush
+  place: {part: right_column, face: back}
+  'on': {part: beam, face: back}
+- id: right_side
+  kind: edge_flush
+  place: {part: right_column, face: left}
+  'on': {part: beam, face: left}

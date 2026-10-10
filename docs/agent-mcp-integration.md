@@ -1,7 +1,7 @@
 # Driving Anvilate from a coding agent
 
 This is the operator's half of [the MCP tool surface](mcp-tool-contracts.md). That page
-says what the eleven tools *are*; this one is what an agent actually does with them, and
+says what the twelve tools *are*; this one is what an agent actually does with them, and
 what it will hit when it tries the loop everybody writes first.
 
 The rules an agent must follow while doing any of this are the shipped
@@ -18,6 +18,7 @@ patterns are callable today:
 | --- | --- | --- |
 | Compile the spec | `compile_spec` | **Dispatched.** |
 | Find the part | `describe_part` | **Dispatched synchronously.** With no argument, every element a spec can declare, marking the ones `build_part` draws and the ones no screen checks. With an `element_type`, that element's fields and an example spec to copy and edit. Call it before writing a spec for a part. |
+| Put parts together | `build_combination` | **Dispatched synchronously.** Places catalog parts by the features they share (holes on holes, face on face, shaft in bore), adds bolts, washers and nuts as envelopes, and checks where the parts meet. Its handle goes to `render_viewport` and `export_artifact`. See [combinations](combinations.md). |
 | Build the part | `build_part` | **Dispatched synchronously** for every part in the [parts catalog](parts-catalog.md): plates, brackets, flanges, spacers, shafts, gear pairs, bearings, rolled members, lifting lugs, sheet-metal brackets and enclosures. Returns the published geometry summary, with each hole and slot under its tag. A part with no screen is drawn and not checked, and its exports carry the unvalidated mark. |
 | Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic PNG (or the SVG drawing with `format: "svg"`) with one line of text and no structured content, so the model actually sees it, and writes the image to the server's output folder. |
 | Inspect the part | `measure_geometry` | **Dispatched synchronously.** Reads dimensions, volume, face count, or tagged-face area from the regenerated B-Rep. |
@@ -188,7 +189,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 ```text
 protocol: 2026-07-28
 server: anvilate
-tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, list_context, read_cad_file, describe_part
+tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, build_combination, list_context, read_cad_file, describe_part
 compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.20.0"}
 ```
 

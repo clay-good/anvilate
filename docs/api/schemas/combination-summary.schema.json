@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "BomLine": {
+      "additionalProperties": false,
+      "description": "One line of the parts list.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "envelope": {
+          "default": false,
+          "title": "Envelope",
+          "type": "boolean"
+        },
+        "item": {
+          "minimum": 1,
+          "title": "Item",
+          "type": "integer"
+        },
+        "mass_kg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mass Kg"
+        },
+        "material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "quantity": {
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item",
+        "name",
+        "description",
+        "quantity"
+      ],
+      "title": "BomLine",
+      "type": "object"
+    },
+    "PlacedSummary": {
+      "additionalProperties": false,
+      "description": "One part of a built combination: what it is and where its mates put it.",
+      "properties": {
+        "corner_mm": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Corner Mm",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "pattern": {
+          "title": "Pattern",
+          "type": "string"
+        },
+        "size_mm": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Size Mm",
+          "type": "array"
+        },
+        "turns_freely": {
+          "default": false,
+          "title": "Turns Freely",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "pattern",
+        "corner_mm",
+        "size_mm"
+      ],
+      "title": "PlacedSummary",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:combination-summary:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate combination summary: several catalog parts placed by the features they share, each with where its mates put it, and the parts list counting every part and fastener envelope. Generated from anvilate.combination.CombinationSummary.",
+  "properties": {
+    "bodies": {
+      "minimum": 2,
+      "title": "Bodies",
+      "type": "integer"
+    },
+    "bom": {
+      "items": {
+        "$ref": "#/$defs/BomLine"
+      },
+      "minItems": 2,
+      "title": "Bom",
+      "type": "array"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "parts": {
+      "items": {
+        "$ref": "#/$defs/PlacedSummary"
+      },
+      "minItems": 2,
+      "title": "Parts",
+      "type": "array"
+    },
+    "size_mm": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Size Mm",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "size_mm",
+    "bodies",
+    "parts",
+    "bom"
+  ],
+  "title": "CombinationSummary",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

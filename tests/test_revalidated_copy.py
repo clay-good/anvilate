@@ -496,6 +496,7 @@ def _any_typed_fields():
 
 def _any_field_probes():
     """One instance per ``Any``-typed field, holding the values that field really carries."""
+    from anvilate.combination import CombinationPart
     from anvilate.compilation import CompilationTask
     from anvilate.mcp import tool_catalog
     from anvilate.patterns import describe_part
@@ -555,6 +556,9 @@ def _any_field_probes():
         element_params={"name": "padeye", "load": Quantity.parse("60 kN"), "grade": "A36"},
     )
     return {
+        ("anvilate.combination", "CombinationPart", "spec"): CombinationPart(
+            id="lug", spec=spec.model_dump(mode="json")
+        ),
         ("anvilate.compilation", "CompilationTask", "reference"): task,
         ("anvilate.patterns", "PartDescription", "example"): describe_part("spacer").parts[0],
         ("anvilate.mcp", "ToolDefinition", "input_schema"): tool,

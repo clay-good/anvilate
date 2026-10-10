@@ -1,0 +1,68 @@
+# A worked combination: A lifting lug welded upright to the middle of a base plate.
+#   anvilate combine examples/combinations/lug_on_base_plate.combination.yaml
+anvilate_combination: 1.0.0
+name: lug-on-base-plate
+description: A lifting lug welded upright to the middle of a base plate.
+parts:
+- id: base
+  spec:
+    anvilate_spec: 1.3.0
+    name: bp1
+    description: The base of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: base_plate
+    element_params:
+      name: bp1
+      width: {magnitude: 300.0, unit: mm}
+      depth: {magnitude: 240.0, unit: mm}
+      plate_thickness: {magnitude: 25.0, unit: mm}
+      cantilever: {magnitude: 50.0, unit: mm}
+      plate_material: ASTM-A36
+      axial_load: {magnitude: 200.0, unit: kN}
+      concrete_strength: {magnitude: 25.0, unit: MPa}
+    constraints:
+      min_safety_factor: {value: 2.0, origin: user_stated}
+    acceptance:
+      tiers: [T1_analytical]
+- id: lug
+  spec:
+    anvilate_spec: 1.3.0
+    name: lug
+    description: The lug of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: lifting_lug
+    element_params:
+      hole_diameter: {magnitude: 25.0, unit: mm}
+      hole_height: {magnitude: 90.0, unit: mm}
+      load: {magnitude: 30.0, unit: kN}
+      material: ASTM-A36
+      name: lug
+      thickness: {magnitude: 12.0, unit: mm}
+      width: {magnitude: 80.0, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+    constraints:
+      min_safety_factor: {value: 2.0, origin: user_stated}
+mates:
+- id: welded
+  kind: face_to_face
+  place: {part: lug, face: bottom}
+  'on': {part: base, face: top}
+- id: across
+  kind: edge_flush
+  offset: {magnitude: -110.0, unit: mm}
+  place: {part: lug, face: left}
+  'on': {part: base, face: left}
+- id: along
+  kind: edge_flush
+  offset: {magnitude: -114.0, unit: mm}
+  place: {part: lug, face: front}
+  'on': {part: base, face: front}
+welds:
+- mate: welded
+  type: fillet
+  size: {magnitude: 6.0, unit: mm}

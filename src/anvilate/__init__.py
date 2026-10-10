@@ -87,6 +87,9 @@ that already ran and does one more thing with them:
   parts in :mod:`anvilate.packs.parts`.
 - :mod:`anvilate._patterns_screened` — the private builders for elements a pack already
   screens: a lug, a key, a spring, a bearing, a gear pair and rolled members.
+- :mod:`anvilate.combination` — several catalog parts placed by the features they share,
+  with fastener envelopes, checked where they meet, drawn numbered and written as a STEP
+  assembly.
 - :mod:`anvilate.context` — a project folder as context: which files are whose to read,
   and measured facts from the STEP, DXF, STL and 3MF files in it, confined to the folders
   the server was started with.

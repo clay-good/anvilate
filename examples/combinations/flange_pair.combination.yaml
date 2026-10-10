@@ -1,0 +1,61 @@
+# A worked combination: Two plate flanges bolted face to face with six M8 bolts.
+#   anvilate combine examples/combinations/flange_pair.combination.yaml
+anvilate_combination: 1.0.0
+name: flange-pair
+description: Two plate flanges bolted face to face with six M8 bolts.
+parts:
+- id: lower
+  spec:
+    anvilate_spec: 1.3.0
+    name: lower
+    description: The lower of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: plate_flange
+    element_params:
+      name: lower
+      outer_diameter: {magnitude: 120.0, unit: mm}
+      bore_diameter: {magnitude: 50.0, unit: mm}
+      thickness: {magnitude: 12.0, unit: mm}
+      bolt_circle_diameter: {magnitude: 90.0, unit: mm}
+      bolt_count: 6
+      bolt_hole_diameter: {magnitude: 9.0, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+- id: upper
+  spec:
+    anvilate_spec: 1.3.0
+    name: upper
+    description: The upper of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: plate_flange
+    element_params:
+      name: upper
+      outer_diameter: {magnitude: 120.0, unit: mm}
+      bore_diameter: {magnitude: 50.0, unit: mm}
+      thickness: {magnitude: 12.0, unit: mm}
+      bolt_circle_diameter: {magnitude: 90.0, unit: mm}
+      bolt_count: 6
+      bolt_hole_diameter: {magnitude: 9.0, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+mates:
+- id: joint
+  kind: hole_pattern
+  place:
+    part: upper
+    face: bottom
+    holes: &id001 [bolt_1, bolt_2, bolt_3, bolt_4, bolt_5, bolt_6]
+  'on':
+    part: lower
+    face: top
+    holes: *id001
+hardware:
+- mate: joint
+  bolt: ISO4014-M8
+  length: {magnitude: 40.0, unit: mm}
+  washer: ISO7089-M8
+  nut: ISO4032-M8

@@ -1,0 +1,92 @@
+# A worked combination: A bracket bolted to a plate through two M6 holes.
+#   anvilate combine examples/combinations/bracket_on_plate.combination.yaml
+anvilate_combination: 1.0.0
+name: bracket-on-plate
+description: A bracket bolted to a plate through two M6 holes.
+parts:
+- id: plate
+  spec:
+    anvilate_spec: 1.3.0
+    name: plate
+    description: The plate of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: mounting_plate
+    element_params:
+      name: plate
+      width: {magnitude: 120.0, unit: mm}
+      length: {magnitude: 80.0, unit: mm}
+      thickness: {magnitude: 6.0, unit: mm}
+      corner_radius: {magnitude: 8.0, unit: mm}
+      holes:
+      - tag: a1
+        x: {magnitude: 20.0, unit: mm}
+        y: {magnitude: -15.0, unit: mm}
+        diameter: {magnitude: 6.6, unit: mm}
+      - tag: a2
+        x: {magnitude: 20.0, unit: mm}
+        y: {magnitude: 15.0, unit: mm}
+        diameter: {magnitude: 6.6, unit: mm}
+      hole_patterns:
+      - tag: m6
+        kind: rectangular
+        diameter: {magnitude: 6.6, unit: mm}
+        count_x: 2
+        count_y: 2
+        pitch_x: {magnitude: 100.0, unit: mm}
+        pitch_y: {magnitude: 60.0, unit: mm}
+      slots: []
+    acceptance:
+      tiers: [T1_analytical]
+- id: bracket
+  spec:
+    anvilate_spec: 1.3.0
+    name: bracket
+    description: The bracket of a worked combination.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: angle_bracket
+    element_params:
+      name: bracket
+      base_length: {magnitude: 60.0, unit: mm}
+      upright_height: {magnitude: 80.0, unit: mm}
+      width: {magnitude: 50.0, unit: mm}
+      thickness: {magnitude: 5.0, unit: mm}
+      rib_thickness: {magnitude: 5.0, unit: mm}
+      rib_leg: {magnitude: 25.0, unit: mm}
+      base_holes:
+      - tag: b1
+        x: {magnitude: 10.0, unit: mm}
+        y: {magnitude: -15.0, unit: mm}
+        diameter: {magnitude: 6.6, unit: mm}
+      - tag: b2
+        x: {magnitude: 10.0, unit: mm}
+        y: {magnitude: 15.0, unit: mm}
+        diameter: {magnitude: 6.6, unit: mm}
+      upright_slots:
+      - tag: s1
+        x: {magnitude: 0.0, unit: mm}
+        y: {magnitude: 15.0, unit: mm}
+        length: {magnitude: 20.0, unit: mm}
+        width: {magnitude: 6.6, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+mates:
+- id: bolted
+  kind: hole_pattern
+  place:
+    part: bracket
+    face: bottom
+    holes: [b1, b2]
+  'on':
+    part: plate
+    face: top
+    holes: [a1, a2]
+hardware:
+- mate: bolted
+  bolt: ISO4762-M6
+  length: {magnitude: 25.0, unit: mm}
+  washer: ISO7089-M6
+  nut: ISO4032-M6

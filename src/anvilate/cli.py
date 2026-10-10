@@ -6,10 +6,10 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Ten of the ten are backed today**; an eleventh command, ``verify``, comes from the
+**Eleven of the eleven are backed today**; a twelfth command, ``verify``, comes from the
 attestation capability. ``parts`` lists what a spec can declare, ``read`` measures a CAD
-file or lists a folder of them, ``doctor`` reports which
-optional runtimes are present,
+file or lists a folder of them, ``combine`` places several parts by the features they
+share, ``doctor`` reports which optional runtimes are present,
 ``fetch`` is where a user consents to downloading a dataset Anvilate may not ship, and
 ``view`` writes the part sheet: the drawn part beside its scorecard, as one HTML file.
 ``build`` now produces STEP for audited ``base_plate``, ``cover_plate``, and
@@ -247,6 +247,7 @@ _COMMAND_EXAMPLES = {
     "fetch": "anvilate fetch aisc-shapes --consent",
     "parts": "anvilate parts mounting_plate",
     "read": "anvilate read drawings/plate.dxf --unit mm",
+    "combine": "anvilate combine bracket_on_plate.combination.yaml --output bracket.step",
     "interfaces": "anvilate interfaces mating.step --format json",
 }
 
@@ -575,6 +576,29 @@ def _build_parser() -> argparse.ArgumentParser:
         "element_type", nargs="?", help="the element to describe, such as mounting_plate"
     )
 
+    combine = commands.add_parser(
+        "combine",
+        help="place several parts by the features they share, and check where they meet",
+        description="Build a combination document: catalog parts, each with its own Design "
+        "Spec, placed by mates (hole_pattern, face_to_face, edge_flush, shaft_in_bore) with "
+        "no coordinates written, and the bolts, washers and nuts in them. Prints where each "
+        "part landed, the parts list, and the card: each part's own verdict, whether mated "
+        "holes line up, bolt clearance and length, and interference. --output writes a STEP "
+        "assembly and --picture the numbered drawing. Exit 0 means the card passes.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['combine']}",
+    )
+    combine.add_argument("combination", type=Path, help="the combination document (YAML or JSON)")
+    combine.add_argument("--output", type=Path, help="write the STEP assembly here")
+    combine.add_argument(
+        "--picture", type=Path, help="write the numbered drawing here (.png or .svg)"
+    )
+    combine.add_argument(
+        "--unvalidated",
+        action="store_true",
+        help="write the STEP assembly marked unvalidated when the card does not pass",
+    )
+    combine.add_argument("--force", action="store_true", help="replace an existing output")
+
     read = commands.add_parser(
         "read",
         help="measure a STEP, DXF, STL or 3MF file, or list a folder of them",
@@ -778,6 +802,8 @@ def run(
             code = _parts(args, out=command_out, err=command_err)
         elif args.command == "read":
             code = _read(args, out=command_out, err=command_err)
+        elif args.command == "combine":
+            code = _combine(args, out=command_out, err=command_err)
         elif args.command == "fetch":
             code = _fetch(args, out=command_out, err=command_err)
         elif args.command == "view":
@@ -845,6 +871,7 @@ def _requested_command(arguments: list[str]) -> str:
         "export",
         "doctor",
         "interfaces",
+        "combine",
         "parts",
         "read",
         "view",
@@ -1018,6 +1045,78 @@ def _external_refs(schema: dict[str, Any]) -> list[str]:
 
     embedded = set((schema.get("$defs") or {}).keys())
     return sorted(ref for ref in _refs(schema) if not ref.startswith("#") and ref not in embedded)
+
+
+def _combine(args: argparse.Namespace, *, out, err) -> int:
+    """Build one combination document, print it, and write what was asked for."""
+    import yaml
+
+    from ._models import parse_yaml
+    from .combination import (
+        CombinationError,
+        build_combination,
+        parse_combination,
+        render_combination,
+        write_step_assembly,
+    )
+    from .export.gate import ExportRefused, authorize_export
+    from .geometry import GeometryUnavailable
+
+    for target in (args.output, args.picture):
+        if target is not None and target.exists() and not args.force:
+            print(
+                f"anvilate combine: output already exists: {target}; pass --force to replace it",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
+    if args.picture is not None and args.picture.suffix.lower() not in (".png", ".svg"):
+        print(
+            f"anvilate combine: --picture takes a .png or .svg file; got {args.picture}", file=err
+        )
+        return EXIT_BAD_REQUEST
+    try:
+        document = parse_yaml(args.combination.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError, yaml.YAMLError) as failure:
+        print(f"anvilate combine: {args.combination}: {failure}", file=err)
+        return EXIT_BAD_REQUEST
+    if not isinstance(document, dict):
+        print(f"anvilate combine: {args.combination}: not a combination document", file=err)
+        return EXIT_BAD_REQUEST
+    try:
+        built = build_combination(parse_combination(document))
+    except GeometryUnavailable as failure:
+        print(f"anvilate combine: {failure}", file=err)
+        return EXIT_UNBUILT
+    except CombinationError as refused:
+        print(f"anvilate combine: {args.combination}: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    print(built.summary(), file=out)
+    print(f"  card: {built.card.status.value.replace('_', ' ')}", file=out)
+    for entry in built.card.entries:
+        print(f"  {entry.status.value:<14} {entry.name}", file=out)
+        print(f"  {'':<14} {entry.detail}", file=out)
+    if args.picture is not None:
+        image, _width, _height = render_combination(
+            built, format=args.picture.suffix.lower().lstrip(".")
+        )
+        args.picture.write_bytes(image)
+        print(f"wrote {args.picture}", file=out)
+    if args.output is not None:
+        try:
+            authorization = authorize_export(built.card, override=args.unvalidated)
+        except ExportRefused as refused:
+            print(
+                f"anvilate combine: {refused.unmet}. Pass --unvalidated to write the assembly "
+                "marked unvalidated",
+                file=err,
+            )
+            return EXIT_CODES[built.card.status]
+        except ValueError as failure:
+            print(f"anvilate combine: {failure}. Remove --unvalidated.", file=err)
+            return EXIT_BAD_REQUEST
+        write_step_assembly(built, args.output, authorization=authorization)
+        print(f"wrote {args.output} ({authorization.status})", file=out)
+    return EXIT_CODES[built.card.status]
 
 
 def _read(args: argparse.Namespace, *, out, err) -> int:
@@ -3576,6 +3675,14 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> tuple[list[Pa
                     document = None
                 if isinstance(document, dict) and _is_a_spec(document):
                     found.append(candidate)
+                elif isinstance(document, dict) and "anvilate_combination" in document:
+                    # A combination is several specs and the mates between them. It is
+                    # not one of the specs this command screens, and it is not a stray file.
+                    print(
+                        f"anvilate {command}: {candidate}: a combination document; build "
+                        "and check it with `anvilate combine`",
+                        file=err,
+                    )
                 else:
                     print(
                         f"anvilate {command}: {candidate}: not a Design Spec, skipped",

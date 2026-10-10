@@ -54,3 +54,6 @@ standards/effectivity.py:design_basis_scorecard | name | a correction at one sit
 packs/structural.py:_shear_entry | {member.name} shear | a capability gap: the peak shear of a couple on a propped (fixed-pinned) member, which is indeterminate and has no load to bound it by
 thirdparty.py:_unrun | name | a third-party module's own outcome: it did not complete, changed after it was enabled, or returned what this library cannot read; the fix is in the module, not a declaration in the document
 packs/parts.py:_drawn_not_checked | {name} screening | a capability gap: the part is drawn and no strength or fit screen ships for it, so no declaration would let one run
+combination.py:_stack | {mate.id} bolt clearance | a data-coverage limit: the bundled ISO 273 table has no row for that thread size, which a table row fixes and no declaration does
+combination.py:_stack | {mate.id} bolt length | a capability gap: with no nut declared the bolt threads into a tapped hole, and thread engagement is not screened whatever else is declared
+combination.py:build_combination | {mate.id} weld | a capability gap: a weld is a declared joint here, and its strength is screened by a welded_connection element with its own load

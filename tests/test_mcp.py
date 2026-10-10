@@ -24,6 +24,7 @@ from anvilate.contracts import (
 )
 from anvilate.mcp import (
     CATALOG_OPERATIONS,
+    COMBINATION_OPERATIONS,
     CONTEXT_OPERATIONS,
     METHOD_NOT_FOUND,
     PROTOCOL_REVISION,
@@ -53,12 +54,15 @@ def test_the_catalog_covers_exactly_the_specified_operations():
     # Named, and counted. A gate that iterates an accidentally-empty collection passes
     # while checking nothing; asserting the number means an emptied catalog fails here.
     names = [tool.name for tool in tool_catalog()]
-    assert len(names) == 11
-    # Eight pipeline operations, the one lookup of what ships, and the two that read the
-    # user's own files.
+    assert len(names) == 12
+    # Eight pipeline operations, the one lookup of what ships, the two that read the
+    # user's own files, and the one that places several parts together.
     assert len(REQUIRED_OPERATIONS) == 8 and set(CATALOG_OPERATIONS) == {"describe_part"}
     assert set(CONTEXT_OPERATIONS) == {"list_context", "read_cad_file"}
-    assert set(names) == REQUIRED_OPERATIONS | CATALOG_OPERATIONS | CONTEXT_OPERATIONS
+    assert set(COMBINATION_OPERATIONS) == {"build_combination"}
+    assert set(names) == (
+        REQUIRED_OPERATIONS | CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
+    )
     assert len(set(names)) == len(names)
 
 
@@ -244,6 +248,7 @@ def test_the_synchronous_tools_are_the_ones_that_finish():
         "describe_part",
         "list_context",
         "read_cad_file",
+        "build_combination",
     }
 
 
@@ -267,11 +272,11 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. All eleven operations
+    A dotted path in a table is a comment until something imports it. All twelve operations
     are backed today, and each claim names a symbol that exists.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 11, backed
+    assert len(backed) == 12, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -1704,6 +1709,7 @@ def _released_registry():
     from anvilate.contracts import (
         BUNDLE_SCHEMA_VERSION,
         CAD_FACTS_SCHEMA_VERSION,
+        COMBINATION_SUMMARY_SCHEMA_VERSION,
         CONTEXT_INVENTORY_SCHEMA_VERSION,
         GEOMETRY_SCHEMA_VERSION,
         MEASUREMENT_SCHEMA_VERSION,
@@ -1727,6 +1733,7 @@ def _released_registry():
                 _released(f"part-catalog-{PART_CATALOG_SCHEMA_VERSION}.json"),
                 _released(f"context-inventory-{CONTEXT_INVENTORY_SCHEMA_VERSION}.json"),
                 _released(f"cad-file-facts-{CAD_FACTS_SCHEMA_VERSION}.json"),
+                _released(f"combination-summary-{COMBINATION_SUMMARY_SCHEMA_VERSION}.json"),
                 _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
                 _released(f"geometry-measurement-{MEASUREMENT_SCHEMA_VERSION}.json"),
             )
@@ -1757,6 +1764,12 @@ def _dispatched_arguments(tool_name: str) -> dict:
         return {"spec": _base_plate_document()}
     if tool_name == "describe_part":
         return {"element_type": "mounting_plate"}
+    if tool_name == "build_combination":
+        import yaml
+
+        worked = pathlib.Path(__file__).resolve().parents[1] / "examples" / "combinations"
+        text = (worked / "collar_on_shaft.combination.yaml").read_text(encoding="utf-8")
+        return {"combination": yaml.safe_load(text)}
     if tool_name in ("list_context", "read_cad_file"):
         # A context folder holding one mesh, named the way the server is told at launch.
         # The fixture that isolates every test clears it again.

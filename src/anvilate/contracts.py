@@ -73,6 +73,7 @@ __all__ = [
     "PART_CATALOG_SCHEMA_VERSION",
     "CONTEXT_INVENTORY_SCHEMA_VERSION",
     "CAD_FACTS_SCHEMA_VERSION",
+    "COMBINATION_SUMMARY_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -89,6 +90,7 @@ __all__ = [
     "part_catalog_json_schema",
     "context_inventory_json_schema",
     "cad_facts_json_schema",
+    "combination_summary_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -177,6 +179,10 @@ PART_CATALOG_SCHEMA_VERSION = "1.0.0"
 # each is to read, and the measured facts of one CAD file.
 CONTEXT_INVENTORY_SCHEMA_VERSION = "1.0.0"
 CAD_FACTS_SCHEMA_VERSION = "1.0.0"
+
+# What ``build_combination`` returns beside the scorecard: where each part landed, and the
+# parts list.
+COMBINATION_SUMMARY_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -454,6 +460,23 @@ def cad_facts_json_schema() -> dict[str, Any]:
     )
 
 
+def combination_summary_json_schema() -> dict[str, Any]:
+    """A built combination: each part's place, and the parts list."""
+    from .combination import CombinationSummary
+
+    return _artifact(
+        CombinationSummary,
+        name="combination-summary",
+        version=COMBINATION_SUMMARY_SCHEMA_VERSION,
+        description=(
+            "Anvilate combination summary: several catalog parts placed by the features "
+            "they share, each with where its mates put it, and the parts list counting "
+            "every part and fastener envelope. Generated from "
+            "anvilate.combination.CombinationSummary."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -638,6 +661,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "part-catalog.schema.json": part_catalog_json_schema(),
         "context-inventory.schema.json": context_inventory_json_schema(),
         "cad-file-facts.schema.json": cad_facts_json_schema(),
+        "combination-summary.schema.json": combination_summary_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

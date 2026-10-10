@@ -21,7 +21,14 @@ from typing import Any
 
 from ._models import each_one
 
-__all__ = ["VIEWS", "render_overview", "render_view"]
+__all__ = [
+    "ASSEMBLY_PALETTES",
+    "ENVELOPE_PALETTE",
+    "render_assembly",
+    "VIEWS",
+    "render_overview",
+    "render_view",
+]
 
 VIEWS = ("iso", "front", "top", "right")
 
@@ -113,9 +120,16 @@ def _hidden_lines(shape: Any, camera: _Camera) -> tuple[list[list[Point]], list[
 
 
 def _faces(
-    shape: Any, tags: Mapping[str, Sequence[Any]], camera: _Camera
+    shape: Any,
+    tags: Mapping[str, Sequence[Any]],
+    camera: _Camera,
+    palettes: Mapping[str, tuple[str, str, str]] | None = None,
 ) -> list[tuple[float, str, str, list[Point]]]:
-    """Front-facing triangles as (depth, tone, tag, points), farthest first."""
+    """Front-facing triangles as (depth, tone, tag, points), farthest first.
+
+    ``palettes`` gives a tag its own three tones, darkest to lightest, so the bodies of a
+    combination can be told apart; a face with no palette takes the single part's.
+    """
     tag_of = {id(face): tag for tag, faces in tags.items() for face in faces}
     by_hash = {hash(face): tag for tag, faces in tags.items() for face in faces}
     light = _unit(_LIGHT)
@@ -129,7 +143,8 @@ def _faces(
             if _dot(normal, camera.toward_eye) <= 1e-9:
                 continue  # facing away: a closed solid hides it behind a front face
             brightness = max(0.0, _dot(normal, light))
-            tone = _TONES[2] if brightness > 0.7 else _TONES[1] if brightness > 0.25 else _TONES[0]
+            tones = (palettes or {}).get(tag, _TONES)
+            tone = tones[2] if brightness > 0.7 else tones[1] if brightness > 0.25 else tones[0]
             corners = [vertices[a], vertices[b], vertices[c]]
             depth = sum(camera.depth(p) for p in corners) / 3
             drawn.append((depth, tone, tag, [camera.flat(p) for p in corners]))
@@ -332,10 +347,12 @@ def _view_markup(
     *,
     dimensions: bool,
     unit: str = "mm",
+    palettes: Mapping[str, tuple[str, str, str]] | None = None,
+    marks: Sequence[tuple[str, Vec]] = (),
 ) -> list[str]:
     camera = _Camera(shape, view)
     visible, hidden = _hidden_lines(shape, camera)
-    faces = _faces(shape, tags, camera)
+    faces = _faces(shape, tags, camera, palettes)
     outline = [p for line in visible + hidden for p in line] + [p for f in faces for p in f[3]]
     margin = 0.2 if dimensions else 0.08
     left = right = w * margin
@@ -371,7 +388,35 @@ def _view_markup(
         out += _dimension(
             sheet, (max(xs), min(ys)), (max(xs), max(ys)), upward, _DIMENSION_OFFSET, height
         )
+    size = max(8.0, min(11.0, w / 40))
+    drawn: list[Point] = []
+    for label, at in marks:
+        centre = sheet.at(camera.flat(at))
+        # Bodies stacked in one hole would have their balloons on top of each other, so a
+        # balloon that lands on an earlier one steps to the right of it.
+        while any(math.dist(centre, other) < size * 2.6 for other in drawn):
+            centre = (centre[0] + size * 2.6, centre[1])
+        drawn.append(centre)
+        out += _balloon(label, centre, size)
     return out
+
+
+def _balloon(label: str, centre: Point, height: float) -> list[str]:
+    """A numbered balloon: a white disc with a ring round it and the number inside."""
+    radius = height * (0.95 if len(label) < 2 else 1.25)
+    ring = [
+        (
+            centre[0] + radius * math.cos(2 * math.pi * step / 20),
+            centre[1] + radius * math.sin(2 * math.pi * step / 20),
+        )
+        for step in range(21)
+    ]
+    points = " ".join(f"{x:.2f},{y:.2f}" for x, y in ring[:-1])
+    return [
+        f'<polygon data-balloon="{label}" points="{points}" fill="#ffffff" stroke="#ffffff"/>',
+        f'<path d="{_polyline(ring)}" fill="none" stroke="{_INK}"/>',
+        _text(label, centre[0], centre[1] + height * 0.42, height * 0.85, anchor="middle"),
+    ]
 
 
 def _document(width: int, height: int, label: str, body: Sequence[str]) -> bytes:
@@ -451,3 +496,100 @@ def render_overview(
         f'fill="none" stroke="{_HIDDEN}"/>'
     )
     return _document(width_px, height_px, f"{_plain(name)} overview", body), height_px
+
+
+#: Three tones for each body of a combination, darkest to lightest, in the order the bodies
+#: are numbered. The middle tones step in lightness as well as hue, so two neighbouring
+#: parts stay apart on a greyscale print; the numbered balloons are what identify a part.
+ASSEMBLY_PALETTES: tuple[tuple[str, str, str], ...] = (
+    ("#93c5fd", "#bfdbfe", "#eff6ff"),
+    ("#d97706", "#f59e0b", "#fcd34d"),
+    ("#10b981", "#34d399", "#a7f3d0"),
+    ("#7c3aed", "#a78bfa", "#ddd6fe"),
+    ("#e11d48", "#f43f5e", "#fda4af"),
+    ("#155e75", "#0e7490", "#06b6d4"),
+)
+#: Hardware envelopes are drawn in grey: where a fastener goes, not a designed part.
+ENVELOPE_PALETTE = ("#94a3b8", "#cbd5e1", "#f1f5f9")
+
+
+def render_assembly(
+    bodies: Sequence[tuple[str, Any, bool]],
+    *,
+    name: str,
+    lines: Sequence[str],
+    parts_list: Sequence[str],
+    marks: Sequence[tuple[str, int]],
+    width_px: int,
+    unit: str = "mm",
+) -> tuple[bytes, int]:
+    """A combination on one image: four views, each body in its own tone, and a parts list.
+
+    ``bodies`` are ``(label, solid, is_envelope)`` in the order they are numbered.
+    ``marks`` put a numbered balloon on a body: ``(number, index into bodies)``.
+    ``parts_list`` are the rows printed under the views, one per line of the bill of
+    materials, so the numbers in the picture can be read off beside it.
+    """
+    from build123d import Compound
+
+    lines = each_one(lines, str, named="lines")
+    parts_list = each_one(parts_list, str, named="parts_list")
+    shape = Compound(children=[solid for _label, solid, _envelope in bodies])
+    tags: dict[str, list[Any]] = {}
+    palettes: dict[str, tuple[str, str, str]] = {}
+    designed = 0
+    for index, (_label, solid, envelope) in enumerate(bodies):
+        tags[str(index)] = list(solid.faces())
+        if envelope:
+            palettes[str(index)] = ENVELOPE_PALETTE
+        else:
+            palettes[str(index)] = ASSEMBLY_PALETTES[designed % len(ASSEMBLY_PALETTES)]
+            designed += 1
+    balloons = []
+    for label, index in marks:
+        box = bodies[index][1].bounding_box()
+        balloons.append(
+            (
+                label,
+                (
+                    (box.min.X + box.max.X) / 2,
+                    (box.min.Y + box.max.Y) / 2,
+                    (box.min.Z + box.max.Z) / 2,
+                ),
+            )
+        )
+    views_px = max(64, round(width_px * 0.75))
+    header = max(40.0, views_px * 0.12)
+    cell_w, cell_h = width_px / 2, (views_px - header) / 2
+    title = max(11.0, min(18.0, width_px / 50))
+    small = title * 0.72
+    row = small * 1.7
+    height_px = round(views_px + row * (len(parts_list) + 1))
+    body = [_text(_plain(name).upper(), 12, header * 0.45, title)]
+    body.append(_text("   ".join(_plain(line).upper() for line in lines), 12, header * 0.85, small))
+    for index, view in enumerate(VIEWS):
+        x, y = (index % 2) * cell_w, header + (index // 2) * cell_h
+        body += _view_markup(
+            shape,
+            tags,
+            view,
+            x,
+            y,
+            cell_w,
+            cell_h,
+            dimensions=view != "iso",
+            unit=unit,
+            palettes=palettes,
+            marks=balloons if view == "iso" else (),
+        )
+        body.append(_text(view.upper(), x + 8, y + small + 4, small))
+    body.append(
+        f'<path d="{_polyline([(0, header), (width_px, header)])} '
+        f"{_polyline([(cell_w, header), (cell_w, views_px)])} "
+        f"{_polyline([(0, header + cell_h), (width_px, header + cell_h)])} "
+        f'{_polyline([(0, views_px), (width_px, views_px)])}" '
+        f'fill="none" stroke="{_HIDDEN}"/>'
+    )
+    for number, text in enumerate(parts_list):
+        body.append(_text(_plain(text).upper(), 12, views_px + row * (number + 1), small))
+    return _document(width_px, height_px, f"{_plain(name)} assembly", body), height_px

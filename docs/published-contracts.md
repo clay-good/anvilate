@@ -28,6 +28,7 @@ that has never heard of anvilate.
 | [`docs/api/schemas/part-catalog.schema.json`](api/schemas/part-catalog.schema.json) | the elements a spec can declare, and for one element its fields and an example spec | `PART_CATALOG_SCHEMA_VERSION` |
 | [`docs/api/schemas/context-inventory.schema.json`](api/schemas/context-inventory.schema.json) | a context folder's engineering files, and whose each is to read | `CONTEXT_INVENTORY_SCHEMA_VERSION` |
 | [`docs/api/schemas/cad-file-facts.schema.json`](api/schemas/cad-file-facts.schema.json) | one STEP, DXF, STL or 3MF file, measured: sizes, holes, profiles, never its contents | `CAD_FACTS_SCHEMA_VERSION` |
+| [`docs/api/schemas/combination-summary.schema.json`](api/schemas/combination-summary.schema.json) | several parts placed by the features they share: where each landed, and the parts list | `COMBINATION_SUMMARY_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and

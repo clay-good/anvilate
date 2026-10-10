@@ -201,8 +201,9 @@ def test_the_tool_surface_count_is_the_catalogs_own():
     words = {"six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
     # The pipeline's operations; the catalog lookup beside them is not one.
     assert words[claimed] == len(REQUIRED_OPERATIONS)
-    # One catalog lookup and two readers of the user's own files stand beside them.
-    assert len(tool_catalog()) == len(REQUIRED_OPERATIONS) + 3
+    # One catalog lookup, two readers of the user's own files and the combination builder
+    # stand beside them.
+    assert len(tool_catalog()) == len(REQUIRED_OPERATIONS) + 4
 
 
 def test_the_geometric_characteristic_count_is_the_models_own():
@@ -401,6 +402,7 @@ def test_every_docs_page_is_in_the_docs_index():
         "Sixty": 60,
         "Sixty-one": 61,
         "Sixty-two": 62,
+        "Sixty-three": 63,
         "Fifty-two": 52,
     }
     claimed = re.search(r"^([A-Z][a-z]+(?:-[a-z]+)?) pages,", index, re.M)
@@ -569,6 +571,7 @@ def test_the_pages_that_count_something_count_the_real_thing():
         "Eight": 8,
         "Nine": 9,
         "eleven": 11,
+        "twelve": 12,
         "sixteen": 16,
         "Sixteen": 16,
         "seventeen": 17,
