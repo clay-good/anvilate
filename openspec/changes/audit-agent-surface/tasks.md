@@ -43,9 +43,10 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
       remedy names its subject (`tests/test_raised_refusal_ledger.py`, 21 documented
       invariants excepted). The reason: the message. The length: none is written past 450
       characters, and what is shown is held to 2,000 for twenty mistakes through both
-      doors. Same words on both doors: `tests/test_refusal_parity.py`. Still open: "a valid
-      example or the allowed values". A remedy names where a valid value comes from, which
-      is a source and not an example; only the spec's own fields show the line to write
+      doors. Same words on both doors: `tests/test_refusal_parity.py`. A valid example: an
+      element parameter of the wrong kind is shown a value of the right one (the spec's own
+      scenario), and a spec's own fields show the line to write. Still open for the rest:
+      elsewhere a remedy names where a valid value comes from, a source and not an example
 - [x] 4.2 No suggestion less conservative than what was refused; near-match only when unambiguous
       (finding 23; every refusal that offers a value is listed and read in
       `tests/test_agent_surface.py`)

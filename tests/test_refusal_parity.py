@@ -159,3 +159,63 @@ def test_a_mistake_is_refused_a_build_in_the_same_words_on_both_surfaces(mistake
     for sentence in _sentences(reply, "spec.element_params: ", "spec."):
         _held(sentence, "build_part")
         assert sentence in err, f"MCP says {sentence!r}; the command line says {err!r}"
+
+
+@pytest.mark.parametrize(
+    ("corpus", "mistake", "command", "tool", "shown"),
+    [
+        (
+            _SCREENED,
+            "a length where a force goes",
+            "check",
+            "run_validation",
+            "write `load` as a force, such as `{magnitude: 5, unit: kN}`",
+        ),
+        (
+            _BUILT,
+            "a force where a length goes",
+            "build",
+            "build_part",
+            "write `thickness` as a length, such as `{magnitude: 6, unit: mm}`",
+        ),
+    ],
+)
+def test_a_value_of_the_wrong_kind_is_shown_a_valid_one(
+    corpus, mistake, command, tool, shown, tmp_path
+):
+    """The spec's own scenario: a thickness given as a force is told what a length looks like.
+
+    The refusal used to say what was wrong and stop. It names the field, the kind it takes
+    and a value of that kind as a document writes one, on both doors.
+    """
+    document = corpus[mistake]
+    path = tmp_path / "part.yaml"
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+    arguments = (command, str(path))
+    if command == "build":
+        arguments += ("--output", str(tmp_path / "part.step"))
+    _code, _out, err = run_cli(*arguments)
+    reply = _call(tool, document)
+    said = (
+        " ".join(_sentences(reply, "spec.element_params: ", "spec."))
+        if "error" in reply
+        else " ".join(
+            e["detail"] for e in reply["result"]["structuredContent"]["scorecard"]["entries"]
+        )
+    )
+    assert shown in err and shown in said
+
+
+def test_the_example_follows_from_the_kind_the_refusal_names():
+    from anvilate.spec.validate import _a_valid_quantity
+
+    assert _a_valid_quantity("width must be a [length] quantity; got 5 kN") == (
+        "write `width` as a length, such as `{magnitude: 6, unit: mm}`"
+    )
+    assert _a_valid_quantity("Value error, net_area must be an area ([length]**2); got 5 mm") == (
+        "write `net_area` as an area, such as `{magnitude: 600, unit: mm**2}`"
+    )
+    assert "MPa" in _a_valid_quantity("allowable_shear must be a stress; got 1 kN ([force])")
+    # A refusal that names no kind, or a kind with no example recorded, is left as it is.
+    assert _a_valid_quantity("thickness must not be negative; got -3 mm") is None
+    assert _a_valid_quantity("ratio must be a [dimensionless] quantity; got 5 mm") is None

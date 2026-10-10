@@ -132,9 +132,47 @@ def _element_reasons(refused: ValidationError, model: type[BaseModel]) -> str:
     return "; ".join(
         _refusal_line(
             ".".join(str(part) for part in error["loc"]),
-            error["msg"] + (f" — {remedy}" if (remedy := _remedy(error, model)) else ""),
+            error["msg"]
+            + (
+                f" — {remedy}"
+                if (remedy := _remedy(error, model) or _a_valid_quantity(error["msg"]))
+                else ""
+            ),
         )
         for error in refused.errors()
+    )
+
+
+# What a quantity of each kind looks like in a document, for a refusal that says a value is
+# the wrong kind. The number is a placeholder and reads as one; the unit is the point.
+_QUANTITY_EXAMPLES = {
+    "length": "{magnitude: 6, unit: mm}",
+    "force": "{magnitude: 5, unit: kN}",
+    "pressure": "{magnitude: 250, unit: MPa}",
+    "stress": "{magnitude: 250, unit: MPa}",
+    "area": "{magnitude: 600, unit: mm**2}",
+    "frequency": "{magnitude: 50, unit: Hz}",
+    "angle": "{magnitude: 30, unit: deg}",
+}
+_WRONG_KIND = re.compile(
+    r"(?:^|, )(?P<field>[A-Za-z_][\w.\[\]]*) must be (?:an? )?\[?(?P<kind>[a-z]+)\]?"
+    r"(?: quantity)?(?: \(\[length\]\*\*2\))?; got "
+)
+
+
+def _a_valid_quantity(message: str) -> str | None:
+    """A value of the kind a wrong-kind refusal asks for, as the document writes one.
+
+    "thickness must be a length; got 3 kN" says what is wrong and not what right looks
+    like. The kind is named in the message, so the example follows from it.
+    """
+    matched = _WRONG_KIND.search(message)
+    if matched is None or matched["kind"] not in _QUANTITY_EXAMPLES:
+        return None
+    article = "an" if matched["kind"][0] in "aeiou" else "a"
+    return (
+        f"write `{matched['field']}` as {article} {matched['kind']}, such as "
+        f"`{_QUANTITY_EXAMPLES[matched['kind']]}`"
     )
 
 
