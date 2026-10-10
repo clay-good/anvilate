@@ -21,6 +21,10 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
       `openspec/changes/trim-agent-tool-set`, awaiting approval row by row)
 - [ ] 2.3 Remove tools that cannot return a result (starting with FEA while no solver ships)
 - [ ] 2.4 One vocabulary for spec, part, card and file across tools, results and docs
+      — measured 2026-10-10 over the twelve tool descriptions and the kept instructions:
+      spec 11 / document 4; part 18 / element 9; scorecard 3 / verdict 1; handle 7 / subject 2.
+      The argument is named `subject` and described as a handle. Choosing one word for each
+      renames a published argument, so it goes with the tool-set decision
 - [x] 2.5 Truthful read-only, destructive and open-world hints on every tool
 - [ ] 2.6 Server instructions and the agent skill rewritten for the new set, most important first
 
@@ -35,6 +39,9 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 ## 4. Refusals
 
 - [ ] 4.1 Each refusal names the field, the reason and a valid example, within a length limit
+      — held today for twenty mistakes through both doors (`tests/test_refusal_parity.py`:
+      no library internals, 2,000 characters) and for every refusal that offers a value. Not
+      yet a rule over all 1,239 listed messages: most name a field and a reason, few an example
 - [x] 4.2 No suggestion less conservative than what was refused; near-match only when unambiguous
       (finding 23; every refusal that offers a value is listed and read in
       `tests/test_agent_surface.py`)
