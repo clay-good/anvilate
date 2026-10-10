@@ -294,6 +294,7 @@ def test_the_wire_format_is_what_a_client_receives():
             "description",
             "inputSchema",
             "_meta",
+            "annotations",
         } | (set() if image else {"outputSchema"})
         assert definition["inputSchema"]["$schema"] == JSON_SCHEMA_DIALECT
         assert image or definition["outputSchema"]["$schema"] == JSON_SCHEMA_DIALECT

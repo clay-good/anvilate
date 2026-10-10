@@ -277,6 +277,22 @@ jobs:
             # Both passes, the instance read and the reference check, must say it.
             test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$pattern.txt")" -eq 2
           done
+      - name: Every worked combination's STEP assembly reads with no errors and no warnings
+        run: |
+          set -euo pipefail
+          # An assembly is products and their usages rather than one solid, so it is read by
+          # the same independent reader as the parts are (add-part-combinations 4.2).
+          for document in examples/combinations/*.combination.yaml; do
+            name=$(basename "$document" .combination.yaml)
+            # Exit 0 is a passing card and 2 one that is not evaluated; the file is what is
+            # read here, so either is fine and anything else stops the step.
+            anvilate combine "$document" --output "$name.assembly.step" \
+              || anvilate combine "$document" --output "$name.assembly.step" --unvalidated \
+              || [ $? -eq 2 ]
+            test -s "$name.assembly.step"
+            ./stepcode/build/bin/p21read_sdai_ap242 "$name.assembly.step" | tee "$name.assembly.txt"
+            test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$name.assembly.txt")" -eq 2
+          done
       - name: A STEP file carrying semantic PMI reads with no errors and no warnings
         run: |
           set -euo pipefail

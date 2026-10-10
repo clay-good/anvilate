@@ -148,6 +148,11 @@ def _one_pass(repeats: int) -> dict[str, list[float]]:
             samples["cli view"].append(
                 _cli("view", str(_PASSING), "--output", str(sheet), "--no-open", produces=sheet)
             )
+            samples["cli parts"].append(_cli("parts", "mounting_plate"))
+            samples["cli read"].append(_cli("read", str(step)))
+            # The frame's card passes, so the command exits 0, which is what `_cli` requires.
+            worked = _ROOT / "examples" / "combinations" / "portal_frame.combination.yaml"
+            samples["cli combine"].append(_cli("combine", str(worked)))
             for name, seconds in _mcp_pass().items():
                 samples[name].append(seconds)
     return samples

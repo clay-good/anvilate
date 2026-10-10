@@ -342,6 +342,10 @@ class ToolDefinition(RevalidatedModel):
     # which is the same for every call and every caller. It needs no subject and no memory:
     # there is nothing a previous call could have left behind for it to read.
     reads_shipped_catalog: bool = False
+    # Whether a call leaves anything behind: a file in the output folder, or a record in the
+    # subject store that a later call names. A tool that only answers is read-only, and a
+    # client may run it without asking.
+    writes: bool = False
 
     @property
     def dispatch(self) -> Dispatch:
@@ -426,6 +430,19 @@ class ToolDefinition(RevalidatedModel):
                 if self.output_schema is None
                 else {"outputSchema": _with_embedded(self.output_schema)}
             ),
+            # The protocol's hints, stated truthfully so a client can decide what to ask
+            # about. Nothing here deletes or overwrites the user's own work: a tool that
+            # writes adds a result to the folder the server was started with, replacing only
+            # its own earlier result of the same name, so repeating a call is harmless. And
+            # nothing here reaches the network: the server is local and reads only what ships
+            # with it and the folders it was started with.
+            "annotations": {
+                "title": self.title,
+                "readOnlyHint": not self.writes,
+                "destructiveHint": False,
+                "idempotentHint": True,
+                "openWorldHint": False,
+            },
             "_meta": {
                 "dev.anvilate/dispatch": self.dispatch.value,
                 "dev.anvilate/cost": self.cost.value,
@@ -511,6 +528,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 },
                 required=["errors"],
             ),
+            writes=True,
             cost=Cost.BOUNDED,
             backing="anvilate.spec:parse_spec",
             subject="document",
@@ -537,6 +555,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 },
                 required=["geometry", "warnings", "subject"],
             ),
+            writes=True,
             cost=Cost.BOUNDED,
             tiers=(ValidationTier.T0_GEOMETRY,),
             subject="spec",
@@ -563,7 +582,12 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                         "description": "overview is all four views on one image with the "
                         "part's name, size, material and verdict: the one to show first",
                     },
-                    "width_px": {"type": "integer", "minimum": 64, "maximum": 4096},
+                    "width_px": {
+                        "type": "integer",
+                        "minimum": 64,
+                        "maximum": 4096,
+                        "description": "the image's width in pixels; 800 when omitted",
+                    },
                     "dimensions": {
                         "type": "boolean",
                         "description": "add the overall dimensions, measured from the solid",
@@ -577,6 +601,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 required=["subject", "view"],
             ),
             output_schema=None,
+            writes=True,
             cost=Cost.BOUNDED,
             subject="subject",
             backing="anvilate.geometry:render_viewport",
@@ -634,6 +659,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                             ],
                         },
                         "minItems": 1,
+                        "description": (
+                            "screen only these tiers instead of the spec's own acceptance.tiers"
+                        ),
                     },
                 },
                 required=["spec"],
@@ -642,6 +670,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 {"scorecard": {"$ref": _SCORECARD_REF}, "subject": _SUBJECT_SCHEMA},
                 required=["scorecard", "subject"],
             ),
+            writes=True,
             cost=Cost.BOUNDED,
             tiers=(
                 ValidationTier.T0_GEOMETRY,
@@ -672,7 +701,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             input_schema=_object_schema(
                 {
                     "spec": _spec_input(),
-                    "convergence_tol": {"type": "number", "exclusiveMinimum": 0},
+                    "convergence_tol": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "the relative change between meshes a result must settle to",
+                    },
                 },
                 required=["spec"],
             ),
@@ -680,6 +713,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 {"scorecard": {"$ref": _SCORECARD_REF}},
                 required=["scorecard"],
             ),
+            writes=True,
             cost=Cost.UNBOUNDED,
             tiers=(ValidationTier.T3_FEA,),
             backing="anvilate.screening:screen_spec",
@@ -743,6 +777,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 },
                 required=["format", "sha256"],
             ),
+            writes=True,
             cost=Cost.BOUNDED,
             emits_artifacts=True,
             backing="anvilate.bundle:BundleSections",
@@ -792,6 +827,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 },
                 required=["combination", "scorecard", "subject"],
             ),
+            writes=True,
             cost=Cost.BOUNDED,
             subject="combination",
             backing="anvilate.combination:build_combination",

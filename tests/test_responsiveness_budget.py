@@ -63,7 +63,7 @@ def test_the_harness_times_exactly_what_the_budget_names(measure, monkeypatch, t
     samples = measure._one_pass(2)
     assert set(samples) == set(_budget()["operations"])
     assert all(len(values) == 2 for values in samples.values()), samples
-    assert set(seen) == {"check", "build", "view"}
+    assert set(seen) == {"check", "build", "view", "parts", "read", "combine"}
 
 
 def _run(measure, monkeypatch, tmp_path, passes):

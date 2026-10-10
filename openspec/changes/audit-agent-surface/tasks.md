@@ -1,23 +1,23 @@
 # Tasks: Audit the agent surface
 
-Each audit task ends in a written finding list (kept under `docs/audits/`) and the fixes
+Each audit task ends in a written finding list (kept in `docs/agent-surface-audit.md`) and the fixes
 it justifies. A finding that needs a breaking change is proposed, not applied.
 
 ## 1. Inventory (no changes yet)
 
-- [ ] 1.1 Every MCP tool: purpose, inputs, result shape and size, time, which journeys use it
-- [ ] 1.2 Every CLI command and flag: purpose, default, overlap with another
+- [x] 1.1 Every MCP tool: purpose, inputs, result shape and size, time, which journeys use it
+- [x] 1.2 Every CLI command and flag: purpose, default, overlap with another
 - [ ] 1.3 Every refusal message on both surfaces, collected into one reviewable list
 - [ ] 1.4 Every docs page: who it is for, whether it is still true, what links to it
-- [ ] 1.5 Client limits table for Claude Code and Codex, each with source and date
+- [x] 1.5 Client limits table for Claude Code and Codex, each with source and date
 
 ## 2. Tool set
 
-- [ ] 2.1 Write the journeys and their maximum call counts
+- [x] 2.1 Write the journeys and their maximum call counts
 - [ ] 2.2 Propose the workflow-level tool set from the inventory and measurements (own delta)
 - [ ] 2.3 Remove tools that cannot return a result (starting with FEA while no solver ships)
 - [ ] 2.4 One vocabulary for spec, part, card and file across tools, results and docs
-- [ ] 2.5 Truthful read-only, destructive and open-world hints on every tool
+- [x] 2.5 Truthful read-only, destructive and open-world hints on every tool
 - [ ] 2.6 Server instructions and the agent skill rewritten for the new set, most important first
 
 ## 3. Two clients
@@ -25,7 +25,7 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 - [ ] 3.1 Codex runner for the measurement harness; registration line tested in CI
 - [ ] 3.2 Corpus extended: journeys, one task per part family, a combination, a context folder
 - [ ] 3.3 Baseline run on both clients; results published per client and version
-- [ ] 3.4 Gates: description and instruction length, schema constraints, result size, call time
+- [x] 3.4 Gates: description and instruction length, schema constraints, result size, call time
 - [ ] 3.5 Release blocked on a completion-rate regression on either client
 
 ## 4. Refusals
@@ -44,11 +44,11 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 ## 6. CLI
 
 - [ ] 6.1 Review every command, flag and default; remove or merge overlaps; one table
-- [ ] 6.2 Help text states what each command is for in its first line
+- [x] 6.2 Help text states what each command is for in its first line
 
 ## 7. Performance
 
-- [ ] 7.1 Responsiveness budget covers every tool and command, cold and warm
+- [x] 7.1 Responsiveness budget covers every tool and command, cold and warm
 - [ ] 7.2 Profile the five slowest; improve or justify each (kernel import, first build)
 - [ ] 7.3 Suite runtime: profile, and cut the slowest tests that add no coverage
 

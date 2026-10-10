@@ -980,7 +980,7 @@ def _stack(
                     f"takes {needed_hole:g} mm at the ISO 273 {stack.clearance} class"
                     + ("" if fits else f"; open the holes to {needed_hole:g} mm")
                 ),
-                reference="ISO 273:1979, clearance holes for bolts and screws",
+                reference="ISO 273:1979 clearance holes for bolts and screws",
                 underived=_MEASURED,
             )
         )

@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Sixty-three pages, arranged by what you are trying to do. The [README](../README.md) is the
+Sixty-four pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -19,6 +19,7 @@ You have a part and you want a verdict.
 | [Values and units](units-and-quantities.md) | What a `Quantity` is, and the arithmetic it refuses so a value is never computed in one unit and read in another. |
 | [What a citation means](citations.md) | What a clause reference does and does not claim, and where every bundled number came from. |
 | [Bundled datasets](datasets.md) | The open reference tables shipped in this repository: their header, versioning, use without Anvilate, and how to contribute. |
+| [Audit of the agent surface](agent-surface-audit.md) | Every tool and command as an agent meets it, the limits the two target clients set, the journeys a user asks for, and what was found and fixed. |
 | [Design decisions](design-decisions.md) | Why Anvilate is fully local and MCP-only: your agent is the model, nothing is hosted, no API keys. |
 
 ## Screening by discipline
