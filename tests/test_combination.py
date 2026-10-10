@@ -724,3 +724,83 @@ def test_a_part_that_is_a_bare_primitive_goes_out_under_its_own_name(tmp_path):
     assert facts.solids[0].size_mm == pytest.approx(
         [h - lo for lo, h in zip(low, high, strict=True)]
     )
+
+
+def _loaded(**joint):
+    """The bracket on its plate with its two M6 bolts carrying a shear across the joint."""
+    stated = {
+        "load": {"magnitude": 6.0, "unit": "kN"},
+        "bolt_material": "ASTM-A36",
+        "min_safety_factor": 2.0,
+        **joint,
+    }
+
+    def change(document: dict) -> None:
+        for name, value in stated.items():
+            if value is None:
+                document["hardware"][0].pop(name, None)
+            else:
+                document["hardware"][0][name] = value
+
+    return change
+
+
+def test_a_loaded_joint_is_screened_from_what_the_mate_measured():
+    """6 kN across two M6 bolts is 3 kN each, on pi 6^2/4 of bolt and on 6 x t of each part.
+
+    Bolt shear is 106.1 MPa against 0.577 x 250 of A36; bearing is 100 MPa on the 5 mm
+    bracket and 83.3 on the 6 mm plate, each against the 250 of the part's own material.
+    """
+    built = _built("bracket_on_plate", _loaded())
+    shear = _entry(built, "bolted bolt shear")
+    assert shear.status is CheckStatus.FAIL
+    assert shear.safety_factor == pytest.approx(0.577 * 250 / (3000 / _disc(6)), rel=1e-3)
+    on_bracket, on_plate = (_entry(built, f"bolted bearing on {p}") for p in ("bracket", "plate"))
+    assert on_bracket.safety_factor == pytest.approx(250 / (3000 / (6 * 5)))
+    assert on_plate.safety_factor == pytest.approx(250 / (3000 / (6 * 6)))
+    assert on_bracket.status is CheckStatus.PASS and on_plate.status is CheckStatus.PASS
+    assert {e.required_safety_factor for e in (shear, on_bracket, on_plate)} == {2.0}
+    assert shear.reference.startswith("AISC 360-16") and shear.derivation is not None
+    # The bolt is screened once, and nothing is said of an edge distance nobody declared.
+    names = [entry.name for entry in built.card.entries]
+    assert names.count("bolted bolt shear") == 1 and not [n for n in names if "tear-out" in n]
+    assert built.card.status is CheckStatus.FAIL
+    # A lighter load passes all three, and an unloaded joint has none of them.
+    light = _built("bracket_on_plate", _loaded(load={"magnitude": 3.0, "unit": "kN"}))
+    assert _entry(light, "bolted bolt shear").status is CheckStatus.PASS
+    assert not [e for e in _built("bracket_on_plate").card.entries if "bearing" in e.name]
+
+
+def test_a_bolt_whose_strength_is_only_typical_is_not_passed():
+    """The screen's own rule carries through: a typical yield is not a design allowable."""
+    built = _built("bracket_on_plate", _loaded(bolt_material="AISI-4140"))
+    shear = _entry(built, "bolted bolt shear")
+    assert shear.status is CheckStatus.NOT_EVALUATED and "typical" in shear.detail
+    assert _entry(built, "bolted bearing on plate").status is CheckStatus.NOT_EVALUATED
+
+
+@pytest.mark.parametrize(
+    ("joint", "reason"),
+    [
+        ({"bolt_material": None}, "a loaded joint without bolt_material"),
+        ({"min_safety_factor": None, "load": None}, "without load and min_safety_factor"),
+        ({"load": _mm(6)}, "it is the shear force the joint carries"),
+        ({"load": {"magnitude": 0.0, "unit": "kN"}}, "it is the shear force the joint carries"),
+        ({"min_safety_factor": 0.0}, "it is a number above zero"),
+        ({"bolt_material": "STEEL"}, "cannot be screened: unknown material 'STEEL'"),
+    ],
+)
+def test_a_loaded_joint_states_its_load_its_bolt_and_its_factor_together(joint, reason):
+    with pytest.raises(CombinationError, match=reason):
+        _built("bracket_on_plate", _loaded(**joint))
+
+
+def test_a_dowel_pin_carries_no_declared_load():
+    def loaded_pin(document: dict) -> None:
+        _doweled()(document)
+        document["hardware"][-1].update(
+            load={"magnitude": 1.0, "unit": "kN"}, bolt_material="ASTM-A36", min_safety_factor=2.0
+        )
+
+    with pytest.raises(CombinationError, match="loads a dowel pin"):
+        _built("bracket_on_plate", loaded_pin)

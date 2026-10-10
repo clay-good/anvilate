@@ -28,7 +28,7 @@ from the STEP file.
 | --- | --- |
 | `parts` | Each part: an `id`, and its `spec`, a whole Design Spec. The first part is the base and stays where it is. |
 | `mates` | How each later part meets a part before it. A mate has an `id`, a `kind`, the feature on the part being placed (`place`) and the feature on a part already placed (`on`). |
-| `hardware` | What goes in a hole-pattern mate's holes: a `bolt` and its `length`, and optionally a `washer` and a `nut`, by designation; or a dowel `pin` (`ISO2338-6`) and its `length`. One goes in every hole of the mate. |
+| `hardware` | What goes in a hole-pattern mate's holes: a `bolt` and its `length`, and optionally a `washer` and a `nut`, by designation; or a dowel `pin` (`ISO2338-6`) and its `length`. One goes in every hole of the mate. A bolted entry may also state the `load` the joint carries in shear, its `bolt_material` and a `min_safety_factor`. |
 | `welds` | A weld on a face-to-face mate: its `type` and `size`. Declared, not drawn. |
 
 ### The four mates
@@ -60,6 +60,7 @@ Each of these is an entry on the combination's card.
 | bolt clearance | Whether the smallest mated hole admits the bolt at the ISO 273 class asked for (`close`, `normal` or `coarse`), and what to open it to when it does not. |
 | bolt length | Whether the bolt fills its nut through the clamped parts and washers, and how much longer it must be when it does not. |
 | fit | On a `shaft_in_bore` mate where one part sits inside a bore of the other: whether the bore and the shaft are one nominal size, and with a declared `fit`, what it leaves between them across their tolerances. A collar slid over a smaller step overlaps nothing and fails here. |
+| bolt shear, bearing on each part | For a hardware entry that states a `load`: the joint screened as a [bolted connection](spec-screening.md), fed from the mate. Each bolt carries an equal share in single shear, and bears on each part at the thickness its hole goes through and that part's own material. |
 | pin fit | Whether every mated hole is the dowel pin's own diameter. A pin locates by filling its hole, so one in a clearance hole fails and names the holes to ream. |
 | pin length | Whether the pin is a length ISO 2338 stocks for its diameter, and sits inside both parts with half its length each side of the plane they meet on. |
 | weld | A declared weld, not evaluated: its strength is screened as a `welded_connection` element with its load. |

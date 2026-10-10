@@ -30,7 +30,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import FrozenMap, Named, Provenance, StatableModel, _refusal_line
+from ._models import FrozenMap, Named, Provenance, StatableModel, _reason, _refusal_line
 from .derivation import DerivationAbsence, Underived
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -206,6 +206,12 @@ class HardwareStack(StatableModel):
     ``pin`` is a parallel dowel pin instead (``ISO2338-6``), ``length`` long and centred on
     the mating plane. A pin locates and does not clamp: it takes no washer and no nut, and
     its holes are its own diameter, not a clearance class.
+
+    ``load`` is the shear the joint carries across the mating plane. With it the bolts are
+    screened as a bolted connection: each bolt in single shear, and bearing on each of the
+    two parts at the thickness its hole goes through, the load shared equally by the bolts
+    of the mate. ``bolt_material`` is the bolt's id in the materials database, and
+    ``min_safety_factor`` what the joint is judged against. The three are stated together.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -217,6 +223,42 @@ class HardwareStack(StatableModel):
     washer: Named | None = None
     nut: Named | None = None
     clearance: Literal["close", "normal", "coarse"] = "normal"
+    load: Quantity | None = None
+    bolt_material: Named | None = None
+    min_safety_factor: float | None = None
+
+    @model_validator(mode="after")
+    def _a_loaded_joint_is_whole(self) -> HardwareStack:
+        joint = ("load", "bolt_material", "min_safety_factor")
+        missing = [name for name in joint if getattr(self, name) is None]
+        if len(missing) == len(joint):
+            return self
+        if missing or self.pin is not None:
+            raise _refuse(
+                f"hardware in mate '{self.mate}' "
+                + (
+                    "loads a dowel pin; a pin locates, and the bolts of a joint carry its load"
+                    if not missing
+                    else f"states a loaded joint without {' and '.join(missing)}; a joint's "
+                    "load, its bolt material and the safety factor it is judged against "
+                    "are stated together"
+                ),
+                subject=f"hardware[].{missing[0] if missing else 'load'}",
+            )
+        assert self.load is not None and self.min_safety_factor is not None
+        if not self.load.has_dimension("[force]") or self.load.to("N").magnitude <= 0:
+            raise _refuse(
+                f"hardware in mate '{self.mate}' states its load as {self.load}; it is the "
+                "shear force the joint carries",
+                subject="hardware[].load",
+            )
+        if not math.isfinite(self.min_safety_factor) or self.min_safety_factor <= 0:
+            raise _refuse(
+                f"hardware in mate '{self.mate}' states min_safety_factor as "
+                f"{self.min_safety_factor}; it is a number above zero",
+                subject="hardware[].min_safety_factor",
+            )
+        return self
 
     @model_validator(mode="after")
     def _a_length(self) -> HardwareStack:
@@ -934,6 +976,7 @@ def _stack(
     inverted = _turning((0.0, 0.0, 1.0), _scale(outward, -1.0))
     bodies: list[HardwareBody] = []
     thinnest, clamped, smallest = math.inf, 0.0, math.inf
+    bears = {moving.id: math.inf, fixed.id: math.inf}  # the least each part's holes go through
     for mine_tag, their_tag in zip(mate.place.holes, mate.on.holes, strict=True):
         mine = _hole(mate, "place", moving.id, moving.built, mine_tag)
         theirs = _hole(mate, "on", fixed.id, fixed.built, their_tag)
@@ -942,6 +985,8 @@ def _stack(
         # The hole's axis where it crosses the mating plane.
         seat = _add(seat, _scale(outward, _dot(outward, _sub(fixed.point(plane_point), seat))))
         top, under = mine.depth_mm, theirs.depth_mm
+        bears[moving.id] = min(bears[moving.id], top)
+        bears[fixed.id] = min(bears[fixed.id], under)
         clamped = max(clamped, top + under)
         thinnest = min(thinnest, top + under)
         smallest = min(smallest, mine.diameter_mm, theirs.diameter_mm)
@@ -1048,7 +1093,55 @@ def _stack(
             )
         )
     del thinnest
+    if stack.load is not None:
+        seats = [(moving, bears[moving.id]), (fixed, bears[fixed.id])]
+        entries += _joint_entries(stack, mate, diameter, seats)
     return bodies, entries
+
+
+def _joint_entries(
+    stack: HardwareStack, mate: Mate, diameter: float, bears: Sequence[tuple[PlacedPart, float]]
+) -> list[ScorecardEntry]:
+    """A loaded joint screened as a bolted connection, fed from the mated parts.
+
+    The existing screen is run once for each part, with what the combination measured: the
+    bolt's diameter from its designation, the thickness that part's holes go through, that
+    part's own material, and an equal share of the load for each bolt of the mate. One
+    shear plane, since two parts lap. The bolt's shear is the same in both runs and is kept
+    once; the bearing entry is kept for each part and named for it.
+    """
+    from .packs.structural import BoltedConnection, screen_bolted_connection
+
+    assert stack.load is not None and stack.min_safety_factor is not None
+    count = len(mate.place.holes)
+    share = Quantity(magnitude=stack.load.to("N").magnitude / count, unit="N")
+    entries: list[ScorecardEntry] = []
+    for part, thickness in bears:
+        try:
+            card = screen_bolted_connection(
+                BoltedConnection(
+                    name=str(mate.id),
+                    bolt_diameter=Quantity(magnitude=diameter, unit="mm"),
+                    plate_thickness=Quantity(magnitude=thickness, unit="mm"),
+                    load=share,
+                    bolt_material=str(stack.bolt_material),
+                    plate_material=str(part.spec.material.ref),
+                ),
+                required_safety_factor=stack.min_safety_factor,
+            )
+        except (KeyError, ValueError) as refused:
+            raise _refuse(
+                f"the loaded joint in mate '{mate.id}' cannot be screened: {_reason(refused)}",
+                subject="hardware[].bolt_material",
+                action="replace",
+            ) from refused
+        for entry in card.entries:
+            if entry.name.endswith("bolt shear"):
+                if not entries or not entries[0].name.endswith("bolt shear"):
+                    entries.insert(0, entry)
+            elif entry.name.endswith("plate bearing"):
+                entries.append(entry.model_copy(update={"name": f"{mate.id} bearing on {part.id}"}))
+    return entries
 
 
 # The pin entries carry no `reference`. A scorecard citation of a normative standard names

@@ -490,6 +490,10 @@ _RESULT_READS = frozenset(
 _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
     "bundle.py:sections<-design_basis_scorecard": "rolls the design-basis card into the bundle",
     "cli.py:_build<-screen_spec": "the build command gates on the card's status",
+    "combination.py:_joint_entries<-screen_bolted_connection": (
+        "a loaded joint's entries are the bolted connection's own, renamed for the mate "
+        "and the part, and nothing is computed from them"
+    ),
     "cli.py:_view<-screen_spec": "the view command renders the card it ran onto the sheet",
     "mcp.py:_run_fea_validation_task<-screen_spec": "the MCP task reports the card it ran",
     "mcp.py:_title_block<-screen_spec": "the overview image's title block prints the verdict",

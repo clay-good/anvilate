@@ -24,7 +24,9 @@ Depends on `expand-drawable-parts` groups 1 and 2 (registry, shared features, pr
       and a declared `fit` (ISO 286) is stated with what it leaves between them
 - [ ] 3.2b Key in keyway and seat
 - [x] 3.3 Interference between every pair, with overlap volume
-- [ ] 3.4 Joint screens fed from mated geometry (bolted connection, shaft key, fit)
+- [x] 3.4a Joint screens fed from mated geometry: a loaded bolted mate (bolt shear, bearing on
+      each part) and the shaft/bore fit (3.2a)
+- [ ] 3.4b Shaft key screen fed from a seated key (waits on 3.2b)
 
 ## 4. Output
 
