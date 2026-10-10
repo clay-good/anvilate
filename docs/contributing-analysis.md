@@ -600,6 +600,13 @@ HEAD the lookup returns `ASTM A36 structural steel`, the twelve `standards/data`
 `tolerance/data` files are present in `site-packages`, a pack screen runs on the installed
 wheel, and the MCP server answers `initialize` with the 2026-07-28 revision.
 
+CI runs the agent's half of this on every push: the `wheel-install` job builds the wheel,
+installs it with the README's extras into an environment that has never seen the checkout,
+and runs `tools/wheel-check/readme_steps.py` from outside it. That script starts the
+installed `anvilate-mcp`, lists the parts, builds and draws a mounting plate, writes its
+STEP file, screens a lifting lug, and holds `anvilate check` to the same verdict. It refuses
+to pass on an editable install or from inside the repository.
+
 **Two traps if you run it without a network.** `pip install .` fetches the build backend and
 the runtime dependencies, so the offline substitute is to build the wheel once
 (`python -m build --wheel`) and install it with `--no-index --no-deps`, copying `pint`,

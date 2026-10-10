@@ -365,3 +365,31 @@ def test_the_availability_job_fails_in_both_directions():
         "the job greps for a bare `pip install`, which matches the comment explaining why "
         "the action does not do that"
     )
+
+
+def test_every_push_installs_the_built_wheel_and_runs_the_readme_steps_on_it():
+    """The suite imports `src/`. What a newcomer installs is the wheel.
+
+    A data file the wheel leaves out, or a console script that does not start, passes every
+    test here and fails the first person who follows the README. The job that would see it
+    has to run on every push, install the extras the README's first step names, and run the
+    journey from outside the checkout, where nothing but the install can answer.
+    """
+    import re
+
+    workflow = yaml.safe_load((_REPO / ".github" / "workflows" / "ci.yml").read_text("utf-8"))
+    job = workflow["jobs"]["wheel-install"]
+    assert "if" not in job, "the wheel check must run on every push, not only on a schedule"
+    script = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "python -m build --wheel" in script
+    assert "pip install -e" not in script, "an editable install is the thing this job is not"
+    readme = (_REPO / "README.md").read_text(encoding="utf-8")
+    (extras,) = re.findall(r'pip install -e "\.(\[[a-z,]+\])"', readme)
+    assert f'"$(ls dist/*.whl){extras}"' in script
+    assert 'cd "$RUNNER_TEMP"' in script
+    steps = _REPO / "tools" / "wheel-check" / "readme_steps.py"
+    assert steps.is_file() and f"$GITHUB_WORKSPACE/{steps.relative_to(_REPO)}" in script
+    # The script refuses to pass on anything but an installed wheel run from elsewhere.
+    source = steps.read_text(encoding="utf-8")
+    assert '"site-packages" not in installed.parts' in source
+    assert "CHECKOUT in (here, *here.parents)" in source

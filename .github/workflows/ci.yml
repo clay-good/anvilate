@@ -35,6 +35,32 @@ jobs:
       - name: Test
         run: pytest -q
 
+  # The suite above runs against src/ through an editable install, so it cannot see a data
+  # file the wheel leaves out, a console script that does not start, or a path that only
+  # resolves inside the repository. This builds the wheel, installs it with the extras the
+  # README's first step names into an environment that has never seen the checkout, and
+  # does what a newcomer does next: starts `anvilate-mcp`, connects the way an agent does,
+  # and asks the README's questions (audit-agent-surface 5.3).
+  wheel-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build the wheel
+        run: |
+          pip install build
+          python -m build --wheel
+      - name: Install it into a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/clean"
+          "$RUNNER_TEMP/clean/bin/pip" install "$(ls dist/*.whl)[geometry,export,pdf]"
+      - name: Run the README's steps from outside the checkout
+        run: |
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/clean/bin/python" "$GITHUB_WORKSPACE/tools/wheel-check/readme_steps.py"
+
   # The two interchange formats ship free schemas, and the tests that validate against them
   # skip unless the schemas are present — an honest default, and a weaker one than it needs
   # to be, since CI can simply fetch them. This job does, on a schedule and on demand rather

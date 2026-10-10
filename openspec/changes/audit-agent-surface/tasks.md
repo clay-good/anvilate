@@ -38,7 +38,8 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 
 - [ ] 5.1 Publish to the package index; geometry and exchange formats in the default install
 - [ ] 5.2 One-line server launch through a package runner; one-line setup per client
-- [ ] 5.3 CI: install from the built wheel in a clean environment and run the README steps
+- [x] 5.3 CI: install from the built wheel in a clean environment and run the README steps
+      (`wheel-install`, every push; `tools/wheel-check/readme_steps.py`)
 - [x] 5.4 `doctor` says in plain words what is missing
 
 ## 6. CLI
