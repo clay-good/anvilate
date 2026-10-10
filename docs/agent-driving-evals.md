@@ -80,6 +80,14 @@ agent should have done with the tools and writing it before they could be driven
 been writing it against nothing — the same order
 [the compilation metrics](valid-is-not-correct.md) shipped in.
 
+**The next corpus is written too**, as `agenteval.journey_task_set`: those nine, and ten
+more that ask what a user asks. What can you draw; a plate from words, shown; a flange as a
+STEP file; a shaft, a bent bracket, a box and its lid; a clevis under its load; two parts
+bolted together; a part started from a drawing in a folder; a file weighed. Together they
+reach every tool in the catalog. No measurement has been scored on the added ten: the
+published run is held to the nine it ran. Each of the ten is walked in a test by a correct
+run against the real server, so none is a task that cannot be completed.
+
 The viewport and measurement tasks check the positive geometry path: build a base plate,
 carry its subject handle into `render_viewport` and `measure_geometry`, and use the returned
 image and measurements rather than describing or calculating values the model invented.

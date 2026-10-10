@@ -90,6 +90,7 @@ __all__ = [
     "default_task_set",
     "default_versioned_task_set",
     "evaluate_task_set",
+    "journey_task_set",
     "score_run_set",
     "score_transcript",
     "task_set_issues",
@@ -876,6 +877,135 @@ def default_task_set() -> tuple[AgentTask, ...]:
     quietly narrowing what the eval covers.
     """
     return _TASK_SET
+
+
+# The next measurement's corpus (audit-agent-surface 3.2). The nine tasks above are what the
+# 2026-10-09 run was scored on, and a published result is held to the tasks it ran, so they
+# stay as they are. These add what that corpus could not ask: the four tools shipped since,
+# the journeys a user asks for, a task for each family of part, a combination and a context
+# folder. No run has been scored on them. They are written the way a user writes, with the
+# numbers in the prompt, and each requires only the calls no correct run can skip:
+# `describe_part` is allowed everywhere and required only where it is the answer.
+_JOURNEY_TASKS: tuple[AgentTask, ...] = (
+    AgentTask(
+        task_id="say-what-can-be-drawn",
+        prompt="What parts can you draw?",
+        required_tools=("describe_part",),
+        notes=(
+            "The catalog is the answer, so the lookup is the task. A run that lists parts "
+            "from the server instructions alone names elements and cannot say which draw."
+        ),
+    ),
+    AgentTask(
+        task_id="draw-a-plate-from-words",
+        prompt=(
+            "Draw a 120 x 80 mm mounting plate, 6 mm thick, with four M6 clearance holes on "
+            "a 100 x 60 mm pattern, and show it to me."
+        ),
+        required_tools=("build_part", "render_viewport"),
+        notes=(
+            "The draw journey, for the plate family. The holes are a pattern in the part's "
+            "own vocabulary; a run that returns a picture it did not render has shown nothing."
+        ),
+    ),
+    AgentTask(
+        task_id="hand-a-flange-to-cad",
+        prompt=(
+            "I need a plate flange: 120 mm outside, 50 mm bore, 12 mm thick, six 9 mm bolt "
+            "holes on a 90 mm circle. Give me the STEP file."
+        ),
+        required_tools=("build_part", "export_artifact"),
+        notes=(
+            "The export journey, for the flange family. A flange is drawn and not checked, "
+            "so the file is written marked unvalidated and the run has to say so."
+        ),
+    ),
+    AgentTask(
+        task_id="draw-a-shaft-with-a-keyway",
+        prompt=(
+            "Draw a stepped shaft: 20 mm for 40 mm, then 30 mm for 60 mm, then 25 mm for "
+            "30 mm, with a 6 x 3.5 mm keyway 25 mm long on the first step."
+        ),
+        required_tools=("build_part",),
+        notes="The shaft family: steps in order from the drive end, and a keyway on one of them.",
+    ),
+    AgentTask(
+        task_id="draw-a-bent-bracket-and-its-blank",
+        prompt=(
+            "Draw a U bracket bent from 2 mm sheet, 40 mm wide, with flanges of 30, 50 and "
+            "25 mm and a 2 mm inside radius. How long is the flat blank?"
+        ),
+        required_tools=("build_part",),
+        notes=(
+            "The sheet-metal family. The developed length needs a K-factor the prompt does "
+            "not give: a correct run says it is not evaluated and asks, and does not assume one."
+        ),
+    ),
+    AgentTask(
+        task_id="draw-a-box-and-its-lid",
+        prompt=(
+            "Draw a 120 x 80 x 40 mm enclosure with 3 mm walls, and a lid for it with a lip "
+            "that drops inside."
+        ),
+        required_tools=("build_part", "build_part"),
+        notes=(
+            "The enclosure family, and two parts in one request. The lid's lip has to clear "
+            "the box's wall, which is the one number the run must work out from the other part."
+        ),
+    ),
+    AgentTask(
+        task_id="screen-a-clevis-under-its-load",
+        prompt=(
+            "Check a clevis 40 mm wide with a 20 mm gap, 30 mm deep and 50 mm tall, 12 mm "
+            "pin 34 mm up, for 20 kN. Pin shear allowable 240 MPa; the ears 250 MPa in "
+            "bearing and tension and 145 MPa in shear."
+        ),
+        required_tools=("run_validation",),
+        notes=(
+            "A drawn part that is screened once it states its load. The four checks are on "
+            "the card; a run that reports a verdict without the load declared read 'drawn'."
+        ),
+    ),
+    AgentTask(
+        task_id="put-two-parts-together",
+        prompt=(
+            "Bolt a 60 x 50 mm angle bracket to a 120 x 80 mm plate with two M6 screws, "
+            "washers and nuts, and show me the assembly."
+        ),
+        required_tools=("build_combination", "render_viewport"),
+        notes=(
+            "The combination journey. The parts are placed by the holes they share, so the "
+            "run writes no coordinate; a bolt too short for the stack fails by name."
+        ),
+    ),
+    AgentTask(
+        task_id="start-from-a-drawing-in-my-folder",
+        prompt="Start a mounting plate from the drawing in my folder. It is 6 mm thick.",
+        required_tools=("list_context", "read_cad_file", "build_part"),
+        notes=(
+            "The context journey. The file is not named, so the folder is listed first; the "
+            "plate's numbers come from the measured file and cite it, and are not re-typed."
+        ),
+    ),
+    AgentTask(
+        task_id="weigh-a-file-i-was-sent",
+        prompt="How much does plate.step weigh in 6061-T6?",
+        required_tools=("read_cad_file",),
+        notes=(
+            "One call with the material named. A run that multiplies a volume by a density "
+            "it remembers has not used the bundled one, and cannot say which it used."
+        ),
+    ),
+)
+
+
+def journey_task_set() -> tuple[AgentTask, ...]:
+    """The corpus for the next measurement: the published nine, and the journeys after them.
+
+    Together they reach every tool in the catalog, and not only the eight pipeline
+    operations. No published result covers the added tasks.
+    """
+    return _TASK_SET + _JOURNEY_TASKS
 
 
 def default_versioned_task_set() -> AgentTaskSet:

@@ -588,3 +588,140 @@ def test_the_published_skill_measurement_is_what_its_transcripts_score():
             f"({report.tool_call_error_rate:.0%}) | {calls} | ${cost:.2f} |"
         )
         assert row in page, row
+
+
+def test_the_journey_corpus_reaches_every_tool_and_keeps_the_published_nine():
+    """The next measurement's corpus (audit-agent-surface 3.2).
+
+    The published run is held to the nine tasks it scored, so those are the first nine
+    here, untouched. The rest reach the four tools added since, and between them the set
+    names every tool in the catalog.
+    """
+    from anvilate.agenteval import default_task_set, journey_task_set, task_set_issues
+    from anvilate.mcp import tool_catalog
+
+    tasks = journey_task_set()
+    assert tasks[: len(default_task_set())] == default_task_set() and len(tasks) >= 19
+    assert task_set_issues(list(tasks)) == []
+    assert {op for task in tasks for op in task.operations} == {t.name for t in tool_catalog()}
+    assert all(task.notes and not task.prelude for task in tasks)
+    assert len({task.task_id for task in tasks}) == len(tasks)
+
+
+def test_every_journey_task_has_a_correct_run_that_completes_it(tmp_path):
+    """A task no correct run can complete measures nothing: one such shipped in 1.0.0.
+
+    Each added task is walked here by a run that does what the prompt asks, against the
+    real server, with each call given the handle the one before it returned. Every call is
+    accepted, and the run scores as complete.
+    """
+    pytest.importorskip("build123d")
+    from pathlib import Path
+
+    import yaml
+
+    from anvilate import context
+    from anvilate.agenteval import ToolCall, default_task_set, journey_task_set, score_transcript
+    from anvilate.mcp import handle_request
+
+    examples = Path(__file__).resolve().parents[1] / "examples"
+
+    def spec(name: str, **changes) -> dict:
+        document = yaml.safe_load((examples / "parts" / f"{name}.spec.yaml").read_text("utf-8"))
+        for key, value in changes.items():
+            if value is None:
+                document["element_params"].pop(key, None)
+            else:
+                document["element_params"][key] = value
+        return document
+
+    def call(tool: str, **arguments) -> dict:
+        reply = handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": tool, "arguments": arguments},
+            }
+        )
+        assert "error" not in reply, (tool, reply.get("error"))
+        return reply["result"].get("structuredContent", {})
+
+    def built(document: dict) -> str:
+        return call("build_part", spec=document)["subject"]
+
+    from anvilate import _outputs
+
+    (tmp_path / "plate.dxf").write_bytes((examples / "context" / "plate.dxf").read_bytes())
+    context.set_context_roots([tmp_path])
+    _outputs.set_output_folder(tmp_path / "out")
+
+    def from_the_folder() -> list[str]:
+        listing = call("list_context", folder=".")["inventory"]
+        (drawing,) = [f["path"] for f in listing["files"] if f["path"].endswith(".dxf")]
+        seed = call("read_cad_file", source=drawing)["seed"]
+        document = spec("mounting_plate")
+        document["element_params"] = {
+            **seed["element_params"],
+            "name": "from-drawing",
+            "thickness": {"magnitude": 6.0, "unit": "mm"},
+        }
+        document["sources"] = seed["sources"]
+        built(document)
+        return ["list_context", "read_cad_file", "build_part"]
+
+    def weighed() -> list[str]:
+        subject = built(spec("spacer"))
+        exported = call("export_artifact", subject=subject, format="step")
+        (tmp_path / "plate.step").write_bytes(Path(exported["file"]["path"]).read_bytes())
+        facts = call("read_cad_file", source="plate.step", material="AA-6061-T6")["facts"]
+        assert facts["mass_kg"] > 0
+        return ["read_cad_file"]
+
+    def assembled() -> list[str]:
+        document = yaml.safe_load(
+            (examples / "combinations" / "bracket_on_plate.combination.yaml").read_text("utf-8")
+        )
+        subject = call("build_combination", combination=document)["subject"]
+        call("render_viewport", subject=subject, view="iso")
+        return ["build_combination", "render_viewport"]
+
+    def drawn(name: str, then: str | None = None, **changes) -> list[str]:
+        subject = built(spec(name, **changes))
+        if then == "render_viewport":
+            call(then, subject=subject, view="iso")
+        elif then == "export_artifact":
+            assert call(then, subject=subject, format="step")["validated"] is False
+        return ["build_part"] + ([then] if then else [])
+
+    def screened() -> list[str]:
+        card = call("run_validation", spec=spec("clevis"))["scorecard"]
+        assert card["status"] == "pass" and len(card["entries"]) >= 4
+        return ["run_validation"]
+
+    runs = {
+        "say-what-can-be-drawn": lambda: [
+            "describe_part" for _ in [call("describe_part")["catalog"]]
+        ],
+        "draw-a-plate-from-words": lambda: drawn("mounting_plate", "render_viewport"),
+        "hand-a-flange-to-cad": lambda: drawn("plate_flange", "export_artifact"),
+        "draw-a-shaft-with-a-keyway": lambda: drawn("stepped_shaft"),
+        "draw-a-bent-bracket-and-its-blank": lambda: drawn(
+            "sheet_metal_bracket", k_factor=None, k_factor_source=None
+        ),
+        "draw-a-box-and-its-lid": lambda: drawn("enclosure") + drawn("enclosure_lid"),
+        "screen-a-clevis-under-its-load": screened,
+        "put-two-parts-together": assembled,
+        "start-from-a-drawing-in-my-folder": from_the_folder,
+        "weigh-a-file-i-was-sent": weighed,
+    }
+    added = journey_task_set()[len(default_task_set()) :]
+    assert {task.task_id for task in added} == set(runs)
+    try:
+        for task in added:
+            made = runs[task.task_id]()
+            outcome = score_transcript(task, [ToolCall(tool=name) for name in made])
+            assert outcome.completed and outcome.tool_call_errors == 0, task.task_id
+    finally:
+        _outputs.set_output_folder(None)
+        context.set_context_roots(None)

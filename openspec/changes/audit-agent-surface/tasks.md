@@ -31,7 +31,9 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 ## 3. Two clients
 
 - [ ] 3.1 Codex runner for the measurement harness; registration line tested in CI
-- [ ] 3.2 Corpus extended: journeys, one task per part family, a combination, a context folder
+- [x] 3.2 Corpus extended: journeys, one task per part family, a combination, a context folder
+      (`agenteval.journey_task_set`: nineteen tasks over all twelve tools, each new one walked
+      by a correct run in a test; not yet measured on either client, which is 3.3)
 - [ ] 3.3 Baseline run on both clients; results published per client and version
 - [x] 3.4 Gates: description and instruction length, schema constraints, result size, call time
 - [ ] 3.5 Release blocked on a completion-rate regression on either client
