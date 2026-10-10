@@ -1,8 +1,30 @@
 # Anvilate examples
 
-Runnable, self-contained scripts that each exercise one deterministic Anvilate
-vertical end to end — no LLM, no network. Every script here is executed by
-`tests/test_examples.py` in CI, so they stay green as the library moves.
+## Start here
+
+If you are new, these are the ones to open. Each is a document your agent could have
+written for you, and each runs with one command from the repository root.
+
+| Open this | To see | Run |
+|---|---|---|
+| [`parts/`](parts) | One spec for every part in the [catalog](../docs/parts-catalog.md): a plate, a bracket, a flange, a shaft, a lid. Copy the nearest one and change its numbers. | `anvilate view examples/parts/mounting_plate.spec.yaml` |
+| [`padeye.spec.yaml`](padeye.spec.yaml) | A part that is checked: a lifting lug under 60 kN, with the verdict for each check. | `anvilate check examples/padeye.spec.yaml` |
+| [`parts/clevis.spec.yaml`](parts/clevis.spec.yaml) | A drawn part that is also screened once it states its load. | `anvilate check examples/parts/clevis.spec.yaml` |
+| [`base_plate.spec.yaml`](base_plate.spec.yaml) | A part built to a STEP file you can open in your CAD. | `anvilate build examples/base_plate.spec.yaml --output base_plate.step` |
+| [`combinations/`](combinations) | Parts put together by the holes and faces they share, with bolts, and checked where they meet. See the [guide](../docs/combinations.md). | `anvilate combine examples/combinations/bracket_on_plate.combination.yaml --picture bracket.png` |
+| [`context/`](context) | A spec whose dimensions cite the drawing they were measured from. | `anvilate read examples/context/plate.dxf` |
+| [`third_party_module/`](third_party_module) | A check of your own, added from one file. See [discipline modules](../docs/discipline-modules.md). | `anvilate check examples/third_party_module/hanger_rod.spec.yaml --module examples/third_party_module/hanger_rod.py` |
+
+The other spec files beside this page (`cover_plate`, `nema23_bracket`, `timber_joist`,
+`transmission_shaft`) are four more checked parts of the same kind.
+
+## The Python gallery
+
+Everything below is for calling the library from Python. These are runnable,
+self-contained scripts that each exercise one deterministic calculation end to end, with
+no model and no network. This page names a selection of them by topic. Every script in the
+folder, named here or not, is run by `tests/test_examples.py`, so the rest stay as tests:
+they prove a formula still gives its published number, and you do not need to read them.
 
 Run any of them directly:
 

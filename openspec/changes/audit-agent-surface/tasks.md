@@ -61,4 +61,6 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 - [x] 8.1 README: three steps to a first part, what comes back, what Anvilate is not
 - [x] 8.2 One index by task; orphan-page gate
 - [x] 8.3 Remove or correct pages describing the workbench, a web server or a built-in model
-- [ ] 8.4 Examples: keep the ones a newcomer needs in the index; the rest stay as tests
+- [x] 8.4 Examples: keep the ones a newcomer needs in the index; the rest stay as tests
+      (`examples/README.md` opens with what to run first; each command is run by hand and
+      each path held by a test)

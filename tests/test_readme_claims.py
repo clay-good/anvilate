@@ -84,6 +84,40 @@ def test_every_example_the_index_names_exists():
     assert not missing, f"the examples index names files that are gone: {missing}"
 
 
+def test_the_examples_page_opens_with_what_a_newcomer_runs_and_every_path_is_there():
+    """The first thing under `examples/` is a short list to start from (audit 8.4).
+
+    The page used to open on the Python gallery, which is not what someone who asks an agent
+    for a part needs. The section may not send them to a file that is gone, give a command
+    the parser does not have, or leave out a folder or a spec that sits beside it.
+    """
+    import re
+
+    from anvilate.cli import _build_parser
+
+    index = (_REPO / "examples" / "README.md").read_text(encoding="utf-8")
+    start = index[index.index("## Start here") : index.index("## The Python gallery")]
+    assert index.index("## Start here") < index.index("| Example | What it shows |")
+    linked = set(re.findall(r"\]\(([\w./]+)\)", start))
+    for target in linked:
+        assert (_REPO / "examples" / target).resolve().exists(), target
+    commands = re.findall(r"`anvilate (\w+) ([^`]+)`", start)
+    assert len(commands) >= 6
+    known = set(_build_parser()._subparsers._group_actions[0].choices)  # noqa: SLF001
+    for command, arguments in commands:
+        assert command in known, command
+        for word in arguments.split():
+            if word.startswith("examples/"):
+                assert (_REPO / word).exists(), word
+    beside = {
+        path.name
+        for path in (_REPO / "examples").iterdir()
+        if (path.is_dir() and not path.name.startswith("_")) or path.name.endswith(".yaml")
+    }
+    named = {name for name in beside if name.removesuffix(".spec.yaml") in start}
+    assert named == beside, f"beside the page and not on it: {sorted(beside - named)}"
+
+
 def test_the_public_symbol_count_is_the_manifests_own():
     manifest = [
         line
