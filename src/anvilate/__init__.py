@@ -78,6 +78,8 @@ that already ran and does one more thing with them:
   ``anvilate view`` and by the MCP export tool alike.
 - :mod:`anvilate._outputs` — the private writer for the one output folder the MCP server
   is started with; no tool names a path.
+- :mod:`anvilate.projection` — hidden-line views of any built solid, with shaded faces,
+  dimension callouts and an overview sheet, as the SVG vocabulary the rasterizer reads.
 - :mod:`anvilate.raster` — the viewport SVG rasterized to PNG with the standard library,
   because a model reads PNG and not SVG.
 - :mod:`anvilate.ingest` — requirement documents read into a draft spec, where an

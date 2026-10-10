@@ -492,6 +492,7 @@ _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
     "cli.py:_build<-screen_spec": "the build command gates on the card's status",
     "cli.py:_view<-screen_spec": "the view command renders the card it ran onto the sheet",
     "mcp.py:_run_fea_validation_task<-screen_spec": "the MCP task reports the card it ran",
+    "mcp.py:_title_block<-screen_spec": "the overview image's title block prints the verdict",
     "needs.py:deepening<-screen_spec": "the needs report reads which checks could not run",
     "packs/structural.py:screen_structure<-screen_shear_plate": (
         "a structure's card is its members' cards, aggregated, not computed from them"

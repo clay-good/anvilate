@@ -183,3 +183,19 @@ def test_every_result_over_the_spec_corpus_fits_the_declared_size_budget(out):
             largest = max(largest, len(json.dumps(reply)))
     assert calls >= 400, f"only {calls} results were measured"
     assert largest <= RESULT_BUDGET_CHARS, f"a result reached {largest:,} characters"
+
+
+def test_the_overview_is_one_picture_with_the_part_its_size_material_and_verdict(out):
+    """The view to show first: four views on one image, under a title block read from the
+    spec that was built. Its summary line names it, and the file is written as an image."""
+    pytest.importorskip("build123d")
+    built, _screened = _handles("transmission_shaft")
+    result = _call("render_viewport", {"subject": built, "view": "overview"})["result"]
+    summary, image = result["content"]
+    assert summary["text"].startswith("overview view, 1000x750 px, image/png")
+    assert image["mimeType"] == "image/png" and "structuredContent" not in result
+    assert (out / "drive-shaft-overview.png").stat().st_size > 2_000
+
+    plain = _call("render_viewport", {"subject": built, "view": "front"})["result"]
+    labelled = _call("render_viewport", {"subject": built, "view": "front", "dimensions": True})
+    assert labelled["result"]["content"][1]["data"] != plain["content"][1]["data"]

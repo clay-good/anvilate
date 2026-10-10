@@ -209,9 +209,13 @@ def test_viewport_is_a_deterministic_self_contained_svg_with_integrity_metadata(
     assert root.attrib["width"] == "640"
     assert root.attrib["height"] == "480"
     assert "href=" not in first.data.decode()
-    assert {node.attrib["data-face"] for node in root if "data-face" in node.attrib} == set(
-        built.faces
-    )
+    # A projection draws the faces that face the camera, each under its own tag. From the
+    # iso corner (looking from +x, -y, above) those are the top, the east and the south.
+    assert {node.attrib["data-face"] for node in root if "data-face" in node.attrib} == {
+        "top",
+        "east",
+        "south",
+    }
 
 
 def test_named_viewports_produce_distinct_projections():
@@ -574,35 +578,43 @@ def test_transmission_shaft_regeneration_is_deterministic():
     assert first.pattern == TRANSMISSION_SHAFT_PATTERN
 
 
-@pytest.mark.parametrize("view", ("iso", "front", "top", "right"))
-def test_transmission_shaft_renders_every_named_view_with_all_semantic_tags(view):
-    built = build_transmission_shaft(_shaft())
-    root = ElementTree.fromstring(render_viewport(built, view=view).data)
+def _drawn_tags(svg: bytes) -> set[str]:
+    return set(re.findall(r'data-face="([^"]+)"', svg.decode("utf-8")))
 
-    assert {node.attrib["data-face"] for node in root if "data-face" in node.attrib} == set(
-        built.faces
-    )
+
+def _drawn_extent(svg: bytes) -> tuple[float, float, float, float]:
+    """The pixel bounding box of every edge the view draws."""
+    numbers = [
+        float(value)
+        for path in re.findall(r'<path data-edges="[a-z]+" d="([^"]+)"', svg.decode("utf-8"))
+        for value in re.findall(r"-?\d+\.\d+", path)
+    ]
+    xs, ys = numbers[::2], numbers[1::2]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def test_transmission_shaft_views_draw_the_faces_that_face_each_camera():
+    """Views come from the solid: a face is drawn where the camera can see it, and nowhere
+    else. Across the four views that is every face of the shaft but the end it stands on."""
+    built = build_transmission_shaft(_shaft())
+    drawn = {
+        view: _drawn_tags(render_viewport(built, view=view).data)
+        for view in ("iso", "front", "top", "right")
+    }
+    assert all(tags and tags <= set(built.faces) for tags in drawn.values()), drawn
+    assert drawn["top"] == {"driven_end"} or drawn["top"] == {"drive_end"}
+    assert drawn["front"] == drawn["right"] == {"outside_surface"}
+    assert "outside_surface" in drawn["iso"] and len(drawn["iso"]) == 2
 
 
 @pytest.mark.parametrize("view", ("iso", "front", "right"))
 def test_long_transmission_shaft_viewports_fit_both_ends_inside_the_canvas(view):
     rendered = render_viewport(build_transmission_shaft(_shaft()), view=view, width_px=800)
-    svg = rendered.data.decode("utf-8")
-    if view == "iso":
-        end_centers = [
-            float(value)
-            for value in re.findall(r'data-face="(?:drive|driven)_end"[^>]+ cy="([\d.]+)"', svg)
-        ]
-        assert min(end_centers) > 0
-        assert max(end_centers) < rendered.height_px
-    else:
-        match = re.search(
-            r'data-face="outside_surface"[^>]+ y="([\d.]+)"[^>]+ height="([\d.]+)"', svg
-        )
-        assert match is not None
-        top, height = (float(value) for value in match.groups())
-        assert top > 0
-        assert top + height < rendered.height_px
+    left, right, top, bottom = _drawn_extent(rendered.data)
+    assert 0 < left < right < rendered.width_px
+    assert 0 < top < bottom < rendered.height_px
+    # The shaft is 600 long and 55 across: taller than wide in every view that shows its side.
+    assert (bottom - top) > 4 * (right - left)
 
 
 @pytest.mark.parametrize(
@@ -1212,7 +1224,7 @@ def test_step_interface_import_does_not_leak_kernel_diagnostics_to_stdout(tmp_pa
 
 
 @pytest.mark.parametrize("view", ("iso", "front", "top", "right"))
-def test_annular_cover_plate_renders_every_named_view_with_all_semantic_tags(view):
+def test_annular_cover_plate_views_draw_what_each_camera_sees(view):
     built = build_cover_plate(
         _cover(
             length=None,
@@ -1226,7 +1238,15 @@ def test_annular_cover_plate_renders_every_named_view_with_all_semantic_tags(vie
     text = rendered.data.decode()
 
     assert rendered == render_viewport(built, view=view, width_px=640)
-    assert all(f'data-face="{tag}"' in text for tag in built.faces)
+    drawn = _drawn_tags(rendered.data)
+    assert drawn <= set(built.faces)
+    # What the camera must see. A side view may also carry the bore's far wall, which is
+    # drawn first and covered by the rim in front of it; nothing ever draws the bottom.
+    assert {"iso": {"top", "perimeter", "bore"}, "top": {"top"}}.get(view, {"perimeter"}) <= drawn
+    assert "bottom" not in drawn
+    if view in ("front", "right"):
+        # The bore is behind the rim here, so its edges are dashed.
+        assert 'data-edges="hidden"' in text and "stroke-dasharray" in text
 
 
 def test_annular_cover_plate_named_views_are_visually_distinct():

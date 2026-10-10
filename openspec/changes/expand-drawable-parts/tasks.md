@@ -12,11 +12,11 @@
 
 ## 2. General drawing
 
-- [ ] 2.1 Hidden-line projector from the built solid (iso, front, top, right)
-- [ ] 2.2 SVG and PNG from one projection; rasterizer vocabulary extended as needed
-- [ ] 2.3 Regression: the four existing patterns draw the same edges as before
-- [ ] 2.4 Dimensioned view: key dimensions measured from the solid, in the spec's units
-- [ ] 2.5 Overview image: four views, name, overall size, material, verdict
+- [x] 2.1 Hidden-line projector from the built solid (iso, front, top, right)
+- [x] 2.2 SVG and PNG from one projection; rasterizer vocabulary extended as needed
+- [x] 2.3 Regression: the four existing patterns draw the same edges as before
+- [x] 2.4 Dimensioned view: key dimensions measured from the solid, in the spec's units
+- [x] 2.5 Overview image: four views, name, overall size, material, verdict
 
 ## 3. Parts that are already screened
 

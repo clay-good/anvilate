@@ -108,23 +108,14 @@ def _drawn() -> list:
     return [build_spec(load_spec_yaml((root / f"{n}.spec.yaml").read_text())) for n in names]
 
 
-def _inside(x: float, y: float, polygon: list[tuple[float, float]]) -> bool:
-    crossings = 0
-    for (x0, y0), (x1, y1) in zip(polygon, polygon[1:] + polygon[:1], strict=True):
-        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
-            crossings += 1
-    return crossings % 2 == 1
-
-
-def test_every_drawn_view_rasterizes_deterministically_with_each_face_in_its_colour():
-    """Each sizable face in every view of every drawn example: a point at its centre carries
-    its fill, unless a face drawn later covers that point (as in the SVG, later wins). Views
-    with curved shapes after the polygons are judged by the faces before them only where
-    nothing curved follows."""
-    from anvilate.geometry import render_viewport
+def test_every_drawn_view_rasterizes_to_the_same_picture_as_its_svg():
+    """Each view of every drawn example, as PNG: the same bytes every time, the size the SVG
+    declares, the ink where the SVG's edges are, and only the colours the SVG uses."""
+    from anvilate.geometry import render_overview, render_viewport
 
     checked = 0
     for built in _drawn():
+        toned = False
         for view in ("iso", "front", "top", "right"):
             rendered = render_viewport(built, view=view, width_px=400)
             png = render_viewport(built, view=view, width_px=400, format="png")
@@ -132,25 +123,35 @@ def test_every_drawn_view_rasterizes_deterministically_with_each_face_in_its_col
             width, height, rows = _pixels(png.data)
             assert (width, height) == (rendered.width_px, rendered.height_px)
             svg = rendered.data.decode()
-            faces = []
-            for match in re.finditer(r'<polygon[^>]*points="([^"]+)"[^>]*fill="#(\w{6})"', svg):
-                values = [float(v) for v in re.findall(r"[-\d.]+", match.group(1))]
-                faces.append((list(zip(values[::2], values[1::2], strict=True)), match))
-            for index, (polygon, match) in enumerate(faces):
-                xs, ys = [x for x, _ in polygon], [y for _, y in polygon]
-                edges = list(zip(polygon, polygon[1:] + polygon[:1], strict=True))
-                area = abs(sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in edges)) / 2
-                perimeter = sum(
-                    ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 for (x0, y0), (x1, y1) in edges
-                )
-                if 2 * area / perimeter < 6:
-                    continue  # a sliver, however long: its interior is all outline at this size
-                cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
-                if any(_inside(cx, cy, later) for later, _ in faces[index + 1 :]):
-                    continue
-                if re.search(r"<(ellipse|circle|path)", svg[match.end() :]):
-                    continue  # a curved shape drawn later may cover it
-                fill = tuple(int(match.group(2)[i : i + 2], 16) for i in (0, 2, 4))
-                assert _at(rows, round(cx), round(cy)) == fill, (built.pattern, view)
-                checked += 1
-    assert checked >= 8, f"only {checked} faces were sampled"
+            edges = [
+                float(value)
+                for path in re.findall(r'<path data-edges="[a-z]+" d="([^"]+)"', svg)
+                for value in re.findall(r"-?\d+\.\d+", path)
+            ]
+            xs, ys = edges[::2], edges[1::2]
+            inked = [
+                (x, y)
+                for y, row in enumerate(rows)
+                for x in range(width)
+                if row[x * 3 : x * 3 + 3] != b"\xff\xff\xff"
+            ]
+            # The picture's extent is the drawing's extent, to within the line's own width.
+            assert abs(min(x for x, _ in inked) - min(xs)) <= 2, (built.pattern, view)
+            assert abs(max(x for x, _ in inked) - max(xs)) <= 2, (built.pattern, view)
+            assert abs(min(y for _, y in inked) - min(ys)) <= 2, (built.pattern, view)
+            assert abs(max(y for _, y in inked) - max(ys)) <= 2, (built.pattern, view)
+            # A face tone the SVG fills with is a colour the PNG contains, exactly.
+            tones = {
+                tuple(int(tone[i : i + 2], 16) for i in (1, 3, 5))
+                for tone in re.findall(r'<polygon[^>]*fill="(#\w{6})"', svg)
+            }
+            present = {tuple(row[x * 3 : x * 3 + 3]) for row in rows for x in range(width)}
+            assert tones, (built.pattern, view)
+            toned |= bool(tones & present)
+            checked += 1
+        # A part thinner than its own outline at this size (a 38 mm joist over 3.6 m) shows
+        # no face between its edges in some views; in at least one it must.
+        assert toned, built.pattern
+        overview = render_overview(built, lines=("size", "material", "pass"), format="png")
+        assert _pixels(overview.data)[:2] == (overview.width_px, overview.height_px)
+    assert checked == 16

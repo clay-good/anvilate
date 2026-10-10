@@ -17,7 +17,6 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
-from html import escape
 from itertools import combinations
 from math import isfinite, pi, sqrt
 from pathlib import Path
@@ -106,6 +105,7 @@ __all__ = [
     "check_cylindrical_mate_fit",
     "detect_step_interfaces",
     "measure_geometry",
+    "render_overview",
     "render_viewport",
     "read_step_validation_properties",
     "verify_step_integrity",
@@ -208,7 +208,7 @@ class GeometryMeasurement(StatableModel):
 class ViewportImage(StatableModel):
     """The portable image document returned beside an MCP image attachment."""
 
-    view: Literal["iso", "front", "top", "right"]
+    view: Literal["iso", "front", "top", "right", "overview"]
     width_px: Annotated[int, Field(ge=64, le=4096)]
     height_px: Annotated[int, Field(ge=64, le=3072)]
     mime_type: Literal["image/svg+xml", "image/png"]
@@ -278,7 +278,7 @@ class BuiltGeometry:
 class RenderedViewport:
     """A deterministic SVG or PNG rendering and the metadata needed to attach it over MCP."""
 
-    view: Literal["iso", "front", "top", "right"]
+    view: Literal["iso", "front", "top", "right", "overview"]
     width_px: int
     height_px: int
     data: bytes
@@ -2578,152 +2578,13 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
     )
 
 
-def _render_round_geometry(
-    built: BuiltGeometry,
-    *,
-    view: Literal["iso", "front", "top", "right"],
-    width_px: int,
-) -> RenderedViewport:
-    """Render a Z-axis disk, annulus, or shaft with exact SVG curves."""
-    height_px = max(64, round(width_px * 0.75))
-    cx, cy = width_px / 2, height_px / 2
-    diameter = built.dimensions_mm["diameter"]
-    is_shaft = built.pattern == TRANSMISSION_SHAFT_PATTERN
-    axial_size = built.dimensions_mm["length" if is_shaft else "thickness"]
-    bottom_tag = "drive_end" if is_shaft else "bottom"
-    top_tag = "driven_end" if is_shaft else "top"
-    perimeter_tag = "outside_surface" if is_shaft else "perimeter"
-    radius = min(width_px, height_px) * 0.42
-    wall = max(3.0, radius * axial_size / diameter)
-    if is_shaft and view != "top":
-        # A plate is normally much wider than it is thick, while a shaft is normally the
-        # opposite. Scaling both from the radius made a 600 x 55 mm shaft thousands of
-        # pixels tall and clipped both ends outside a 600 px viewport. Fit the full axial
-        # extent for the shaft views, including the projected end ellipse in isometric.
-        projected_length = axial_size + (diameter * 0.42 if view == "iso" else 0)
-        scale = min(width_px * 0.84 / diameter, height_px * 0.84 / projected_length)
-        radius = diameter * scale / 2
-        wall = axial_size * scale
-    bore_radius = radius * built.dimensions_mm.get("hole_diameter", 0) / diameter
-    if view == "top":
-        body = [
-            f'<circle data-face="{bottom_tag}" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
-            'fill="#dbeafe" stroke="#0f172a" stroke-width="1.5"/>',
-            f'<circle data-face="{top_tag}" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
-            'fill="#eff6ff" stroke="#0f172a" stroke-width="1.5"/>',
-            f'<circle data-face="{perimeter_tag}" cx="{cx:.3f}" cy="{cy:.3f}" r="{radius:.3f}" '
-            'fill="none" stroke="#0f172a" stroke-width="2"/>',
-        ]
-        if bore_radius:
-            body.append(
-                f'<circle data-face="bore" cx="{cx:.3f}" cy="{cy:.3f}" '
-                f'r="{bore_radius:.3f}" fill="#ffffff" stroke="#0f172a" stroke-width="1.5"/>'
-            )
-    elif view == "iso":
-        ry = radius * 0.42
-        top_y = cy - wall / 2
-        bottom_y = cy + wall / 2
-        body = [
-            f'<ellipse data-face="{bottom_tag}" cx="{cx:.3f}" cy="{bottom_y:.3f}" '
-            f'rx="{radius:.3f}" ry="{ry:.3f}" fill="#bfdbfe" stroke="#0f172a"/>',
-            f'<path data-face="{perimeter_tag}" d="M {cx - radius:.3f} {top_y:.3f} '
-            f"L {cx - radius:.3f} {bottom_y:.3f} A {radius:.3f} {ry:.3f} 0 0 0 "
-            f'{cx + radius:.3f} {bottom_y:.3f} L {cx + radius:.3f} {top_y:.3f} Z" '
-            'fill="#93c5fd" stroke="#0f172a" stroke-width="1.5"/>',
-            f'<ellipse data-face="{top_tag}" cx="{cx:.3f}" cy="{top_y:.3f}" '
-            f'rx="{radius:.3f}" ry="{ry:.3f}" fill="#eff6ff" stroke="#0f172a"/>',
-        ]
-        if bore_radius:
-            body.append(
-                f'<ellipse data-face="bore" cx="{cx:.3f}" cy="{top_y:.3f}" '
-                f'rx="{bore_radius:.3f}" ry="{bore_radius * 0.42:.3f}" '
-                'fill="#ffffff" stroke="#0f172a" stroke-width="1.5"/>'
-            )
-    else:
-        left, top = cx - radius, cy - wall / 2
-        body = [
-            f'<line data-face="{bottom_tag}" x1="{left:.3f}" y1="{top + wall:.3f}" '
-            f'x2="{left + 2 * radius:.3f}" y2="{top + wall:.3f}" stroke="#0f172a"/>',
-            f'<rect data-face="{perimeter_tag}" x="{left:.3f}" y="{top:.3f}" '
-            f'width="{2 * radius:.3f}" height="{wall:.3f}" fill="#bfdbfe" '
-            'stroke="#0f172a" stroke-width="1.5"/>',
-            f'<line data-face="{top_tag}" x1="{left:.3f}" y1="{top:.3f}" '
-            f'x2="{left + 2 * radius:.3f}" y2="{top:.3f}" stroke="#0f172a"/>',
-        ]
-        if bore_radius:
-            body.append(
-                f'<path data-face="bore" d="M {cx - bore_radius:.3f} {top:.3f} '
-                f'V {top + wall:.3f} M {cx + bore_radius:.3f} {top:.3f} V {top + wall:.3f}" '
-                'fill="none" stroke="#475569" stroke-dasharray="4 3"/>'
-            )
-    svg = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_px}" height="{height_px}" '
-        f'viewBox="0 0 {width_px} {height_px}" role="img" '
-        f'aria-label="{escape(built.name)} {view} viewport">\n'
-        f'<rect width="{width_px}" height="{height_px}" fill="#ffffff"/>\n'
-        + "\n".join(body)
-        + "\n</svg>\n"
-    ).encode("utf-8")
-    return RenderedViewport(view=view, width_px=width_px, height_px=height_px, data=svg)
-
-
-def render_viewport(
-    built: BuiltGeometry,
-    *,
-    view: Literal["iso", "front", "top", "right"] = "iso",
-    width_px: int = 800,
-    format: Literal["svg", "png"] = "svg",  # noqa: A002 - the word the MCP argument uses
-) -> RenderedViewport:
-    """Render a deterministic viewport of one valid solid, as SVG or as PNG.
-
-    SVG is the drawing itself and what the part sheet embeds. PNG is the same drawing
-    rasterized by :mod:`anvilate.raster`, because a model reads PNG and not SVG: over MCP
-    an SVG attachment reached the agent as an image it could not look at.
-    """
+def _viewport_arguments(width_px: int, view: str, format: str) -> None:  # noqa: A002
     if format not in ("svg", "png"):
         raise GeometryError(
             f"unknown viewport format {format!r}; choose svg or png",
             action="select",
             subject=f"the viewport format {format!r}",
             source="the supported svg and png viewport formats",
-        )
-    rendered = _render_svg_viewport(built, view=view, width_px=width_px)
-    if format == "svg":
-        return rendered
-    from .raster import svg_to_png
-
-    return RenderedViewport(
-        view=rendered.view,
-        width_px=rendered.width_px,
-        height_px=rendered.height_px,
-        data=svg_to_png(rendered.data),
-        format="png",
-    )
-
-
-def _render_svg_viewport(
-    built: BuiltGeometry,
-    *,
-    view: Literal["iso", "front", "top", "right"],
-    width_px: int,
-) -> RenderedViewport:
-    """Render a deterministic vector viewport of one valid solid.
-
-    The projection uses only the built solid's bounding vertices. That is exact for the
-    current rectangular base-plate pattern and deliberately refuses to masquerade as a
-    general hidden-line renderer for patterns that have not shipped.
-    """
-    if built.pattern not in {
-        BASE_PLATE_PATTERN,
-        COVER_PLATE_PATTERN,
-        TRANSMISSION_SHAFT_PATTERN,
-        TIMBER_BEAM_PATTERN,
-    }:
-        raise UnsupportedGeometry(
-            f"viewport rendering has no projector for {built.pattern!r}",
-            subject=f"the viewport pattern {built.pattern!r}",
-            source="a pattern with an audited viewport projector",
         )
     if not 64 <= width_px <= 4096:
         raise GeometryError(
@@ -2732,86 +2593,89 @@ def _render_svg_viewport(
             subject=f"the viewport width_px value {width_px}",
             source="an integer width from 64 through 4096 pixels",
         )
-    if view not in {"iso", "front", "top", "right"}:
+    if view not in {"iso", "front", "top", "right", "overview"}:
         raise GeometryError(
-            f"unknown viewport {view!r}; choose iso, front, top, or right",
+            f"unknown viewport {view!r}; choose iso, front, top, right, or overview",
             action="select",
             subject=f"the viewport name {view!r}",
-            source="the supported iso, front, top, and right viewport registry",
-        )
-    if "diameter" in built.dimensions_mm:
-        return _render_round_geometry(built, view=view, width_px=width_px)
-    height_px = max(64, round(width_px * 0.75))
-    bounds = built.shape.bounding_box()
-    x0, y0, z0 = bounds.min.X, bounds.min.Y, bounds.min.Z
-    x1, y1, z1 = bounds.max.X, bounds.max.Y, bounds.max.Z
-    vertices = (
-        (x0, y0, z0),
-        (x1, y0, z0),
-        (x1, y1, z0),
-        (x0, y1, z0),
-        (x0, y0, z1),
-        (x1, y0, z1),
-        (x1, y1, z1),
-        (x0, y1, z1),
-    )
-    root2 = sqrt(2)
-    projectors = {
-        "top": lambda x, y, z: (x, y, z),
-        "front": lambda x, y, z: (x, z, -y),
-        "right": lambda x, y, z: (y, z, x),
-        "iso": lambda x, y, z: ((x + y) / root2, z + (y - x) / root2, x - y + z),
-    }
-    projected = tuple(projectors[view](*vertex) for vertex in vertices)
-    low_x = min(point[0] for point in projected)
-    high_x = max(point[0] for point in projected)
-    low_y = min(point[1] for point in projected)
-    high_y = max(point[1] for point in projected)
-    margin = width_px * 0.08
-    span_x = max(high_x - low_x, 1e-9)
-    span_y = max(high_y - low_y, 1e-9)
-    scale = min((width_px - 2 * margin) / span_x, (height_px - 2 * margin) / span_y)
-    offset_x = (width_px - span_x * scale) / 2
-    offset_y = (height_px - span_y * scale) / 2
-
-    def screen(point: tuple[float, float, float]) -> tuple[float, float]:
-        return (
-            offset_x + (point[0] - low_x) * scale,
-            height_px - offset_y - (point[1] - low_y) * scale,
+            source="the supported iso, front, top, right, and overview viewport registry",
         )
 
-    faces = (
-        ("bottom", (0, 1, 2, 3), "#cbd5e1"),
-        ("south", (0, 1, 5, 4), "#bfdbfe"),
-        ("east", (1, 2, 6, 5), "#93c5fd"),
-        ("north", (2, 3, 7, 6), "#dbeafe"),
-        ("west", (3, 0, 4, 7), "#e2e8f0"),
-        ("top", (4, 5, 6, 7), "#eff6ff"),
+
+def _as_viewport(svg: bytes, *, view: str, width_px: int, height_px: int, format: str):  # noqa: A002
+    if format == "svg":
+        return RenderedViewport(view=view, width_px=width_px, height_px=height_px, data=svg)
+    from .raster import svg_to_png
+
+    return RenderedViewport(
+        view=view, width_px=width_px, height_px=height_px, data=svg_to_png(svg), format="png"
     )
-    ordered = sorted(
-        faces,
-        key=lambda face: sum(projected[index][2] for index in face[1]) / len(face[1]),
+
+
+def render_viewport(
+    built: BuiltGeometry,
+    *,
+    view: Literal["iso", "front", "top", "right"] = "iso",
+    width_px: int = 800,
+    format: Literal["svg", "png"] = "svg",  # noqa: A002 - the word the MCP argument uses
+    dimensions: bool = False,
+    unit: Literal["mm", "in"] = "mm",
+) -> RenderedViewport:
+    """Render a deterministic view of one valid solid, as SVG or as PNG.
+
+    The view is drawn from the solid itself by :mod:`anvilate.projection`: the kernel's
+    hidden-line removal gives the visible edges (solid) and hidden edges (dashed), so any
+    pattern draws with no drawing code of its own. ``dimensions`` adds the overall width
+    and height of what the view shows, measured from the projected solid, in ``unit``.
+
+    SVG is the drawing itself and what the part sheet embeds. PNG is the same drawing
+    rasterized by :mod:`anvilate.raster`, because a model reads PNG and not SVG.
+    """
+    from .projection import render_view
+
+    _viewport_arguments(width_px, view, format)
+    if view == "overview":
+        raise GeometryError(
+            "the overview is drawn by render_overview, which takes its title block lines",
+            action="call",
+            subject="the viewport name 'overview'",
+            source="anvilate.geometry.render_overview",
+        )
+    svg, height_px = render_view(
+        built.shape,
+        built.faces,
+        name=built.name,
+        view=view,
+        width_px=width_px,
+        dimensions=dimensions,
+        unit=unit,
     )
-    polygons = []
-    for tag, indices, fill in ordered:
-        points = " ".join(
-            f"{screen(projected[index])[0]:.3f},{screen(projected[index])[1]:.3f}"
-            for index in indices
-        )
-        polygons.append(
-            f'<polygon data-face="{escape(tag)}" points="{points}" fill="{fill}" '
-            'stroke="#0f172a" stroke-width="1.5" stroke-linejoin="round"/>'
-        )
-    svg = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_px}" height="{height_px}" '
-        f'viewBox="0 0 {width_px} {height_px}" role="img" '
-        f'aria-label="{escape(built.name)} {view} viewport">\n'
-        f'<rect width="{width_px}" height="{height_px}" fill="#ffffff"/>\n'
-        + "\n".join(polygons)
-        + "\n</svg>\n"
-    ).encode("utf-8")
-    return RenderedViewport(view=view, width_px=width_px, height_px=height_px, data=svg)
+    return _as_viewport(svg, view=view, width_px=width_px, height_px=height_px, format=format)
+
+
+def render_overview(
+    built: BuiltGeometry,
+    *,
+    lines: Sequence[str] = (),
+    width_px: int = 1000,
+    format: Literal["svg", "png"] = "svg",  # noqa: A002
+    unit: Literal["mm", "in"] = "mm",
+) -> RenderedViewport:
+    """The four views of a part on one image, under its name and ``lines``.
+
+    One picture that answers "what did you make?": iso, front, top and right, the three
+    flat views carrying their overall dimensions, and a title block whose rows the caller
+    supplies (overall size, material, verdict).
+    """
+    from ._models import each_one
+    from .projection import render_overview as draw
+
+    lines = each_one(lines, str, named="lines")
+    _viewport_arguments(width_px, "overview", format)
+    svg, height_px = draw(
+        built.shape, built.faces, name=built.name, lines=lines, width_px=width_px, unit=unit
+    )
+    return _as_viewport(svg, view="overview", width_px=width_px, height_px=height_px, format=format)
 
 
 def measure_geometry(built: BuiltGeometry, query: str) -> GeometryMeasurement:

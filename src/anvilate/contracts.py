@@ -158,7 +158,7 @@ CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION = "1.1.0"
 CYLINDRICAL_MATE_ENGAGEMENT_CHECK_SCHEMA_VERSION = "1.1.0"
 
 # The self-contained SVG image document returned by ``render_viewport``.
-VIEWPORT_SCHEMA_VERSION = "1.2.0"
+VIEWPORT_SCHEMA_VERSION = "1.3.0"
 
 # A scalar read directly from a built B-Rep by ``measure_geometry``.
 MEASUREMENT_SCHEMA_VERSION = "1.1.0"

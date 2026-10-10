@@ -285,6 +285,7 @@ geometry.check_planar_gap_clearance
 geometry.check_cylindrical_mate_fit
 geometry.detect_step_interfaces
 geometry.measure_geometry
+geometry.render_overview
 geometry.render_viewport
 geometry.read_step_validation_properties
 geometry.verify_step_integrity
@@ -381,6 +382,9 @@ profile.SuppliedValue
 profile.Profile
 profile.ProfileBinding
 profile.OutsideApplicability
+projection.VIEWS
+projection.render_overview
+projection.render_view
 raster.RasterError
 raster.svg_to_png
 refusal.RefusalError

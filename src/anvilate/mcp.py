@@ -198,7 +198,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
 _BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.27.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.4.0"
-_VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.2.0"
+_VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.1.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
@@ -530,9 +530,15 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "subject": _SUBJECT_SCHEMA,
                     "view": {
                         "type": "string",
-                        "enum": ["iso", "front", "top", "right"],
+                        "enum": ["overview", "iso", "front", "top", "right"],
+                        "description": "overview is all four views on one image with the "
+                        "part's name, size, material and verdict: the one to show first",
                     },
                     "width_px": {"type": "integer", "minimum": 64, "maximum": 4096},
+                    "dimensions": {
+                        "type": "boolean",
+                        "description": "add the overall dimensions, measured from the solid",
+                    },
                     "format": {
                         "type": "string",
                         "enum": ["png", "svg"],
@@ -1776,18 +1782,45 @@ def _written(name: str, data: bytes) -> dict[str, Any] | None:
     return write_output(name, data)
 
 
+def _title_block(handle: str, built: Any) -> tuple[str, ...]:
+    """The overview's rows: overall size, material and verdict, from the spec that was built."""
+    from .screening import screen_spec
+    from .spec import parse_spec
+
+    box = built.shape.bounding_box()
+    size = " x ".join(f"{extent:.4g}" for extent in (box.size.X, box.size.Y, box.size.Z)) + " mm"
+    spec = parse_spec(subject_store().resolve(handle, kind=_BUILT_GEOMETRY)["spec"])
+    verdict = screen_spec(spec, **({"modules": _MODULES} if _MODULES else {})).status.value
+    return (size, str(spec.material.ref), verdict.replace("_", " "))
+
+
 def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """Render a built-geometry subject as a schema-backed MCP image attachment."""
-    from .geometry import GeometryError, GeometryUnavailable, UnsupportedGeometry, render_viewport
+    from .geometry import (
+        GeometryError,
+        GeometryUnavailable,
+        UnsupportedGeometry,
+        render_overview,
+        render_viewport,
+    )
 
     try:
         built = _built_geometry(arguments["subject"])
-        rendered = render_viewport(
-            built,
-            view=arguments["view"],
-            width_px=arguments.get("width_px", 800),
-            format=arguments.get("format", "png"),
-        )
+        if arguments["view"] == "overview":
+            rendered = render_overview(
+                built,
+                lines=_title_block(arguments["subject"], built),
+                width_px=arguments.get("width_px", 1000),
+                format=arguments.get("format", "png"),
+            )
+        else:
+            rendered = render_viewport(
+                built,
+                view=arguments["view"],
+                width_px=arguments.get("width_px", 800),
+                format=arguments.get("format", "png"),
+                dimensions=bool(arguments.get("dimensions", False)),
+            )
     except UnknownSubject as unknown:
         raise _InvalidArguments(
             [f"subject: {unknown.args[0]}"], operation="render_viewport"
