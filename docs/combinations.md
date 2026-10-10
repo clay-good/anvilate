@@ -38,7 +38,7 @@ from the STEP file.
 | `hole_pattern` | Puts one face on another with the listed holes coaxial, pair by pair. | a `face`, and `holes` by their tags |
 | `face_to_face` | Puts two faces in contact. `offset` opens a gap. | a `face` |
 | `edge_flush` | Lines two faces up in one plane. `offset` steps one back from the other. | a `face` |
-| `shaft_in_bore` | Makes two axes one. | an `axis` (x, y or z through the part's origin) or a `feature`, a hole by its tag |
+| `shaft_in_bore` | Makes two axes one. `fit` states the ISO 286 fit the two are made to, such as `H7/g6`. | an `axis` (x, y or z through the part's origin) or a `feature`, a hole by its tag |
 
 A `face` is one of the part's six outermost faces by direction: top, bottom, left, right,
 front or back. A hole's tag is the one the part's own spec gave it; `build_part` lists them
@@ -59,6 +59,7 @@ Each of these is an entry on the combination's card.
 | hole pattern | Whether the mated holes line up, hole by hole. With a fastener in them, they may be out by the room the bolt has; with a declared `position_tolerance`, by that; otherwise they must agree. A mismatch fails and names the holes. |
 | bolt clearance | Whether the smallest mated hole admits the bolt at the ISO 273 class asked for (`close`, `normal` or `coarse`), and what to open it to when it does not. |
 | bolt length | Whether the bolt fills its nut through the clamped parts and washers, and how much longer it must be when it does not. |
+| fit | On a `shaft_in_bore` mate where one part sits inside a bore of the other: whether the bore and the shaft are one nominal size, and with a declared `fit`, what it leaves between them across their tolerances. A collar slid over a smaller step overlaps nothing and fails here. |
 | pin fit | Whether every mated hole is the dowel pin's own diameter. A pin locates by filling its hole, so one in a clearance hole fails and names the holes to ream. |
 | pin length | Whether the pin is a length ISO 2338 stocks for its diameter, and sits inside both parts with half its length each side of the plane they meet on. |
 | weld | A declared weld, not evaluated: its strength is screened as a `welded_connection` element with its load. |
@@ -99,7 +100,8 @@ Two plate flanges face to face, their six holes mated, with six hex bolts.
 ### A collar on a shaft
 
 `shaft_in_bore` puts the collar on the shaft's axis, and an `edge_flush` mate with an
-offset puts it 60 mm from the drive end.
+offset puts it 60 mm from the drive end. The mate states its fit, H7/g6, and the card says
+what that is at 30 mm: 0.007 to 0.041 mm of clearance.
 [`collar_on_shaft.combination.yaml`](../examples/combinations/collar_on_shaft.combination.yaml)
 
 ![collar on shaft](combinations/collar_on_shaft.png)

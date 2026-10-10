@@ -81,7 +81,7 @@ def test_a_worked_combination_builds_with_no_coordinate_in_its_document(name):
     assert _entry(built, "interference").status is CheckStatus.PASS
     # A mate names features. Nothing in one is a position.
     for mate in document["mates"]:
-        assert set(mate) <= {"id", "kind", "place", "on", "offset", "rotation_deg"}
+        assert set(mate) <= {"id", "kind", "place", "on", "offset", "rotation_deg", "fit"}
         for side in ("place", "on"):
             assert set(mate[side]) <= {"part", "face", "holes", "axis", "feature"}
     again = _built(name)
@@ -550,6 +550,9 @@ def test_a_dowel_pin_sits_in_each_hole_half_each_side_of_the_mating_plane():
     assert str(built.bom[-1]) == " 6  2 x ISO2338-4x8: pin (envelope)"
     assert _entry(built, "doweled pin fit").status is CheckStatus.PASS
     assert _entry(built, "doweled pin length").status is CheckStatus.PASS
+    # No edition of ISO 2338 is recorded with the bundled table, so none is cited.
+    assert _entry(built, "doweled pin fit").reference is None
+    assert _entry(built, "doweled pin length").reference is None
     assert "held to a micrometre" in _entry(built, "doweled hole pattern").detail
     # A pin filling its hole touches it and overlaps nothing.
     assert _entry(built, "interference").status is CheckStatus.PASS
@@ -600,3 +603,96 @@ def test_hardware_is_a_bolt_or_a_pin_and_a_pin_takes_nothing_else(change, reason
 
     with pytest.raises(CombinationError, match=reason):
         _built("bracket_on_plate", broken)
+
+
+def _collar(change=None):
+    return _built("collar_on_shaft", change)
+
+
+def test_a_collar_sits_on_the_step_its_bore_is_made_for():
+    """A 30 mm bore on the shaft's 30 mm step, over the collar's 12 mm width."""
+    seat = _entry(_collar(), "seated fit")
+    assert seat.status is CheckStatus.PASS
+    assert "the 30 mm bore of 'collar' sits on 30 mm of 'shaft' over 12 mm" in seat.detail
+    assert "30 mm H7/g6 is a clearance fit" in seat.detail  # the example states its fit
+    bare = _entry(_collar(lambda d: d["mates"][0].pop("fit")), "seated fit")
+    assert bare.status is CheckStatus.PASS
+    assert "no fit is declared" in bare.detail and "declare fit on the mate" in bare.detail
+
+
+@pytest.mark.parametrize(
+    ("fit", "said"),
+    [
+        # 30 mm: H7 is +21/0 um, g6 -7/-20, k6 +15/+2, p6 +35/+22 (ISO 286-2).
+        ("H7/g6", "30 mm H7/g6 is a clearance fit, 0.007 to 0.041 mm of clearance"),
+        ("H7/h6", "30 mm H7/h6 is a clearance fit, 0.000 to 0.034 mm of clearance"),
+        (
+            "H7/k6",
+            "30 mm H7/k6 is a transition fit, from 0.015 mm of interference to 0.019 mm of "
+            "clearance",
+        ),
+        ("H7/p6", "30 mm H7/p6 is an interference fit, 0.001 to 0.035 mm of interference"),
+    ],
+)
+def test_a_declared_fit_is_stated_with_what_it_leaves_between_bore_and_shaft(fit, said):
+    seat = _entry(_collar(lambda d: d["mates"][0].update(fit=fit)), "seated fit")
+    assert seat.status is CheckStatus.PASS and said in seat.detail
+    assert seat.reference == "ISO 286-1:2010, standard tolerance grades and fundamental deviations"
+
+
+@pytest.mark.parametrize(
+    ("change", "said"),
+    [
+        # 105 mm up the shaft is its 25 mm step: the collar is placed, clear, and loose.
+        (
+            lambda d: d["mates"][1].update(offset=_mm(-105.0)),
+            "'collar' has a 30 mm bore where 'shaft' is 25 mm",
+        ),
+        (
+            lambda d: d["parts"][1]["spec"]["element_params"].update(bore=_mm(32.0)),
+            "'collar' has a 32 mm bore where 'shaft' is 30 mm",
+        ),
+    ],
+)
+def test_a_bore_on_a_shaft_of_another_size_is_not_seated(change, said):
+    built = _collar(change)
+    seat = _entry(built, "seated fit")
+    assert seat.status is CheckStatus.FAIL and said in seat.detail
+    # Nothing overlaps, which is why nothing else on the card noticed.
+    assert _entry(built, "interference").status is CheckStatus.PASS
+    assert built.card.status is CheckStatus.FAIL
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        (lambda d: d["mates"][0].update(fit="h6/H7"), "must be hole/shaft"),
+        (lambda d: d["mates"][0].update(fit="H7"), "expected a hole and shaft zone"),
+        (lambda d: d["mates"][0].update(fit="X9/z3"), "zone 'X' is not yet encoded"),
+        (lambda d: d["mates"][1].update(fit="H7/g6"), "is edge_flush and states a fit"),
+    ],
+)
+def test_a_fit_that_is_not_one_is_refused_and_names_the_mate(change, reason):
+    with pytest.raises(CombinationError, match=reason) as refused:
+        _collar(change)
+    assert "Value error" not in str(refused.value)
+    assert refused.value.remedies
+
+
+def test_parts_that_only_share_an_axis_have_no_seat_to_check():
+    """Stacked end to end, a collar past the end of the shaft sits on nothing.
+
+    With no fit declared that is an alignment and there is nothing to say. With one
+    declared, the fit has no shaft in a bore to be between, and fails.
+    """
+
+    def beyond(document: dict) -> None:
+        document["mates"][1].update(offset=_mm(-140.0))
+
+    def aligned(document: dict) -> None:
+        beyond(document)
+        document["mates"][0].pop("fit")
+
+    assert not [e for e in _collar(aligned).card.entries if e.name == "seated fit"]
+    seat = _entry(_collar(beyond), "seated fit")
+    assert seat.status is CheckStatus.FAIL and "no bore of one part has the other" in seat.detail

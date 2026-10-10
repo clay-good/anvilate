@@ -50,6 +50,7 @@ parts:
 mates:
 - id: seated
   kind: shaft_in_bore
+  fit: H7/g6
   place: {part: collar, axis: z}
   'on': {part: shaft, axis: z}
 - id: located

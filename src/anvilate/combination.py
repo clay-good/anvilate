@@ -30,7 +30,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import FrozenMap, Named, Provenance, StatableModel
+from ._models import FrozenMap, Named, Provenance, StatableModel, _refusal_line
 from .derivation import DerivationAbsence, Underived
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -130,6 +130,10 @@ class Mate(StatableModel):
     puts ``place.face`` on ``on.face`` with the listed holes coaxial, pair by pair.
     ``shaft_in_bore`` makes two axes one. ``offset`` opens a gap between mated faces, and
     ``rotation_deg`` turns the part about a shared axis that nothing else fixes.
+
+    ``fit`` is the ISO 286 fit a ``shaft_in_bore`` mate is made to, hole zone then shaft
+    zone, such as ``H7/g6``. The bore and the shaft are drawn at one nominal size; the fit
+    says how much room, or how much interference, their tolerances leave between them.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -144,9 +148,16 @@ class Mate(StatableModel):
     # is declared, a fastener in the holes sets it from the room it has, and otherwise the
     # holes are held to a micrometre.
     position_tolerance: Quantity | None = None
+    fit: Named | None = None
 
     @model_validator(mode="after")
     def _the_kind_names_its_features(self) -> Mate:
+        if self.fit is not None and self.kind != "shaft_in_bore":
+            raise _refuse(
+                f"mate '{self.id}' is {self.kind} and states a fit; a fit is between a "
+                "shaft and a bore, on a shaft_in_bore mate",
+                subject="mates[].fit",
+            )
         for side, end in (("place", self.place), ("on", self.on)):
             if self.kind in ("face_to_face", "edge_flush", "hole_pattern") and end.face is None:
                 raise _refuse(
@@ -338,8 +349,10 @@ def parse_combination(document: Mapping[str, Any]) -> Combination:
     except ValidationError as failure:
         first = failure.errors()[0]
         where = ".".join(str(part) for part in first["loc"]) or "the document"
+        # The sentence, without the validation library's "Value error, " in front of it.
+        said = _refusal_line("", first["msg"])
         raise _refuse(
-            f"the combination document is not valid at {where}: {first['msg']}",
+            f"the combination document is not valid at {where}: {said}",
             subject=where,
         ) from failure
 
@@ -1038,7 +1051,10 @@ def _stack(
     return bodies, entries
 
 
-_PIN_REFERENCE = "ISO 2338:1997 parallel pins"
+# The pin entries carry no `reference`. A scorecard citation of a normative standard names
+# its edition, and the bundled dowel table records none for ISO 2338: its source line is
+# "ISO 2338 parallel-pin dimensions". An edition written here would be one recalled, not
+# one read, so the entries name the standard in their own words and cite nothing.
 
 
 def _pins(
@@ -1098,7 +1114,6 @@ def _pins(
                     else f"every mated hole is {diameter:g} mm"
                 )
             ),
-            reference=_PIN_REFERENCE,
             underived=_MEASURED,
         )
     ]
@@ -1126,7 +1141,6 @@ def _pins(
                     f"(the thinner is {shallowest:g} mm)"
                 )
             ),
-            reference=_PIN_REFERENCE,
             underived=_MEASURED,
         )
     )
@@ -1172,6 +1186,128 @@ def _pattern_entry(
             f"'{fixed.id}': the farthest pair is {worst:.4g} mm apart, against {basis}"
             + ("" if agree else f"; {at} do not line up")
         ),
+        underived=_MEASURED,
+    )
+
+
+# The citation the cylindrical-mate check in :mod:`anvilate.geometry` gives the same tables.
+_FIT_REFERENCE = "ISO 286-1:2010, standard tolerance grades and fundamental deviations"
+
+
+def _coaxial(
+    part: PlacedPart, point: Vec, direction: Vec
+) -> list[tuple[float, float, float, bool]]:
+    """Each cylinder of ``part`` about the given axis: radius, where it starts and ends
+    along the axis from ``point``, and whether it is a bore (its surface faces the axis)."""
+    found = []
+    for face in part.shape.faces():
+        if face.geom_type.name != "CYLINDER":
+            continue
+        axis = face.axis_of_rotation
+        along = (axis.direction.X, axis.direction.Y, axis.direction.Z)
+        if abs(abs(_dot(along, direction)) - 1.0) > 1e-9:
+            continue
+        offset = _sub((axis.position.X, axis.position.Y, axis.position.Z), point)
+        if _norm(_sub(offset, _scale(direction, _dot(offset, direction)))) > EXACT_MM:
+            continue
+        stations = [_dot(_sub((v.X, v.Y, v.Z), point), direction) for v in face.vertices()]
+        at = face.position_at(0.5, 0.5)
+        middle = _sub((at.X, at.Y, at.Z), point)
+        radial = _sub(middle, _scale(direction, _dot(middle, direction)))
+        normal = face.normal_at(at)
+        bore = _dot((normal.X, normal.Y, normal.Z), radial) < 0
+        found.append((float(face.radius), min(stations), max(stations), bore))
+    return found
+
+
+def _fit_entry(mate: Mate, moving: PlacedPart, fixed: PlacedPart) -> ScorecardEntry | None:
+    """Whether a shaft sits in the bore it is mated into, and the fit between them.
+
+    The seat is a bore of one part and an outside cylinder of the other, on the mated axis
+    and overlapping along it. Two parts that only share an axis, stacked end to end, have
+    none, and the mate is then an alignment with nothing to check. Where there is one, the
+    two are held to one nominal size: a collar slid over a smaller step is placed, clear of
+    everything, and seated on nothing.
+    """
+    local_point, local_direction = _axis(mate, "on", mate.on, fixed.built)
+    point, direction = fixed.point(local_point), fixed.direction(local_direction)
+    seats = []
+    for hub, shaft in ((moving, fixed), (fixed, moving)):
+        for bore_radius, bore_low, bore_high, is_bore in _coaxial(hub, point, direction):
+            if not is_bore:
+                continue
+            for radius, low, high, inner in _coaxial(shaft, point, direction):
+                shared = min(bore_high, high) - max(bore_low, low)
+                if not inner and shared > EXACT_MM:
+                    seats.append(
+                        (abs(bore_radius - radius), hub.id, shaft.id, bore_radius, radius, shared)
+                    )
+    name = f"{mate.id} fit"
+    if not seats:
+        if mate.fit is None:
+            return None
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.FAIL,
+            detail=(
+                f"mate '{mate.id}' states the fit {mate.fit}, and no bore of one part has "
+                "the other inside it along the mated axis; a fit is between a shaft and "
+                "the bore it sits in"
+            ),
+            underived=_MEASURED,
+        )
+    _apart, hub_id, shaft_id, bore_radius, radius, shared = min(seats)
+    bore, shaft_size = 2 * bore_radius, 2 * radius
+    if abs(bore - shaft_size) > EXACT_MM:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.FAIL,
+            detail=(
+                f"'{hub_id}' has a {bore:g} mm bore where '{shaft_id}' is {shaft_size:g} mm; "
+                "a shaft_in_bore mate seats one in the other at one nominal size"
+            ),
+            underived=_MEASURED,
+        )
+    seated = (
+        f"the {bore:g} mm bore of '{hub_id}' sits on {shaft_size:g} mm of '{shaft_id}' "
+        f"over {shared:g} mm"
+    )
+    if mate.fit is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.PASS,
+            detail=(
+                f"{seated}; no fit is declared, so how tight the two are is not stated: "
+                "declare fit on the mate, such as H7/g6"
+            ),
+            underived=_MEASURED,
+        )
+    from .tolerance.iso286 import fit as iso286_fit
+
+    try:
+        resolved = iso286_fit(str(mate.fit), Quantity(magnitude=bore, unit="mm"))
+    except ValueError as refused:
+        raise _refuse(
+            f"mate '{mate.id}' states the fit '{mate.fit}': {refused}",
+            subject="mates[].fit",
+            action="replace",
+        ) from refused
+    low = resolved.min_clearance.to("mm").magnitude
+    high = resolved.max_clearance.to("mm").magnitude
+    between = {
+        "clearance": f"{low:.3f} to {high:.3f} mm of clearance",
+        "interference": f"{-high:.3f} to {-low:.3f} mm of interference",
+        "transition": f"from {-low:.3f} mm of interference to {high:.3f} mm of clearance",
+    }[resolved.kind]
+    return ScorecardEntry(
+        name=name,
+        status=CheckStatus.PASS,
+        detail=(
+            f"{seated}; {bore:g} mm {resolved.designation} is "
+            f"{'an' if resolved.kind == 'interference' else 'a'} {resolved.kind} fit, "
+            f"{between} across their tolerances"
+        ),
+        reference=_FIT_REFERENCE,
         underived=_MEASURED,
     )
 
@@ -1288,6 +1424,10 @@ def build_combination(combination: Combination) -> BuiltCombination:
         moving, fixed = placed[mate.place.part], placed[mate.on.part]
         if mate.kind == "hole_pattern":
             entries.append(_pattern_entry(mate, moving, fixed, stacks.get(mate.id)))
+        if mate.kind == "shaft_in_bore":
+            seat = _fit_entry(mate, moving, fixed)
+            if seat is not None:
+                entries.append(seat)
         if moving.turns_freely and mate is next(
             m for m in combination.mates if m.place.part == moving.id
         ):
