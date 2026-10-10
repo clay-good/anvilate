@@ -211,6 +211,26 @@ citation the [effectivity ratchet](standards-effectivity.md) exists to prevent.
 
 See [`examples/drive_train_scorecard.py`](../examples/drive_train_scorecard.py).
 
+## A clevis and its pin
+
+A `clevis` from the [parts catalog](parts-catalog.md) is drawn from its dimensions. Add the
+`load` on its pin and it is screened too, each check against an allowable stress the
+document states (they are the caller's, as a key's are) at the document's
+`constraints.min_safety_factor`, or 2.0 when it states none:
+
+| Check | Stress | Held against |
+| --- | --- | --- |
+| pin shear | `P / (2 · π · d² / 4)`, the pin's two shear planes | `pin_allowable_shear` |
+| ear bearing | `P / (2 · d · t)` | `allowable_bearing` |
+| ear net tension | `P / (2 · (w − d) · t)`, beside the hole | `allowable_tension` |
+| ear shear-out | `P / (4 · a · t)`, two planes per ear above the hole | `allowable_shear` |
+
+`d` is `pin_diameter`, `t` one ear's thickness `(width − gap) / 2`, `w` the ear's `depth`,
+and `a` the material from the edge of the hole to the top of the ear. A check whose
+allowable is not declared is not evaluated and names it; a clevis with no `load` is drawn
+and not checked. The base, and whatever holds it, are not part of the element. See
+[`examples/parts/clevis.spec.yaml`](../examples/parts/clevis.spec.yaml).
+
 ## Helical compression springs
 
 Three checks again, and this time **two of them pull the same knob in opposite directions**.

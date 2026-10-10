@@ -255,6 +255,18 @@
   }
  },
  "clevis": {
+  "allowable_bearing": {
+   "magnitude": 250.0,
+   "unit": "MPa"
+  },
+  "allowable_shear": {
+   "magnitude": 145.0,
+   "unit": "MPa"
+  },
+  "allowable_tension": {
+   "magnitude": 250.0,
+   "unit": "MPa"
+  },
   "base_thickness": {
    "magnitude": 12.0,
    "unit": "mm"
@@ -271,8 +283,16 @@
    "magnitude": 50.0,
    "unit": "mm"
   },
+  "load": {
+   "magnitude": 20.0,
+   "unit": "kN"
+  },
   "material": null,
   "name": "rod-end-clevis",
+  "pin_allowable_shear": {
+   "magnitude": 240.0,
+   "unit": "MPa"
+  },
   "pin_diameter": {
    "magnitude": 12.0,
    "unit": "mm"

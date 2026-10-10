@@ -570,6 +570,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     "beam_column_member": "1.4.0",
     "beam_member": "1.4.0",
     "bolted_connection": "1.3.0",
+    # 1.2.0 adds the pin load and the four allowables its pin and ears are screened against.
+    "clevis": "1.2.0",
     "column_member": "1.4.0",
     "concrete_bearing": "1.3.0",
     "cover_plate": "1.3.0",

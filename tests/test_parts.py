@@ -200,11 +200,26 @@ def test_every_view_draws_with_no_code_of_the_parts_own(element_type):
         assert height > 0 and b"<path" in svg, (element_type, view)
 
 
+# A clevis is screened once it states the load on its pin, and its example does; without
+# one it is the fifteenth drawn-only part, and is held to the same statement here.
+_UNLOADED = {
+    "clevis": dict.fromkeys(
+        (
+            "load",
+            "pin_allowable_shear",
+            "allowable_bearing",
+            "allowable_tension",
+            "allowable_shear",
+        )
+    )
+}
+
+
 @pytest.mark.parametrize("element_type", _PARTS)
 def test_a_part_with_no_screen_says_it_was_drawn_and_not_checked(element_type):
     from anvilate.export.gate import ExportRefused, authorize_export
 
-    card = screen_spec(_spec(element_type))
+    card = screen_spec(_spec(element_type, **_UNLOADED.get(element_type, {})))
     drawn = [entry for entry in card.entries if "drawn" in entry.detail]
     assert drawn and all(entry.status is CheckStatus.NOT_EVALUATED for entry in drawn)
     assert not card.passed
@@ -481,3 +496,91 @@ def test_an_enclosure_lid_drops_into_the_enclosure_it_is_drawn_for():
     clearance = lid["lip_inset"]["magnitude"] - box["wall"]["magnitude"]
     assert clearance == pytest.approx(0.2)
     assert lid["lip_height"]["magnitude"] < box["height"]["magnitude"] - box["wall"]["magnitude"]
+
+
+def _mpa(value: float) -> dict:
+    return {"magnitude": value, "unit": "MPa"}
+
+
+def _checks(card) -> dict:
+    return {entry.name.removeprefix("rod-end-clevis "): entry for entry in card.entries}
+
+
+def test_a_loaded_clevis_is_screened_on_its_pin_and_its_ears():
+    """20 kN on a 12 mm pin through two 10 mm ears, 30 wide, the hole 10 below their top.
+
+    The pin shears on two planes of pi 12^2/4; the ears bear on 2 x 12 x 10, pull apart on
+    2 x (30 - 12) x 10 and tear out on four planes of 10 x 10.
+    """
+    from anvilate.export.gate import authorize_export
+
+    card = screen_spec(_spec("clevis"))
+    checks = _checks(card)
+    expected = {
+        "pin shear": (20000 / (2 * _disc(12)), 240),
+        "ear bearing": (20000 / 240, 250),
+        "ear net tension": (20000 / 360, 250),
+        "ear shear-out": (20000 / 400, 145),
+    }
+    for name, (stress, allowable) in expected.items():
+        entry = checks[name]
+        assert entry.status is CheckStatus.PASS, name
+        assert entry.safety_factor == pytest.approx(allowable / stress, rel=1e-12), name
+        assert entry.required_safety_factor == 2.0
+        assert entry.derivation.result.value.to("MPa").magnitude == pytest.approx(stress)
+    assert not any("drawn" in entry.detail for entry in card.entries)
+    assert card.passed and authorize_export(card).validated
+
+
+@pytest.mark.parametrize(
+    ("check", "allowable", "at_the_margin"),
+    [
+        # Each allowable sits a hair under twice its stress, so only that check fails.
+        ("pin shear", "pin_allowable_shear", 2 * 20000 / (2 * math.pi * 12**2 / 4)),
+        ("ear bearing", "allowable_bearing", 2 * 20000 / 240),
+        ("ear net tension", "allowable_tension", 2 * 20000 / 360),
+        ("ear shear-out", "allowable_shear", 2 * 20000 / 400),
+    ],
+)
+def test_each_clevis_check_fails_alone_under_twice_its_stress(check, allowable, at_the_margin):
+    failing = _checks(screen_spec(_spec("clevis", **{allowable: _mpa(at_the_margin * 0.999)})))
+    assert failing[check].status is CheckStatus.FAIL
+    assert [n for n, e in failing.items() if e.status is CheckStatus.FAIL] == [check]
+    passing = _checks(screen_spec(_spec("clevis", **{allowable: _mpa(at_the_margin * 1.001)})))
+    assert passing[check].status is CheckStatus.PASS
+    # An allowable nobody declared is not assumed: that check alone is not evaluated.
+    missing = _checks(screen_spec(_spec("clevis", **{allowable: None})))
+    assert missing[check].status is CheckStatus.NOT_EVALUATED
+    assert [need.declaration for need in missing[check].needs] == [f"element_params.{allowable}"]
+    assert sum(e.status is CheckStatus.NOT_EVALUATED for e in missing.values()) == 1
+
+
+def test_a_clevis_is_judged_against_the_documents_safety_factor():
+    document = _document("clevis")
+    document["constraints"] = {"min_safety_factor": {"value": 2.8, "origin": "user_stated"}}
+    checks = _checks(screen_spec(load_spec_yaml(yaml.safe_dump(document))))
+    assert checks["pin shear"].status is CheckStatus.FAIL  # 2.71
+    assert checks["ear shear-out"].status is CheckStatus.PASS  # 2.90
+    assert checks["pin shear"].required_safety_factor == 2.8
+
+
+def test_a_clevis_load_is_a_force_and_an_ear_with_no_section_is_not_passed():
+    for changes, reason in (
+        ({"load": _mm(20)}, "load must be a force"),
+        ({"allowable_shear": {"magnitude": 1.0, "unit": "kN"}}, "allowable_shear must be a stress"),
+        ({"load": {"magnitude": 0.0, "unit": "kN"}}, "load must be greater than zero"),
+    ):
+        card = screen_spec(_spec("clevis", **changes))
+        (refused,) = [entry for entry in card.entries if reason in entry.detail]
+        assert refused.status is CheckStatus.NOT_EVALUATED and not card.passed
+    # The hole's edge at the top of the ear: nothing is left to tear through.
+    torn = _checks(screen_spec(_spec("clevis", pin_height=_mm(44))))
+    assert torn["ear shear-out"].status is CheckStatus.NOT_EVALUATED
+    assert "reaches the top of the ear" in torn["ear shear-out"].detail
+    # A pin as wide as the ear, and ears of no thickness.
+    assert _checks(screen_spec(_spec("clevis", pin_diameter=_mm(30))))[
+        "ear net tension"
+    ].status is (CheckStatus.NOT_EVALUATED)
+    closed = _checks(screen_spec(_spec("clevis", gap=_mm(40))))
+    for name in ("ear bearing", "ear net tension", "ear shear-out"):
+        assert closed[name].status is CheckStatus.NOT_EVALUATED, name

@@ -89,12 +89,12 @@ A sleeve bushing, plain or with a flange at one end. **drawn, not checked**.
 
 ### `clevis`
 
-A fork: a base and two ears with a pin hole through both. **drawn, not checked**.
+A fork: a base and two ears with a pin hole through both, screened under a pin load.
 
 ![clevis](parts/clevis.png)
 
 - Required: `name` (text), `width` (quantity), `gap` (quantity), `depth` (quantity), `height` (quantity), `base_thickness` (quantity), `pin_diameter` (quantity), `pin_height` (quantity)
-- Optional: `material` (text)
+- Optional: `material` (text), `load` (quantity), `pin_allowable_shear` (quantity), `allowable_bearing` (quantity), `allowable_tension` (quantity), `allowable_shear` (quantity)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/clevis.spec.yaml`](../examples/parts/clevis.spec.yaml)
 

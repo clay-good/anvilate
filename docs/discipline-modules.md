@@ -186,5 +186,5 @@ This is the manifest contract, including reserved namespaces and stable emitted 
 the completeness and exercise gates (`openspec/changes/add-physical-domain-modules`, tasks
 1.1, 1.3, 2.1, 3.1, 3.2 and 3.3), the loader (2.2), declared coverage (1.2), the authoring
 page (5.1) and duplicate-limit-state detection by registry id (2.3):
-64 limit states across the 82 checks the shipped modules emit, and third-party modules
+68 limit states across the 86 checks the shipped modules emit, and third-party modules
 enabled by path, confined and marked unverified-origin (4.1, 4.2).

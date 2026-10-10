@@ -10,7 +10,8 @@ asked for one returns a picture and a STEP file.
 screen returns one *not evaluated* entry stating that the part was drawn and not checked, so
 a drawn part never reads as a validated one and its exports carry the unvalidated mark. Where
 a load-bearing check exists for the same job (a lifting lug, a bolted connection, a shaft
-key, a transmission shaft), declare that element as well, or instead.
+key, a transmission shaft), declare that element as well, or instead. A clevis is the
+exception: given the load on its pin and the allowables, its pin and ears are screened.
 
 Holes are declared once, in one vocabulary, and built by :mod:`anvilate.features`:
 :class:`Hole`, :class:`HolePattern` and :class:`Slot`, positioned from the centre of the
@@ -19,6 +20,7 @@ face they are cut into.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import ClassVar, Literal
@@ -27,6 +29,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from .._models import Named
 from ..analysis.sheetmetal import bend_allowance, minimum_bend_radius
+from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from ..units import Quantity
 from ._guarded import GuardedInputs, _guarded_pack_refusal
@@ -429,8 +432,21 @@ class Clevis(_Part):
     ``width`` is the overall width across the ears and ``gap`` the opening between them.
     ``height`` runs from the bottom of the base to the top of the ears, and the pin hole is
     ``pin_height`` above the bottom.
+
+    ``load`` is the force on the pin, pulling it away from the base. With it the pin and the
+    ears are screened, each check against the allowable stress it names: the pin's in shear
+    (``pin_allowable_shear``), and the ears' in bearing, tension and shear
+    (``allowable_bearing``, ``allowable_tension``, ``allowable_shear``). The allowables are
+    the caller's, as a shaft key's are. Without a load the clevis is drawn and not checked.
     """
 
+    not_lengths = (
+        "load",
+        "pin_allowable_shear",
+        "allowable_bearing",
+        "allowable_tension",
+        "allowable_shear",
+    )
     positive_fields = (
         "width",
         "gap",
@@ -439,6 +455,7 @@ class Clevis(_Part):
         "base_thickness",
         "pin_diameter",
         "pin_height",
+        *not_lengths,
     )
 
     name: Named
@@ -450,6 +467,23 @@ class Clevis(_Part):
     pin_diameter: Quantity
     pin_height: Quantity
     material: str | None = None
+    load: Quantity | None = None
+    pin_allowable_shear: Quantity | None = None
+    allowable_bearing: Quantity | None = None
+    allowable_tension: Quantity | None = None
+    allowable_shear: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _a_load_is_a_force_and_an_allowable_a_stress(self) -> Clevis:
+        for name in type(self).not_lengths:
+            value = getattr(self, name)
+            wanted = "[force]" if name == "load" else "[pressure]"
+            if value is not None and not value.has_dimension(wanted):
+                kind = "a force" if name == "load" else "a stress"
+                raise _refuse(
+                    f"{name} must be {kind}; got {value} ({value.dimensionality})", subject=name
+                )
+        return self
 
 
 class Tube(_Part):
@@ -683,15 +717,20 @@ class EnclosureLid(_Part):
         return self
 
 
-def _drawn_not_checked(what: str, name: str) -> Scorecard:
-    """The one entry a part with no screen carries: drawn, and not checked."""
+def _drawn_not_checked(what: str, name: str, *, until: str | None = None) -> Scorecard:
+    """The one entry a part with no screen carries: drawn, and not checked.
+
+    ``until`` is for a part that has a screen and has not been given what it runs on: it
+    says what to declare.
+    """
+    checked = until or "no strength or fit check ships for it"
     return Scorecard(
         entries=(
             ScorecardEntry(
                 name=f"{name} screening",
                 status=CheckStatus.NOT_EVALUATED,
                 detail=(
-                    f"this {what} is drawn, and no strength or fit check ships for it; the "
+                    f"this {what} is drawn, and {checked}; the "
                     "picture and the STEP file are its geometry, not a verdict on it"
                 ),
             ),
@@ -744,9 +783,188 @@ def screen_pulley(pulley: Pulley) -> Scorecard:
     return _drawn_not_checked("pulley", str(pulley.name))
 
 
-def screen_clevis(clevis: Clevis) -> Scorecard:
-    """A clevis is drawn and not checked; `lifting_lug` screens a pin joint."""
-    return _drawn_not_checked("clevis", str(clevis.name))
+_CLEVIS_REFERENCE = "Shigley §8-12, joints loaded in shear: pin shear, bearing, tension, tear-out"
+_NEEDS_A_CLEVIS_LOAD = Need(
+    declaration="element_params.load",
+    takes="the force on the clevis pin, pulling it away from the base",
+    dimension="[force]",
+    units=("kN", "lbf"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_CLEVIS_ALLOWABLES = {
+    "pin_allowable_shear": "the pin material's allowable shear stress",
+    "allowable_bearing": "the ear material's allowable bearing stress",
+    "allowable_tension": "the ear material's allowable tensile stress",
+    "allowable_shear": "the ear material's allowable shear stress",
+}
+
+
+def _clevis_check(
+    clevis: Clevis,
+    check: str,
+    *,
+    allowable: str,
+    area: float,
+    symbolic: str,
+    result: tuple[str, str],
+    inputs: tuple[SymbolValue, ...],
+    no_area: tuple[str, str],
+    required_safety_factor: float,
+) -> ScorecardEntry:
+    """One clevis limit state: the load over ``area`` (mm²) against the named allowable."""
+    assert clevis.load is not None
+    name = f"{clevis.name} {check}"
+    strength = getattr(clevis, allowable)
+    if strength is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — {check} is held against {_CLEVIS_ALLOWABLES[allowable]}, "
+                f"and none is assumed for a material; declare {allowable}"
+            ),
+            needs=(
+                Need(
+                    declaration=f"element_params.{allowable}",
+                    takes=_CLEVIS_ALLOWABLES[allowable],
+                    dimension="[pressure]",
+                    units=("MPa", "ksi"),
+                    sources=(ValueSource.USER, ValueSource.STANDARD),
+                ),
+            ),
+        )
+    if area <= 0:
+        field, why = no_area
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=f"not evaluated — {why}, so there is no section to carry the load",
+            needs=(
+                Need(
+                    declaration=f"element_params.{field}",
+                    takes=f"a {field.replace('_', ' ')} that leaves the ear a section here",
+                    dimension="[length]",
+                    units=("mm", "in"),
+                    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+                ),
+            ),
+        )
+    stress = Quantity(magnitude=clevis.load.to("N").magnitude / area, unit="MPa")
+    symbol, description = result
+    derivation = Derivation(
+        symbolic=symbolic,
+        inputs=(
+            SymbolValue(symbol="P", description="load on the pin", value=clevis.load, unit="N"),
+            *inputs,
+        ),
+        result=SymbolValue(symbol=symbol, description=description, value=stress, unit="MPa"),
+        citation=_CLEVIS_REFERENCE,
+    )
+    return ScorecardEntry.from_safety_factor(
+        name,
+        computed=strength.to("MPa").magnitude / stress.magnitude,
+        required=required_safety_factor,
+    ).model_copy(update={"reference": _CLEVIS_REFERENCE, "derivation": derivation})
+
+
+def screen_clevis(clevis: Clevis, *, required_safety_factor: float = 2.0) -> Scorecard:
+    """Screen a clevis's pin and ears under the load on its pin, or say it is only drawn.
+
+    Four limit states, each the load over the area that carries it, against the allowable
+    it names at ``required_safety_factor`` (2.0, as on a shaft key: the allowables are plain
+    material strengths with no code margin in them). The pin shears on two planes, one at
+    each ear; the ears bear on the pin, pull apart across the hole, and tear out above it
+    on two planes each, taken from the edge of the hole to the top of the ear.
+
+    A check whose allowable is not declared is not evaluated and names it. Without a
+    ``load`` nothing is checked, and the one entry says so. The base and whatever holds it
+    are not part of this element.
+    """
+    if clevis.load is None:
+        (drawn,) = _drawn_not_checked(
+            "clevis",
+            str(clevis.name),
+            until=(
+                "its pin and ears are checked once it states the load on its pin: declare "
+                "load, and the allowable each check is held against"
+            ),
+        ).entries
+        return Scorecard(entries=(drawn.model_copy(update={"needs": (_NEEDS_A_CLEVIS_LOAD,)}),))
+    pin = clevis.pin_diameter.to("mm").magnitude
+    depth = clevis.depth.to("mm").magnitude
+    ear = (clevis.width.to("mm").magnitude - clevis.gap.to("mm").magnitude) / 2
+    above = clevis.height.to("mm").magnitude - clevis.pin_height.to("mm").magnitude - pin / 2
+    millimetres = {"d": pin, "t": ear, "w": depth, "a": above}
+    described = {
+        "d": "pin diameter",
+        "t": "thickness of one ear, (width − gap)/2",
+        "w": "ear width across the pin hole (depth)",
+        "a": "from the edge of the pin hole to the top of the ear",
+    }
+    symbols = {
+        symbol: SymbolValue(
+            symbol=symbol,
+            description=described[symbol],
+            value=Quantity(magnitude=value, unit="mm"),
+            unit="mm",
+        )
+        for symbol, value in millimetres.items()
+    }
+    no_ear = ("gap", "gap is not below width, which leaves the ears no thickness")
+
+    def check(name: str, allowable: str, area: float, symbolic: str, result, uses, no_area):
+        return _clevis_check(
+            clevis,
+            name,
+            allowable=allowable,
+            area=area,
+            symbolic=symbolic,
+            result=result,
+            inputs=tuple(symbols[symbol] for symbol in uses),
+            no_area=no_area,
+            required_safety_factor=required_safety_factor,
+        )
+
+    return Scorecard(
+        entries=(
+            check(
+                "pin shear",
+                "pin_allowable_shear",
+                2 * math.pi * pin**2 / 4,
+                "τ_p = P / (2 · π · d² / 4)",
+                ("τ_p", "shear stress in the pin, on two planes"),
+                "d",
+                ("pin_diameter", "the pin has no diameter"),
+            ),
+            check(
+                "ear bearing",
+                "allowable_bearing",
+                2 * pin * ear,
+                "σ_b = P / (2 · d · t)",
+                ("σ_b", "bearing stress of the pin on the two ears"),
+                "dt",
+                no_ear,
+            ),
+            check(
+                "ear net tension",
+                "allowable_tension",
+                2 * (depth - pin) * ear if ear > 0 else 0.0,
+                "σ_t = P / (2 · (w − d) · t)",
+                ("σ_t", "tensile stress across the two ears beside the hole"),
+                "wdt",
+                ("pin_diameter", "pin_diameter is not below depth") if ear > 0 else no_ear,
+            ),
+            check(
+                "ear shear-out",
+                "allowable_shear",
+                4 * above * ear if ear > 0 else 0.0,
+                "τ_s = P / (4 · a · t)",
+                ("τ_s", "shear stress on the two tear-out planes of each ear"),
+                "at",
+                ("pin_height", "the pin hole reaches the top of the ear") if ear > 0 else no_ear,
+            ),
+        )
+    )
 
 
 def screen_tube(tube: Tube) -> Scorecard:

@@ -2057,6 +2057,7 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
         machinery,
         masonry,
         noise_exposure,
+        parts,
         ventilation,
     )
     from anvilate.units import Quantity
@@ -2232,6 +2233,26 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
                     shear_modulus=q("79.3 GPa"),
                     elastic_modulus=q("207 GPa"),
                     allowable_shear_stress=q("700 MPa"),
+                )
+            ),
+        ),
+        (
+            "clevis",
+            parts.screen_clevis(
+                parts.Clevis(
+                    name="clevis",
+                    width=q("40 mm"),
+                    gap=q("20 mm"),
+                    depth=q("30 mm"),
+                    height=q("50 mm"),
+                    base_thickness=q("12 mm"),
+                    pin_diameter=q("12 mm"),
+                    pin_height=q("34 mm"),
+                    load=q("20 kN"),
+                    pin_allowable_shear=q("240 MPa"),
+                    allowable_bearing=q("250 MPa"),
+                    allowable_tension=q("250 MPa"),
+                    allowable_shear=q("145 MPa"),
                 )
             ),
         ),

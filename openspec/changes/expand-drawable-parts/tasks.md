@@ -42,8 +42,10 @@
 - [x] 4.6 Tube and T-slot extrusion profile
 - [x] 4.7 Sheet-metal bracket (L, U, Z): formed solid, developed length, K-factor as input
 - [x] 4.8 Enclosure: open box shell with floor holes
-- [ ] 4.9 Screens: angle bracket (leg bending, bolt bearing, edge distance), clevis (pin
-      shear and bearing), stepped shaft (stress at a shoulder)
+- [x] 4.9a Clevis screen: pin shear, ear bearing, ear net tension and ear shear-out under a
+      declared pin load, each against a declared allowable
+- [ ] 4.9b Screens: angle bracket (leg bending, bolt bearing, edge distance), stepped shaft
+      (stress at a shoulder)
 - [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
       developed blank with its bend lines
 - [x] 4.10b Minimum bend radius reported through the existing bend-radius screen

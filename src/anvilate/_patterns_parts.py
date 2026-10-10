@@ -898,8 +898,7 @@ def _register(element_type: str, model: type, builder: Any, summary: str, **opti
             build=lambda element, name, params: builder(element),
             summary=summary,
             example=f"parts/{element_type}.spec.yaml",
-            screened=False,
-            **options,
+            **{"screened": False, **options},
         )
     )
 
@@ -959,7 +958,8 @@ _register(
     "clevis",
     parts.Clevis,
     build_clevis,
-    "A fork: a base and two ears with a pin hole through both.",
+    "A fork: a base and two ears with a pin hole through both, screened under a pin load.",
+    screened=True,
 )
 _register("tube", parts.Tube, build_tube, "A straight round or rectangular tube cut to length.")
 _register(

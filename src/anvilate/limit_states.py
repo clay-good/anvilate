@@ -490,6 +490,26 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("structural.screen_shear_plate", "shear rupture"),
         ),
         _state(
+            "parts.clevis_pin_shear",
+            "a clevis pin shearing on the two planes between the ears and what it holds",
+            ("parts.screen_clevis", "pin shear"),
+        ),
+        _state(
+            "parts.clevis_ear_bearing",
+            "the ears of a clevis yielding in bearing against the pin",
+            ("parts.screen_clevis", "ear bearing"),
+        ),
+        _state(
+            "parts.clevis_ear_net_tension",
+            "the ears of a clevis failing in tension across the net section beside the pin hole",
+            ("parts.screen_clevis", "ear net tension"),
+        ),
+        _state(
+            "parts.clevis_ear_shear_out",
+            "the pin tearing out of a clevis through the top of its ears",
+            ("parts.screen_clevis", "ear shear-out"),
+        ),
+        _state(
             "parts.drawn_not_checked",
             "no limit state: an everyday part that is drawn, with no strength or fit check",
             ("parts.screen_angle_bracket", "screening"),

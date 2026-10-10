@@ -63,6 +63,7 @@ def test_the_catalog_says_what_is_checked_and_what_is_an_envelope():
 
     by_type = {entry["element_type"]: entry for entry in drawable_catalog()}
     drawn_only = {name.removeprefix("screen_") for name in parts.__all__ if "screen_" in name}
+    drawn_only.remove("clevis")  # screened under the load on its pin
     assert {name for name, entry in by_type.items() if not entry["screened"]} == drawn_only
     assert {name for name, entry in by_type.items() if entry["envelope"]} == {
         "helical_compression_spring",
