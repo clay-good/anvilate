@@ -51,7 +51,8 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 
 - [x] 7.1 Responsiveness budget covers every tool and command, cold and warm
 - [x] 7.2 Profile the five slowest; improve or justify each (kernel import, first build)
-- [ ] 7.3 Suite runtime: profile, and cut the slowest tests that add no coverage
+- [x] 7.3 Suite runtime: profile, and cut the slowest tests that add no coverage (findings
+      16 to 18: the rasterizer, one redundant 26-body render, and per-view meshing left open)
 
 ## 8. Docs
 

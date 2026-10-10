@@ -66,23 +66,57 @@ class _Canvas:
     def fill(self, points: list[Point], colour: tuple[int, int, int]) -> None:
         """Even-odd scanline fill of one closed polygon, in output pixel coordinates."""
         scaled = [(x * _SCALE, y * _SCALE) for x, y in points]
-        edges = list(zip(scaled, scaled[1:] + scaled[:1], strict=True))
-        top = max(0, math.floor(min(y for _, y in scaled)))
-        bottom = min(self.height - 1, math.ceil(max(y for _, y in scaled)))
+        ys = [y for _, y in scaled]
+        top = max(0, math.floor(min(ys)))
+        bottom = min(self.height - 1, math.ceil(max(ys)))
         pixel = bytes(colour)
+        # Each edge that can cross a row centre, as (lowest y, highest y, x0, y0, dx, dy).
+        # A level edge crosses none. The crossing is evaluated exactly as x0 + (c - y0) *
+        # dx / dy, never through a precomputed slope: the picture is held to its bytes.
+        edges = [
+            (min(y0, y1), max(y0, y1), x0, y0, x1 - x0, y1 - y0)
+            for (x0, y0), (x1, y1) in zip(scaled, scaled[1:] + scaled[:1], strict=True)
+            if y0 != y1
+        ]
+        width, rows, ceil = self.width, self.rows, math.ceil
         for row in range(top, bottom + 1):
             centre = row + 0.5
-            crossings = sorted(
-                x0 + (centre - y0) * (x1 - x0) / (y1 - y0)
-                for (x0, y0), (x1, y1) in edges
-                if (y0 <= centre < y1) or (y1 <= centre < y0)
-            )
-            line = self.rows[row]
+            crossings = [
+                x0 + (centre - y0) * dx / dy
+                for low, high, x0, y0, dx, dy in edges
+                if low <= centre < high
+            ]
+            if len(crossings) == 2:  # a convex polygon: nearly every fill a drawing makes
+                left, right = crossings
+                if left > right:
+                    left, right = right, left
+                start, stop = max(0, ceil(left - 0.5)), min(width, ceil(right - 0.5))
+                if stop > start:
+                    rows[row][start * 3 : stop * 3] = pixel * (stop - start)
+                continue
+            crossings.sort()
+            line = rows[row]
             for left, right in zip(crossings[::2], crossings[1::2], strict=False):
-                start = max(0, math.ceil(left - 0.5))
-                stop = min(self.width, math.ceil(right - 0.5))
+                start = max(0, ceil(left - 0.5))
+                stop = min(width, ceil(right - 0.5))
                 if stop > start:
                     line[start * 3 : stop * 3] = pixel * (stop - start)
+
+    def _square(self, x: float, y: float, half: float, colour: tuple[int, int, int]) -> None:
+        """The square ``fill`` draws about one point, without the polygon machinery.
+
+        Half the fills in a drawing are these joints. Its two upright edges cross every row
+        centre between its top and bottom at their own x, so the run is the same on each.
+        """
+        left, right = (x - half) * _SCALE, (x + half) * _SCALE
+        high, low = (y - half) * _SCALE, (y + half) * _SCALE
+        start, stop = max(0, math.ceil(left - 0.5)), min(self.width, math.ceil(right - 0.5))
+        if stop <= start:
+            return
+        run = bytes(colour) * (stop - start)
+        for row in range(max(0, math.floor(high)), min(self.height - 1, math.ceil(low)) + 1):
+            if high <= row + 0.5 < low:
+                self.rows[row][start * 3 : stop * 3] = run
 
     def stroke(
         self, points: list[Point], colour: tuple[int, int, int], width: float, *, closed: bool
@@ -100,30 +134,32 @@ class _Canvas:
                 colour,
             )
         for x, y in path:
-            self.fill(
-                [
-                    (x - half, y - half),
-                    (x + half, y - half),
-                    (x + half, y + half),
-                    (x - half, y + half),
-                ],
-                colour,
-            )
+            self._square(x, y, half, colour)
 
     def png(self) -> bytes:
         """Average each 2x2 block into one pixel and encode as an 8-bit RGB PNG."""
         width, height = self.width // _SCALE, self.height // _SCALE
         raw = bytearray()
+        blank, white = bytearray(b"\xff" * (self.width * 3)), b"\xff" * (width * 3)
         for row in range(height):
             upper, lower = self.rows[row * 2], self.rows[row * 2 + 1]
             raw.append(0)  # filter: none
+            if upper == blank and lower == blank:  # most of a drawing is paper
+                raw += white
+                continue
             out = bytearray(width * 3)
-            for index in range(width * 3):
-                pixel, channel = divmod(index, 3)
-                base = pixel * 6 + channel
-                out[index] = (
-                    upper[base] + upper[base + 3] + lower[base] + lower[base + 3] + 2
-                ) >> 2
+            for channel in range(3):
+                # The four samples under one output pixel sit 0, 3 bytes along each row.
+                out[channel::3] = bytes(
+                    (a + b + c + d + 2) >> 2
+                    for a, b, c, d in zip(
+                        upper[channel::6],
+                        upper[channel + 3 :: 6],
+                        lower[channel::6],
+                        lower[channel + 3 :: 6],
+                        strict=True,
+                    )
+                )
             raw += out
 
         def chunk(kind: bytes, body: bytes) -> bytes:

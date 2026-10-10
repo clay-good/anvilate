@@ -161,16 +161,9 @@ def test_the_command_prints_the_placement_the_card_and_the_parts_list(tmp_path):
     assert "flange-pair: 26 bodies, 120 x 120 x 45.3 mm" in out
     assert " 4  6 x ISO4014-M8x40: bolt (envelope)" in out
     assert "pass           joint bolt length" in out
-    code, out, _err = run_cli(
-        "combine",
-        path,
-        "--output",
-        str(step),
-        "--unvalidated",
-        "--picture",
-        str(picture),
-        "--force",
-    )
+    # No picture this time: it was drawn and checked above, and drawing 26 bodies again is
+    # most of what this test used to cost.
+    code, out, _err = run_cli("combine", path, "--output", str(step), "--unvalidated")
     assert code == 2 and f"wrote {step} (UNVALIDATED)" in out and step.exists()
     code, _out, err = run_cli("combine", path, "--output", str(step))
     assert code == 3 and "pass --force to replace it" in err

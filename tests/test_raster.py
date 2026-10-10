@@ -155,3 +155,70 @@ def test_every_drawn_view_rasterizes_to_the_same_picture_as_its_svg():
         overview = render_overview(built, lines=("size", "material", "pass"), format="png")
         assert _pixels(overview.data)[:2] == (overview.width_px, overview.height_px)
     assert checked == 16
+
+
+def test_a_line_joint_is_the_square_the_polygon_fill_would_draw():
+    """Half the fills in a drawing are the square at a line joint, drawn by a short path.
+
+    The short path has to be the polygon fill's own answer to the byte, at every position
+    and size: off each edge of the canvas, narrower than a sample, and on a sample's edge.
+    """
+    import random
+
+    from anvilate.raster import _Canvas
+
+    chosen = random.Random(20261010)
+    cases = [
+        (x / 4, y / 4, half)
+        for x in range(-6, 50, 5)
+        for y in (-3, 0, 7, 39, 42)
+        for half in (0.375, 0.5, 1.25)
+    ]
+    cases += [
+        (chosen.uniform(-5, 45), chosen.uniform(-5, 45), chosen.uniform(0.01, 6.0))
+        for _ in range(400)
+    ]
+    for x, y, half in cases:
+        short, long = _Canvas(40, 40), _Canvas(40, 40)
+        short._square(x, y, half, (10, 20, 30))
+        long.fill(
+            [
+                (x - half, y - half),
+                (x + half, y - half),
+                (x + half, y + half),
+                (x - half, y + half),
+            ],
+            (10, 20, 30),
+        )
+        assert short.rows == long.rows, (x, y, half)
+    assert any(row != bytearray(b"\xff" * 240) for row in long.rows)  # the last one drew
+
+
+def test_the_png_is_the_average_of_each_two_by_two_block():
+    """The encoder copies blank rows and averages the rest a channel at a time.
+
+    Held against the plain definition: each output byte is the rounded mean of the four
+    samples under it.
+    """
+    import random
+    import zlib
+
+    from anvilate.raster import _Canvas
+
+    chosen = random.Random(7)
+    canvas = _Canvas(9, 6)
+    for index in (0, 1, 4, 5, 6, 11):  # rows 2, 3 and 7 to 10 stay blank
+        canvas.rows[index] = bytearray(chosen.randrange(256) for _ in range(9 * 2 * 3))
+    data = canvas.png()
+    start = data.index(b"IDAT") + 4
+    length = int.from_bytes(data[start - 8 : start - 4], "big")
+    raw = zlib.decompress(data[start : start + length])
+    for row in range(6):
+        line = raw[row * 28 : (row + 1) * 28]
+        assert line[0] == 0
+        upper, lower = canvas.rows[2 * row], canvas.rows[2 * row + 1]
+        for pixel in range(9):
+            for channel in range(3):
+                at = pixel * 6 + channel
+                mean = (upper[at] + upper[at + 3] + lower[at] + lower[at + 3] + 2) >> 2
+                assert line[1 + pixel * 3 + channel] == mean, (row, pixel, channel)
