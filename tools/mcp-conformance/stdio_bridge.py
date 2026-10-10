@@ -50,6 +50,10 @@ class _Server:
             return self._child.stdout.readline() if expects_reply else None
 
 
+# How much of a refused request's body is read before the refusal is sent.
+_REFUSED_BODY = 8 * 1024 * 1024
+
+
 def _handler(server: _Server) -> type[BaseHTTPRequestHandler]:
     class Relay(BaseHTTPRequestHandler):
         def _foreign(self) -> bool:
@@ -63,6 +67,20 @@ def _handler(server: _Server) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:  # noqa: N802 - the stdlib's spelling
             if self._foreign():
+                # Read what was sent before refusing it. Closing a socket with the body
+                # still unread makes the kernel reset the connection, and the client then
+                # gets the reset where the 403 was: 8 of 60 refusals of a 600 kB body were
+                # lost that way. Read in pieces and up to a bound, since the sender is the
+                # one being refused; past it the reset is theirs to have.
+                try:
+                    unread = min(int(self.headers.get("Content-Length", 0)), _REFUSED_BODY)
+                except ValueError:
+                    unread = 0
+                while unread > 0:
+                    piece = self.rfile.read(min(unread, 65536))
+                    if not piece:
+                        break
+                    unread -= len(piece)
                 self.send_response(403)
                 self.end_headers()
                 return

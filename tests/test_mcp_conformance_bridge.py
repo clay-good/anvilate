@@ -71,3 +71,16 @@ def test_a_notification_gets_no_body(port):
 def test_a_request_naming_another_host_is_refused(port, headers):
     status, _body = _post(port, {"jsonrpc": "2.0", "id": 9, "method": "ping"}, headers)
     assert status == 403
+
+
+def test_a_refusal_reaches_a_client_that_sent_a_large_body(port):
+    """The 403 is the answer, so the client has to receive it.
+
+    Refused before its body was read, a request left unread bytes on the socket; closing it
+    then resets the connection, and the client saw the reset in place of the status: 8 of 60
+    times with this body, and once in a loaded run of the two-line test above.
+    """
+    pad = {"jsonrpc": "2.0", "id": 9, "method": "ping", "params": {"pad": "x" * 600_000}}
+    for _ in range(40):
+        status, _body = _post(port, pad, {"Origin": "http://evil.example"})
+        assert status == 403
