@@ -581,7 +581,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     "lifting_lug": "1.4.0",
     "lighting_installation": "1.3.0",
     "masonry_wall": "1.3.0",
-    "pipe_run": "1.3.0",
+    # 1.4.0 adds the optional designation the drawing is made from.
+    "pipe_run": "1.4.0",
     "pump_duty": "1.3.0",
     "retaining_wall": "1.3.0",
     "rolling_bearing": "1.3.0",

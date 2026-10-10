@@ -782,6 +782,7 @@
    "magnitude": 2.0,
    "unit": "m"
   },
+  "designation": null,
   "diameter": {
    "magnitude": 0.15,
    "unit": "m"

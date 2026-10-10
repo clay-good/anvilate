@@ -175,6 +175,17 @@ A flat rectangular plate with holes, hole patterns and slots, and optional round
 - Outputs: views, step, 3mf, dxf
 - Example: [`examples/parts/mounting_plate.spec.yaml`](../examples/parts/mounting_plate.spec.yaml)
 
+### `pipe_run`
+
+A pipe run drawn straight at its length, from its ASME B36.10M size and schedule. **envelope**.
+
+![pipe_run](parts/pipe_run.png)
+
+- Required: `flow_rate` (quantity), `diameter` (quantity), `length` (quantity), `roughness` (quantity), `fitting_loss_coefficient` (number), `kinematic_viscosity` (quantity), `available_head` (quantity)
+- Optional: `designation` (text)
+- Outputs: views, step, 3mf
+- Example: [`examples/parts/pipe_run.spec.yaml`](../examples/parts/pipe_run.spec.yaml)
+
 ### `plate_flange`
 
 A flat ring flange: a disc with a central bore and a circle of bolt holes. **drawn, not checked**.

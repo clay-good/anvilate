@@ -45,7 +45,7 @@ _INK = "#0f172a"
 _HIDDEN = "#64748b"
 _TONES = ("#93c5fd", "#bfdbfe", "#eff6ff")  # darkest to lightest face
 _LIGHT = (0.35, -0.5, 0.8)
-_CHORD_MM_FRACTION = 0.004  # curve discretisation, as a fraction of the part's size
+_CHORD_MM_FRACTION = 0.004  # curve discretisation, as a fraction of what the view shows
 
 Vec = tuple[float, float, float]
 Point = tuple[float, float]
@@ -90,6 +90,21 @@ class _Camera:
             self.centre[2] + self.toward_eye[2] * distance,
         )
         self.declared_up = up
+        # What this view shows of the part: the larger side of its bounding box as seen from
+        # here. Curves are cut to a fraction of this and not of `size`, because each view is
+        # fitted to its own extent: the end of a 3 m pipe fills its panel at 60 mm across,
+        # and cut to the pipe's length its bore was drawn as a twelve-sided ring.
+        corners = [
+            self.flat((x, y, z))
+            for x in (box.min.X, box.max.X)
+            for y in (box.min.Y, box.max.Y)
+            for z in (box.min.Z, box.max.Z)
+        ]
+        self.seen = max(
+            max(c[0] for c in corners) - min(c[0] for c in corners),
+            max(c[1] for c in corners) - min(c[1] for c in corners),
+            1e-9,
+        )
 
     def flat(self, point: Vec) -> Point:
         relative = _sub(point, self.centre)
@@ -112,7 +127,7 @@ def _hidden_lines(shape: Any, camera: _Camera) -> tuple[list[list[Point]], list[
     visible, hidden = shape.project_to_viewport(
         camera.eye, viewport_up=camera.declared_up, look_at=camera.centre
     )
-    chord = camera.size * _CHORD_MM_FRACTION
+    chord = camera.seen * _CHORD_MM_FRACTION
     return (
         [_edge_points(edge, chord) for edge in visible],
         [_edge_points(edge, chord) for edge in hidden],
@@ -136,7 +151,7 @@ def _faces(
     drawn = []
     for face in shape.faces():
         tag = tag_of.get(id(face)) or by_hash.get(hash(face), "")
-        points, triangles = face.tessellate(camera.size * 0.002, 0.3)
+        points, triangles = face.tessellate(camera.seen * 0.002, 0.3)
         vertices = [(p.X, p.Y, p.Z) for p in points]
         for a, b, c in triangles:
             normal = _unit(_cross(_sub(vertices[b], vertices[a]), _sub(vertices[c], vertices[a])))

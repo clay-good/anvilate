@@ -38,6 +38,13 @@ See [`examples/pump_line_pressure_drop.py`](../examples/pump_line_pressure_drop.
 [`examples/water_main_hazen_williams.py`](../examples/water_main_hazen_williams.py), and
 [`examples/water_hammer_valve_closure.py`](../examples/water_hammer_valve_closure.py).
 
+**Drawing a pipe run.** A `pipe_run` in a Design Spec is screened from its bore, `diameter`.
+Add `designation: NPS 2 SCH 40` and it is also drawn, straight at its length, with the
+outside diameter and wall ASME B36.10M tabulates for that size and schedule. No check reads
+the designation. The drawing is refused when `diameter` and the designation's bore are more
+than 0.5% apart, since the picture would be of a pipe the card did not screen. See
+[`examples/parts/pipe_run.spec.yaml`](../examples/parts/pipe_run.spec.yaml).
+
 ## Open-channel (free-surface) flow
 
 - **`hydraulic_radius`** `A/P` → **`manning_flow_velocity`** / **`manning_flow_rate`**

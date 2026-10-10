@@ -1,0 +1,20 @@
+# A drawable part: Three metres of NPS 2 schedule 40 pipe carrying 2 L/s of water.
+#   anvilate view examples/parts/pipe_run.spec.yaml
+anvilate_spec: 1.3.0
+name: cooling-water-run
+description: Three metres of NPS 2 schedule 40 pipe carrying 2 L/s of water.
+units: {value: SI, origin: user_stated}
+material: {ref: ASTM-A36}
+manufacturing: {process: cnc_milling}
+element_type: pipe_run
+element_params:
+  available_head: {magnitude: 1.0, unit: m}
+  designation: NPS 2 SCH 40
+  diameter: {magnitude: 52.48, unit: mm}
+  fitting_loss_coefficient: 2.0
+  flow_rate: {magnitude: 2.0, unit: L/s}
+  kinematic_viscosity: {magnitude: 1.0e-06, unit: m**2/s}
+  length: {magnitude: 3.0, unit: m}
+  roughness: {magnitude: 0.045, unit: mm}
+acceptance:
+  tiers: [T1_analytical]

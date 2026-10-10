@@ -15,6 +15,7 @@ from typing import Any
 from . import features, geometry
 from ._patterns_parts import _X, _Y, _built, _low, _mm, _refuse, _ring
 from .geometry import BuiltGeometry, FlatProfile, GeometryError
+from .packs.hydraulics import PipeRun
 from .packs.machinery import (
     HelicalCompressionSpring,
     RollingBearing,
@@ -153,6 +154,69 @@ def build_rolling_bearing(
     return _built(bearing, tag, _ring(outer, bore, width), dimensions, envelope=True, name=name)
 
 
+# How far a declared bore may sit from its designation's before the two are different pipes.
+# Friction head goes with the fifth power of the bore, so half a percent of bore is two and
+# a half percent of head: inside what a screen resolves, and wide enough for a bore written
+# to three figures.
+_BORE_AGREEMENT = 0.005
+
+
+def build_pipe_run(pipe: PipeRun, name: str, params: Mapping[str, Any]) -> BuiltGeometry:
+    """An envelope: the run drawn straight along y at its length, from its ASME B36.10M size.
+
+    The bends and fittings summed into the run's loss coefficient are not drawn. The bore
+    the head loss was worked from has to be the designation's, or the picture would be of a
+    pipe the card did not screen.
+    """
+    import difflib
+    import re
+
+    from build123d import Circle, Plane, extrude
+
+    from .standards.pipe import default_pipe_schedule_table
+
+    geometry._kernel()
+    tag = "pipe_run"
+    if pipe.designation is None:
+        raise _needs(tag, "designation", "its nominal size and schedule, such as NPS 2 SCH 40")
+    table = default_pipe_schedule_table()
+    named = re.fullmatch(r"NPS (\S+) SCH (\S+)", pipe.designation)
+    if named is None or not table.has_pipe(*named.groups()):
+        near = difflib.get_close_matches(pipe.designation, table.designations(), n=4)
+        raise GeometryError(
+            f"pipe_run: no bundled pipe is designated {pipe.designation!r}"
+            + (f"; closest: {', '.join(near)}" if near else "; write it as NPS 2 SCH 40"),
+            action="select",
+            subject="the pipe_run element_params.designation",
+            source="the bundled ASME B36.10M pipe schedule table",
+        )
+    record = table.get(*named.groups())
+    outer = float(record.outside_diameter.quantity.to("mm").magnitude)
+    wall = float(record.wall_thickness.quantity.to("mm").magnitude)
+    bore = float(record.inside_diameter.to("mm").magnitude)
+    declared = _mm(pipe.diameter, "diameter", tag)
+    if abs(declared - bore) > _BORE_AGREEMENT * bore:
+        raise GeometryError(
+            f"pipe_run: diameter is {declared:g} mm and the bore of {pipe.designation} is "
+            f"{bore:g} mm, more than {_BORE_AGREEMENT:.1%} apart; the head loss was worked "
+            "from one pipe and this would draw another. State the bore of the pipe named, "
+            "or name the pipe with that bore",
+            action="replace",
+            subject="the pipe_run element_params.diameter",
+            source=f"the bore of {pipe.designation} in ASME B36.10M, {bore:g} mm",
+        )
+    length = _mm(pipe.length, "length", tag)
+    dimensions = {
+        "outside_diameter": outer,
+        "wall_thickness": wall,
+        "inside_diameter": bore,
+        "length": length,
+    }
+    ring = Circle(outer / 2) - Circle(bore / 2)
+    shape = extrude(Plane.XZ * ring, amount=length / 2, both=True)
+    return _built(pipe, tag, shape, dimensions, envelope=True, name=name)
+
+
 def build_gear_mesh(mesh: SpurGearMesh, name: str, params: Mapping[str, Any]) -> BuiltGeometry:
     """An envelope: the pinion and the gear as their tip cylinders, at their centre distance.
 
@@ -289,6 +353,17 @@ _register(
     build_gear_mesh,
     "A spur gear pair, drawn as its two tip cylinders at their centre distance.",
     envelope=True,
+)
+_register(
+    "pipe_run",
+    PipeRun,
+    build_pipe_run,
+    "A pipe run drawn straight at its length, from its ASME B36.10M size and schedule.",
+    envelope=True,
+    example_params={
+        "designation": "NPS 6 SCH 40",
+        "diameter": {"magnitude": 154.08, "unit": "mm"},
+    },
 )
 _register(
     "beam_member",

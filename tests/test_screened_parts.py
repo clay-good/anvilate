@@ -30,6 +30,7 @@ _DRAWN = (
     "column_member",
     "helical_compression_spring",
     "lifting_lug",
+    "pipe_run",
     "rolling_bearing",
     "shaft_key",
     "spur_gear_mesh",
@@ -80,6 +81,8 @@ _VOLUMES = {
     "helical_compression_spring": (_disc(27) - _disc(21)) * 200,
     # 80 wide and 12 thick, the hole 90 up, a half disc above it, less the 25 mm pin hole.
     "lifting_lug": (80 * 90 + _disc(80) / 2 - _disc(25)) * 12,
+    # NPS 2 schedule 40 is 60.3 outside with a 3.91 wall in ASME B36.10M, so 52.48 inside.
+    "pipe_run": (_disc(60.3) - _disc(60.3 - 2 * 3.91)) * 3000,
     # A 6204 is 20 x 47 x 14 in ISO 15.
     "rolling_bearing": (_disc(47) - _disc(20)) * 14,
     "shaft_key": 40 * 4 * 20,
@@ -120,7 +123,11 @@ def test_the_step_file_is_one_part_and_reads_back(element_type, tmp_path):
 
 def test_being_drawn_changes_nothing_on_the_card():
     """`hole_height` and `designation` are for the drawing. No check reads either."""
-    for element_type, field in (("lifting_lug", "hole_height"), ("rolling_bearing", "designation")):
+    for element_type, field in (
+        ("lifting_lug", "hole_height"),
+        ("rolling_bearing", "designation"),
+        ("pipe_run", "designation"),
+    ):
         with_it = screen_spec(_spec(element_type))
         without = screen_spec(_spec(element_type, **{field: None}))
         assert [(e.name, e.status, e.detail) for e in with_it.entries] == [
@@ -138,6 +145,14 @@ def test_being_drawn_changes_nothing_on_the_card():
             {"designation": "6240"},
             "no bundled bearing is designated .6240.; closest: 62",
         ),
+        ("pipe_run", {"designation": None}, "add element_params.designation"),
+        (
+            "pipe_run",
+            {"designation": "NPS 2 SCH 41"},
+            "no bundled pipe is designated .NPS 2 SCH 41.; closest: NPS 2 SCH 40",
+        ),
+        ("pipe_run", {"designation": "2 in sch 40"}, "no bundled pipe is designated"),
+        ("pipe_run", {"diameter": _mm(50)}, "the bore of NPS 2 SCH 40 is 52.48 mm"),
         ("helical_compression_spring", {"wire_diameter": _mm(30)}, "wire_diameter"),
         ("beam_member", {"section": "IPE 201"}, "IPE 200"),
     ],
@@ -178,6 +193,7 @@ def test_an_envelope_is_labelled_one_and_a_made_part_is_not():
         built = build_spec(_spec(element_type))
         expected = element_type in (
             "helical_compression_spring",
+            "pipe_run",
             "rolling_bearing",
             "spur_gear_mesh",
         )
@@ -201,3 +217,43 @@ def test_a_beam_lies_and_a_column_stands():
     assert build_spec(_spec("beam_member")).dimensions_mm["section_area"] == pytest.approx(
         _IPE_200, rel=1e-12
     )
+
+
+def test_a_pipe_run_is_drawn_only_as_the_pipe_its_head_loss_was_worked_from():
+    """The declared bore and the designation's agree to half a percent, or nothing is drawn.
+
+    NPS 2 schedule 40 has a 52.48 mm bore, so half a percent is 0.2624 mm either side.
+    """
+    run = build_spec(_spec("pipe_run", diameter=_mm(52.7)))
+    assert run.dimensions_mm["inside_diameter"] == pytest.approx(52.48)
+    assert run.dimensions_mm["wall_thickness"] == 3.91
+    box = run.shape.bounding_box().size
+    assert (box.X, box.Y, box.Z) == pytest.approx((60.3, 3000.0, 60.3), abs=1e-6)
+    for apart in (52.2, 52.76):
+        with pytest.raises(GeometryError, match="more than 0.5% apart"):
+            build_spec(_spec("pipe_run", diameter=_mm(apart)))
+    # The same bore in schedule 80 is a different pipe: 5.54 mm of wall leaves 49.22 mm.
+    with pytest.raises(GeometryError, match="the bore of NPS 2 SCH 80 is 49.22 mm"):
+        build_spec(_spec("pipe_run", designation="NPS 2 SCH 80"))
+
+
+def test_the_end_of_a_long_pipe_is_drawn_round():
+    """A view is fitted to what it shows, so its curves are cut to that and not to the part.
+
+    Seen from its end a 3 m pipe is 60.3 mm across and fills the panel. Cut to a fraction
+    of the pipe's length, each circle was eight chords and the bore a polygon. A chord's
+    middle now sits within a thousandth of the view of the circle it stands for.
+    """
+    from anvilate import projection
+
+    run = build_spec(_spec("pipe_run"))
+    camera = projection._Camera(run.shape, "front")
+    assert camera.size == pytest.approx(3000.0) and camera.seen == pytest.approx(60.3)
+    visible, _hidden = projection._hidden_lines(run.shape, camera)
+    curves = [line for line in visible if len(line) > 2]
+    assert curves
+    for line in curves:
+        for first, second in zip(line, line[1:], strict=False):
+            radius = math.hypot(*first)
+            middle = math.hypot((first[0] + second[0]) / 2, (first[1] + second[1]) / 2)
+            assert radius - middle < 0.001 * camera.seen

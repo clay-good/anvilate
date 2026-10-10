@@ -252,6 +252,10 @@ class PipeRun(GuardedInputs):
     fitting_loss_coefficient: float
     kinematic_viscosity: Quantity
     available_head: Quantity
+    # The pipe's size and schedule, such as "NPS 2 SCH 40". No check reads it: ``diameter``
+    # above is the bore the head loss is worked from. The drawing asks for it, because a bore
+    # does not say how thick the wall around it is.
+    designation: str | None = None
 
     @model_validator(mode="after")
     def _a_loss_coefficient(self) -> PipeRun:

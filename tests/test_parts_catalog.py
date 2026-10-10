@@ -66,6 +66,7 @@ def test_the_catalog_says_what_is_checked_and_what_is_an_envelope():
     assert {name for name, entry in by_type.items() if not entry["screened"]} == drawn_only
     assert {name for name, entry in by_type.items() if entry["envelope"]} == {
         "helical_compression_spring",
+        "pipe_run",
         "rolling_bearing",
         "spur_gear_mesh",
         "t_slot_extrusion",

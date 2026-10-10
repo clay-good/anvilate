@@ -27,7 +27,8 @@
       named rolled I or H profile
 - [ ] 3.3b Channel, angle, HSS and flat-bar members (no bundled table yet)
 - [x] 3.4 Shaft key; stepped shaft with shoulders and keyways
-- [ ] 3.5 Pipe run (declares a bore and no wall; needs a schedule designation)
+- [x] 3.5 Pipe run: drawn straight from an optional `designation` (NPS and schedule), and
+      refused when the declared bore is not that pipe's
 - [x] 3.6 Catalog envelopes: rolling bearing (by designation), helical compression spring
 - [x] 3.7 Spur gear pair as tip cylinders, with pitch, root and tip circles stated
 
