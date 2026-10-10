@@ -7,7 +7,8 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 
 - [x] 1.1 Every MCP tool: purpose, inputs, result shape and size, time, which journeys use it
 - [x] 1.2 Every CLI command and flag: purpose, default, overlap with another
-- [ ] 1.3 Every refusal message on both surfaces, collected into one reviewable list
+- [x] 1.3 Every refusal message on both surfaces, collected into one reviewable list
+      (`docs/api/refusal-messages.txt`, from `tools/audit/refusals.py`; finding 21)
 - [ ] 1.4 Every docs page: who it is for, whether it is still true, what links to it
 - [x] 1.5 Client limits table for Claude Code and Codex, each with source and date
 

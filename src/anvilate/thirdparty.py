@@ -41,7 +41,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from ._models import parse_json
+from ._models import _reason, parse_json
 from .modules import MODULE_MANIFESTS, ModuleManifest
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, ScorecardEntry, UnverifiedOrigin
@@ -199,7 +199,7 @@ def enable_module(path: str | Path) -> ThirdPartyModule:
         manifest = ModuleManifest.model_validate(reply.get("result"))
     except ValidationError as refused:
         raise ThirdPartyModuleError(
-            f"{file.name} declares no valid MANIFEST: {refused}",
+            f"{file.name} declares no valid MANIFEST: {_reason(refused)}",
             subject=f"the MANIFEST in {file.name}",
         ) from refused
     for shipped in MODULE_MANIFESTS.manifests:

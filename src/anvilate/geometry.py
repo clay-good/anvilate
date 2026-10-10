@@ -26,7 +26,7 @@ from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, model_validator
 
-from ._models import FrozenMap, Named, Provenance, StatableModel
+from ._models import FrozenMap, Named, Provenance, StatableModel, _reason
 from .derivation import DerivationAbsence, Underived
 from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
@@ -2322,7 +2322,7 @@ def confirm_step_interface(
         return ConfirmedStepInterface.model_validate(confirmed_data)
     except ValueError as failure:
         raise GeometryError(
-            f"could not create the confirmed interface contract: {failure}",
+            f"could not create the confirmed interface contract: {_reason(failure)}",
             action="correct",
             subject=f"the interface contract for pattern candidate {pattern_id!r}",
             source="the measured candidate and the Design Spec interface schema",

@@ -31,7 +31,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Self, TypeVar
 
 import yaml
-from pydantic import AfterValidator, BaseModel, PlainSerializer, ValidationInfo, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    PlainSerializer,
+    ValidationError,
+    ValidationInfo,
+    model_validator,
+)
 
 __all__ = [
     "EMPTY_MAP",
@@ -82,7 +89,16 @@ def _reason(failure: BaseException) -> str:
     sentence printed that sentence inside quotes: `"unknown material 'ASTM-A63'; did you
     mean ASTM-A36?"`. A sentence is unwrapped here. A bare missing key such as
     `'scorecard'` keeps its quotes, because they are what mark it as a key.
+
+    A model's validation failure is its fields and their reasons, one clause each. Its own
+    ``str()`` is a report for a developer: the model's name, a count, a repr of the input
+    and a URL per error. Three refusals passed that through whole.
     """
+    if isinstance(failure, ValidationError):
+        return "; ".join(
+            _refusal_line(".".join(str(part) for part in error["loc"]), error["msg"])
+            for error in failure.errors()
+        )
     if (
         isinstance(failure, KeyError)
         and len(failure.args) == 1

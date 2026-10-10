@@ -27,7 +27,7 @@ from zipfile import BadZipFile, ZipFile
 
 from pydantic import ConfigDict
 
-from .._models import Named, RevalidatedModel, parse_yaml
+from .._models import Named, RevalidatedModel, _reason, parse_yaml
 from ..analysis.section import CrossSection
 from ..fetch import DatasetRecipe, FetchProvenance, cached_dataset, fetch_dataset
 from ..refusal import RefusalError, Remedy
@@ -406,7 +406,7 @@ def _load_aisc_profiles(path: str, provenance_json: str) -> AiscProfileTable:
             )
         except (KeyError, TypeError, ValueError) as invalid:
             label = row.get("C", "<unnamed>")
-            raise ValueError(f"invalid AISC W-shape row {label}: {invalid}") from invalid
+            raise ValueError(f"invalid AISC W-shape row {label}: {_reason(invalid)}") from invalid
     if not profiles:
         raise ValueError("the AISC workbook contains no W-shape geometry")
     return AiscProfileTable(profiles, provenance)

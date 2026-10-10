@@ -39,7 +39,7 @@ from typing import Protocol
 
 from pydantic import ConfigDict, field_validator
 
-from ._models import Named, Provenance, RevalidatedModel, StatableModel
+from ._models import Named, Provenance, RevalidatedModel, StatableModel, _reason
 from .refusal import RefusalError, Remedy
 
 _PUBLISHER_SOURCE = "the dataset publisher's download page and published checksum"
@@ -312,7 +312,8 @@ def cached_dataset(
         provenance = FetchProvenance.model_validate_json(text)
     except ValueError as invalid:
         raise IntegrityError(
-            f"{sidecar} is not valid fetch provenance ({invalid}), so nothing can reliably "
+            f"{sidecar} is not valid fetch provenance ({_reason(invalid)}), so nothing can "
+            "reliably "
             "say where the cached payload came from or under what licence. Delete both and "
             "fetch again.",
             remedies=_integrity_remedy(

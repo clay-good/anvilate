@@ -179,8 +179,11 @@ def test_only_a_python_file_with_a_manifest_is_a_module(tmp_path):
         enable_module(tmp_path / "missing.py")
     bare = tmp_path / "bare.py"
     bare.write_text(_PASSING, encoding="utf-8")
-    with pytest.raises(ThirdPartyModuleError, match="no valid MANIFEST"):
+    with pytest.raises(ThirdPartyModuleError, match="no valid MANIFEST") as refused:
         enable_module(bare)
+    # The reason, and not the validation library's report of it.
+    assert "errors.pydantic.dev" not in str(refused.value)
+    assert "validation error for" not in str(refused.value)
 
 
 def _example_spec():

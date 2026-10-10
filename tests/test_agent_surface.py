@@ -287,3 +287,55 @@ def test_each_journey_completes_in_the_calls_the_audit_states(journey, tmp_path)
         assert [path.suffix for path in out.iterdir() if path.suffix == ".step"] == [".step"]
     if "render_viewport" in steps:
         assert any(path.suffix == ".png" for path in out.iterdir())
+
+
+def _refusal_list():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "audit_refusals", _REPO / "tools" / "audit" / "refusals.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_refusal_list_is_what_the_source_says_today():
+    """Every message either surface can show, in one file to read through (audit 1.3).
+
+    Held to the source so it cannot describe a message that has moved on. The floors are
+    there because a walk that found nothing would write a short file and agree with it.
+    """
+    tool = _refusal_list()
+    assert tool.PAGE == _REPO / "docs" / "api" / "refusal-messages.txt"
+    assert tool.PAGE.read_text(encoding="utf-8") == tool.page()
+    assert tool.main(["--check"]) == 0
+    listed, analysis = tool.refusals()
+    assert sum(len(rows) for rows in listed.values()) > 1000 and analysis > 4000
+    assert {"cli.py", "mcp.py", "combination.py", "spec/validate.py"} <= set(listed)
+    # Both kinds are found: a raise, and a line the command line prints to standard error.
+    assert ("_read", "anvilate read: {refused}") in listed["cli.py"]
+    assert any(text.startswith("mate '{self.id}' is") for _f, text in listed["combination.py"])
+    built_elsewhere = sum(
+        text == "<built elsewhere>" for rows in listed.values() for _f, text in rows
+    )
+    assert built_elsewhere < 120, "more messages are assembled where this cannot read them"
+
+
+def test_a_validation_failure_is_stated_as_its_fields_and_their_reasons():
+    """What five refusals passed through whole: the model's name, a dump, and a URL."""
+    from pydantic import BaseModel, ValidationError
+
+    from anvilate._models import _reason
+
+    class Pair(BaseModel):
+        first: int
+        second: int
+
+    with pytest.raises(ValidationError) as failed:
+        Pair.model_validate({"first": "one"})
+    said = _reason(failed.value)
+    assert said.startswith("first: Input should be a valid integer")
+    assert said.endswith("second: Field required")
+    assert "Pair" not in said and "pydantic" not in said and "input_value" not in said
+    assert _reason(ValueError("as it was")) == "as it was"

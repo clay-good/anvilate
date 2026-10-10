@@ -312,6 +312,10 @@ def test_an_invalid_provenance_sidecar_is_one_structured_integrity_refusal(tmp_p
     with pytest.raises(IntegrityError, match="not valid fetch provenance") as refused:
         cached_dataset(_recipe(), cache_dir=tmp_path)
 
+    # Which fields the sidecar lacks, and not the validation library's report of it.
+    assert "Field required" in str(refused.value)
+    assert "errors.pydantic.dev" not in str(refused.value)
+    assert "validation error" not in str(refused.value)
     assert isinstance(refused.value, RefusalError)
     assert isinstance(refused.value, RuntimeError), "the public exception hierarchy changed"
     assert len(refused.value.remedies) == 1
