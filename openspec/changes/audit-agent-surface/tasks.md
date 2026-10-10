@@ -15,7 +15,8 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 ## 2. Tool set
 
 - [x] 2.1 Write the journeys and their maximum call counts
-- [ ] 2.2 Propose the workflow-level tool set from the inventory and measurements (own delta)
+- [x] 2.2 Propose the workflow-level tool set from the inventory and measurements (own delta:
+      `openspec/changes/trim-agent-tool-set`, awaiting approval row by row)
 - [ ] 2.3 Remove tools that cannot return a result (starting with FEA while no solver ships)
 - [ ] 2.4 One vocabulary for spec, part, card and file across tools, results and docs
 - [x] 2.5 Truthful read-only, destructive and open-world hints on every tool
@@ -48,7 +49,8 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 
 ## 6. CLI
 
-- [ ] 6.1 Review every command, flag and default; remove or merge overlaps; one table
+- [x] 6.1 Review every command, flag and default; one table (the audit page). The merges are
+      proposed in `trim-agent-tool-set` and not applied: each changes a published contract
 - [x] 6.2 Help text states what each command is for in its first line
 
 ## 7. Performance
