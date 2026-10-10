@@ -775,6 +775,149 @@ def test_the_mass_is_asked_for_the_same_way_over_mcp_and_on_the_command_line(tmp
     assert code == 3 and "no bundled material has the id 'steel'" in err
 
 
+# --- a reading beside a measurement ----------------------------------------------------
+
+
+def _plain_plate_step(tmp_path: Path) -> Path:
+    """A 120 x 80 x 6 plate with four holes through it: a file that measures as a plate."""
+    pytest.importorskip("build123d")
+    from build123d import Box, Cylinder, Pos, export_step
+
+    plate = Box(120, 80, 6)
+    for x, y in ((-50, -30), (50, -30), (50, 30), (-50, 30)):
+        plate -= Pos(x, y, 0) * Cylinder(3.3, 6)
+    export_step(plate, str(tmp_path / "plate.step"))
+    return tmp_path / "plate.step"
+
+
+def _read_plate(tmp_path: Path, **read) -> dict:
+    """The mounting plate example, with ``read`` lengths cited as the agent's off a sketch."""
+    import hashlib
+
+    import yaml
+
+    sketch = tmp_path / "sketch.png"
+    sketch.write_bytes(b"\x89PNG a sketch of the plate")
+    document = yaml.safe_load((_EXAMPLES / "mounting_plate.spec.yaml").read_text(encoding="utf-8"))
+    document["element_params"].update(read)
+    document["sources"] = [
+        {
+            "field": f"element_params.{name}",
+            "origin": "agent_read",
+            "file": sketch.name,
+            "sha256": hashlib.sha256(sketch.read_bytes()).hexdigest(),
+            "locator": "the top view",
+        }
+        for name in read
+    ]
+    return document
+
+
+def test_a_reading_is_held_against_the_file_that_measures_the_same_field(tmp_path):
+    """The agent read 118 off a sketch and the STEP file of the part measures 120.
+
+    Both are reported with their sources, the difference is flagged, and the entry citing
+    the measurement is there to use. A reading the file bears out is reported as agreeing,
+    and one the file cannot give (a corner radius is not a seeded field) is named.
+    """
+    from anvilate.context import compare_readings
+    from anvilate.spec import parse_spec
+
+    facts = read_cad_file(_plain_plate_step(tmp_path))
+    mm = lambda value: {"magnitude": value, "unit": "mm"}  # noqa: E731
+    spec = parse_spec(
+        _read_plate(
+            tmp_path,
+            width=mm(118.0),
+            length={"magnitude": 8.0, "unit": "cm"},
+            thickness=mm(6.0),
+            corner_radius=mm(8.0),
+        )
+    )
+    report = compare_readings(spec, facts)
+    by_field = {line.field.removeprefix("element_params."): line for line in report.compared}
+    assert set(by_field) == {"width", "length", "thickness"}
+    assert report.not_measured == ("element_params.corner_radius",)
+    width = by_field["width"]
+    assert (width.read_mm, width.measured_mm, width.difference_mm) == (118.0, 120.0, -2.0)
+    assert not width.agrees and report.disagreements == (width,)
+    assert width.read_from == "sketch.png" and width.read_locator == "the top view"
+    assert width.measured_source == {
+        "field": "element_params.width",
+        "origin": "measured_from_file",
+        "file": "plate.step",
+        "sha256": facts.sha256,
+        "locator": "the solid's overall size",
+    }
+    # 8 cm is 80 mm: a reading in another unit is the same length.
+    assert by_field["length"].agrees and by_field["length"].read_mm == pytest.approx(80.0)
+    assert by_field["thickness"].agrees
+    text = str(report)
+    assert "3 agent-read values compared with plate.step, 1 disagree" in text
+    assert (
+        "element_params.width: read 118 mm from sketch.png (the top view), measured 120 mm "
+        "from plate.step (the solid's overall size) — DISAGREE by 2 mm"
+    ) in text
+    assert "not measured by this file: element_params.corner_radius" in text
+    assert type(report).model_validate_json(report.model_dump_json()) == report
+
+
+def test_a_reading_is_equal_to_a_millionth_or_it_disagrees(tmp_path):
+    from anvilate.context import compare_readings
+    from anvilate.spec import parse_spec
+
+    facts = read_cad_file(_plain_plate_step(tmp_path))
+    for width, agrees in ((120.0, True), (120.0000001, True), (120.001, False), (119.999, False)):
+        spec = parse_spec(_read_plate(tmp_path, width={"magnitude": width, "unit": "mm"}))
+        (line,) = compare_readings(spec, facts).compared
+        assert line.agrees is agrees, width
+
+
+def test_only_an_agents_readings_of_the_same_part_are_compared(tmp_path):
+    from anvilate.context import compare_readings
+    from anvilate.spec import parse_spec
+
+    plate = read_cad_file(_plain_plate_step(tmp_path))
+    # A value the user stated, or one already measured, is not a reading to check.
+    stated = parse_spec(_read_plate(tmp_path))
+    report = compare_readings(stated, plate)
+    assert report.compared == () and report.not_measured == () and report.note is None
+    assert "0 agent-read values compared" in str(report)
+    # A file that is another part, or no catalog part, measures none of the spec's fields.
+    spec = parse_spec(_read_plate(tmp_path, width={"magnitude": 118.0, "unit": "mm"}))
+    for other, what in (("spacer", "a spacer"), ("angle_bracket", "no catalog part")):
+        report = compare_readings(spec, read_cad_file(_step(tmp_path, other)))
+        assert report.compared == () and report.not_measured == ("element_params.width",)
+        assert f"measures as {what}, and the spec declares a mounting_plate" in report.note
+
+
+def test_the_comparison_is_asked_for_the_same_way_over_mcp_and_on_the_command_line(tmp_path):
+    import yaml
+
+    from cli_output import run_cli
+
+    path = _plain_plate_step(tmp_path)
+    document = _read_plate(tmp_path, width={"magnitude": 118.0, "unit": "mm"})
+    context.set_context_roots([tmp_path])
+    result = _call("read_cad_file", {"source": path.name, "spec": document})["result"]
+    readings = result["structuredContent"]["readings"]
+    (line,) = readings["compared"]
+    assert (line["read_mm"], line["measured_mm"], line["agrees"]) == (118.0, 120.0, False)
+    assert line["measured_source"]["origin"] == "measured_from_file"
+    assert (
+        "readings"
+        not in _call("read_cad_file", {"source": path.name})["result"]["structuredContent"]
+    )
+    broken = _call("read_cad_file", {"source": path.name, "spec": {"name": "x"}})["error"]
+    assert broken["code"] == -32602 and "spec" in broken["message"]
+    spec_file = tmp_path / "plate.spec.yaml"
+    spec_file.write_text(yaml.safe_dump(document), encoding="utf-8")
+    code, out, _err = run_cli("read", str(path), "--against", str(spec_file))
+    assert code == 0 and "DISAGREE by 2 mm" in out
+    code, _out, err = run_cli("read", str(path), "--against", str(tmp_path / "missing.yaml"))
+    assert code == 3 and "missing.yaml" in err
+
+
 # --- starting a part from what was read ------------------------------------------------
 
 

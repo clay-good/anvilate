@@ -899,6 +899,13 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                             "adds each solid's mass"
                         ),
                     },
+                    "spec": {
+                        "type": "object",
+                        "description": (
+                            "a Design Spec whose agent_read values to hold against this "
+                            "file; adds readings"
+                        ),
+                    },
                 },
                 required=["source"],
             ),
@@ -917,6 +924,21 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                             "missing": {"type": "array", "items": {"type": "string"}},
                         },
                         "required": ["element_type", "element_params", "sources", "missing"],
+                        "additionalProperties": False,
+                    },
+                    # Present when the call gave a spec: each length the spec cites as
+                    # agent_read beside what this file measures for the same field, with
+                    # the source entry citing the measurement, and whether they agree.
+                    "readings": {
+                        "type": "object",
+                        "properties": {
+                            "file": {"type": "string"},
+                            "sha256": {"type": "string"},
+                            "compared": {"type": "array", "items": {"type": "object"}},
+                            "not_measured": {"type": "array", "items": {"type": "string"}},
+                            "note": {"type": "string"},
+                        },
+                        "required": ["file", "sha256", "compared"],
                         "additionalProperties": False,
                     },
                 },
@@ -2237,6 +2259,23 @@ def _read_cad_file(arguments: Mapping[str, Any]) -> dict[str, Any]:
     seed = seed_part(facts)
     if seed is not None:
         result["seed"] = {"missing": [], **seed.model_dump(mode="json")}
+    if arguments.get("spec") is not None:
+        from .context import compare_readings
+        from .spec import SpecValidationError, parse_spec
+
+        try:
+            spec = parse_spec(dict(arguments["spec"]))
+        except SpecValidationError as failure:
+            raise _InvalidArguments(
+                [_refusal_line(f"spec.{e['loc']}".rstrip("."), e["msg"]) for e in failure.errors],
+                operation="read_cad_file",
+                remedies=failure.remedy_texts,
+            ) from failure
+        except (ValueError, TypeError, KeyError) as failure:
+            raise _InvalidArguments(
+                [f"spec: {_reason(failure)}"], operation="read_cad_file"
+            ) from failure
+        result["readings"] = compare_readings(spec, facts).model_dump(mode="json")
     return result
 
 

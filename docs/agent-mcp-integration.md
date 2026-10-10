@@ -286,6 +286,16 @@ is a plate whose width, length and hole size each cite the DXF beside it.
 | measured from file | Anvilate, with `read_cad_file` | Nothing more: a measurement is used as it is. |
 | agent read | The agent, off a picture, a scan or a PDF | The part is drawn and screened, every check that used the value says it rests on an unconfirmed reading, one entry counts the readings and names each with its file, and nothing exports as validated. |
 
+**A measurement outranks a reading.** When a file Anvilate measures gives a length the
+agent also read off a picture, pass the spec to `read_cad_file` as `spec` (on the command
+line, `anvilate read FILE --against SPEC`). The result's `readings` lists each agent-read
+length beside what the file measures for the same field, with both sources, and says
+whether they agree: read 118 mm from the sketch, measured 120 mm from the STEP file,
+disagree by 2 mm. Each line carries the source entry that cites the measurement, ready to
+replace the reading's. The difference is the engineer's to settle; the measurement is the
+one to use meanwhile. Fields are matched as the spec writes them, so the file has to
+measure as the same catalog part.
+
 The two origins are written in the document with underscores, as the example shows. An
 agent's reading becomes a confirmed value when the engineer adds who confirmed it and on
 what date to its source: the two fields are named confirmed-by and confirmed-on, with

@@ -163,7 +163,10 @@ context.PartSeed
 context.PlaneFacts
 context.ProfileFacts
 context.ProfileHole
+context.ReadingComparison
+context.ReadingReport
 context.SolidFacts
+context.compare_readings
 context.context_roots
 context.inventory
 context.read_cad_file

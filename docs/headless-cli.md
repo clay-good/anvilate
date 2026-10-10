@@ -18,7 +18,7 @@ has not shipped exits 4 naming that gap.
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
 | `combine` | a combination document | `--output`, `--picture`, `--unvalidated`, `--force` | the combination's card passes |
-| `read` | a CAD file, or a folder | `--material`, `--unit` | the file was measured, or the folder listed |
+| `read` | a CAD file, or a folder | `--against`, `--material`, `--unit` | the file was measured, or the folder listed |
 | `parts` | an element type, or none to list them | none | the catalog, or that element's fields and example, was printed |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
@@ -1156,6 +1156,10 @@ anvilate read drawings/
 `--material` names what a STEP file's solids are made of, by its id in the bundled
 materials database, and adds each solid's mass: its volume at that material's density. A
 STEP file states no material this reader trusts, so without the flag there is no mass.
+
+`--against SPEC` holds the lengths that spec cites as read by an agent (`agent_read`)
+against what the file measures for the same fields, prints each pair with its two sources,
+and flags the ones that disagree.
 
 A DXF that declares no unit is refused until `--unit` states one: a drawing in inches read
 as millimetres is wrong by 25.4. DWG, IGES, Parasolid and native CAD files are refused by

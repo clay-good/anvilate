@@ -39,7 +39,7 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `export_artifact` | pipeline | `subject`, `format` | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 673 characters | 2 s | export, combination |
 | `build_combination` | combination | `combination` | `combination`, `scorecard`, `subject` | yes | 668 characters | 15 s | combination |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
-| `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional) | `facts`, `seed` | no | 791 characters | 10 s | context |
+| `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 791 characters | 10 s | context |
 | `describe_part` | catalog lookup | `element_type` (optional) | `catalog` | no | 384 characters | 1 s | check, draw, export |
 
 ## The journeys
@@ -69,7 +69,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | `fetch` | download a dataset Anvilate may read but not ship, once, with your consent | `--consent`, `--format` |
 | `interfaces` | detect planar faces and through-hole patterns in a mating STEP | `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--confirmed-by`, `--fit`, `--format`, `--locator`, `--mating-plane`, `--max-gap`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--name`, `--requirement`, `--solid` |
 | `parts` | list the parts a spec can declare, or describe one | none |
-| `read` | measure a STEP, DXF, STL or 3MF file, or list a folder of them | `--material`, `--unit` |
+| `read` | measure a STEP, DXF, STL or 3MF file, or list a folder of them | `--against`, `--material`, `--unit` |
 | `verify` | verify an attestation envelope or STEP import integrity | `--artifact`, `--format`, `--hmac-key-file` |
 | `view` | write a one-page HTML part sheet: the drawn part beside its scorecard | `--force`, `--module`, `--no-open`, `--output` |
 

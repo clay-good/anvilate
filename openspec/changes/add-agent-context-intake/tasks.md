@@ -27,7 +27,8 @@
 
 - [x] 3.1 Folder inventory, bounded, with who reads what
 - [x] 3.2 Seed a catalog pattern from a measured profile or part; "no pattern matches" result
-- [ ] 3.3 Measured-versus-read disagreement report
+- [x] 3.3 Measured-versus-read disagreement report: `read_cad_file` given a spec, and
+      `anvilate read --against`, list each agent-read length beside the file's measurement
 
 ## 4. Surfaces
 

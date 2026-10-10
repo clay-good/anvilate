@@ -619,6 +619,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--material",
         help="what a STEP file's solids are made of, as a material id; adds each solid's mass",
     )
+    read.add_argument(
+        "--against",
+        type=Path,
+        metavar="SPEC",
+        help="a spec whose agent-read values to hold against what the file measures",
+    )
 
     fetch = commands.add_parser(
         "fetch",
@@ -1136,6 +1142,13 @@ def _read(args: argparse.Namespace, *, out, err) -> int:
             seed = seed_part(facts)
             if seed is not None:
                 print(f"  {seed}", file=out)
+            if args.against is not None:
+                from .context import compare_readings
+
+                spec = _load(args.against, err=err, command="read")
+                if isinstance(spec, int):
+                    return spec
+                print(compare_readings(spec, facts), file=out)
     except ContextError as refused:
         print(f"anvilate read: {refused}", file=err)
         return EXIT_BAD_REQUEST

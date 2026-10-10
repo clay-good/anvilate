@@ -49,7 +49,10 @@ __all__ = [
     "PlaneFacts",
     "ProfileFacts",
     "ProfileHole",
+    "ReadingComparison",
+    "ReadingReport",
     "SolidFacts",
+    "compare_readings",
     "context_roots",
     "inventory",
     "read_cad_file",
@@ -1607,3 +1610,155 @@ def _plate_seed(
         sources=tuple(sources),
         missing=("name",),
     )
+
+
+# --- a reading beside a measurement ----------------------------------------------------
+
+
+class ReadingComparison(StatableModel):
+    """One length an agent read, beside what a file measures for the same field."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    field: Provenance
+    read_mm: float
+    read_from: Named
+    read_locator: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    measured_mm: float
+    # The entry that cites the measurement, ready to replace the reading's in `sources`.
+    measured_source: FrozenMap[str, str]
+    difference_mm: float
+    agrees: bool
+
+    def __str__(self) -> str:
+        read_at = f" ({self.read_locator})" if self.read_locator else ""
+        measured_at = self.measured_source.get("locator")
+        measured_at = f" ({measured_at})" if measured_at else ""
+        verdict = (
+            "agree"
+            if self.agrees
+            else f"DISAGREE by {abs(self.difference_mm):g} mm: the measurement is the one to "
+            "use, and the reading is the person's to settle"
+        )
+        return (
+            f"{self.field}: read {self.read_mm:g} mm from {self.read_from}{read_at}, measured "
+            f"{self.measured_mm:g} mm from {self.measured_source['file']}{measured_at} — {verdict}"
+        )
+
+
+class ReadingReport(StatableModel):
+    """A spec's agent-read lengths held against one measured file."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    file: Provenance
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    compared: tuple[ReadingComparison, ...] = ()
+    # Agent-read values this file gives no measurement for, by field. Not a finding: a
+    # drawing has no thickness, and a load is in no file.
+    not_measured: tuple[Provenance, ...] = Field(default=(), exclude_if=lambda value: not value)
+    note: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @property
+    def disagreements(self) -> tuple[ReadingComparison, ...]:
+        """The readings the file contradicts."""
+        return tuple(line for line in self.compared if not line.agrees)
+
+    def __str__(self) -> str:
+        lines = [
+            f"{len(self.compared)} agent-read values compared with {self.file}, "
+            f"{len(self.disagreements)} disagree"
+        ]
+        lines += [f"  {line}" for line in self.compared]
+        if self.not_measured:
+            lines.append(f"  not measured by this file: {', '.join(self.not_measured)}")
+        if self.note is not None:
+            lines.append(f"  note: {self.note}")
+        return "\n".join(lines)
+
+
+def _value_at(params: Any, path: str) -> Any:
+    """The value at ``path`` under ``element_params``, or ``None`` when there is none."""
+    import re
+
+    node = params
+    try:
+        for part in path.split("."):
+            name, _, rest = part.partition("[")
+            node = node[name]
+            for index in re.findall(r"\d+", rest):
+                node = node[int(index)]
+    except (KeyError, IndexError, TypeError):
+        return None
+    return node
+
+
+def _length_mm(value: Any) -> float | None:
+    from collections.abc import Mapping
+
+    from .units import Quantity
+
+    if isinstance(value, Mapping) and {"magnitude", "unit"} <= set(value):
+        try:
+            value = Quantity(magnitude=value["magnitude"], unit=value["unit"])
+        except (ValueError, TypeError):
+            return None
+    if not isinstance(value, Quantity) or not value.has_dimension("[length]"):
+        return None
+    return float(value.to("mm").magnitude)
+
+
+def compare_readings(spec: Any, facts: CadFacts) -> ReadingReport:
+    """Hold every length ``spec`` cites as agent-read against what ``facts`` measures.
+
+    A value an agent read off a picture or a PDF is a draft. Where a file Anvilate measures
+    gives the same field, the measurement is offered beside it with the entry that cites it,
+    and a difference is flagged for the person to settle. The two are the same field when
+    the file seeds the spec's own element type (:func:`seed_part`) and the seed fills the
+    path the reading is cited at; a path is matched as written, so a plate read with its
+    width and length the other way round shows as two disagreements, with both sources.
+
+    A reading is held to the measurement the way a dimension's text is held to its geometry:
+    equal to a millionth, or it disagrees.
+    """
+    read = [
+        source
+        for source in getattr(spec, "sources", ())
+        if source.origin == "agent_read" and source.field.startswith("element_params.")
+    ]
+    seed = seed_part(facts)
+    common = {"file": facts.file, "sha256": facts.sha256}
+    fields = tuple(source.field for source in read)
+    if seed is None or seed.element_type != getattr(spec, "element_type", None):
+        what = "no catalog part" if seed is None else f"a {seed.element_type}"
+        return ReadingReport(
+            **common,
+            not_measured=fields,
+            note=(
+                f"{facts.file} measures as {what}, and the spec declares a "
+                f"{getattr(spec, 'element_type', None) or 'part with no element_type'}; "
+                "nothing in it is the same field as a reading"
+            ),
+        )
+    cited = {source["field"]: source for source in seed.sources}
+    compared, unmeasured = [], []
+    for source in read:
+        path = source.field.removeprefix("element_params.")
+        stated = _length_mm(_value_at(spec.element_params, path))
+        measured = _length_mm(_value_at(seed.element_params, path))
+        if stated is None or measured is None or source.field not in cited:
+            unmeasured.append(source.field)
+            continue
+        compared.append(
+            ReadingComparison(
+                field=source.field,
+                read_mm=stated,
+                read_from=source.file,
+                read_locator=source.locator,
+                measured_mm=measured,
+                measured_source=cited[source.field],
+                difference_mm=round(stated - measured, 6),
+                agrees=math.isclose(stated, measured, rel_tol=1e-6, abs_tol=1e-6),
+            )
+        )
+    return ReadingReport(**common, compared=tuple(compared), not_measured=tuple(unmeasured))
