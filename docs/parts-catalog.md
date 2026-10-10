@@ -39,7 +39,7 @@ An L bracket: two legs with holes and slots in each, and an optional stiffening 
 ![angle_bracket](parts/angle_bracket.png)
 
 - Required: `name` (text), `base_length` (quantity), `upright_height` (quantity), `width` (quantity), `thickness` (quantity)
-- Optional: `rib_thickness` (quantity), `rib_leg` (quantity), `base_holes` (list of Hole), `base_patterns` (list of HolePattern), `base_slots` (list of Slot), `upright_holes` (list of Hole), `upright_patterns` (list of HolePattern), `upright_slots` (list of Slot), `material` (text)
+- Optional: `rib_thickness` (quantity), `rib_leg` (quantity), `base_holes` (list of Hole), `base_patterns` (list of HolePattern), `base_slots` (list of Slot), `upright_holes` (list of Hole), `upright_patterns` (list of HolePattern), `upright_slots` (list of Slot), `material` (text), `load` (quantity), `load_height` (quantity), `allowable_bending` (quantity), `allowable_bearing` (quantity)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/angle_bracket.spec.yaml`](../examples/parts/angle_bracket.spec.yaml)
 

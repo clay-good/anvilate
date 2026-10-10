@@ -2237,6 +2237,25 @@ def _discipline_pack_derivations() -> list[tuple[str, object]]:
             ),
         ),
         (
+            "angle bracket",
+            parts.screen_angle_bracket(
+                parts.AngleBracket(
+                    name="bracket",
+                    base_length=q("60 mm"),
+                    upright_height=q("80 mm"),
+                    width=q("50 mm"),
+                    thickness=q("5 mm"),
+                    base_holes=(
+                        parts.Hole(tag="b1", x=q("10 mm"), y=q("0 mm"), diameter=q("6.6 mm")),
+                    ),
+                    load=q("1 kN"),
+                    load_height=q("60 mm"),
+                    allowable_bending=q("150 MPa"),
+                    allowable_bearing=q("250 MPa"),
+                )
+            ),
+        ),
+        (
             "clevis",
             parts.screen_clevis(
                 parts.Clevis(

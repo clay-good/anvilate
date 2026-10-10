@@ -582,3 +582,67 @@ def test_a_shaft_says_where_each_keyway_is():
     shaft = build_spec(_spec("stepped_shaft")).dimensions_mm
     # Step 1 is 20 mm across and starts at the drive end; the keyway is 5 mm along it.
     assert (shaft["keyway_1_start"], shaft["keyway_1_diameter"]) == (5.0, 20.0)
+
+
+def _loaded_bracket(**changes):
+    stated = {
+        "load": {"magnitude": 1.0, "unit": "kN"},
+        "load_height": _mm(60),
+        "allowable_bending": _mpa(150),
+        "allowable_bearing": _mpa(250),
+        **changes,
+    }
+    card = screen_spec(_spec("angle_bracket", **stated))
+    return {e.name.removeprefix("shelf-angle-bracket "): e for e in card.entries}, card
+
+
+def test_a_loaded_angle_bracket_is_screened_on_its_upright_and_its_base_holes():
+    """1 kN on the upright 60 mm up a 50 x 5 bracket, fixed by two 6.6 mm holes.
+
+    The upright bends about the top of the base leg, 55 mm below the load: 6 x 1000 x 55 /
+    (50 x 5^2) = 264 MPa. The two holes bear 1000 / (2 x 6.6 x 5) = 15.15 MPa.
+    """
+    checks, card = _loaded_bracket()
+    assert checks["leg bending"].safety_factor == pytest.approx(150 / 264)
+    assert checks["bolt bearing"].safety_factor == pytest.approx(250 / (1000 / 66))
+    assert checks["leg bending"].status is CheckStatus.FAIL
+    assert checks["bolt bearing"].status is CheckStatus.PASS
+    assert checks["leg bending"].derivation.result.value.to("MPa").magnitude == pytest.approx(264)
+    assert not any("drawn" in e.detail for e in card.entries) and not card.passed
+    # A load a third as high bends the upright a third as much, about the same root.
+    low, _card = _loaded_bracket(load_height=_mm(5 + 55 / 3))
+    assert low["leg bending"].safety_factor == pytest.approx(3 * 150 / 264)
+    # A thicker allowable passes, and an allowable nobody declared is not assumed.
+    assert _loaded_bracket(allowable_bending=_mpa(530))[0]["leg bending"].status is CheckStatus.PASS
+    bare, _card = _loaded_bracket(allowable_bearing=None)
+    assert bare["bolt bearing"].status is CheckStatus.NOT_EVALUATED
+    assert [n.declaration for n in bare["bolt bearing"].needs] == [
+        "element_params.allowable_bearing"
+    ]
+
+
+def test_a_bracket_load_has_a_height_on_the_upright_and_holes_to_bear_on():
+    for changes, reason in (
+        ({"load_height": None}, "states its load and the load_height it acts at"),
+        ({"load_height": _mm(81)}, "above the top of the upright"),
+        ({"load": _mm(5)}, "load must be a force"),
+        ({"allowable_bending": {"magnitude": 1.0, "unit": "kN"}}, "must be a stress"),
+    ):
+        card = screen_spec(_spec("angle_bracket", **{**_BRACKET_LOAD, **changes}))
+        (refused,) = [entry for entry in card.entries if reason in entry.detail]
+        assert refused.status is CheckStatus.NOT_EVALUATED, reason
+    # At the height of the base leg there is no arm, and with no round hole nothing bears.
+    flat, _card = _loaded_bracket(load_height=_mm(5))
+    assert flat["leg bending"].status is CheckStatus.NOT_EVALUATED
+    assert "not above the base leg" in flat["leg bending"].detail
+    bare, _card = _loaded_bracket(base_holes=[])
+    assert bare["bolt bearing"].status is CheckStatus.NOT_EVALUATED
+    assert "no round hole" in bare["bolt bearing"].detail
+
+
+_BRACKET_LOAD = {
+    "load": {"magnitude": 1.0, "unit": "kN"},
+    "load_height": _mm(60),
+    "allowable_bending": _mpa(150),
+    "allowable_bearing": _mpa(250),
+}

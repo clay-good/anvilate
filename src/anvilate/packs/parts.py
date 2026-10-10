@@ -23,7 +23,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -231,7 +231,15 @@ class AngleBracket(_Part):
     part of the leg beyond the other leg's thickness. ``rib_thickness`` and ``rib_leg``
     add a triangular stiffening rib in the middle of the inside corner, running ``rib_leg``
     along each leg.
+
+    ``load`` is a force on the upright, square to it, acting ``load_height`` above the
+    bracket's underside. With it the bracket is screened: the upright in bending where it
+    meets the base, against ``allowable_bending``, and the base's round holes in bearing
+    as they carry the same force in shear, against ``allowable_bearing``. The allowables
+    are the caller's. Without a load the bracket is drawn and not checked.
     """
+
+    not_lengths = ("load", "allowable_bending", "allowable_bearing")
 
     positive_fields = (
         "base_length",
@@ -240,6 +248,8 @@ class AngleBracket(_Part):
         "thickness",
         "rib_thickness",
         "rib_leg",
+        "load_height",
+        *not_lengths,
     )
 
     name: Named
@@ -256,11 +266,39 @@ class AngleBracket(_Part):
     upright_patterns: tuple[HolePattern, ...] = ()
     upright_slots: tuple[Slot, ...] = ()
     material: str | None = None
+    load: Quantity | None = None
+    load_height: Quantity | None = None
+    allowable_bending: Quantity | None = None
+    allowable_bearing: Quantity | None = None
 
     @model_validator(mode="after")
     def _a_rib_has_both_dimensions(self) -> AngleBracket:
         if (self.rib_thickness is None) != (self.rib_leg is None):
             raise _refuse("a stiffening rib states rib_thickness and rib_leg", subject="rib_leg")
+        for name in type(self).not_lengths:
+            value = getattr(self, name)
+            wanted = "[force]" if name == "load" else "[pressure]"
+            if value is not None and not value.has_dimension(wanted):
+                kind = "a force" if name == "load" else "a stress"
+                raise _refuse(
+                    f"{name} must be {kind}; got {value} ({value.dimensionality})", subject=name
+                )
+        if (self.load is None) != (self.load_height is None):
+            missing = "load_height" if self.load is not None else "load"
+            raise _refuse(
+                "a loaded bracket states its load and the load_height it acts at",
+                subject=missing,
+            )
+        if self.load_height is not None and (
+            self.load_height.has_dimension("[length]")
+            and self.upright_height.has_dimension("[length]")
+            and self.load_height.to("mm").magnitude > self.upright_height.to("mm").magnitude
+        ):
+            raise _refuse(
+                f"load_height ({self.load_height}) is above the top of the upright "
+                f"({self.upright_height})",
+                subject="load_height",
+            )
         return self
 
 
@@ -756,9 +794,121 @@ def screen_mounting_plate(plate: MountingPlate) -> Scorecard:
     return _drawn_not_checked("mounting plate", str(plate.name))
 
 
-def screen_angle_bracket(bracket: AngleBracket) -> Scorecard:
-    """An angle bracket is drawn and not checked."""
-    return _drawn_not_checked("angle bracket", str(bracket.name))
+_BRACKET_REFERENCE = "Shigley, bending of a rectangular section and bearing on a fastener hole"
+_BRACKET_ALLOWABLES = {
+    "allowable_bending": "the bracket material's allowable bending stress",
+    "allowable_bearing": "the bracket material's allowable bearing stress",
+}
+_NEEDS_A_BRACKET_LOAD = Need(
+    declaration="element_params.load",
+    takes=(
+        "the force on the upright, square to it, with element_params.load_height saying "
+        "how far above the bracket's underside it acts"
+    ),
+    dimension="[force]",
+    units=("kN", "lbf"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+
+
+def screen_angle_bracket(
+    bracket: AngleBracket, *, required_safety_factor: float = 2.0
+) -> Scorecard:
+    """Screen an angle bracket under a load on its upright, or say it is only drawn.
+
+    Two limit states, at ``required_safety_factor`` (2.0, as on a clevis: the allowables
+    are plain strengths with no code margin in them). The upright bends about its root, the
+    top of the base leg, as a cantilever of the bracket's ``width`` and ``thickness`` with
+    the load ``load_height − thickness`` above it; a stiffening rib is not counted, which
+    leaves the plain section carrying the whole moment. The same force is shear on the
+    base's fixings, and bears on its round holes, shared equally, at the smallest of them;
+    a slot carries none of it along its length and is not counted.
+
+    Without a ``load`` nothing is checked, and the one entry says so. Whether a hole is far
+    enough from an edge is not checked: the rule for it is a table this library does not
+    carry.
+    """
+    if bracket.load is None:
+        (drawn,) = _drawn_not_checked(
+            "angle bracket",
+            str(bracket.name),
+            until=(
+                "its upright and its base holes are checked once it states the load on "
+                "its upright: declare load and load_height, and the allowable each check "
+                "is held against"
+            ),
+        ).entries
+        return Scorecard(entries=(drawn.model_copy(update={"needs": (_NEEDS_A_BRACKET_LOAD,)}),))
+    assert bracket.load_height is not None
+    width, thickness = bracket.width.to("mm").magnitude, bracket.thickness.to("mm").magnitude
+    arm = bracket.load_height.to("mm").magnitude - thickness
+    holes = [hole.diameter.to("mm").magnitude for hole in bracket.base_holes]
+    for pattern in bracket.base_patterns:
+        count = (
+            pattern.count
+            if pattern.kind == "bolt_circle"
+            else (pattern.count_x or 1) * (pattern.count_y or 1)
+        )
+        holes += [pattern.diameter.to("mm").magnitude] * (count or 0)
+
+    def symbol(name: str, description: str, value: float) -> SymbolValue:
+        return SymbolValue(
+            symbol=name,
+            description=description,
+            value=Quantity(magnitude=value, unit="mm"),
+            unit="mm",
+        )
+
+    common = {
+        "allowables": _BRACKET_ALLOWABLES,
+        "reference": _BRACKET_REFERENCE,
+        "load": "load on the upright",
+        "required_safety_factor": required_safety_factor,
+    }
+    w, t = symbol("w", "bracket width", width), symbol("t", "leg thickness", thickness)
+    return Scorecard(
+        entries=(
+            _clevis_check(
+                bracket,
+                "leg bending",
+                allowable="allowable_bending",
+                # σ = M·c/I with M = P·a, c = t/2 and I = w·t³/12: the load over w·t²/(6·a).
+                area=width * thickness**2 / (6 * arm) if arm > 0 else 0.0,
+                symbolic="σ = 6 · P · a / (w · t²)",
+                result=("σ", "bending stress in the upright where it meets the base"),
+                inputs=(
+                    symbol("a", "from the top of the base leg to the load", arm),
+                    w,
+                    t,
+                ),
+                no_area=(
+                    "load_height",
+                    "load_height is not above the base leg, which the upright stands on",
+                ),
+                **common,
+            ),
+            _clevis_check(
+                bracket,
+                "bolt bearing",
+                allowable="allowable_bearing",
+                area=len(holes) * min(holes) * thickness if holes else 0.0,
+                symbolic="σ_b = P / (n · d · t)",
+                result=("σ_b", "bearing stress on the base's holes"),
+                inputs=(
+                    SymbolValue(
+                        symbol="n", description="round holes in the base", value=len(holes)
+                    ),
+                    symbol("d", "smallest base hole", min(holes) if holes else 0.0),
+                    t,
+                ),
+                no_area=(
+                    "base_holes",
+                    "the base has no round hole to carry the load in bearing",
+                ),
+                **common,
+            ),
+        )
+    )
 
 
 def screen_plate_flange(flange: PlateFlange) -> Scorecard:
@@ -796,7 +946,8 @@ def screen_pulley(pulley: Pulley) -> Scorecard:
     return _drawn_not_checked("pulley", str(pulley.name))
 
 
-_CLEVIS_REFERENCE = "Shigley §8-12, joints loaded in shear: pin shear, bearing, tension, tear-out"
+# Named for what it is, with no section number: none is recorded here to read it from.
+_CLEVIS_REFERENCE = "Shigley, joints loaded in shear: pin shear, bearing, tension, tear-out"
 _NEEDS_A_CLEVIS_LOAD = Need(
     declaration="element_params.load",
     takes="the force on the clevis pin, pulling it away from the base",
@@ -813,7 +964,7 @@ _CLEVIS_ALLOWABLES = {
 
 
 def _clevis_check(
-    clevis: Clevis,
+    clevis: Any,
     check: str,
     *,
     allowable: str,
@@ -823,8 +974,17 @@ def _clevis_check(
     inputs: tuple[SymbolValue, ...],
     no_area: tuple[str, str],
     required_safety_factor: float,
+    allowables: Mapping[str, str] | None = None,
+    reference: str | None = None,
+    load: str = "load on the pin",
 ) -> ScorecardEntry:
-    """One clevis limit state: the load over ``area`` (mm²) against the named allowable."""
+    """One limit state of a loaded part: the load over ``area`` (mm²) against an allowable.
+
+    Written for the clevis and used by the angle bracket too, which names its own
+    allowables, reference and load.
+    """
+    allowed = allowables or _CLEVIS_ALLOWABLES
+    cited = reference or _CLEVIS_REFERENCE
     assert clevis.load is not None
     name = f"{clevis.name} {check}"
     strength = getattr(clevis, allowable)
@@ -833,13 +993,13 @@ def _clevis_check(
             name=name,
             status=CheckStatus.NOT_EVALUATED,
             detail=(
-                f"not evaluated — {check} is held against {_CLEVIS_ALLOWABLES[allowable]}, "
+                f"not evaluated — {check} is held against {allowed[allowable]}, "
                 f"and none is assumed for a material; declare {allowable}"
             ),
             needs=(
                 Need(
                     declaration=f"element_params.{allowable}",
-                    takes=_CLEVIS_ALLOWABLES[allowable],
+                    takes=allowed[allowable],
                     dimension="[pressure]",
                     units=("MPa", "ksi"),
                     sources=(ValueSource.USER, ValueSource.STANDARD),
@@ -855,7 +1015,7 @@ def _clevis_check(
             needs=(
                 Need(
                     declaration=f"element_params.{field}",
-                    takes=f"a {field.replace('_', ' ')} that leaves the ear a section here",
+                    takes=f"a {field.replace('_', ' ')} that leaves the part a section here",
                     dimension="[length]",
                     units=("mm", "in"),
                     sources=(ValueSource.USER, ValueSource.MEASUREMENT),
@@ -867,17 +1027,17 @@ def _clevis_check(
     derivation = Derivation(
         symbolic=symbolic,
         inputs=(
-            SymbolValue(symbol="P", description="load on the pin", value=clevis.load, unit="N"),
+            SymbolValue(symbol="P", description=load, value=clevis.load, unit="N"),
             *inputs,
         ),
         result=SymbolValue(symbol=symbol, description=description, value=stress, unit="MPa"),
-        citation=_CLEVIS_REFERENCE,
+        citation=cited,
     )
     return ScorecardEntry.from_safety_factor(
         name,
         computed=strength.to("MPa").magnitude / stress.magnitude,
         required=required_safety_factor,
-    ).model_copy(update={"reference": _CLEVIS_REFERENCE, "derivation": derivation})
+    ).model_copy(update={"reference": cited, "derivation": derivation})
 
 
 def screen_clevis(clevis: Clevis, *, required_safety_factor: float = 2.0) -> Scorecard:

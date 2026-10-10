@@ -569,6 +569,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # model field, published in each schema as something a document could write, and a
     # document that wrote it was accepted and then ignored — the guard read the class's
     # own value. It is a class attribute now, and a document naming it is refused.
+    # 1.2.0 adds the load on the upright, its height and the two allowables it is screened on.
+    "angle_bracket": "1.2.0",
     "base_plate": "1.3.0",
     "beam_column_member": "1.4.0",
     "beam_member": "1.4.0",

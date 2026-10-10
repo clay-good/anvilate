@@ -1,5 +1,7 @@
 {
  "angle_bracket": {
+  "allowable_bearing": null,
+  "allowable_bending": null,
   "base_holes": [
    {
     "counterbore_depth": null,
@@ -48,6 +50,8 @@
   },
   "base_patterns": [],
   "base_slots": [],
+  "load": null,
+  "load_height": null,
   "material": null,
   "name": "shelf-angle-bracket",
   "rib_leg": {

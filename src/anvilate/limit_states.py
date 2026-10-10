@@ -490,6 +490,16 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("structural.screen_shear_plate", "shear rupture"),
         ),
         _state(
+            "parts.bracket_leg_bending",
+            "the upright of an angle bracket yielding in bending where it meets the base",
+            ("parts.screen_angle_bracket", "leg bending"),
+        ),
+        _state(
+            "parts.bracket_bolt_bearing",
+            "the base of an angle bracket yielding in bearing at its fixing holes",
+            ("parts.screen_angle_bracket", "bolt bearing"),
+        ),
+        _state(
             "parts.clevis_pin_shear",
             "a clevis pin shearing on the two planes between the ears and what it holds",
             ("parts.screen_clevis", "pin shear"),

@@ -50,12 +50,12 @@
 - [x] 4.8 Enclosure: open box shell with floor holes
 - [x] 4.9a Clevis screen: pin shear, ear bearing, ear net tension and ear shear-out under a
       declared pin load, each against a declared allowable
-- [ ] 4.9b Screens: angle bracket (leg bending, bolt bearing, edge distance), stepped shaft
-      (stress at a shoulder)
+- [x] 4.9b Angle bracket screen: leg bending and bolt bearing under a load on the upright at a
+      declared height (edge distance is not checked: its rule is a table not bundled)
+- [ ] 4.9c Stepped shaft: stress at a shoulder
       — held open, 2026-10-10: a shoulder needs its stress-concentration factor, and no
       fillet-shoulder Kt is in the library; it is to be solved out of a published chart
-      before it is written, not recalled. The bracket's checks need the load's direction
-      and where on the upright it acts, which the element does not yet say.
+      before it is written, not recalled.
 - [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
       developed blank with its bend lines
 - [x] 4.10b Minimum bend radius reported through the existing bend-radius screen

@@ -231,6 +231,21 @@ allowable is not declared is not evaluated and names it; a clevis with no `load`
 and not checked. The base, and whatever holds it, are not part of the element. See
 [`examples/parts/clevis.spec.yaml`](../examples/parts/clevis.spec.yaml).
 
+## An angle bracket under a load on its upright
+
+An `angle_bracket` is drawn from its dimensions. Add a `load` on the upright, square to it,
+and the `load_height` it acts at above the bracket's underside, and it is screened on two
+checks, each against an allowable the document states, at the document's minimum safety
+factor or 2.0:
+
+| Check | Stress | Held against |
+| --- | --- | --- |
+| leg bending | `6 · P · a / (w · t²)` where the upright meets the base, `a` being the load's height above the base leg | `allowable_bending` |
+| bolt bearing | `P / (n · d · t)` on the base's `n` round holes, at the smallest | `allowable_bearing` |
+
+A stiffening rib is not counted: the plain section carries the whole moment. A slot is not
+counted as a hole that bears. How far a hole sits from an edge is not checked.
+
 ## Helical compression springs
 
 Three checks again, and this time **two of them pull the same knob in opposite directions**.
