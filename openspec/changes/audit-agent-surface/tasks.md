@@ -39,10 +39,13 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 ## 4. Refusals
 
 - [ ] 4.1 Each refusal names the field, the reason and a valid example, within a length limit
-      — held today for twenty mistakes through both doors (`tests/test_refusal_parity.py`:
-      no library internals, 2,000 characters) and for every refusal that offers a value. Not
-      yet a rule over all listed messages for the field and the example: most name a field and
-      a reason, few an example. The length limit is: none is written past 450 characters
+      — clause by clause, 2026-10-10. The field: every raise is a structured refusal whose
+      remedy names its subject (`tests/test_raised_refusal_ledger.py`, 21 documented
+      invariants excepted). The reason: the message. The length: none is written past 450
+      characters, and what is shown is held to 2,000 for twenty mistakes through both
+      doors. Same words on both doors: `tests/test_refusal_parity.py`. Still open: "a valid
+      example or the allowed values". A remedy names where a valid value comes from, which
+      is a source and not an example; only the spec's own fields show the line to write
 - [x] 4.2 No suggestion less conservative than what was refused; near-match only when unambiguous
       (finding 23; every refusal that offers a value is listed and read in
       `tests/test_agent_surface.py`)
