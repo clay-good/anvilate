@@ -56,8 +56,9 @@
 - [x] 5.1 Drawable-parts catalog generated from the registry; CLI and MCP surfaces
 - [x] 5.2 "Drawn, not screened" entry and unvalidated mark for patterns with no screen
 - [x] 5.3 Out-of-catalog refusal with nearest patterns and the STEP hand-off sentence
-- [ ] 5.4 Gate: every registered pattern has an example spec, five golden tests, a catalog
-      entry, and appears in the STEP referee job
+- [x] 5.4 Gate: every registered pattern has an example spec, five golden tests, a catalog
+      entry, and appears in the STEP referee job (`tests/test_pattern_gate.py`, read from
+      the registry; the referee's floor is the registry's size)
 
 ## 6. Docs
 

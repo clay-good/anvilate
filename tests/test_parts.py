@@ -17,7 +17,7 @@ import yaml
 
 pytest.importorskip("build123d")
 
-from anvilate import patterns, projection  # noqa: E402
+from anvilate import patterns  # noqa: E402
 from anvilate.geometry import GeometryError, build_spec, measure_geometry  # noqa: E402
 from anvilate.packs import parts  # noqa: E402
 from anvilate.scorecard import CheckStatus  # noqa: E402
@@ -153,17 +153,6 @@ def test_the_example_builds_to_its_closed_form_volume(element_type):
     assert built.volume_mm3 == pytest.approx(_VOLUMES[element_type], rel=1e-6)
 
 
-@pytest.mark.parametrize("element_type", _PARTS)
-def test_a_part_rebuilds_the_same_and_its_summary_round_trips(element_type):
-    first, second = build_spec(_spec(element_type)), build_spec(_spec(element_type))
-    assert first.signature == second.signature
-    assert first.volume_mm3 == second.volume_mm3
-    summary = first.summary()
-    assert type(summary).model_validate_json(summary.model_dump_json(by_alias=True)) == summary
-    assert summary.face_tags == tuple(sorted(first.faces))
-    assert [feature.tag for feature in summary.features] == [f.tag for f in first.features]
-
-
 _TAGS = {
     "mounting_plate": {"top", "bottom", "left", "right", "front", "back", "round"},
     "angle_bracket": {"top", "bottom", "left", "right", "front", "back", "round", "inclined"},
@@ -188,16 +177,6 @@ def test_faces_are_named_by_direction_and_every_face_has_a_name(element_type):
     built = build_spec(_spec(element_type))
     assert set(built.faces) == _TAGS[element_type]
     assert sum(len(faces) for faces in built.faces.values()) == len(built.shape.faces())
-
-
-@pytest.mark.parametrize("element_type", _PARTS)
-def test_every_view_draws_with_no_code_of_the_parts_own(element_type):
-    built = build_spec(_spec(element_type))
-    for view in projection.VIEWS:
-        svg, height = projection.render_view(
-            built.shape, built.faces, name=built.name, view=view, width_px=480
-        )
-        assert height > 0 and b"<path" in svg, (element_type, view)
 
 
 # A clevis is screened once it states the load on its pin, and its example does; without

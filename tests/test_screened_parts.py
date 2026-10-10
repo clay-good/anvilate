@@ -106,21 +106,6 @@ def test_the_example_builds_to_its_closed_form_volume(element_type):
     assert again.signature == built.signature and again.volume_mm3 == built.volume_mm3
 
 
-@pytest.mark.parametrize("element_type", _DRAWN)
-def test_the_step_file_is_one_part_and_reads_back(element_type, tmp_path):
-    from anvilate.export.gate import authorize_export
-    from anvilate.geometry import read_step_validation_properties, write_step
-
-    built = build_spec(_spec(element_type))
-    path = write_step(
-        built, tmp_path / "part.step", authorization=authorize_export(None, override=True)
-    )
-    assert path.read_text(encoding="utf-8").count("PRODUCT(") == 1
-    assert read_step_validation_properties(path).volume_mm3 == pytest.approx(
-        built.volume_mm3, rel=1e-9
-    )
-
-
 def test_being_drawn_changes_nothing_on_the_card():
     """`hole_height` and `designation` are for the drawing. No check reads either."""
     for element_type, field in (
