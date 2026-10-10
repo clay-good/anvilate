@@ -1790,6 +1790,10 @@ _PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "src" / "anvilate"
 # exemptions rather than the datasets is the direction that survives: a gate naming the two
 # directories datasets happen to live in today cannot see the third.
 _NOT_A_DATASET = {
+    "packs/element_examples.json": (
+        "one example parameter set per element, written by this project for its own "
+        "models and returned by describe_part; invented values, not third-party data"
+    ),
     "skills/anvilate/SKILL.md": (
         "the agent skill — instructions this project wrote about its own library, "
         "under the project's own licence, not third-party data"

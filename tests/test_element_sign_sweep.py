@@ -10,7 +10,8 @@ negative demand and reported it as "the load is zero".
 
 The library's contract, stated in tests/test_contract.py, is that a non-positive demand
 screens to NOT_EVALUATED. So each signed field is negated in turn from the valid document in
-`tests/element_params.json`, and the card must differ from the card of the original, unless
+`src/anvilate/packs/element_examples.json`, and the card must differ from the card of the
+original, unless
 the field is one whose direction the physics does not see, named below with its cause.
 """
 
@@ -23,7 +24,9 @@ from pathlib import Path
 
 from anvilate.screening import element_registry
 
-_PARAMS = Path(__file__).resolve().parent / "element_params.json"
+_PARAMS = (
+    Path(__file__).resolve().parents[1] / "src" / "anvilate" / "packs" / "element_examples.json"
+)
 
 # Fields whose sign is a direction the screened limit states do not depend on.
 _DIRECTION_FREE = {

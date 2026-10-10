@@ -498,6 +498,7 @@ def _any_field_probes():
     """One instance per ``Any``-typed field, holding the values that field really carries."""
     from anvilate.compilation import CompilationTask
     from anvilate.mcp import tool_catalog
+    from anvilate.patterns import describe_part
     from anvilate.screening import StructureMember
     from anvilate.spec import (
         AcceptanceCriteria,
@@ -555,6 +556,7 @@ def _any_field_probes():
     )
     return {
         ("anvilate.compilation", "CompilationTask", "reference"): task,
+        ("anvilate.patterns", "PartDescription", "example"): describe_part("spacer").parts[0],
         ("anvilate.mcp", "ToolDefinition", "input_schema"): tool,
         ("anvilate.mcp", "ToolDefinition", "output_schema"): tool,
         ("anvilate.screening", "StructureMember", "element_params"): member,

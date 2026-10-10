@@ -199,7 +199,9 @@ def test_the_citations_page_does_not_state_the_split_twice_with_two_answers():
 def test_the_tool_surface_count_is_the_catalogs_own():
     claimed = _claimed(r"the pipeline's (\w+) operations")
     words = {"six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
-    assert words[claimed] == len(tool_catalog()) == len(REQUIRED_OPERATIONS)
+    # The pipeline's operations; the catalog lookup beside them is not one.
+    assert words[claimed] == len(REQUIRED_OPERATIONS)
+    assert len(tool_catalog()) == len(REQUIRED_OPERATIONS) + 1
 
 
 def test_the_geometric_characteristic_count_is_the_models_own():

@@ -25,6 +25,7 @@ that has never heard of anvilate.
 | [`docs/api/schemas/cylindrical-mate-fit-check.schema.json`](api/schemas/cylindrical-mate-fit-check.schema.json) | a confirmed measured bore/shaft pair checked against caller-supplied ISO 286 fit inputs | `CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION` |
 | [`docs/api/schemas/viewport-image.schema.json`](api/schemas/viewport-image.schema.json) | a deterministic PNG or SVG viewport, integrity digest, and base64 payload | `VIEWPORT_SCHEMA_VERSION` |
 | [`docs/api/schemas/geometry-measurement.schema.json`](api/schemas/geometry-measurement.schema.json) | one scalar read from the regenerated B-Rep, with unit and semantic feature | `MEASUREMENT_SCHEMA_VERSION` |
+| [`docs/api/schemas/part-catalog.schema.json`](api/schemas/part-catalog.schema.json) | the elements a spec can declare, and for one element its fields and an example spec | `PART_CATALOG_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and

@@ -6,8 +6,9 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Eight of the eight are backed today**; a ninth command, ``verify``, comes from the
-attestation capability. ``doctor`` reports which optional runtimes are present,
+**Nine of the nine are backed today**; a tenth command, ``verify``, comes from the
+attestation capability. ``parts`` lists what a spec can declare, ``doctor`` reports which
+optional runtimes are present,
 ``fetch`` is where a user consents to downloading a dataset Anvilate may not ship, and
 ``view`` writes the part sheet: the drawn part beside its scorecard, as one HTML file.
 ``build`` now produces STEP for audited ``base_plate``, ``cover_plate``, and
@@ -243,6 +244,7 @@ _COMMAND_EXAMPLES = {
     "view": "anvilate view part.yaml",
     "doctor": "anvilate doctor --format json",
     "fetch": "anvilate fetch aisc-shapes --consent",
+    "parts": "anvilate parts mounting_plate",
     "interfaces": "anvilate interfaces mating.step --format json",
 }
 
@@ -558,6 +560,19 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render the report"
     )
 
+    parts = commands.add_parser(
+        "parts",
+        help="list the parts a spec can declare, or describe one",
+        description="With no argument, list every element a Design Spec can declare, "
+        "marking the ones that are drawn and the ones that are drawn and not checked. "
+        "With an element type, print its fields and an example spec to copy and edit. "
+        "The same catalog the MCP tool describe_part returns.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['parts']}",
+    )
+    parts.add_argument(
+        "element_type", nargs="?", help="the element to describe, such as mounting_plate"
+    )
+
     fetch = commands.add_parser(
         "fetch",
         help="download a dataset Anvilate may read but not ship, once, with your consent",
@@ -740,6 +755,8 @@ def run(
             code = _diff(args, out=command_out, err=command_err)
         elif args.command == "doctor":
             code = _doctor(args, out=command_out)
+        elif args.command == "parts":
+            code = _parts(args, out=command_out, err=command_err)
         elif args.command == "fetch":
             code = _fetch(args, out=command_out, err=command_err)
         elif args.command == "view":
@@ -807,6 +824,7 @@ def _requested_command(arguments: list[str]) -> str:
         "export",
         "doctor",
         "interfaces",
+        "parts",
         "view",
         *_UNBUILT,
     }
@@ -978,6 +996,56 @@ def _external_refs(schema: dict[str, Any]) -> list[str]:
 
     embedded = set((schema.get("$defs") or {}).keys())
     return sorted(ref for ref in _refs(schema) if not ref.startswith("#") and ref not in embedded)
+
+
+def _parts(args: argparse.Namespace, *, out, err) -> int:
+    """List the element catalog, or print one element's fields and its example spec."""
+    import yaml
+
+    from .geometry import GeometryError
+    from .patterns import describe_part, describe_parts
+
+    if args.element_type is None:
+        catalog = describe_parts()
+        width = max(len(part.element_type) for part in catalog)
+        for part in catalog:
+            mark = "drawn" if part.drawable else "     "
+            checked = "" if part.screened else "  (drawn, not checked)"
+            print(f"  {part.element_type:<{width}}  {mark}  {part.summary}{checked}", file=out)
+        drawn = sum(part.drawable for part in catalog)
+        print(
+            f"{len(catalog)} elements, {drawn} drawn. `anvilate parts NAME` describes one.",
+            file=out,
+        )
+        return EXIT_OK
+    try:
+        (part,) = describe_part(args.element_type)
+    except GeometryError as refused:
+        print(f"anvilate parts: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    print(f"{part.element_type}: {part.summary}", file=out)
+    if not part.screened:
+        print("  drawn, not checked: its exports carry the unvalidated mark", file=out)
+    if part.envelope:
+        print("  an envelope: where the component goes, not how it is made", file=out)
+    if part.outputs:
+        print(f"  outputs: {', '.join(part.outputs)}", file=out)
+
+    def listed(title: str, parameters) -> None:
+        print(f"  {title}:", file=out)
+        for parameter in parameters:
+            need = "required" if parameter.required else "optional"
+            print(f"    {parameter.name:<24} {need}  {parameter.takes}", file=out)
+
+    listed("fields", part.parameters)
+    for name, parameters in part.types.items():
+        listed(name, parameters)
+    if part.example is not None:
+        print("  example spec:", file=out)
+        text = yaml.safe_dump(dict(part.example), sort_keys=False, default_flow_style=None)
+        for line in text.splitlines():
+            print(f"    {line}", file=out)
+    return EXIT_OK
 
 
 def _doctor(args: argparse.Namespace, *, out) -> int:

@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "PartDescription": {
+      "additionalProperties": false,
+      "description": "One element a spec can declare, as the part catalog describes it.\n\nA listing carries the first four fields. A full description adds whether the part is\nan envelope, the outputs it supports, its parameters, the fields of every model a\nparameter names (``Hole`` for ``list of Hole``), and an example spec to copy and edit.",
+      "properties": {
+        "drawable": {
+          "title": "Drawable",
+          "type": "boolean"
+        },
+        "element_type": {
+          "title": "Element Type",
+          "type": "string"
+        },
+        "envelope": {
+          "default": false,
+          "title": "Envelope",
+          "type": "boolean"
+        },
+        "example": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Example"
+        },
+        "outputs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Outputs",
+          "type": "array"
+        },
+        "parameters": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PartParameter"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "screened": {
+          "title": "Screened",
+          "type": "boolean"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "types": {
+          "additionalProperties": true,
+          "title": "Types",
+          "type": "object"
+        }
+      },
+      "required": [
+        "element_type",
+        "summary",
+        "drawable",
+        "screened"
+      ],
+      "title": "PartDescription",
+      "type": "object"
+    },
+    "PartParameter": {
+      "additionalProperties": false,
+      "description": "One field of an element: its name, whether it is required, and what it takes.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "takes": {
+          "title": "Takes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "required",
+        "takes"
+      ],
+      "title": "PartParameter",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:part-catalog:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate part catalog: the elements a Design Spec can declare, each with whether it is drawn and whether a screen checks it, and for one element its fields and an example spec. Generated from anvilate.patterns.PartCatalog.",
+  "properties": {
+    "parts": {
+      "items": {
+        "$ref": "#/$defs/PartDescription"
+      },
+      "minItems": 1,
+      "title": "Parts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "parts"
+  ],
+  "title": "PartCatalog",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

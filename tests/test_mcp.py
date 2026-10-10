@@ -23,6 +23,7 @@ from anvilate.contracts import (
     spec_json_schema,
 )
 from anvilate.mcp import (
+    CATALOG_OPERATIONS,
     METHOD_NOT_FOUND,
     PROTOCOL_REVISION,
     REQUIRED_OPERATIONS,
@@ -51,8 +52,10 @@ def test_the_catalog_covers_exactly_the_specified_operations():
     # Named, and counted. A gate that iterates an accidentally-empty collection passes
     # while checking nothing; asserting the number means an emptied catalog fails here.
     names = [tool.name for tool in tool_catalog()]
-    assert len(names) == 8
-    assert set(names) == REQUIRED_OPERATIONS
+    assert len(names) == 9
+    # Eight pipeline operations, and the one lookup of what ships.
+    assert len(REQUIRED_OPERATIONS) == 8 and set(CATALOG_OPERATIONS) == {"describe_part"}
+    assert set(names) == REQUIRED_OPERATIONS | CATALOG_OPERATIONS
     assert len(set(names)) == len(names)
 
 
@@ -235,6 +238,7 @@ def test_the_synchronous_tools_are_the_ones_that_finish():
         "run_validation",
         "read_scorecard",
         "export_artifact",
+        "describe_part",
     }
 
 
@@ -258,11 +262,11 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. All eight operations
+    A dotted path in a table is a comment until something imports it. All nine operations
     are backed today, and each claim names a symbol that exists.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 8, backed
+    assert len(backed) == 9, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -815,8 +819,14 @@ def test_every_tool_names_what_it_acts_on():
     is also what a broken derivation returns.
     """
     assert stateless_gaps() == ()
-    assert {t.name for t in tool_catalog() if t.subject is None} == set()
+    # One tool names no subject, and says why: it reads only the shipped element catalog,
+    # which no earlier call can have changed.
+    without = [t for t in tool_catalog() if t.subject is None]
+    assert [t.name for t in without] == ["describe_part"]
+    assert all(t.reads_shipped_catalog and t.is_stateless for t in without)
     for tool in tool_catalog():
+        if tool.subject is None:
+            continue
         assert tool.subject in tool.input_schema["properties"], tool.name
         assert tool.subject in tool.input_schema["required"], tool.name
 
@@ -1690,6 +1700,7 @@ def _released_registry():
         BUNDLE_SCHEMA_VERSION,
         GEOMETRY_SCHEMA_VERSION,
         MEASUREMENT_SCHEMA_VERSION,
+        PART_CATALOG_SCHEMA_VERSION,
         SCORECARD_SCHEMA_VERSION,
         SPEC_SCHEMA_VERSION,
         VIEWPORT_SCHEMA_VERSION,
@@ -1706,6 +1717,7 @@ def _released_registry():
                 _released(f"scorecard-{SCORECARD_SCHEMA_VERSION}.json"),
                 _released(f"evidence-bundle-{BUNDLE_SCHEMA_VERSION}.json"),
                 _released(f"geometry-summary-{GEOMETRY_SCHEMA_VERSION}.json"),
+                _released(f"part-catalog-{PART_CATALOG_SCHEMA_VERSION}.json"),
                 _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
                 _released(f"geometry-measurement-{MEASUREMENT_SCHEMA_VERSION}.json"),
             )
@@ -1734,6 +1746,8 @@ def _dispatched_arguments(tool_name: str) -> dict:
         return {"document": document}
     if tool_name == "build_part":
         return {"spec": _base_plate_document()}
+    if tool_name == "describe_part":
+        return {"element_type": "mounting_plate"}
     if tool_name == "render_viewport":
         built = _call("build_part", {"spec": _base_plate_document()})["result"]
         return {"subject": built["structuredContent"]["subject"], "view": "iso"}

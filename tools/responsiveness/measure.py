@@ -111,6 +111,9 @@ def _mcp_pass() -> dict[str, float]:
         timings["mcp export_artifact"], _ = session.tool(
             "export_artifact", {"subject": handle, "format": "evidence_bundle"}
         )
+        timings["mcp describe_part"], _ = session.tool(
+            "describe_part", {"element_type": "mounting_plate"}
+        )
         return timings
     finally:
         session.close()

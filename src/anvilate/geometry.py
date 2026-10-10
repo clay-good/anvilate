@@ -2628,7 +2628,8 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
         )
     raise UnsupportedGeometry(
         f"no audited geometry pattern is registered for element_type {spec.element_type!r}; "
-        f"supported: {supported}. A shape outside the catalog belongs in your own CAD",
+        f"supported: {supported}. A shape outside the catalog belongs in your own CAD, "
+        "starting from the STEP export of the closest part here",
         subject=f"the element_type {spec.element_type!r}",
         source="the audited geometry pattern registry",
     )

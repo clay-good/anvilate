@@ -17,6 +17,7 @@ has not shipped exits 4 naming that gap.
 | `doctor` | no arguments | `--format` | every required runtime capability is ready |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
+| `parts` | an element type, or none to list them | none | the catalog, or that element's fields and example, was printed |
 
 Each command's `--help` states its own exit rule, because what counts as failure differs
 between them — `diff` returns 0 on a run where every check fails, as long as none of them
@@ -1122,6 +1123,21 @@ is on the sheet, and `anvilate check` is the command whose exit code is the verd
 
 For the solid itself, `anvilate build` writes STEP, which opens in the CAD tools you
 already use.
+
+## List the parts: `anvilate parts`
+
+`anvilate parts` lists every element a Design Spec can declare, one line each, marking the
+ones that are drawn and the ones that are drawn and not checked. `anvilate parts NAME`
+prints that element's fields, which are required and what each takes, and an example spec
+to copy and edit. It is the same catalog an agent reads with the MCP tool `describe_part`,
+and the page [Parts you can ask for](parts-catalog.md) shows a picture of each.
+
+```bash
+anvilate parts
+anvilate parts mounting_plate
+```
+
+A name the catalog does not carry exits 3 and names the closest ones.
 
 ## Running it in CI
 

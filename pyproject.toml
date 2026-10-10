@@ -71,7 +71,7 @@ dev = [
 # The MCP server on stdio. No arguments and no configuration: the surface is the
 # published tool catalog and there is no state to lose across a restart.
 anvilate-mcp = "anvilate.mcp:main"
-# The headless CLI. Nine of its nine commands are backed. `build` produces STEP for audited
+# The headless CLI. Ten of its ten commands are backed. `build` produces STEP for audited
 # geometry patterns and refuses an element whose pattern has not shipped rather than passing
 # it to arbitrary generated code.
 anvilate = "anvilate.cli:main"

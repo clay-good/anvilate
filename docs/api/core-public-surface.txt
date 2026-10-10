@@ -135,8 +135,10 @@ compilation.score_candidate
 compilation.score_task_set
 compilation.task_set_issues
 contracts.JSON_SCHEMA_DIALECT
+contracts.PART_CATALOG_SCHEMA_VERSION
 contracts.RELEASED_DIRECTORY
 contracts.freeze_release
+contracts.part_catalog_json_schema
 contracts.released_path
 contracts.ELEMENT_SCHEMA_INITIAL_VERSION
 contracts.ELEMENT_SCHEMA_VERSIONS
@@ -351,6 +353,7 @@ margin.MarginLedger
 margin.ledger_for
 margin.PhysicsLimited
 margin.physics_limited
+mcp.CATALOG_OPERATIONS
 mcp.Cost
 mcp.Dispatch
 mcp.Gate
@@ -390,9 +393,15 @@ optical_tolerances.SurfaceForm
 optical_tolerances.Centring
 optical_tolerances.SurfaceImperfections
 optical_tolerances.OpticalElementTolerances
+patterns.PartCatalog
+patterns.PartDescription
+patterns.PartParameter
 patterns.Pattern
 patterns.build
+patterns.describe_part
+patterns.describe_parts
 patterns.drawable_catalog
+patterns.example_spec
 patterns.pattern_for
 patterns.patterns
 patterns.register

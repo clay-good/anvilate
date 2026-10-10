@@ -70,6 +70,7 @@ __all__ = [
     "CYLINDRICAL_MATE_FIT_CHECK_SCHEMA_VERSION",
     "INTERFACE_CANDIDATES_SCHEMA_VERSION",
     "MEASUREMENT_SCHEMA_VERSION",
+    "PART_CATALOG_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -83,6 +84,7 @@ __all__ = [
     "cylindrical_mate_fit_check_json_schema",
     "interface_candidates_json_schema",
     "measurement_json_schema",
+    "part_catalog_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -162,6 +164,10 @@ VIEWPORT_SCHEMA_VERSION = "1.3.0"
 
 # A scalar read directly from a built B-Rep by ``measure_geometry``.
 MEASUREMENT_SCHEMA_VERSION = "1.2.0"
+
+# What ``describe_part`` returns: every element in a line, or one with its fields and an
+# example spec.
+PART_CATALOG_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -389,6 +395,22 @@ def measurement_json_schema() -> dict[str, Any]:
     )
 
 
+def part_catalog_json_schema() -> dict[str, Any]:
+    """The part catalog: what a spec can declare, and what each element takes."""
+    from .patterns import PartCatalog
+
+    return _artifact(
+        PartCatalog,
+        name="part-catalog",
+        version=PART_CATALOG_SCHEMA_VERSION,
+        description=(
+            "Anvilate part catalog: the elements a Design Spec can declare, each with "
+            "whether it is drawn and whether a screen checks it, and for one element its "
+            "fields and an example spec. Generated from anvilate.patterns.PartCatalog."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -570,6 +592,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "cylindrical-mate-fit-check.schema.json": cylindrical_mate_fit_check_json_schema(),
         "viewport-image.schema.json": viewport_json_schema(),
         "geometry-measurement.schema.json": measurement_json_schema(),
+        "part-catalog.schema.json": part_catalog_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

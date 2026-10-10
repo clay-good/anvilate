@@ -82,6 +82,7 @@ __all__ = [
     "Cost",
     "Dispatch",
     "Gate",
+    "CATALOG_OPERATIONS",
     "REQUIRED_OPERATIONS",
     "ToolDefinition",
     "catalog_issues",
@@ -147,6 +148,11 @@ REQUIRED_OPERATIONS = frozenset(
     }
 )
 
+# The one tool that is not a pipeline operation: a lookup of what ships. It acts on no
+# subject, produces no artifact and screens nothing, so the agent-driving corpus, which
+# measures driving the pipeline, is not required to exercise it.
+CATALOG_OPERATIONS = frozenset({"describe_part"})
+
 # Written out, not read from `contracts`. Deriving these would make the check below
 # vacuous: a reference computed from the same call it is compared against agrees with
 # itself at every version, including the one where the tool surface should have moved and
@@ -200,6 +206,7 @@ _BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.27.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
+_PART_CATALOG_REF = "urn:anvilate:schema:part-catalog:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -316,6 +323,10 @@ class ToolDefinition(RevalidatedModel):
     # something the caller does not hand it, which is server-side state. Declared rather
     # than inferred, and cross-checked against the schema below so it cannot drift.
     subject: str | None = None
+    # True for an operation that acts on what ships with the library, the element catalog,
+    # which is the same for every call and every caller. It needs no subject and no memory:
+    # there is nothing a previous call could have left behind for it to read.
+    reads_shipped_catalog: bool = False
 
     @property
     def dispatch(self) -> Dispatch:
@@ -326,13 +337,14 @@ class ToolDefinition(RevalidatedModel):
     def is_stateless(self) -> bool:
         """Whether a server with no memory between calls can serve this operation.
 
-        True exactly when the tool names a :attr:`subject`: everything it acts on arrives
-        in the call. A tool without one is asking the server to remember what the last
-        call produced, which is a different server from the stateless skeleton the
+        True when the tool names a :attr:`subject`: everything it acts on arrives in the
+        call. A tool without one is asking the server to remember what the last call
+        produced, which is a different server from the stateless skeleton the
         headless-automation spec describes — and the difference is a design decision, not
-        an implementation detail.
+        an implementation detail. The one other case is a tool that reads only what ships
+        with the library (:attr:`reads_shipped_catalog`), which no call can have changed.
         """
-        return self.subject is not None
+        return self.subject is not None or self.reads_shipped_catalog
 
     @property
     def gates(self) -> frozenset[Gate]:
@@ -567,8 +579,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                         "type": "string",
                         "minLength": 1,
                         "description": (
-                            "volume, a declared dimension, face_count, hole_diameter, or "
-                            "area:<semantic-face>"
+                            "volume, a declared dimension, extent_x, face_count, "
+                            "area:<semantic-face>, feature_count, or feature:<tag>:diameter "
+                            "(also depth, x, y, z) for a hole or slot by its tag"
                         ),
                     },
                 },
@@ -716,6 +729,35 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             backing="anvilate.bundle:BundleSections",
             subject="subject",
         ),
+        ToolDefinition(
+            name="describe_part",
+            title="List the parts, or describe one",
+            description=(
+                "Call this before writing a spec for a part. With no element_type it lists "
+                "every element a spec can declare, with whether build_part draws it and "
+                "whether a screen checks it. With an element_type it returns that "
+                "element's fields, which are required and what each takes, and an example "
+                "spec to copy and edit. The example's values are placeholders: replace "
+                "each with what the user stated."
+            ),
+            input_schema=_object_schema(
+                {
+                    "element_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "an element to describe, such as mounting_plate",
+                    },
+                },
+                required=[],
+            ),
+            output_schema=_object_schema(
+                {"catalog": {"$ref": _PART_CATALOG_REF}},
+                required=["catalog"],
+            ),
+            cost=Cost.BOUNDED,
+            reads_shipped_catalog=True,
+            backing="anvilate.patterns:describe_part",
+        ),
     )
 
 
@@ -775,6 +817,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _GEOMETRY_REF,
             _VIEWPORT_REF,
             _MEASUREMENT_REF,
+            _PART_CATALOG_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -798,10 +841,10 @@ def catalog_issues() -> list[str]:
     duplicates = sorted({name for name in names if names.count(name) > 1})
     if duplicates:
         issues.append(f"the catalog defines these tools more than once: {duplicates}")
-    missing = sorted(REQUIRED_OPERATIONS - set(names))
+    missing = sorted((REQUIRED_OPERATIONS | CATALOG_OPERATIONS) - set(names))
     if missing:
         issues.append(f"the spec requires operations the catalog does not expose: {missing}")
-    extra = sorted(set(names) - REQUIRED_OPERATIONS)
+    extra = sorted(set(names) - REQUIRED_OPERATIONS - CATALOG_OPERATIONS)
     if extra:
         issues.append(
             f"the catalog exposes operations nothing specified: {extra}. Add them to "
@@ -1841,6 +1884,21 @@ def _render_viewport(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return {"viewport": rendered.document().model_dump(mode="json"), "file": file}
 
 
+def _describe_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``describe_part``: every element in a line, or one with its fields and an example."""
+    from .geometry import GeometryError
+    from .patterns import describe_part, describe_parts
+
+    element_type = arguments.get("element_type")
+    try:
+        catalog = describe_parts() if element_type is None else describe_part(element_type)
+    except GeometryError as failure:
+        raise _InvalidArguments(
+            [f"element_type: {failure}"], operation="describe_part"
+        ) from failure
+    return {"catalog": catalog.model_dump(mode="json")}
+
+
 def _measure_geometry(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """Measure an actual regenerated B-Rep property by built-geometry subject."""
     from .geometry import GeometryError, GeometryUnavailable, measure_geometry
@@ -2242,6 +2300,7 @@ _TASK_DISPATCH: dict[str, Any] = {
 _DISPATCH: dict[str, Any] = {
     "build_part": _build_part,
     "compile_spec": _compile_spec,
+    "describe_part": _describe_part,
     "export_artifact": _export_artifact,
     "measure_geometry": _measure_geometry,
     "read_scorecard": _read_scorecard,

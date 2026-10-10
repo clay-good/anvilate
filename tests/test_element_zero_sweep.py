@@ -6,7 +6,7 @@ dimension. A sweep over the 29 registered elements found fifteen such fields in 
 them. They included the plate and bearing dimensions, a nested cross-section's area and
 extreme fibre, and two dimensionless requirements the screens divide by.
 
-`tests/element_params.json` holds one valid parameter set per registered element,
+`src/anvilate/packs/element_examples.json` holds one valid parameter set per registered element,
 harvested from the suite's own fixtures. Each number in it, at any depth, is set to zero in
 turn. The element must then either refuse to build, which is a sentence, or screen: a
 `ValueError` or `LookupError` from the screen is a refusal the card reports. Anything else
@@ -26,7 +26,9 @@ from pydantic import ValidationError
 
 from anvilate.screening import element_registry
 
-_PARAMS = Path(__file__).resolve().parent / "element_params.json"
+_PARAMS = (
+    Path(__file__).resolve().parents[1] / "src" / "anvilate" / "packs" / "element_examples.json"
+)
 
 
 def _documents() -> dict[str, dict]:

@@ -212,10 +212,14 @@ def test_the_contracts_page_backing_table_is_the_catalogs_own():
         6: "Six",
         7: "Seven",
         8: "Eight",
+        9: "Nine",
     }
     unbacked = len(catalog) - backed
+    total = words[len(catalog)].lower()
     count_claim = (
-        "All eight run today" if backed == 8 else f"{words[backed]} of the eight run today"
+        f"All {total} run today"
+        if backed == len(catalog)
+        else f"{words[backed]} of the {total} run today"
     )
     assert count_claim in text, backed
     if unbacked:

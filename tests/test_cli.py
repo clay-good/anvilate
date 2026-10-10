@@ -3651,7 +3651,7 @@ def test_the_module_says_how_many_of_its_commands_are_backed():
     backed = sorted(set(commands) - set(cli._UNBUILT))
     words = {
         "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-        "six": 6, "seven": 7, "eight": 8, "nine": 9,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
     }  # fmt: skip
 
     claimed = re.search(r"\*\*(\w+) of the (\w+) are backed today\*\*", cli.__doc__)

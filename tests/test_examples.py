@@ -7767,7 +7767,7 @@ def test_mcp_server_session_example_drives_a_real_subprocess():
     assert len(namespace["_requests"]()) == 7
     assert len(responses) == 9
     assert by_id[1]["result"]["protocolVersion"] == "2026-07-28"
-    assert len(by_id[2]["result"]["tools"]) == 8
+    assert len(by_id[2]["result"]["tools"]) == 9
 
     assert by_id[3]["result"]["structuredContent"]["spec"]["name"] == "mezzanine_deck"
     assert by_id[4]["result"]["isError"] is True
@@ -8914,7 +8914,7 @@ def test_mcp_tool_catalog_example_splits_the_surface_the_way_the_spec_states():
     namespace = runpy.run_path(str(_EXAMPLES / "mcp_tool_catalog.py"))
     lines = namespace["describe_tool_surface"]()
     # One header plus one line per operation, and the header is not counted as a tool.
-    assert len(lines) == 9
+    assert len(lines) == 10
     assert lines[0].startswith("tool")
     body = "\n".join(lines[1:])
     # The bounded build and the one task-dispatched operation.
