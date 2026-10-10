@@ -33,7 +33,9 @@ Depends on `expand-drawable-parts` groups 1 and 2 (registry, shared features, pr
 ## 4. Output
 
 - [x] 4.1 Assembly views: per-part tone, balloons, parts list
-- [ ] 4.1b Exploded view; a failing mate marked on the picture; weld symbol
+- [x] 4.1b A failing mate marked on the picture: an X on the part it places, and a row under
+      the parts list naming the check
+- [ ] 4.1c Exploded view; weld symbol
 - [x] 4.2 STEP AP242 assembly with named components and transforms; referee job reads it
 - [x] 4.3 Bill of materials (text, JSON, in the evidence bundle)
 - [x] 4.4 Export gated on the combination's card

@@ -130,6 +130,8 @@ flush faces.
 
 - **A picture.** Four views on one sheet, each part in its own tone and numbered, with the
   parts list underneath. The numbers are the parts list's.
+  A check that fails is marked with an X on the part it is about, and named in a row
+  under the parts list; the card has the reason.
 - **A parts list.** Every part with its pattern, material and mass, and every fastener
   with its designation and count.
 - **A STEP assembly.** AP242, each part a named component with its own placement, each

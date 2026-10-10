@@ -718,6 +718,8 @@ class BuiltCombination:
     hardware: tuple[HardwareBody, ...]
     card: Scorecard
     bom: tuple[BomLine, ...]
+    # Each mate and the part it places, so a failing check can be marked where it is.
+    placed_by: tuple[tuple[str, str], ...] = ()
 
     def summary(self) -> CombinationSummary:
         """The document the surfaces publish: each part's place, and the parts list."""
@@ -1833,6 +1835,7 @@ def build_combination(combination: Combination) -> BuiltCombination:
         hardware=tuple(hardware),
         card=Scorecard(entries=tuple(entries)),
         bom=tuple(bom),
+        placed_by=tuple((str(mate.id), str(mate.place.part)) for mate in combination.mates),
     )
 
 
@@ -1856,6 +1859,33 @@ def _numbered(built: BuiltCombination) -> tuple[list[tuple[str, Any, bool]], lis
     return bodies, marks
 
 
+def _failing(
+    built: BuiltCombination,
+    bodies: Sequence[tuple[str, Any, bool]],
+    marks: list[tuple[str, int]],
+) -> tuple[list[tuple[str, int]], list[str]]:
+    """The marks with an X on each part a failing check is about, and a row naming each.
+
+    A check on a mate is named for it, so it is marked on the part that mate places; a
+    part's own failing card is marked on the part. The picture says where to look and the
+    row under the parts list says which check: the card has the reason.
+    """
+    index = {label: number for number, (label, _solid, _envelope) in enumerate(bodies)}
+    by_mate = sorted(built.placed_by, key=lambda pair: -len(pair[0]))
+    rows, marked = [], []
+    for entry in built.card.entries:
+        if entry.status is not CheckStatus.FAIL:
+            continue
+        rows.append(f" X  fails: {entry.name}")
+        part = next(
+            (placed for mate, placed in by_mate if entry.name.startswith(f"{mate} ")),
+            entry.name.removesuffix(" part"),
+        )
+        if part in index and index[part] not in marked:
+            marked.append(index[part])
+    return marks + [("X", number) for number in marked], rows
+
+
 def render_combination(
     built: BuiltCombination,
     *,
@@ -1874,6 +1904,7 @@ def render_combination(
     if not 320 <= width_px <= 4096:
         raise _refuse(f"width_px must be from 320 through 4096; got {width_px}", subject="width_px")
     bodies, marks = _numbered(built)
+    marks, failing = _failing(built, bodies, marks)
     box_low = [
         min(tuple(shape.bounding_box().min)[axis] for _l, shape, _e in bodies) for axis in range(3)
     ]
@@ -1885,7 +1916,7 @@ def render_combination(
         bodies,
         name=built.name,
         lines=[f"{size} mm", built.card.status.value.replace("_", " ")],
-        parts_list=[str(line) for line in built.bom],
+        parts_list=[str(line) for line in built.bom] + failing,
         marks=marks,
         width_px=width_px,
     )

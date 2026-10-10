@@ -932,3 +932,29 @@ def test_a_key_that_states_its_torque_is_screened_over_the_length_the_hub_covers
 def test_a_key_document_that_cannot_be_seated_is_refused(change, reason):
     with pytest.raises(CombinationError, match=reason):
         _keyed(lambda d: change(d["keys"][0]))
+
+
+def test_a_failing_check_is_marked_on_the_part_it_is_about():
+    """An X beside the part a failing mate places, and a row under the parts list.
+
+    A collar over the wrong step fails its fit: the X goes on the collar, not the shaft.
+    A picture of a combination with nothing failing has no X and no extra row.
+    """
+    from anvilate.combination import _failing, _numbered
+
+    sound = _collar()
+    marks, rows = _failing(sound, *_numbered(sound))
+    assert rows == [] and [label for label, _index in marks] == ["1", "2"]
+
+    loose = _collar(lambda d: d["mates"][1].update(offset=_mm(-105.0)))
+    bodies, numbered = _numbered(loose)
+    marks, rows = _failing(loose, bodies, numbered)
+    assert rows == [" X  fails: seated fit"]
+    assert marks[-1] == ("X", [label for label, _s, _e in bodies].index("collar"))
+    svg, _width, height = render_combination(loose, format="svg")
+    assert re.findall(r'data-balloon="(\w+)"', svg.decode("utf-8")) == ["1", "2", "X"]
+    assert height > render_combination(sound, format="svg")[2]  # the row it added
+    # Two failing checks on one mate are two rows and one X.
+    both = _keyed(None, width=_mm(6), height=_mm(8))
+    marks, rows = _failing(both, *_numbered(both))
+    assert len(rows) >= 2 and [label for label, _i in marks].count("X") == 1
