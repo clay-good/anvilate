@@ -365,9 +365,14 @@ def build_gear_mesh(mesh: SpurGearMesh, name: str, params: Mapping[str, Any]) ->
     return _built(mesh, tag, shape, dimensions, envelope=True, name=name)
 
 
-def _hollow_outline(sizes: tuple[float, ...], wall: float) -> tuple[Any, dict[str, float]]:
-    """A round tube's or a square-cornered box's outline, centred, and its dimensions."""
-    from build123d import Circle, Rectangle
+def _hollow_outline(
+    sizes: tuple[float, ...], wall: float, corner: float = 0.0
+) -> tuple[Any, dict[str, float]]:
+    """A round tube's or a box's outline, centred, and its dimensions.
+
+    ``corner`` is a rolled box's outside corner radius; the inside corner keeps the wall.
+    """
+    from build123d import Circle, Rectangle, RectangleRounded
 
     if len(sizes) == 1:
         (outside,) = sizes
@@ -378,6 +383,22 @@ def _hollow_outline(sizes: tuple[float, ...], wall: float) -> tuple[Any, dict[st
             "section_area": math.pi * (outside**2 - bore**2) / 4,
         }
     breadth, box_depth = sizes
+    if corner > 0:
+        from .analysis.section import _box_properties
+
+        within = corner - wall
+        inside = (
+            RectangleRounded(breadth - 2 * wall, box_depth - 2 * wall, within)
+            if within > 0
+            else Rectangle(breadth - 2 * wall, box_depth - 2 * wall)
+        )
+        return RectangleRounded(breadth, box_depth, corner) - inside, {
+            "width": breadth,
+            "depth": box_depth,
+            "wall_thickness": wall,
+            "corner_radius": corner,
+            "section_area": _box_properties(breadth, box_depth, wall, corner)[0],
+        }
     inside = Rectangle(breadth - 2 * wall, box_depth - 2 * wall)
     return Rectangle(breadth, box_depth) - inside, {
         "width": breadth,
@@ -385,6 +406,15 @@ def _hollow_outline(sizes: tuple[float, ...], wall: float) -> tuple[Any, dict[st
         "wall_thickness": wall,
         "section_area": breadth * box_depth - (breadth - 2 * wall) * (box_depth - 2 * wall),
     }
+
+
+def _section_outline(section: Any) -> tuple[Any, dict[str, float]]:
+    """The outline of a section that records the tube or box it is of."""
+    return _hollow_outline(
+        tuple(size.to("mm").magnitude for size in section.outside),
+        section.wall_thickness.to("mm").magnitude,
+        0.0 if section.corner_radius is None else section.corner_radius.to("mm").magnitude,
+    )
 
 
 def _rolled_section(
@@ -403,10 +433,7 @@ def _rolled_section(
     named = params.get("section")
     if not isinstance(named, str):
         if section.outside is not None:
-            return _hollow_outline(
-                tuple(size.to("mm").magnitude for size in section.outside),
-                section.wall_thickness.to("mm").magnitude,
-            )
+            return _section_outline(section)
         raise GeometryError(
             f"{tag} is drawn from a named rolled profile, such as `section: IPE 200`, or a "
             "bar named by its dimensions, such as `section: FLAT 50x10` or `TUBE 60x4`; "
@@ -429,6 +456,8 @@ def _rolled_section(
     if hollow is not None:
         return _hollow_outline(hollow[:-1], hollow[-1])
     profile = resolve_profile(named)
+    if not hasattr(profile, "flange_width"):  # a rolled HSS: drawn from its own section
+        return _section_outline(section)
     depth, flange, web, thick, root = (
         float(getattr(profile, field).quantity.to("mm").magnitude)
         for field in (

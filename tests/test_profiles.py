@@ -178,42 +178,47 @@ def test_a_name_the_table_does_not_hold_is_refused_with_what_it_nearly_named():
         default_profile_table().get("W12x26")
 
 
-def _test_aisc_workbook() -> bytes:
-    strings = ["Type", "AISC_Manual_Label", "d", "bf", "tw", "tf", "kdes", "W", "W12X26"]
+# Three rows of the AISC Shapes Database v16.0, as its US customary columns give them. A
+# cell the workbook leaves without a number holds an en dash.
+_AISC_FIXTURE_ROWS = (
+    {"A": "W", "C": "W12X26", "G": 12.2, "L": 6.49, "Q": 0.23, "T": 0.38, "Y": 0.68},
+    {"A": "HSS", "C": "HSS6X4X1/4", "I": 6, "K": "–", "N": 4, "X": 0.233},
+    {"A": "HSS", "C": "HSS6.000X0.250", "I": "–", "K": 6, "N": "–", "X": 0.233},
+)
+_AISC_FIXTURE_HEAD = {
+    "A": "Type", "C": "AISC_Manual_Label", "G": "d", "I": "Ht", "K": "OD", "L": "bf",
+    "N": "B", "Q": "tw", "T": "tf", "X": "tdes", "Y": "kdes",
+}  # fmt: skip
+
+
+def _test_aisc_workbook(rows: tuple[dict, ...] = _AISC_FIXTURE_ROWS) -> bytes:
+    strings: list[str] = []
+
+    def cell(column: str, number: int, value: object) -> str:
+        if isinstance(value, str):
+            if value not in strings:
+                strings.append(value)
+            return f'<c r="{column}{number}" t="s"><v>{strings.index(value)}</v></c>'
+        return f'<c r="{column}{number}"><v>{value}</v></c>'
+
+    sheet = "".join(
+        f'<row r="{number}">'
+        + "".join(cell(column, number, value) for column, value in row.items())
+        + "</row>"
+        for number, row in enumerate((_AISC_FIXTURE_HEAD, *rows), start=1)
+    )
     shared = "".join(f"<si><t>{value}</t></si>" for value in strings)
-    cells = "".join(
-        (
-            '<c r="A1" t="s"><v>0</v></c>',
-            '<c r="C1" t="s"><v>1</v></c>',
-            '<c r="G1" t="s"><v>2</v></c>',
-            '<c r="L1" t="s"><v>3</v></c>',
-            '<c r="Q1" t="s"><v>4</v></c>',
-            '<c r="T1" t="s"><v>5</v></c>',
-            '<c r="Y1" t="s"><v>6</v></c>',
-        )
-    )
-    values = "".join(
-        (
-            '<c r="A2" t="s"><v>7</v></c>',
-            '<c r="C2" t="s"><v>8</v></c>',
-            '<c r="G2"><v>12.2</v></c>',
-            '<c r="L2"><v>6.49</v></c>',
-            '<c r="Q2"><v>0.23</v></c>',
-            '<c r="T2"><v>0.38</v></c>',
-            '<c r="Y2"><v>0.68</v></c>',
-        )
-    )
     namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
     output = io.BytesIO()
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         archive.writestr(
             "xl/sharedStrings.xml",
-            f'<sst xmlns="{namespace}" count="9" uniqueCount="9">{shared}</sst>',
+            f'<sst xmlns="{namespace}" count="{len(strings)}" uniqueCount="{len(strings)}">'
+            f"{shared}</sst>",
         )
         archive.writestr(
             "xl/worksheets/sheet2.xml",
-            f'<worksheet xmlns="{namespace}"><sheetData><row r="1">{cells}</row>'
-            f'<row r="2">{values}</row></sheetData></worksheet>',
+            f'<worksheet xmlns="{namespace}"><sheetData>{sheet}</sheetData></worksheet>',
         )
     return output.getvalue()
 
@@ -261,6 +266,116 @@ def test_an_aisc_fetch_verifies_caches_and_computes_the_section_from_geometry(
 
     again = fetch_aisc_profile_table(retrieved="2026-09-28", cache_dir=tmp_path, opener=no_network)
     assert again.get("W12X26").section() == section
+
+
+def test_a_rolled_hss_resolves_from_the_workbook_and_reproduces_its_tabulated_properties(
+    tmp_path, monkeypatch
+):
+    """`HSS6X4X1/4` is 6 deep, 4 wide and a 0.233 in design wall, and the database tabulates
+    A = 4.30 in², Ix = 20.9 in⁴, Iy = 11.1 in⁴ and Zx = 8.53 in³ for it; the round
+    `HSS6.000X0.250`, A = 4.22, I = 17.6 and Z = 7.75. Each is computed here from the
+    dimensions alone: a corner of twice the wall for the box, and none for the tube."""
+    from anvilate.standards import profiles
+    from anvilate.standards.profiles import canonical_hss_designation, resolve_profile
+
+    for written in ("HSS6X4X1/4", "hss6x4x1/4", " HSS 6 x 4 x 1/4 ", "HSS6×4×1/4"):
+        assert canonical_hss_designation(written) == "HSS6X4X1/4"
+    for written in ("HSS6.000X0.250", "hss6x0.25", "HSS 6.0 x 0.250"):
+        assert canonical_hss_designation(written) == "HSS6.000X0.250"
+    for other in ("W12X26", "IPE 200", "HSS", "HSS6", "HSSAXB", "TUBE 60x4", "HSS6X4X1/4X2"):
+        assert canonical_hss_designation(other) is None
+
+    payload = _test_aisc_workbook()
+    monkeypatch.setattr(profiles, "AISC_SHAPES_V16", _test_aisc_recipe(payload))
+    table = fetch_aisc_profile_table(
+        retrieved="2026-10-11", consent=True, cache_dir=tmp_path, opener=lambda _url: payload
+    )
+    assert len(table) == 1 and table.hollow_designations() == ["HSS6.000X0.250", "HSS6X4X1/4"]
+
+    box = resolve_profile("hss6x4x1/4", cache_dir=tmp_path)
+    assert str(box) == "HSS6X4X1/4 (h 152.4, b 101.6, t 5.9182 mm)"
+    assert box.wall_thickness.citation.license == "LicenseRef-AISC-Terms"
+    section = box.section()
+    assert section.area.to("in**2").magnitude == pytest.approx(4.30, rel=2e-3)
+    assert section.second_moment.to("in**4").magnitude == pytest.approx(20.9, rel=3e-3)
+    assert section.second_moment_transverse.to("in**4").magnitude == pytest.approx(11.1, rel=3e-3)
+    assert section.plastic_modulus.to("in**3").magnitude == pytest.approx(8.53, rel=2e-3)
+    assert section.corner_radius.to("in").magnitude == pytest.approx(2 * 0.233)
+    # The corners are what a box welded from plates would add: 3% of the area here.
+    sharp = CrossSection.hollow_rectangular(
+        width=Quantity.parse("4 in"),
+        height=Quantity.parse("6 in"),
+        wall_thickness=Quantity.parse("0.233 in"),
+    )
+    assert sharp.area.to("in**2").magnitude == pytest.approx(4 * 6 - 3.534 * 5.534)
+    assert sharp.area.to("in**2").magnitude / section.area.to("in**2").magnitude == pytest.approx(
+        1.0325, abs=5e-4
+    )
+
+    tube = resolve_profile("HSS6x0.25", cache_dir=tmp_path).section()
+    assert tube.area.to("in**2").magnitude == pytest.approx(4.22, rel=2e-3)
+    assert tube.second_moment.to("in**4").magnitude == pytest.approx(17.6, rel=3e-3)
+    assert tube.plastic_modulus.to("in**3").magnitude == pytest.approx(7.75, rel=2e-3)
+    assert tube.corner_radius is None and len(tube.outside) == 1
+
+    with pytest.raises(UnknownProfileError, match="no AISC HSS record") as unknown:
+        resolve_profile("HSS6X4X1/2", cache_dir=tmp_path)
+    assert "did you mean HSS6X4X1/4?" in str(unknown.value)
+    with pytest.raises(profiles.AiscProfileDataRequired, match="fetch aisc-shapes --consent"):
+        resolve_profile("HSS6X4X1/4", cache_dir=tmp_path / "empty")
+
+
+def test_every_rolled_hss_in_a_fetched_workbook_reproduces_its_tabulated_properties(monkeypatch):
+    """The whole table, where the workbook has been fetched. It is not redistributable, so
+    this is the check a machine with it runs; the fixture above is what runs everywhere.
+
+    The corner of twice the wall and the flat of the outside less three walls were solved
+    out of these columns, so this holds them to every row: area, both second moments and
+    the plastic modulus to the three figures the database prints, and b/t and h/t."""
+    from anvilate.fetch import cached_dataset
+    from anvilate.packs.structural import _box_flats
+    from anvilate.standards import profiles
+
+    # The suite keeps every test out of the user's own cache, so the fetched workbook is
+    # named: ANVILATE_FETCHED_DATA=~/.cache/anvilate/datasets pytest tests/test_profiles.py
+    where = os.environ.get("ANVILATE_FETCHED_DATA")
+    found = cached_dataset(profiles.AISC_SHAPES_V16, cache_dir=where) if where else None
+    if found is None:
+        pytest.skip(
+            "fetch the workbook (`anvilate fetch aisc-shapes --consent`) and set "
+            "ANVILATE_FETCHED_DATA to its folder to check every HSS row"
+        )
+    table = cached_aisc_profile_table(cache_dir=where)
+    extra = {"F": "A", "AI": "b/tdes", "AK": "h/tdes", "AM": "Ix", "AN": "Zx", "AQ": "Iy"}
+    for column, heading in extra.items():
+        monkeypatch.setitem(profiles._AISC_COLUMNS, column, heading)
+    rows = [row for row in profiles._aisc_rows(found[0]) if row["A"] == "HSS"]
+    assert len(rows) == 714 == len(table.hollow_designations())
+    boxes = 0
+    for row in rows:
+        section = table.get(row["C"]).section()
+        box = section.corner_radius is not None
+        boxes += box
+        # A small section's three printed figures round further than a large one's.
+        loose = 1.5 if float(row["F"]) < 1.5 else 1.0
+        for have, column, unit, tight, round_tube in (
+            (section.area, "F", "in**2", 5e-3, 8e-3),
+            (section.second_moment, "AM", "in**4", 1e-2, 2e-2),
+            (section.second_moment_transverse, "AQ", "in**4", 1e-2, 2e-2),
+            (section.plastic_modulus, "AN", "in**3", 6e-3, 1.4e-2),
+        ):
+            allowed = (tight if box else round_tube) * loose
+            assert have.to(unit).magnitude == pytest.approx(float(row[column]), rel=allowed), (
+                row["C"],
+                column,
+            )
+        if box:
+            wall = section.wall_thickness.to("in").magnitude
+            flats = [flat / 25.4 / wall for flat in _box_flats(section)]
+            assert flats == pytest.approx(
+                [float(row["AI"]), float(row["AK"])], rel=8e-3, abs=0.07
+            ), row["C"]
+    assert boxes == 525
 
 
 def test_an_absent_w_shape_suggests_the_weights_either_side_at_its_depth(tmp_path, monkeypatch):

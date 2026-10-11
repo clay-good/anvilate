@@ -345,7 +345,15 @@ round tube's `D/t` up to `0.11·E/F_y`, a box wall's `b/t` up to `1.40·√(E/F_
 Table B4.1a). Past that only part of the area is effective, which is not computed, so the
 entry is not evaluated and the card is not a pass.
 
-AISC W-shapes use the same named-section path without redistributing AISC's workbook. You
+AISC W-shapes and rolled HSS use the same named-section path without redistributing AISC's
+workbook. A rectangular HSS is written depth, breadth, wall (`HSS6X4X1/4`) and bends about
+its strong axis; a round one is diameter and wall (`HSS6.000X0.250`). Each is computed from
+its dimensions and design wall, a rectangular one with an outside corner radius of twice
+the wall and flats of the outside less three walls. Both conventions were solved out of the
+workbook's own columns, and a test holds all 714 HSS rows to its tabulated areas, second
+moments and plastic moduli on a machine that has fetched it. Pipes, channels and angles
+are not read: the pipe table disagrees with its own dimensions by up to 3%, and a channel
+or an angle does not bend the way these screens assume. You
 consent to the download once, from the shell:
 
 ```bash

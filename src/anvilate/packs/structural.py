@@ -309,7 +309,7 @@ def _hollow_bar(designation: str) -> tuple[float, ...] | None:
 def _named_section(value: object) -> object:
     """A profile designation such as ``IPE 200`` or ``W12x26`` resolves to its section.
 
-    EN profiles are bundled. AISC W-shapes resolve only from the verified local cache; this
+    EN profiles are bundled. AISC W-shapes and HSS resolve only from the verified local cache; this
     validator never downloads implicitly. A name no table holds is refused with near misses.
     A flat bar, ``FLAT 50x10``, a round tube, ``TUBE 60x4``, and a square-cornered box,
     ``BOX 100x50x4``, are each their own dimensions.
@@ -347,7 +347,8 @@ def _named_section(value: object) -> object:
 
 
 #: A member's section: its properties, or the designation of a rolled profile the library
-#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape (``W12x26``), or a bar named
+#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape or HSS (``W12x26``,
+#: ``HSS6X4X1/4``), or a bar named
 #: by its own dimensions in millimetres: a flat bar by breadth and depth (``FLAT 50x10``), a
 #: round tube by outside diameter and wall (``TUBE 60x4``), or a square-cornered box by
 #: breadth, depth and wall (``BOX 100x50x4``).
@@ -961,6 +962,20 @@ def screen_beam_member(
     )
 
 
+def _box_flats(section: CrossSection) -> tuple[float, float]:
+    """The flat width of a box's two walls in mm, breadth then depth.
+
+    Between the walls for a box welded from plates. A rolled box, which states its corner
+    radius, is read the way AISC tabulates it: the outside dimension less three walls. That
+    is solved out of the Shapes Database's own b/tdes and h/tdes columns, which give
+    (B − 3·t)/t on every one of its 525 rectangular rows, to their rounding.
+    """
+    wall = section.wall_thickness.to("mm").magnitude
+    removed = 2.0 if section.corner_radius is None else 3.0
+    breadth, depth = (size.to("mm").magnitude for size in section.outside)
+    return breadth - removed * wall, depth - removed * wall
+
+
 def _wall_slenderness_entries(
     member, yield_strength: Quantity, elastic_modulus: Quantity
 ) -> tuple[ScorecardEntry, ...]:
@@ -986,7 +1001,7 @@ def _wall_slenderness_entries(
         measure, bound = "D/t", f"{_ROUND_WALL_SLENDER:g}·E/F_y"
         symbolic = f"λ_r = {_ROUND_WALL_SLENDER:g} * E / F_y"
     else:
-        slenderness, limit = (max(sizes) - 2 * wall) / wall, _BOX_WALL_SLENDER * ratio**0.5
+        slenderness, limit = max(_box_flats(section)) / wall, _BOX_WALL_SLENDER * ratio**0.5
         measure, bound = "b/t of the wider wall", f"{_BOX_WALL_SLENDER:.2f}·√(E/F_y)"
         symbolic = f"λ_r = {_BOX_WALL_SLENDER:.2f} * (E / F_y) ** 0.5"
     places = decimals_distinguishing(slenderness, limit, minimum=1)
@@ -1053,7 +1068,6 @@ def _wall_buckling_entry(
     if section.outside is None or section.wall_thickness is None:
         return None
     name = f"{member.name} wall local buckling"
-    wall = section.wall_thickness.to("mm").magnitude
     sizes = [size.to("mm").magnitude for size in section.outside]
     round_tube = len(sizes) == 1
     reference = _CLAUSE_ROUND_HSS if round_tube else _CLAUSE_BOX
@@ -1072,25 +1086,19 @@ def _wall_buckling_entry(
     }
     try:
         if round_tube:
-            (outer,) = sizes
-            # Z of an annulus, (D³ − d³)/6.
-            plastic = (outer**3 - (outer - 2 * wall) ** 3) / 6
             nominal = aisc_round_hss_flexural_strength(
                 diameter=section.outside[0],
                 thickness=section.wall_thickness,
-                plastic_section_modulus=Quantity(magnitude=plastic, unit="mm**3"),
+                plastic_section_modulus=section.plastic_modulus,
                 **common,
             )
         else:
-            breadth, depth = sizes
-            flat_breadth, flat_depth = breadth - 2 * wall, depth - 2 * wall
-            # Z of a square-cornered box about its breadth, (b·h² − b_i·h_i²)/4.
-            plastic = (breadth * depth**2 - flat_breadth * flat_depth**2) / 4
+            flat_breadth, flat_depth = _box_flats(section)
             nominal = aisc_rectangular_hss_flexural_strength(
                 flange_flat_width=Quantity(magnitude=flat_breadth, unit="mm"),
                 web_flat_height=Quantity(magnitude=flat_depth, unit="mm"),
                 wall_thickness=section.wall_thickness,
-                plastic_section_modulus=Quantity(magnitude=plastic, unit="mm**3"),
+                plastic_section_modulus=section.plastic_modulus,
                 **common,
             )
     except ValueError as too_thin:

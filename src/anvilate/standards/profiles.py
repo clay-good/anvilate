@@ -159,6 +159,84 @@ class RolledProfile(RevalidatedModel):
         return f"{self.designation} ({dims} mm)"
 
 
+_HSS_DESIGNATION = re.compile(r"HSS[\d./-]{1,12}(?:X[\d./-]{1,12}){1,2}")
+
+#: AISC's rolled HSS corner, solved out of the Shapes Database's own columns rather than
+#: recalled: an outside corner radius of twice the design wall reproduces every tabulated
+#: area within 0.4% and second moment within 1%, over all 525 rectangular rows.
+_HSS_CORNER_RADIUS_WALLS = 2.0
+
+
+def canonical_hss_designation(text: str) -> str | None:
+    """AISC's spelling of a rolled HSS (``HSS6X4X1/4``, ``HSS6.000X0.250``), or ``None``.
+
+    A rectangular one is its depth, breadth and nominal wall, the wall as AISC writes it,
+    a fraction. A round one is its outside diameter and wall to three decimals, so
+    ``HSS6x0.25`` is ``HSS6.000X0.250``.
+    """
+    compact = re.sub(r"\s", "", text[:48]).upper().replace("×", "X")
+    if _HSS_DESIGNATION.fullmatch(compact) is None:
+        return None
+    parts = compact[3:].split("X")
+    if len(parts) == 2:
+        try:
+            return "HSS" + "X".join(f"{float(part):.3f}" for part in parts)
+        except ValueError:
+            return None
+    return compact
+
+
+class HollowProfile(RevalidatedModel):
+    """One rolled HSS: its outside dimensions and design wall, each cited.
+
+    ``depth`` is a round HSS's outside diameter, or a rectangular one's dimension along the
+    load, which AISC names first; ``breadth`` is the other and is absent for a round one.
+    ``wall_thickness`` is the design wall, which is what the section is computed on.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    designation: Named
+    depth: Length
+    wall_thickness: Length
+    breadth: Length | None = None
+
+    def section(self) -> CrossSection:
+        """The cross-section the structural screens take, bending about the strong axis."""
+        wall = self.wall_thickness.quantity
+        if self.breadth is None:
+            outer = self.depth.quantity.to("mm").magnitude
+            return CrossSection.hollow_circular(
+                outer_diameter=self.depth.quantity,
+                inner_diameter=Quantity(magnitude=outer - 2 * wall.to("mm").magnitude, unit="mm"),
+            )
+        return CrossSection.hollow_rectangular(
+            width=self.breadth.quantity,
+            height=self.depth.quantity,
+            wall_thickness=wall,
+            corner_radius=Quantity(
+                magnitude=_HSS_CORNER_RADIUS_WALLS * wall.to("mm").magnitude, unit="mm"
+            ),
+        )
+
+    def citations(self) -> dict[str, PropertyCitation]:
+        """Every dimension's citation, keyed by property name — the evidence trail."""
+        return {
+            field: value.citation
+            for field in type(self).model_fields
+            if isinstance(value := getattr(self, field), QuantityProperty)
+        }
+
+    def __str__(self) -> str:
+        wall = f"t {self.wall_thickness.quantity.magnitude:g}"
+        if self.breadth is None:
+            return f"{self.designation} (D {self.depth.quantity.magnitude:g}, {wall} mm)"
+        return (
+            f"{self.designation} (h {self.depth.quantity.magnitude:g}, "
+            f"b {self.breadth.quantity.magnitude:g}, {wall} mm)"
+        )
+
+
 class UnknownProfileError(KeyError):
     """A requested profile designation has no record in the table."""
 
@@ -237,20 +315,45 @@ class ProfileTable:
 
 
 class AiscProfileDataRequired(LookupError):
-    """A W-shape was named before the non-redistributable AISC workbook was cached."""
+    """An AISC shape was named before the non-redistributable AISC workbook was cached."""
 
 
 class AiscProfileTable:
-    """AISC W-shape geometry parsed from the user's verified local workbook."""
+    """AISC W-shape and HSS geometry parsed from the user's verified local workbook."""
 
-    def __init__(self, profiles: dict[str, RolledProfile], provenance: FetchProvenance) -> None:
+    def __init__(
+        self,
+        profiles: dict[str, RolledProfile],
+        provenance: FetchProvenance,
+        hollow: dict[str, HollowProfile] | None = None,
+    ) -> None:
         self._profiles = profiles
+        self._hollow = hollow or {}
         self.provenance = provenance
 
     def designations(self) -> list[str]:
         return sorted(self._profiles)
 
-    def get(self, designation: str) -> RolledProfile:
+    def hollow_designations(self) -> list[str]:
+        return sorted(self._hollow)
+
+    def get(self, designation: str) -> RolledProfile | HollowProfile:
+        hss = canonical_hss_designation(designation)
+        if hss is not None:
+            if hss in self._hollow:
+                return self._hollow[hss]
+            suggestions = difflib.get_close_matches(hss, self._hollow, n=3, cutoff=0.8)
+            hint = f"; did you mean {', '.join(suggestions)}?" if suggestions else ""
+            raise UnknownProfileError(
+                designation,
+                suggestions,
+                detail=(
+                    f"no AISC HSS record for profile {designation!r}{hint}; a rectangular "
+                    "one is written depth, breadth, wall (HSS6X4X1/4) and a round one "
+                    "diameter, wall (HSS6.000X0.250). Declare its section properties "
+                    "rather than substituting another shape"
+                ),
+            )
         key = canonical_aisc_designation(designation)
         if key is not None and key in self._profiles:
             return self._profiles[key]
@@ -321,9 +424,13 @@ _AISC_COLUMNS = {
     "A": "Type",
     "C": "AISC_Manual_Label",
     "G": "d",
+    "I": "Ht",
+    "K": "OD",
     "L": "bf",
+    "N": "B",
     "Q": "tw",
     "T": "tf",
+    "X": "tdes",
     "Y": "kdes",
 }
 
@@ -338,7 +445,7 @@ def _xlsx_value(cell: ElementTree.Element, shared: list[str]) -> str | None:
 
 
 def _aisc_rows(path: Path) -> list[dict[str, str]]:
-    """Read the pinned workbook's W-shape geometry without a spreadsheet dependency."""
+    """Read the pinned workbook's W-shape and HSS geometry without a spreadsheet dependency."""
     try:
         with ZipFile(path) as workbook:
             strings = ElementTree.fromstring(workbook.read("xl/sharedStrings.xml"))
@@ -370,7 +477,7 @@ def _aisc_rows(path: Path) -> list[dict[str, str]]:
             f"{path} does not carry the expected AISC v16.0 geometry columns "
             f"{sorted(_AISC_COLUMNS.values())}"
         )
-    return [row for row in rows[1:] if row.get("A") == "W"]
+    return [row for row in rows[1:] if row.get("A") in ("W", "HSS")]
 
 
 @cache
@@ -389,11 +496,33 @@ def _load_aisc_profiles(path: str, provenance_json: str) -> AiscProfileTable:
         )
 
     profiles: dict[str, RolledProfile] = {}
+    hollow: dict[str, HollowProfile] = {}
     for row in _aisc_rows(Path(path)):
+        is_hss = row.get("A") == "HSS"
+        kind = "HSS" if is_hss else "W-shape"
+        canonical = canonical_hss_designation if is_hss else canonical_aisc_designation
         try:
-            designation = canonical_aisc_designation(row["C"])
+            designation = canonical(row["C"])
             if designation is None or designation != row["C"]:
-                raise ValueError(f"non-canonical W-shape designation {row['C']!r}")
+                raise ValueError(f"non-canonical {kind} designation {row['C']!r}")
+            if is_hss:
+                wall = _dimension(float(row["X"]), designation, "design wall thickness")
+                # A cell with no number in it is an en dash, which is how the workbook
+                # says a round HSS has no height and a rectangular one no diameter.
+                if _is_number(row.get("K")):
+                    hollow[designation] = HollowProfile(
+                        designation=designation,
+                        depth=_dimension(float(row["K"]), designation, "outside diameter"),
+                        wall_thickness=wall,
+                    )
+                else:
+                    hollow[designation] = HollowProfile(
+                        designation=designation,
+                        depth=_dimension(float(row["I"]), designation, "height"),
+                        breadth=_dimension(float(row["N"]), designation, "width"),
+                        wall_thickness=wall,
+                    )
+                continue
             flange_thickness = float(row["T"])
             root_radius = float(row["Y"]) - flange_thickness
             profiles[designation] = RolledProfile(
@@ -406,10 +535,18 @@ def _load_aisc_profiles(path: str, provenance_json: str) -> AiscProfileTable:
             )
         except (KeyError, TypeError, ValueError) as invalid:
             label = row.get("C", "<unnamed>")
-            raise ValueError(f"invalid AISC W-shape row {label}: {_reason(invalid)}") from invalid
+            raise ValueError(f"invalid AISC {kind} row {label}: {_reason(invalid)}") from invalid
     if not profiles:
         raise ValueError("the AISC workbook contains no W-shape geometry")
-    return AiscProfileTable(profiles, provenance)
+    return AiscProfileTable(profiles, provenance, hollow)
+
+
+def _is_number(cell: str | None) -> bool:
+    try:
+        float(cell)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _table_from_cached(path: Path, provenance: FetchProvenance) -> AiscProfileTable:
@@ -442,16 +579,21 @@ def fetch_aisc_profile_table(
     return _table_from_cached(*found)
 
 
-def resolve_profile(designation: str, *, cache_dir: str | Path | None = None) -> RolledProfile:
-    """Resolve a bundled EN profile or a fetched AISC W-shape, without fetching implicitly."""
+def resolve_profile(
+    designation: str, *, cache_dir: str | Path | None = None
+) -> RolledProfile | HollowProfile:
+    """Resolve a bundled EN profile or a fetched AISC W-shape or HSS, never fetching implicitly."""
     if canonical_designation(designation) is not None:
         return default_profile_table().get(designation)
-    if canonical_aisc_designation(designation) is None:
+    if (
+        canonical_aisc_designation(designation) is None
+        and canonical_hss_designation(designation) is None
+    ):
         return default_profile_table().get(designation)
     table = cached_aisc_profile_table(cache_dir=cache_dir)
     if table is None:
         raise AiscProfileDataRequired(
-            f"AISC W-shape {designation!r} needs the non-redistributable AISC Shapes "
+            f"AISC shape {designation!r} needs the non-redistributable AISC Shapes "
             "Database v16.0. Fetch it once with `anvilate fetch aisc-shapes --consent` (in "
             "Python, `fetch_aisc_profile_table(retrieved=..., consent=True)`), or declare the "
             "section properties from a local source."

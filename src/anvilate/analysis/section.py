@@ -237,14 +237,40 @@ def _tube_properties(outer: float, inner: float) -> tuple[float, float, float]:
     return pi * (outer**2 - inner**2) / 4, pi * (outer**4 - inner**4) / 64, outer / 2
 
 
-def _box_properties(breadth: float, depth: float, wall: float) -> tuple[float, float, float]:
-    """A square-cornered box's area, second moment about its breadth and extreme fibre."""
-    inner_breadth, inner_depth = breadth - 2 * wall, depth - 2 * wall
-    return (
-        breadth * depth - inner_breadth * inner_depth,
-        (breadth * depth**3 - inner_breadth * inner_depth**3) / 12,
-        depth / 2,
+def _rounded_rectangle(breadth: float, depth: float, radius: float) -> tuple[float, float, float]:
+    """A solid rectangle with its four corners rounded: area, second moment about the axis
+    parallel to its breadth, and plastic modulus about the same axis.
+
+    The rectangle, less a square at each corner, plus the quarter circle that replaces it.
+    A quarter circle's centroid is 4r/(3π) from the circle's centre and its own second
+    moment about that centroid is (π/16 − 4/(9π))·r⁴. A radius of zero is the rectangle.
+    """
+    square = radius**2
+    quarter = pi * square / 4
+    to_square = depth / 2 - radius / 2
+    to_quarter = depth / 2 - radius + 4 * radius / (3 * pi)
+    area = breadth * depth - (4 - pi) * square
+    second_moment = (
+        breadth * depth**3 / 12
+        - 4 * (radius**4 / 12 + square * to_square**2)
+        + 4 * ((pi / 16 - 4 / (9 * pi)) * radius**4 + quarter * to_quarter**2)
     )
+    plastic = breadth * depth**2 / 4 - 4 * square * to_square + 4 * quarter * to_quarter
+    return area, second_moment, plastic
+
+
+def _box_properties(
+    breadth: float, depth: float, wall: float, corner: float = 0.0
+) -> tuple[float, float, float]:
+    """A box's area, second moment about its breadth and extreme fibre.
+
+    ``corner`` is the outside corner radius: zero for a box welded from four plates. The
+    inside corner is then rounded to ``corner − wall``, which keeps the wall one thickness
+    round the bend, and is square when that is not positive.
+    """
+    outer = _rounded_rectangle(breadth, depth, corner)
+    inner = _rounded_rectangle(breadth - 2 * wall, depth - 2 * wall, max(corner - wall, 0.0))
+    return outer[0] - inner[0], outer[1] - inner[1], depth / 2
 
 
 class CrossSection(RevalidatedModel):
@@ -268,7 +294,9 @@ class CrossSection(RevalidatedModel):
     is, and a thin wall buckles before the section yields. The two hollow builders
     therefore record what they were built from: ``outside`` is a round tube's one outside
     diameter or a box's breadth and depth, and ``wall_thickness`` its wall. A section that
-    states them is held to them, so the properties are that tube's or that box's.
+    states them is held to them, so the properties are that tube's or that box's. A box
+    welded from plates has square corners; a rolled one states its outside
+    ``corner_radius``, which takes a little metal out of each corner.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -280,6 +308,7 @@ class CrossSection(RevalidatedModel):
     shear_form_factor: float | None = None
     outside: tuple[Quantity, ...] | None = None
     wall_thickness: Quantity | None = None
+    corner_radius: Quantity | None = None
 
     @model_validator(mode="after")
     def _every_property_is_a_number(self) -> CrossSection:
@@ -319,6 +348,12 @@ class CrossSection(RevalidatedModel):
     @model_validator(mode="after")
     def _a_stated_wall_is_the_wall_of_this_section(self) -> CrossSection:
         if self.outside is None and self.wall_thickness is None:
+            if self.corner_radius is not None:
+                raise _section_refusal(
+                    "corner_radius is the corner of a box, which states outside and wall_thickness",
+                    subject="corner_radius",
+                    source=_DRAWING_SOURCE,
+                )
             return self
         if self.outside is None or self.wall_thickness is None:
             raise _section_refusal(
@@ -342,10 +377,20 @@ class CrossSection(RevalidatedModel):
                 subject="wall_thickness and outside",
                 source=_DRAWING_SOURCE,
             )
+        corner = 0.0
+        if self.corner_radius is not None:
+            corner = _require_length(self.corner_radius, "corner_radius")
+            if len(sizes) == 1 or not corner <= min(sizes) / 2:
+                raise _section_refusal(
+                    f"corner_radius ({self.corner_radius}) is the outside corner of a box, "
+                    "at most half its smaller outside dimension; a round tube has none",
+                    subject="corner_radius and outside",
+                    source=_DRAWING_SOURCE,
+                )
         if len(sizes) == 1:
             expected = _tube_properties(sizes[0], sizes[0] - 2 * wall)
         else:
-            expected = _box_properties(sizes[0], sizes[1], wall)
+            expected = _box_properties(sizes[0], sizes[1], wall, corner)
         stated = (
             self.area.to("mm**2").magnitude,
             self.second_moment.to("mm**4").magnitude,
@@ -371,6 +416,30 @@ class CrossSection(RevalidatedModel):
         """The elastic section modulus Z = I/c — a bending stress is M/Z."""
         z = self.second_moment.to("mm**4").magnitude / self.extreme_fibre.to("mm").magnitude
         return Quantity(magnitude=z, unit="mm**3")
+
+    @property
+    def plastic_modulus(self) -> Quantity | None:
+        """The plastic section modulus Z of a section that records its tube or box, else None.
+
+        (D³ − d³)/6 for a round tube; for a box, the first moment of each half about the
+        bending axis, corners included.
+        """
+        if self.outside is None or self.wall_thickness is None:
+            return None
+        wall = self.wall_thickness.to("mm").magnitude
+        sizes = [size.to("mm").magnitude for size in self.outside]
+        if len(sizes) == 1:
+            plastic = (sizes[0] ** 3 - (sizes[0] - 2 * wall) ** 3) / 6
+        else:
+            corner = 0.0 if self.corner_radius is None else self.corner_radius.to("mm").magnitude
+            breadth, depth = sizes
+            plastic = (
+                _rounded_rectangle(breadth, depth, corner)[2]
+                - _rounded_rectangle(breadth - 2 * wall, depth - 2 * wall, max(corner - wall, 0.0))[
+                    2
+                ]
+            )
+        return Quantity(magnitude=plastic, unit="mm**3")
 
     @property
     def radius_of_gyration(self) -> Quantity:
@@ -453,11 +522,20 @@ class CrossSection(RevalidatedModel):
 
     @classmethod
     def hollow_rectangular(
-        cls, *, width: Quantity, height: Quantity, wall_thickness: Quantity
+        cls,
+        *,
+        width: Quantity,
+        height: Quantity,
+        wall_thickness: Quantity,
+        corner_radius: Quantity | None = None,
     ) -> CrossSection:
         """A rectangular box tube of uniform ``wall_thickness``, bending about the
         axis normal to ``height``: A = b·h − (b−2t)·(h−2t),
-        I = (b·h³ − (b−2t)·(h−2t)³)/12, c = h/2, I_t with b and h swapped."""
+        I = (b·h³ − (b−2t)·(h−2t)³)/12, c = h/2, I_t with b and h swapped.
+
+        ``corner_radius`` is the outside corner radius of a rolled box, with the inside
+        corner rounded to keep the wall; each of those properties then loses what the
+        corners do."""
         b = _require_length(width, "width")
         h = _require_length(height, "height")
         t = _require_length(wall_thickness, "wall_thickness")
@@ -468,17 +546,26 @@ class CrossSection(RevalidatedModel):
                 subject="wall_thickness, width, and height",
                 source=_DRAWING_SOURCE,
             )
-        bi, hi = b - 2 * t, h - 2 * t
-        area, second_moment, fibre = _box_properties(b, h, t)
+        corner = 0.0 if corner_radius is None else _require_length(corner_radius, "corner_radius")
+        if not corner <= min(b, h) / 2:
+            raise _section_refusal(
+                f"corner_radius ({corner_radius}) must be at most half the smaller outside "
+                f"dimension ({width} x {height})",
+                subject="corner_radius, width, and height",
+                source=_DRAWING_SOURCE,
+            )
+        area, second_moment, fibre = _box_properties(b, h, t, corner)
+        transverse = _box_properties(h, b, t, corner)[1]
         return cls(
             area=Quantity(magnitude=area, unit="mm**2"),
             second_moment=Quantity(magnitude=second_moment, unit="mm**4"),
             extreme_fibre=_mm(fibre),
-            second_moment_transverse=Quantity(magnitude=(h * b**3 - hi * bi**3) / 12, unit="mm**4"),
+            second_moment_transverse=Quantity(magnitude=transverse, unit="mm**4"),
             # web-area approximation: the two side walls carry the shear
             shear_form_factor=area / (2 * t * h),
             outside=(_mm(b), _mm(h)),
             wall_thickness=_mm(t),
+            corner_radius=None if corner_radius is None else _mm(corner),
         )
 
     @classmethod

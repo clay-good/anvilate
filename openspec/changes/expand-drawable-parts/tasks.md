@@ -35,7 +35,14 @@
 - [x] 3.3c Hollow members named by their dimensions: a round tube, `section: TUBE 60x4`
       (outside diameter by wall), and a square-cornered box, `BOX 100x50x4` (breadth, depth,
       wall), screened and drawn; a wall that leaves no bore is refused by name
-- [ ] 3.3d Channel, angle and rolled HSS members (rounded corners; no bundled table yet)
+- [x] 3.3d Rolled HSS members, rectangular and round, from the fetched AISC workbook
+      (`section: HSS6X4X1/4`, `HSS6.000X0.250`): computed from dimensions and design wall,
+      drawn with their corners, and held to the workbook's tabulated properties on all 714
+      rows where it is fetched
+- [ ] 3.3h Channel and angle members, and pipe. A channel twists unless loaded through its
+      shear centre and an angle bends about principal axes that are not its legs, neither of
+      which the member screens model; the workbook's pipe areas disagree with their own
+      dimensions by up to 3%
 - [x] 3.3e A hollow beam is held to what its wall carries: `wall local buckling`, from the
       moment AISC 360-16 Chapter F gives a round tube (§F8) or a box (§F7), and NOT_EVALUATED
       past what those clauses cover. A section records the tube or box it is of

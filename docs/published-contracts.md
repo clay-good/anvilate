@@ -118,6 +118,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Member schemas 1.6.0: a rolled box states its corner
+
+A section that records its box gains an optional `corner_radius`, the outside corner radius
+of a rolled one. `CrossSection.hollow_rectangular(corner_radius=...)` fills it, and so does
+a member that names a rolled HSS (`section: HSS6X4X1/4`, once the AISC workbook is
+fetched). Its properties are then the rounded box's. `beam_member`, `column_member` and
+`beam_column_member` move to 1.6.0.
+
 ### `interfaces` flags: one `--accept`, one `--limit`
 
 No schema moved; the command line did. `anvilate interfaces --accept ID` accepts a hole

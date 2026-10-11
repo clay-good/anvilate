@@ -1232,7 +1232,8 @@ def agent_instructions() -> str:
         # properties are the numbers easiest to get wrong from memory.
         "Rolled sections (a member's `section` may name one instead of stating its "
         "properties): " + ", ".join(default_profile_table().designations()) + "; AISC "
-        "W-shapes such as W12x26 once the user has run `anvilate fetch aisc-shapes --consent`; "
+        "W-shapes such as W12x26 and HSS such as HSS6X4X1/4 or HSS6.000X0.250 once the "
+        "user has run `anvilate fetch aisc-shapes --consent`; "
         "or a bar by its own dimensions in mm: FLAT 50x10 (breadth x depth), TUBE 60x4 "
         "(outside diameter x wall), BOX 100x50x4 (breadth x depth x wall).",
         "Part screens (element_type: fields; * marks required):",

@@ -433,3 +433,72 @@ def test_a_section_declared_by_its_properties_is_drawn_when_it_records_its_wall(
     bare["extreme_fibre"] = declared.model_dump(mode="json")["extreme_fibre"]
     with pytest.raises(GeometryError, match="which do not say its shape"):
         build_spec(_spec("beam_member", section=bare))
+
+
+def test_a_rolled_hss_member_is_screened_and_drawn_with_its_corners(tmp_path, monkeypatch):
+    """`HSS6X4X1/4` from a fetched workbook: the solid has the area the screen divides by,
+    its flats are the outside less three walls, and the trail says where it came from."""
+    import hashlib
+    import io
+    from zipfile import ZIP_DEFLATED, ZipFile
+
+    from anvilate.evidence import provenance_for
+    from anvilate.fetch import DatasetRecipe
+    from anvilate.packs.structural import BeamMember, _box_flats
+    from anvilate.standards import fetch_aisc_profile_table, profiles
+
+    head = {"A": "Type", "C": "AISC_Manual_Label", "G": "d", "I": "Ht", "K": "OD", "L": "bf",
+            "N": "B", "Q": "tw", "T": "tf", "X": "tdes", "Y": "kdes"}  # fmt: skip
+    rows = (
+        {"A": "W", "C": "W12X26", "G": 12.2, "L": 6.49, "Q": 0.23, "T": 0.38, "Y": 0.68},
+        {"A": "HSS", "C": "HSS6X4X1/4", "I": 6, "K": "–", "N": 4, "X": 0.233},
+    )
+    strings = sorted({v for row in (head, *rows) for v in row.values() if isinstance(v, str)})
+    sheet = "".join(
+        f'<row r="{n}">'
+        + "".join(
+            f'<c r="{c}{n}" t="s"><v>{strings.index(v)}</v></c>'
+            if isinstance(v, str)
+            else f'<c r="{c}{n}"><v>{v}</v></c>'
+            for c, v in row.items()
+        )
+        + "</row>"
+        for n, row in enumerate((head, *rows), start=1)
+    )
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    output = io.BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        shared = "".join(f"<si><t>{value}</t></si>" for value in strings)
+        archive.writestr("xl/sharedStrings.xml", f'<sst xmlns="{namespace}">{shared}</sst>')
+        archive.writestr(
+            "xl/worksheets/sheet2.xml",
+            f'<worksheet xmlns="{namespace}"><sheetData>{sheet}</sheetData></worksheet>',
+        )
+    payload = output.getvalue()
+    recipe = DatasetRecipe(
+        name="aisc-shapes-database-v16.0.xlsx",
+        url="https://example.invalid/aisc-shapes-database-v16.0.xlsx",
+        sha256=hashlib.sha256(payload).hexdigest(),
+        license="LicenseRef-AISC-Terms",
+        source="AISC Shapes Database v16.0, test fixture",
+        redistributable=False,
+    )
+    monkeypatch.setattr(profiles, "AISC_SHAPES_V16", recipe)
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    fetch_aisc_profile_table(retrieved="2026-10-11", consent=True, opener=lambda _url: payload)
+
+    spec = _spec("beam_member", section="hss6x4x1/4")
+    built = build_spec(spec)
+    box = built.shape.bounding_box().size
+    assert (box.X, box.Z, box.Y) == pytest.approx((101.6, 152.4, 4000.0), abs=1e-6)
+    section = BeamMember.model_validate(spec.element_params).section
+    area = section.area.to("mm**2").magnitude
+    assert area == pytest.approx(4.30 * 25.4**2, rel=2e-3)
+    assert built.volume_mm3 == pytest.approx(area * 4000, rel=1e-6)
+    assert built.dimensions_mm["corner_radius"] == pytest.approx(2 * 0.233 * 25.4)
+    assert built.dimensions_mm["section_area"] == pytest.approx(area, rel=1e-12)
+    wall = 0.233 * 25.4
+    assert _box_flats(section) == pytest.approx((101.6 - 3 * wall, 152.4 - 3 * wall))
+    (source,) = [record for record in provenance_for(spec) if record.kind == "section"]
+    assert source.ref == "hss6x4x1/4" and source.name == "HSS6X4X1/4"
+    assert source.sources == ("AISC Shapes Database v16.0, test fixture",)
