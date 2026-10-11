@@ -17,8 +17,13 @@ python tools/agent-skill-measurement/harness.py . /tmp/anvilate-skill-runs
 python tools/agent-skill-measurement/score.py . /tmp/anvilate-skill-runs
 ```
 
-The harness reads `$TMPDIR/anvilate-geovenv/bin/python` for the MCP server; edit `PY` in
-`harness.py` to point at your venv. Each run gets a fresh subject store and a working
+The harness reads `$TMPDIR/anvilate-geovenv/bin/python` for the MCP server; edit
+`server_python` in `harness.py` to point at your venv.
+
+Add `codex` as a third argument to drive OpenAI Codex instead (`codex exec`, with the
+server registered for that run only, so your own Codex configuration is not edited). A
+Codex run is recorded and not yet scored: `score.py` reads Claude Code's stream, and
+Codex's has to be read from a real run before a scorer is written for it. Each run gets a fresh subject store and a working
 directory with the padeye, base-plate and bracket specs. A call counts as failed only when
 the protocol rejected it, per `agenteval.ToolCall`. Claude Code strips the `MCP error -326xx`
 prefix from that text, so the scorer tells a rejection (bare text) from a tool's answer (a

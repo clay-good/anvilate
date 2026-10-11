@@ -40,7 +40,11 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 
 ## 3. Two clients
 
-- [ ] 3.1 Codex runner for the measurement harness; registration line tested in CI
+- [x] 3.1 Codex runner for the measurement harness; registration line tested in CI
+      (`harness.py REPO OUT codex`; `tests/test_agenteval.py` parses the registration as
+      TOML, starts the server from it and reads its answer, and holds each client's one
+      line in the README. Never run against Codex itself, which is 3.3; scoring Codex's
+      output waits on reading a real run's format)
 - [x] 3.2 Corpus extended: journeys, one task per part family, a combination, a context folder
       (`agenteval.journey_task_set`: nineteen tasks over all twelve tools, each new one walked
       by a correct run in a test; not yet measured on either client, which is 3.3)

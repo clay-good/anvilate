@@ -816,3 +816,82 @@ def test_the_gate_script_exits_by_what_it_found(tmp_path):
     worse.write_text(json.dumps(document), encoding="utf-8")
     assert "the candidate was not" in gate(published, worse).stdout
     assert gate(published).returncode == 2
+
+
+def _harness():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "tools/agent-skill-measurement/harness.py"
+    spec = importlib.util.spec_from_file_location("measurement_harness", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_harness_registers_the_server_for_either_client_and_the_server_answers(tmp_path):
+    """audit-agent-surface 3.1. Codex is not installed where this runs, so what can be held
+    is everything short of it: the registration the harness hands Codex is the TOML Codex's
+    configuration is written in, it names the same server Claude Code's JSON does, and that
+    server, started exactly so, answers."""
+    import json
+    import subprocess
+    import sys
+    import tomllib
+    from pathlib import Path
+
+    harness = _harness()
+    repo = Path(__file__).resolve().parents[1]
+    launch = harness.server(repo, tmp_path, sys.executable)
+    assert launch["args"] == ["-m", "anvilate.mcp"]
+    assert launch["env"]["ANVILATE_SUBJECT_STORE"] == str(tmp_path / "store")
+
+    argv = harness.codex_argv("check the padeye", launch, None)
+    assert argv[:4] == ["codex", "exec", "--skip-git-repo-check", "-c"] and len(argv) == 6
+    assert tomllib.loads(argv[4]) == {"mcp_servers": {"anvilate": launch}}
+    assert argv[5] == "check the padeye"
+    with_skill = harness.codex_argv("check the padeye", launch, "THE SKILL")
+    assert with_skill[5] == "THE SKILL\n\ncheck the padeye" and with_skill[:5] == argv[:5]
+    # A path with a quote or a backslash in it is still one TOML string.
+    awkward = {**launch, "command": 'C:\\py "3"\\python'}
+    assert tomllib.loads(harness.codex_override(awkward))["mcp_servers"]["anvilate"] == awkward
+
+    # Claude Code's invocation is the one the published 2026-10-09 run was made with.
+    assert harness.claude_argv("check the padeye", Path("mcp.json"), None) == [
+        "claude", "-p", "check the padeye",
+        "--mcp-config", "mcp.json", "--strict-mcp-config",
+        "--allowedTools", "mcp__anvilate", "Read", "Glob",
+        "--disallowedTools", "Bash", "Write", "Edit", "WebFetch", "WebSearch", "Task",
+        "--output-format", "stream-json", "--verbose",
+        "--max-turns", "20", "--no-session-persistence",
+    ]  # fmt: skip
+    assert harness.claude_argv("p", Path("m"), "S")[-2:] == ["--append-system-prompt", "S"]
+
+    registered = tomllib.loads(argv[4])["mcp_servers"]["anvilate"]
+    answered = subprocess.run(  # noqa: S603 - our own module, started as the client would
+        [registered["command"], *registered["args"]],
+        input=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}) + "\n",
+        capture_output=True,
+        text=True,
+        env={**registered["env"], "PATH": "/usr/bin:/bin"},
+        timeout=120,
+        check=True,
+    )
+    result = json.loads(answered.stdout.splitlines()[0])["result"]
+    assert result["serverInfo"]["name"] == "anvilate" and result["instructions"]
+
+
+def test_each_client_the_harness_drives_has_its_one_line_in_the_readme(monkeypatch, capsys):
+    from pathlib import Path
+
+    harness = _harness()
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text("utf-8")
+    assert harness.CLIENTS == ("claude", "codex")
+    for client in harness.CLIENTS:
+        assert f'{client} mcp add anvilate -- "$(which anvilate-mcp)"' in readme, client
+    # A client that is not installed is said to be, and nothing is run or written.
+    monkeypatch.setattr(harness.shutil, "which", lambda _name: None)
+    assert harness.main(["repo", "out", "codex"]) == 2
+    assert "codex is not installed on this machine; nothing was run" in capsys.readouterr().out
+    assert harness.main(["repo", "out", "cursor"]) == 2 and harness.main([]) == 2
+    assert not Path("out").exists()
