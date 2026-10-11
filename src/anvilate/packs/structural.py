@@ -265,12 +265,43 @@ def _flat_bar(designation: str) -> tuple[float, float] | None:
     return (breadth, depth) if breadth > 0 and depth > 0 else None
 
 
+def _hollow_bar(designation: str) -> tuple[float, ...] | None:
+    """The dimensions in mm of a tube written ``TUBE 60x4`` or a box ``BOX 100x50x4``, or ``None``.
+
+    A round tube is its outside diameter and its wall, and a box is its breadth across the
+    load, its depth along it and its wall, so neither needs a table: two numbers are a tube
+    and three are a box. The box has square corners, as one welded from four plates has; a
+    rolled hollow section rounds them and has a little less metal than this. A wall that
+    leaves no bore is refused here by name, rather than looked up as a profile nobody rolls.
+    """
+    import re
+
+    number = r"(\d+(?:\.\d+)?)"
+    text = designation.strip()
+    tube = re.fullmatch(rf"TUBE {number}x{number}", text)
+    box = re.fullmatch(rf"BOX {number}x{number}x{number}", text)
+    if tube is None and box is None:
+        return None
+    sizes = tuple(float(size) for size in (tube or box).groups())
+    *outside, wall = sizes
+    if not 0 < 2 * wall < min(outside):
+        across = "outside diameter" if tube else "smaller outside dimension"
+        raise _structural_pack_refusal(
+            f"{text} has a {wall:g} mm wall, which must be more than zero and less than half "
+            f"its {across}, {min(outside):g} mm, to leave a bore",
+            subject="section",
+            source=_SECTION_SOURCE,
+        )
+    return sizes
+
+
 def _named_section(value: object) -> object:
     """A profile designation such as ``IPE 200`` or ``W12x26`` resolves to its section.
 
     EN profiles are bundled. AISC W-shapes resolve only from the verified local cache; this
     validator never downloads implicitly. A name no table holds is refused with near misses.
-    A flat bar, ``FLAT 50x10``, is its own two dimensions.
+    A flat bar, ``FLAT 50x10``, a round tube, ``TUBE 60x4``, and a square-cornered box,
+    ``BOX 100x50x4``, are each their own dimensions.
     """
     if isinstance(value, str):
         flat = _flat_bar(value)
@@ -279,18 +310,36 @@ def _named_section(value: object) -> object:
                 width=Quantity(magnitude=flat[0], unit="mm"),
                 height=Quantity(magnitude=flat[1], unit="mm"),
             )
+        hollow = _hollow_bar(value)
+        if hollow is not None:
+            sizes = [Quantity(magnitude=size, unit="mm") for size in hollow]
+            if len(sizes) == 2:
+                return CrossSection.hollow_circular(
+                    outer_diameter=sizes[0],
+                    inner_diameter=Quantity(magnitude=hollow[0] - 2 * hollow[1], unit="mm"),
+                )
+            return CrossSection.hollow_rectangular(
+                width=sizes[0], height=sizes[1], wall_thickness=sizes[2]
+            )
         try:
             return resolve_profile(value).section()
         except LookupError as unknown:
+            # The table's own words end "declared by its properties", which is all a table
+            # can say. A member has one more way, and `TUBE 60 x 4` is asking for it.
             raise _structural_pack_refusal(
-                str(unknown.args[0]), subject="section", source=_SECTION_SOURCE
+                f"{unknown.args[0]}, or, for a flat bar, a round tube or a box, by its "
+                "dimensions in millimetres: `FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`",
+                subject="section",
+                source=_SECTION_SOURCE,
             ) from None
     return value
 
 
 #: A member's section: its properties, or the designation of a rolled profile the library
-#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape (``W12x26``), or a flat bar
-#: by its breadth and depth in millimetres (``FLAT 50x10``).
+#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape (``W12x26``), or a bar named
+#: by its own dimensions in millimetres: a flat bar by breadth and depth (``FLAT 50x10``), a
+#: round tube by outside diameter and wall (``TUBE 60x4``), or a square-cornered box by
+#: breadth, depth and wall (``BOX 100x50x4``).
 MemberSection = Annotated[
     CrossSection, BeforeValidator(_named_section, json_schema_input_type=str | CrossSection)
 ]

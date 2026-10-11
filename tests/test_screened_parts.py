@@ -339,3 +339,68 @@ def test_a_member_may_be_a_flat_bar_named_by_its_two_dimensions():
     assert section.second_moment.to("mm**4").magnitude == pytest.approx(10 * 50**3 / 12)
     with pytest.raises(ValueError, match="FLAT 0x10"):
         BeamMember.model_validate({**params, "section": "FLAT 0x10"})
+
+
+def test_a_member_may_be_a_round_tube_or_a_box_named_by_its_dimensions():
+    """`TUBE 60x4` is outside diameter by wall; `BOX 100x50x4` is breadth, depth and wall.
+
+    Neither needs a table. The metal that is drawn is the area the screen divides a load by,
+    for every member kind, and a wall that leaves no bore is refused by name.
+    """
+    from anvilate.packs.structural import BeamMember, _hollow_bar
+
+    assert _hollow_bar("TUBE 60x4") == (60.0, 4.0)
+    assert _hollow_bar("BOX 100x50x4") == (100.0, 50.0, 4.0)
+    assert _hollow_bar("IPE 200") is None and _hollow_bar("FLAT 50x10") is None
+    assert _hollow_bar("TUBE 60") is None and _hollow_bar("BOX 100x50") is None
+    document = yaml.safe_load((_EXAMPLES / "beam_member.spec.yaml").read_text("utf-8"))
+    params = document["element_params"]
+    tube_area = math.pi * (60**2 - 52**2) / 4
+    box_area = 100 * 50 - 92 * 42
+    for named, area, lying, standing in (
+        ("TUBE 60x4", tube_area, (60.0, 60.0), (60.0, 60.0)),
+        ("BOX 100x50x4", box_area, (100.0, 50.0), (100.0, 50.0)),
+        ("BOX 50x100x4", box_area, (50.0, 100.0), (50.0, 100.0)),
+    ):
+        section = BeamMember.model_validate({**params, "section": named}).section
+        assert section.area.to("mm**2").magnitude == pytest.approx(area, rel=1e-12)
+        beam = build_spec(_spec("beam_member", section=named))
+        box = beam.shape.bounding_box().size
+        assert (box.X, box.Z, box.Y) == pytest.approx((*lying, 4000.0), abs=1e-6)
+        assert beam.volume_mm3 == pytest.approx(area * 4000, rel=1e-6)
+        assert beam.dimensions_mm["section_area"] == pytest.approx(area, rel=1e-12)
+        for upright in ("column_member", "beam_column_member"):
+            column = build_spec(_spec(upright, section=named))
+            box = column.shape.bounding_box().size
+            assert (box.X, box.Y, box.Z) == pytest.approx((*standing, 3000.0), abs=1e-6)
+            assert column.volume_mm3 == pytest.approx(area * 3000, rel=1e-6)
+    # The screen's section is that shape, about the bending axis: the depth is the second
+    # number of a box, so the same tube on edge is stiffer.
+    tube = BeamMember.model_validate({**params, "section": "TUBE 60x4"}).section
+    assert tube.second_moment.to("mm**4").magnitude == pytest.approx(
+        math.pi * (60**4 - 52**4) / 64, rel=1e-12
+    )
+    flat = BeamMember.model_validate({**params, "section": "BOX 100x50x4"}).section
+    edge = BeamMember.model_validate({**params, "section": "BOX 50x100x4"}).section
+    assert flat.second_moment.to("mm**4").magnitude == pytest.approx(
+        (100 * 50**3 - 92 * 42**3) / 12, rel=1e-12
+    )
+    assert edge.second_moment.to("mm**4").magnitude == pytest.approx(
+        (50 * 100**3 - 42 * 92**3) / 12, rel=1e-12
+    )
+    assert flat.second_moment_transverse == edge.second_moment
+    for solid, reason in (
+        ("TUBE 60x30", "TUBE 60x30 has a 30 mm wall.*half its outside diameter, 60 mm"),
+        ("TUBE 60x0", "TUBE 60x0 has a 0 mm wall"),
+        ("BOX 100x50x25", "a 25 mm wall.*half its smaller outside dimension, 50 mm"),
+        ("BOX 50x100x25", "a 25 mm wall.*half its smaller outside dimension, 50 mm"),
+    ):
+        with pytest.raises(ValueError, match=reason):
+            BeamMember.model_validate({**params, "section": solid})
+        with pytest.raises(ValueError, match=reason):
+            build_spec(_spec("beam_member", section=solid))
+    # A near miss is not a profile nobody rolls: it is shown the spelling it wanted.
+    for near in ("TUBE 60 x 4", "tube 60x4", "BOX 100x50", "HSS 100x50x4"):
+        with pytest.raises(ValueError, match="`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`") as said:
+            BeamMember.model_validate({**params, "section": near})
+        assert near in str(said.value)

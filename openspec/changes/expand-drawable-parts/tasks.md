@@ -32,7 +32,10 @@
 - [x] 3.3 Structural members from the section tables: beam, column and beam-column from a
       named rolled I or H profile
 - [x] 3.3b Flat-bar members: `section: FLAT 50x10`, breadth by depth, screened and drawn
-- [ ] 3.3c Channel, angle and HSS members (no bundled table yet)
+- [x] 3.3c Hollow members named by their dimensions: a round tube, `section: TUBE 60x4`
+      (outside diameter by wall), and a square-cornered box, `BOX 100x50x4` (breadth, depth,
+      wall), screened and drawn; a wall that leaves no bore is refused by name
+- [ ] 3.3d Channel, angle and rolled HSS members (rounded corners; no bundled table yet)
 - [x] 3.4 Shaft key; stepped shaft with shoulders and keyways
 - [x] 3.5 Pipe run: drawn straight from an optional `designation` (NPS and schedule), and
       refused when the declared bore is not that pipe's

@@ -375,13 +375,13 @@ def _rolled_section(tag: str, params: Mapping[str, Any]) -> tuple[Any, dict[str,
     if not isinstance(named, str):
         raise GeometryError(
             f"{tag} is drawn from a named rolled profile, such as `section: IPE 200`, or a "
-            "flat bar, `section: FLAT 50x10`; this one states its section properties, "
-            "which do not say its shape",
+            "bar named by its dimensions, such as `section: FLAT 50x10` or `TUBE 60x4`; "
+            "this one states its section properties, which do not say its shape",
             action="declare",
             subject=f"the {tag} element_params.section",
             source="the bundled rolled-profile table, by designation",
         )
-    from .packs.structural import _flat_bar
+    from .packs.structural import _flat_bar, _hollow_bar
 
     flat = _flat_bar(named)
     if flat is not None:
@@ -390,6 +390,24 @@ def _rolled_section(tag: str, params: Mapping[str, Any]) -> tuple[Any, dict[str,
             "width": breadth,
             "depth": bar_depth,
             "section_area": breadth * bar_depth,
+        }
+    hollow = _hollow_bar(named)
+    if hollow is not None and len(hollow) == 2:
+        outside, wall = hollow
+        bore = outside - 2 * wall
+        return Circle(outside / 2) - Circle(bore / 2), {
+            "outside_diameter": outside,
+            "wall_thickness": wall,
+            "section_area": math.pi * (outside**2 - bore**2) / 4,
+        }
+    if hollow is not None:
+        breadth, box_depth, wall = hollow
+        inside = Rectangle(breadth - 2 * wall, box_depth - 2 * wall)
+        return Rectangle(breadth, box_depth) - inside, {
+            "width": breadth,
+            "depth": box_depth,
+            "wall_thickness": wall,
+            "section_area": breadth * box_depth - (breadth - 2 * wall) * (box_depth - 2 * wall),
         }
     profile = resolve_profile(named)
     depth, flange, web, thick, root = (
@@ -526,20 +544,23 @@ _register(
     "beam_member",
     BeamMember,
     _member("beam_member", upright=False),
-    "A beam cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).",
+    "A beam cut to length from a rolled I or H profile, or a flat bar, round tube or "
+    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`).",
     example_params={"section": "IPE 200"},
 )
 _register(
     "column_member",
     ColumnMember,
     _member("column_member", upright=True),
-    "A column cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).",
+    "A column cut to length from a rolled I or H profile, or a flat bar, round tube or "
+    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`).",
     example_params={"section": "IPE 200"},
 )
 _register(
     "beam_column_member",
     BeamColumnMember,
     _member("beam_column_member", upright=True),
-    "A beam-column cut to length from a named rolled I or H profile, or a flat bar (`FLAT 50x10`).",
+    "A beam-column cut to length from a rolled I or H profile, or a flat bar, round tube or "
+    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`).",
     example_params={"section": "IPE 200"},
 )
