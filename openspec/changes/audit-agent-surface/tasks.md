@@ -20,6 +20,9 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 - [x] 2.2 Propose the workflow-level tool set from the inventory and measurements (own delta:
       `openspec/changes/trim-agent-tool-set`, awaiting approval row by row)
 - [ ] 2.3 Remove tools that cannot return a result (starting with FEA while no solver ships)
+      — held by the owner, 2026-10-10: `run_fea_validation` is the only tool the MCP Tasks
+      transport serves, so it stays until a solver or another long-running tool settles what
+      the transport is for (`trim-agent-tool-set` 1.1)
 - [ ] 2.4 One vocabulary for spec, part, card and file across tools, results and docs
       — measured 2026-10-10 over the twelve tool descriptions and the kept instructions:
       spec 11 / document 4; part 18 / element 9; scorecard 3 / verdict 1; handle 7 / subject 2.
