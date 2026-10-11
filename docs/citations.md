@@ -328,6 +328,11 @@ for one: it came from the document. The box is the one welded from four plates. 
 hollow section rounds its corners and has a little less metal, so declare that one by its
 properties.
 
+A section declared by its properties is drawn only when it says its shape, which a tube or
+a box built with `CrossSection.hollow_circular` or `hollow_rectangular` does, in any units:
+it records its `outside` and `wall_thickness`. Three bare properties are screened and not
+drawn.
+
 A hollow beam gets one check a solid one does not. The bending check holds the extreme fibre
 to yield, and a thin wall buckles before it gets there, so `wall local buckling` holds the
 beam to the moment AISC 360-16 Chapter F lets its wall carry (§F8 for a round tube, §F7

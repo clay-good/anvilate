@@ -365,14 +365,48 @@ def build_gear_mesh(mesh: SpurGearMesh, name: str, params: Mapping[str, Any]) ->
     return _built(mesh, tag, shape, dimensions, envelope=True, name=name)
 
 
-def _rolled_section(tag: str, params: Mapping[str, Any]) -> tuple[Any, dict[str, float]]:
-    """The 2D outline of the member's named rolled profile, centred, and its dimensions."""
+def _hollow_outline(sizes: tuple[float, ...], wall: float) -> tuple[Any, dict[str, float]]:
+    """A round tube's or a square-cornered box's outline, centred, and its dimensions."""
+    from build123d import Circle, Rectangle
+
+    if len(sizes) == 1:
+        (outside,) = sizes
+        bore = outside - 2 * wall
+        return Circle(outside / 2) - Circle(bore / 2), {
+            "outside_diameter": outside,
+            "wall_thickness": wall,
+            "section_area": math.pi * (outside**2 - bore**2) / 4,
+        }
+    breadth, box_depth = sizes
+    inside = Rectangle(breadth - 2 * wall, box_depth - 2 * wall)
+    return Rectangle(breadth, box_depth) - inside, {
+        "width": breadth,
+        "depth": box_depth,
+        "wall_thickness": wall,
+        "section_area": breadth * box_depth - (breadth - 2 * wall) * (box_depth - 2 * wall),
+    }
+
+
+def _rolled_section(
+    tag: str, params: Mapping[str, Any], section: Any
+) -> tuple[Any, dict[str, float]]:
+    """The 2D outline of the member's section, centred, and its dimensions.
+
+    A named rolled profile is drawn from its table, and a bar named by its dimensions from
+    them. A section declared by its properties says its shape only when it records the tube
+    or box it is of, and then it is drawn as that.
+    """
     from build123d import Circle, Pos, Rectangle
 
     from .standards.profiles import resolve_profile
 
     named = params.get("section")
     if not isinstance(named, str):
+        if section.outside is not None:
+            return _hollow_outline(
+                tuple(size.to("mm").magnitude for size in section.outside),
+                section.wall_thickness.to("mm").magnitude,
+            )
         raise GeometryError(
             f"{tag} is drawn from a named rolled profile, such as `section: IPE 200`, or a "
             "bar named by its dimensions, such as `section: FLAT 50x10` or `TUBE 60x4`; "
@@ -392,23 +426,8 @@ def _rolled_section(tag: str, params: Mapping[str, Any]) -> tuple[Any, dict[str,
             "section_area": breadth * bar_depth,
         }
     hollow = _hollow_bar(named)
-    if hollow is not None and len(hollow) == 2:
-        outside, wall = hollow
-        bore = outside - 2 * wall
-        return Circle(outside / 2) - Circle(bore / 2), {
-            "outside_diameter": outside,
-            "wall_thickness": wall,
-            "section_area": math.pi * (outside**2 - bore**2) / 4,
-        }
     if hollow is not None:
-        breadth, box_depth, wall = hollow
-        inside = Rectangle(breadth - 2 * wall, box_depth - 2 * wall)
-        return Rectangle(breadth, box_depth) - inside, {
-            "width": breadth,
-            "depth": box_depth,
-            "wall_thickness": wall,
-            "section_area": breadth * box_depth - (breadth - 2 * wall) * (box_depth - 2 * wall),
-        }
+        return _hollow_outline(hollow[:-1], hollow[-1])
     profile = resolve_profile(named)
     depth, flange, web, thick, root = (
         float(getattr(profile, field).quantity.to("mm").magnitude)
@@ -445,7 +464,7 @@ def _member(tag: str, upright: bool):
         from build123d import Plane, extrude
 
         geometry._kernel()
-        outline, dimensions = _rolled_section(tag, params)
+        outline, dimensions = _rolled_section(tag, params, member.section)
         length = _mm(member.length, "length", tag)
         # A beam lies along y with its web vertical; a column stands along z.
         plane = Plane.XY if upright else Plane.XZ

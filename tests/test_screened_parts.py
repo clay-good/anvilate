@@ -404,3 +404,32 @@ def test_a_member_may_be_a_round_tube_or_a_box_named_by_its_dimensions():
         with pytest.raises(ValueError, match="`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`") as said:
             BeamMember.model_validate({**params, "section": near})
         assert near in str(said.value)
+
+
+def test_a_section_declared_by_its_properties_is_drawn_when_it_records_its_wall():
+    """Three properties do not say a shape. A tube's or a box's own dimensions do."""
+    from anvilate.analysis.section import CrossSection
+    from anvilate.units import Quantity
+
+    inch = CrossSection.hollow_circular(
+        outer_diameter=Quantity.parse("2 in"), inner_diameter=Quantity.parse("1.5 in")
+    )
+    tube = build_spec(_spec("column_member", section=inch.model_dump(mode="json")))
+    box = tube.shape.bounding_box().size
+    assert (box.X, box.Y, box.Z) == pytest.approx((50.8, 50.8, 3000.0), abs=1e-6)
+    area = math.pi * (50.8**2 - 38.1**2) / 4
+    assert tube.volume_mm3 == pytest.approx(area * 3000, rel=1e-6)
+    assert tube.dimensions_mm["wall_thickness"] == pytest.approx(6.35)
+    named = build_spec(_spec("beam_member", section="BOX 100x50x4"))
+    declared = CrossSection.hollow_rectangular(
+        width=Quantity.parse("100 mm"),
+        height=Quantity.parse("50 mm"),
+        wall_thickness=Quantity.parse("4 mm"),
+    )
+    drawn = build_spec(_spec("beam_member", section=declared.model_dump(mode="json")))
+    assert drawn.volume_mm3 == pytest.approx(named.volume_mm3, rel=1e-9)
+    assert drawn.dimensions_mm == named.dimensions_mm
+    bare = {key: declared.model_dump(mode="json")[key] for key in ("area", "second_moment")}
+    bare["extreme_fibre"] = declared.model_dump(mode="json")["extreme_fibre"]
+    with pytest.raises(GeometryError, match="which do not say its shape"):
+        build_spec(_spec("beam_member", section=bare))
