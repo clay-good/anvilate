@@ -1157,6 +1157,10 @@
   "thread": "M4x0.7"
  },
  "stepped_shaft": {
+  "allowable_shear": {
+   "magnitude": 145.0,
+   "unit": "MPa"
+  },
   "end_chamfer": {
    "magnitude": 1.0,
    "unit": "mm"
@@ -1184,6 +1188,7 @@
   ],
   "material": null,
   "name": "drive-shaft",
+  "shoulder_stress_concentration": 1.6,
   "steps": [
    {
     "diameter": {
@@ -1215,7 +1220,11 @@
      "unit": "mm"
     }
    }
-  ]
+  ],
+  "torque": {
+   "magnitude": 40.0,
+   "unit": "N*m"
+  }
  },
  "structure": {
   "members": [

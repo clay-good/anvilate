@@ -968,7 +968,9 @@ _register(
     "stepped_shaft",
     parts.SteppedShaft,
     build_stepped_shaft,
-    "A solid round shaft of several diameters, with keyways and chamfered ends.",
+    "A solid round shaft of several diameters, with keyways and chamfered ends, screened in "
+    "torsion at its shoulders under a torque.",
+    screened=True,
 )
 _register(
     "pulley",

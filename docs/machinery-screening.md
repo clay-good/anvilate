@@ -246,6 +246,25 @@ factor or 2.0:
 A stiffening rib is not counted: the plain section carries the whole moment. A slot is not
 counted as a hole that bears. How far a hole sits from an edge is not checked.
 
+## A stepped shaft at its shoulders
+
+A `stepped_shaft` is drawn from its steps. Add the `torque` it carries and it is screened in
+torsion where the stress is highest, at a shoulder, against an allowable the document
+states, at the document's minimum safety factor or 2.0:
+
+| Check | Stress | Held against |
+| --- | --- | --- |
+| shoulder torsion | `K_ts · 16 · T / (π · d³)`, `d` being the smallest diameter on the small side of a shoulder | `allowable_shear` |
+
+`K_ts` is `shoulder_stress_concentration`, and it is the document's: it comes from a chart
+for the fillet radius and the two diameters, and this element states no fillet, so none is
+looked up or assumed. One factor covers every shoulder, so state the largest. A factor
+below 1 is refused. A shaft that states a torque and no factor, or no allowable, is not
+evaluated and names what is missing; one with no `torque` is drawn and not checked. Bending,
+a keyway's own stress raiser and fatigue are not checked here: `transmission_shaft` screens
+one section under bending and torsion together. See
+[`examples/parts/stepped_shaft.spec.yaml`](../examples/parts/stepped_shaft.spec.yaml).
+
 ## Helical compression springs
 
 Three checks again, and this time **two of them pull the same knob in opposite directions**.

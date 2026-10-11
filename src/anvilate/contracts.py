@@ -604,6 +604,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # 1.2.0 adds the bend-radius check's optional reduction of area and its source.
     "sheet_metal_bracket": "1.2.0",
     "spur_gear_mesh": "1.2.0",
+    # 1.2.0 adds the torque, the shoulder's stress-concentration factor and the allowable.
+    "stepped_shaft": "1.2.0",
     "structure": "1.2.0",
     "tension_member": "1.4.0",
     # 1.1.0 adds the support bearing check's optional fields.

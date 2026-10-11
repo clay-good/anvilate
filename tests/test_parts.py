@@ -190,7 +190,8 @@ _UNLOADED = {
             "allowable_tension",
             "allowable_shear",
         )
-    )
+    ),
+    "stepped_shaft": dict.fromkeys(("torque", "shoulder_stress_concentration", "allowable_shear")),
 }
 
 
@@ -646,3 +647,74 @@ _BRACKET_LOAD = {
     "allowable_bending": _mpa(150),
     "allowable_bearing": _mpa(250),
 }
+
+
+def _shaft(**changes):
+    card = screen_spec(_spec("stepped_shaft", **changes))
+    return {e.name.removeprefix("drive-shaft "): e for e in card.entries}, card
+
+
+def test_a_stepped_shaft_under_a_torque_is_screened_at_its_smallest_shoulder():
+    """40 N·m through steps of 20, 30 and 25 mm, with the document's own factor of 1.6.
+
+    The nominal stress is highest in the 20 mm step: 16 x 40000 / (pi x 20^3) = 25.46 MPa,
+    and 1.6 times that at its shoulder, 40.74 MPa, against 145 MPa.
+    """
+    nominal = 16 * 40_000 / (math.pi * 20**3)
+    checks, card = _shaft()
+    torsion = checks["shoulder torsion"]
+    assert torsion.safety_factor == pytest.approx(145 / (1.6 * nominal))
+    assert torsion.status is CheckStatus.PASS and card.passed
+    assert torsion.derivation.result.value.to("MPa").magnitude == pytest.approx(1.6 * nominal)
+    assert not any("drawn" in e.detail for e in card.entries)
+    # Twice the factor is twice the stress; the torque in other units is the same torque.
+    assert _shaft(shoulder_stress_concentration=3.2)[0][
+        "shoulder torsion"
+    ].safety_factor == pytest.approx(145 / (3.2 * nominal))
+    inch = _shaft(torque={"magnitude": 40 / 0.1129848290276167, "unit": "lbf*in"})[0]
+    assert inch["shoulder torsion"].safety_factor == pytest.approx(torsion.safety_factor)
+    # The step that governs is the smallest one a shoulder touches, wherever it sits.
+    steps = [
+        {"diameter": _mm(30), "length": _mm(40)},
+        {"diameter": _mm(30), "length": _mm(20)},
+        {"diameter": _mm(25), "length": _mm(30)},
+    ]
+    moved = _shaft(steps=steps, keyways=None)[0]["shoulder torsion"]
+    assert moved.safety_factor == pytest.approx(145 / (1.6 * 16 * 40_000 / (math.pi * 25**3)))
+    assert _shaft(allowable_shear=_mpa(60))[0]["shoulder torsion"].status is CheckStatus.FAIL
+
+
+def test_a_shaft_torque_is_not_screened_on_anything_the_document_did_not_state():
+    for changes, missing, declaration in (
+        (
+            {"shoulder_stress_concentration": None},
+            "none is assumed; declare shoulder_stress_concentration",
+            "element_params.shoulder_stress_concentration",
+        ),
+        (
+            {"allowable_shear": None},
+            "declare allowable_shear",
+            "element_params.allowable_shear",
+        ),
+        (
+            {"steps": [{"diameter": _mm(20), "length": _mm(40)}] * 2, "keyways": None},
+            "the shaft has no shoulder to check",
+            "element_params.steps",
+        ),
+    ):
+        entry = _shaft(**changes)[0]["shoulder torsion"]
+        assert entry.status is CheckStatus.NOT_EVALUATED and missing in entry.detail
+        assert [need.declaration for need in entry.needs] == [declaration]
+    drawn, card = _shaft(torque=None)
+    assert "drawn" in drawn["screening"].detail and not card.passed
+    assert [need.declaration for need in drawn["screening"].needs] == ["element_params.torque"]
+    for changes, reason in (
+        ({"shoulder_stress_concentration": 0.9}, "must be at least 1; got 0.9"),
+        ({"torque": _mm(5)}, "torque must be a torque"),
+        ({"torque": {"magnitude": -40.0, "unit": "N*m"}}, "torque"),
+        ({"allowable_shear": {"magnitude": 1.0, "unit": "kN"}}, "must be a stress"),
+    ):
+        refused = screen_spec(_spec("stepped_shaft", **changes))
+        (said,) = [entry for entry in refused.entries if reason in entry.detail]
+        assert said.status is CheckStatus.NOT_EVALUATED, reason
+        assert not refused.passed

@@ -76,11 +76,22 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:elements:stepped_shaft:1.1.0",
+  "$id": "urn:anvilate:schema:elements:stepped_shaft:1.2.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate pack element 'stepped_shaft': the fields a Design Spec puts in `element_params` when it declares `element_type: stepped_shaft`. Generated from anvilate.packs.parts.SteppedShaft.",
   "properties": {
+    "allowable_shear": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "end_chamfer": {
       "anyOf": [
         {
@@ -116,6 +127,18 @@
       "title": "Name",
       "type": "string"
     },
+    "shoulder_stress_concentration": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shoulder Stress Concentration"
+    },
     "steps": {
       "items": {
         "$ref": "#/$defs/ShaftStep"
@@ -124,6 +147,17 @@
       "minItems": 1,
       "title": "Steps",
       "type": "array"
+    },
+    "torque": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
@@ -132,5 +166,5 @@
   ],
   "title": "SteppedShaft",
   "type": "object",
-  "x-anvilate-version": "1.1.0"
+  "x-anvilate-version": "1.2.0"
 }

@@ -309,12 +309,12 @@ A hexagonal standoff with a hole along its axis, tapped as data. **drawn, not ch
 
 ### `stepped_shaft`
 
-A solid round shaft of several diameters, with keyways and chamfered ends. **drawn, not checked**.
+A solid round shaft of several diameters, with keyways and chamfered ends, screened in torsion at its shoulders under a torque.
 
 ![stepped_shaft](parts/stepped_shaft.png)
 
 - Required: `name` (text), `steps` (list of ShaftStep)
-- Optional: `keyways` (list of Keyway), `end_chamfer` (quantity), `material` (text)
+- Optional: `keyways` (list of Keyway), `end_chamfer` (quantity), `material` (text), `torque` (quantity), `shoulder_stress_concentration` (number), `allowable_shear` (quantity)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/stepped_shaft.spec.yaml`](../examples/parts/stepped_shaft.spec.yaml)
 

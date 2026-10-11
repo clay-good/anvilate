@@ -525,6 +525,11 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("parts.screen_clevis", "ear shear-out"),
         ),
         _state(
+            "parts.shaft_shoulder_torsion",
+            "a stepped shaft yielding in torsion at the fillet of a shoulder",
+            ("parts.screen_stepped_shaft", "shoulder torsion"),
+        ),
+        _state(
             "parts.drawn_not_checked",
             "no limit state: an everyday part that is drawn, with no strength or fit check",
             ("parts.screen_angle_bracket", "screening"),

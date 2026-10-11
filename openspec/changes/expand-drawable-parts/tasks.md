@@ -62,10 +62,13 @@
       declared pin load, each against a declared allowable
 - [x] 4.9b Angle bracket screen: leg bending and bolt bearing under a load on the upright at a
       declared height (edge distance is not checked: its rule is a table not bundled)
-- [ ] 4.9c Stepped shaft: stress at a shoulder
-      — held open, 2026-10-10: a shoulder needs its stress-concentration factor, and no
-      fillet-shoulder Kt is in the library; it is to be solved out of a published chart
-      before it is written, not recalled.
+- [x] 4.9c Stepped shaft: torsion at a shoulder, under a declared `torque`, with the
+      stress-concentration factor the document states (`shoulder_stress_concentration`)
+      against a declared `allowable_shear`. No factor is looked up: the element states no
+      fillet, and no fillet-shoulder chart is in the library
+- [ ] 4.9d Stepped shaft: a fillet radius per shoulder and the factor read from a published
+      chart, solved out of the chart's own values before it is written, not recalled; and
+      bending at a shoulder
 - [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
       developed blank with its bend lines
 - [x] 4.10b Minimum bend radius reported through the existing bend-radius screen
