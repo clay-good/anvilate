@@ -35,10 +35,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.60.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.61.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.60.0"]
-SchemaVersion = Literal["1.60.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.61.0"]
+SchemaVersion = Literal["1.61.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -150,6 +150,18 @@ class BuildOutput(_WireModel):
     name: Named
     source: Named
     artifact: BuildArtifact
+
+
+class GeometryExportOutput(_WireModel):
+    """``export --artifact step|3mf``: the part itself, written to one file."""
+
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["export"]
+    artifact: Literal["step", "3mf"]
+    name: Named
+    source: Named
+    built: BuildArtifact
 
 
 class EvidenceBundleOutputEntry(_WireModel):
@@ -336,7 +348,9 @@ class CancelledOutput(_WireModel):
 
 class DoctorCheck(_WireModel):
     name: Named
-    status: Literal["pass", "fail"]
+    #: ``not_shipped`` is a capability this release does not build. Nothing the user does
+    #: changes it, so it does not make the report a failure.
+    status: Literal["pass", "fail", "not_shipped"]
     detail: Named
     remedy: Named | None
 
@@ -405,6 +419,7 @@ CliOutput = (
     | EvidenceBundleOutput
     | DxfOutput
     | QifOutput
+    | GeometryExportOutput
     | VerifyOutput
     | StepVerifyOutput
     | DiffOutput

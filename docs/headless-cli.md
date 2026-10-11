@@ -9,12 +9,12 @@ has not shipped exits 4 naming that gap.
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
 | `check` | one or more specs, or a directory | `--format`, `--show-work`, `--module` | every check passed, or passed with margin to spare |
-| `export` | one or more specs, or a directory | `--artifact`, `--format`, `--module` | the bundle rolled up clean |
+| `export` | one or more specs, or a directory; one spec for `step` or `3mf` | `--artifact`, `--format`, `--module`; for `step` and `3mf`: `--output`, `--unvalidated`, `--ap214`, `--force` | the bundle rolled up clean; for `step` or `3mf`, the file was written |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format`, `--module` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214`, `--module` | a valid, watermarked STEP artifact was written |
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
-| `doctor` | no arguments | `--format` | every required runtime capability is ready |
+| `doctor` | no arguments | `--format` | nothing you can change is wrong (a capability this release does not build is listed as not shipped) |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
 | `combine` | a combination document | `--output`, `--picture`, `--exploded`, `--unvalidated`, `--force` | the combination's card passes |
@@ -335,10 +335,11 @@ result shape is published at
 
 `anvilate doctor` checks the five runtime areas the onboarding contract names: FEA solver,
 geometry kernel, MCP server, viewport prerequisites, and bundled database
-integrity. Each gets its own pass/fail line, and every failure carries a concrete next
+integrity. Each gets its own line, and every failure carries a concrete next
 action. With the `geometry` extra installed, the kernel check builds a valid probe solid and
 reports the build123d and OCCT binding versions, and the viewport check renders a probe
-image. The FEA check remains an explicit failure, since no solver ships in this release. The
+image. The FEA check reads `not shipped`, since no solver ships in this release and nothing you
+install changes that; it does not fail the report, so a healthy install exits 0. The
 MCP server check builds the tool catalog in-process and confirms every tool schema carries
 the schemas it references, so an agent can use it offline; it opens no connection. Anvilate
 runs no language model of its own: your agent is the model. Database
@@ -433,8 +434,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.60.0",
- "schema_version": "1.60.0", "command": "check", "status": "fail",
+{"schema": "urn:anvilate:schema:cli-output:1.61.0",
+ "schema_version": "1.61.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}
@@ -1055,6 +1056,11 @@ and what makes a deleted check visible instead is `verdict.worse`, which reads t
 roll-up and cannot be deleted by deleting the checks.
 
 ## Build a STEP solid
+
+`anvilate export --artifact step --output part.step` and `--artifact 3mf --output part.3mf`
+write the same files, from the one command that writes everything else a spec makes. The
+flags below (`--unvalidated`, `--ap214`, `--force`) mean the same there. `anvilate build`
+stays for one release as the same writer.
 
 Install the optional kernel and build either checked-in geometry spec. Both state a safety
 factor and pass their screens, so each builds a validated STEP in one command:

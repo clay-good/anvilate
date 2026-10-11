@@ -118,6 +118,18 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### CLI output 1.61.0: one command writes a part's files, and a healthy install is healthy
+
+`export --artifact step` and `export --artifact 3mf` write the part itself to the file
+`--output` names. The result is an `export` document whose `artifact` is `step` or `3mf` and
+whose `built` object is what `build` reports as its `artifact`. `build` is unchanged and
+stays one release as the same writer.
+
+A `doctor` check's `status` gains `not_shipped`, for a capability this release does not
+build. The FEA solver check reported `fail` on every install; it is `not_shipped` now, the
+report's own `status` is `pass` when nothing else is wrong, and the command exits 0. A
+script that read exit 1 as "no solver" should read the check's status instead.
+
 ### Member schemas 1.5.0: a section records the tube or box it is of
 
 A section gains two optional properties, `outside` and `wall_thickness`: a round tube's one

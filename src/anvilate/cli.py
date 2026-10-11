@@ -223,18 +223,21 @@ _NEEDS_GEOMETRY: dict[str, str] = {}
 # What the shell refuses: what cannot be produced at all. The MCP tool used to refuse DXF and
 # QIF on top of that, because its result could carry only the bundle document; it now writes
 # files to the server's output folder (`simplify-visual-output`), so the two surfaces serve
-# the same artifacts. The shell reaches STEP and 3MF through `build` and the part sheet
-# through `view`; `_MCP_FORMAT_COMMAND` says which command each MCP format corresponds to.
+# the same artifacts. The shell writes every file a spec makes through `export` (`build`
+# stays one release as the same STEP and 3MF writer) and the part sheet through `view`;
+# `_MCP_FORMAT_COMMAND` says which command each MCP format corresponds to.
 _UNBUILT_ARTIFACTS = _NEEDS_GEOMETRY
 _MCP_FORMAT_COMMAND = {
     "evidence_bundle": "export --artifact evidence-bundle",
     "qif": "export --artifact qif",
     "dxf": "export --artifact dxf",
-    "step": "build --output part.step",
-    "3mf": "build --output part.3mf",
+    "step": "export --artifact step --output part.step",
+    "3mf": "export --artifact 3mf --output part.3mf",
     "part_sheet": "view",
 }
-_ARTIFACTS = ("evidence-bundle", "dxf", "qif")
+_ARTIFACTS = ("evidence-bundle", "dxf", "qif", "step", "3mf")
+# The two that are the part itself, written to a file `--output` names.
+_GEOMETRY_ARTIFACTS = {"step": (".step", ".stp"), "3mf": (".3mf",)}
 
 _COMMAND_EXAMPLES = {
     "check": "anvilate check parts/bracket.yaml --show-work",
@@ -533,7 +536,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "a directory. The exit code is the bundle roll-up, which is never better than its "
         "worst section: 0 when every section passed, 1 when one failed, 2 when one could "
         "not be evaluated. QIF and DXF results are gated on the card passing, as "
-        "`artifact-export` asks; unsupported geometry is refused with 4.",
+        "`artifact-export` asks; unsupported geometry is refused with 4. STEP and 3MF are "
+        "the part itself: one spec, written to the file --output names, exit 0 when it was "
+        "written.",
         epilog=f"Example: {_COMMAND_EXAMPLES['export']}",
     )
     export.add_argument(
@@ -551,12 +556,33 @@ def _build_parser() -> argparse.ArgumentParser:
     export.add_argument(
         "--format", choices=("text", "json"), default="text", help="how to render it"
     )
+    export.add_argument(
+        "--output",
+        type=Path,
+        help="for --artifact step or 3mf: the file to write (.step, .stp or .3mf)",
+    )
+    export.add_argument(
+        "--unvalidated",
+        action="store_true",
+        help="for step or 3mf: write a watermarked file when the scorecard does not pass",
+    )
+    export.add_argument(
+        "--ap214",
+        action="store_true",
+        help="for step: the explicit AP214 fallback for a legacy receiver (AP242 is the default)",
+    )
+    export.add_argument(
+        "--force",
+        action="store_true",
+        help="for step or 3mf: replace an existing output file deliberately",
+    )
 
     doctor = commands.add_parser(
         "doctor",
         help="check which Anvilate runtime capabilities are ready",
         description="Check solvers, geometry, the MCP server, viewport support, "
-        "and bundled database integrity independently. Exit 0 only when every item passes.",
+        "and bundled database integrity independently. Exit 0 when nothing you can change "
+        "is wrong; a capability this release does not build is listed as not shipped.",
         epilog=f"Example: {_COMMAND_EXAMPLES['doctor']}",
     )
     doctor.add_argument(
@@ -655,7 +681,9 @@ def _build_parser() -> argparse.ArgumentParser:
     build = commands.add_parser(
         "build",
         help="build an audited Design Spec geometry pattern as STEP or 3MF",
-        description="Build one Design Spec as a valid B-Rep and write a validation-stamped "
+        description="The same writer as `export --artifact step` and `export --artifact "
+        "3mf`, kept for one release. Build one Design Spec as a valid B-Rep and write a "
+        "validation-stamped "
         "STEP, or a 3MF mesh when --output ends in .3mf. Base plates, cover plates, and "
         "transmission shafts are supported; unsupported "
         "patterns exit 4 and name "
@@ -1220,7 +1248,9 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
     checks: list[dict[str, Any]] = [
         {
             "name": "FEA solver",
-            "status": "fail",
+            # Not a failure: it failed on every install, for something nothing a user does
+            # can supply, so `doctor` could never say an install was healthy.
+            "status": "not_shipped",
             "detail": "No FEA solver backend is shipped or configured in this release.",
             # "Implement and configure the T3 backend" was a task for whoever builds the
             # library, offered to whoever runs it. Nothing a user does makes T3 available.
@@ -1343,9 +1373,13 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
     else:
         print(f"doctor: {status.upper()}", file=out)
         for check in checks:
-            print(f"  {check['status']:<4}  {check['name']}: {check['detail']}", file=out)
+            shown = check["status"].replace("_", " ")
+            print(f"  {shown:<11}  {check['name']}: {check['detail']}", file=out)
             if check["remedy"]:
-                print(f"        fix: {check['remedy']}", file=out)
+                # Nothing fixes a capability that is not built; what is said is what to do
+                # without it.
+                label = "fix" if check["status"] == "fail" else "note"
+                print(f"               {label}: {check['remedy']}", file=out)
     return EXIT_OK if status == "pass" else EXIT_FAILED
 
 
@@ -2855,6 +2889,35 @@ def _dxf(results, *, worst, fmt: str, out, err) -> int:
     return EXIT_CODES[worst]
 
 
+def _export_geometry(args: argparse.Namespace, *, out, err) -> int:
+    """``export --artifact step|3mf``: the part itself, through the writer ``build`` uses."""
+    suffixes = _GEOMETRY_ARTIFACTS[args.artifact]
+    wanted = " or ".join(suffixes)
+    if args.output is None:
+        print(
+            f"anvilate export: --artifact {args.artifact} writes a file; name it with "
+            f"--output, ending in {wanted}",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+    if args.output.suffix.lower() not in suffixes:
+        print(
+            f"anvilate export: --artifact {args.artifact} writes a file ending in {wanted}, "
+            f"and --output is {args.output.name}",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+    if len(args.spec) != 1 or args.spec[0].is_dir():
+        print(
+            f"anvilate export: --artifact {args.artifact} writes one part to one file; give "
+            "it one spec document, not several or a directory",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+    one = argparse.Namespace(**{**vars(args), "spec": args.spec[0]})
+    return _build(one, out=out, err=err, command="export")
+
+
 def _export(args: argparse.Namespace, *, out, err) -> int:
     """``export``, for the artifacts a spec file alone can produce."""
     modules = _modules(args, err=err, command="export")
@@ -2870,6 +2933,28 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
             file=err,
         )
         return EXIT_UNBUILT
+    if args.artifact in _GEOMETRY_ARTIFACTS:
+        return _export_geometry(args, out=out, err=err)
+    # A flag that is read for two artifacts and ignored for the rest would be a request
+    # dropped without a word: `--unvalidated` on a DXF would look like it had been honoured.
+    given = [
+        flag
+        for flag, value in (
+            ("--output", args.output is not None),
+            ("--unvalidated", args.unvalidated),
+            ("--ap214", args.ap214),
+            ("--force", args.force),
+        )
+        if value
+    ]
+    if given:
+        print(
+            f"anvilate export: {', '.join(given)} "
+            f"{'is' if len(given) == 1 else 'are'} for --artifact step or 3mf, and this is "
+            f"--artifact {args.artifact}, which is printed; redirect it to keep it",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
 
     from .screening import screen_spec
 
@@ -3250,9 +3335,13 @@ def _view(args: argparse.Namespace, *, out, err) -> int:
     return EXIT_OK
 
 
-def _build(args: argparse.Namespace, *, out, err) -> int:
-    """Build one supported Design Spec pattern and write a valid STEP solid."""
-    modules = _modules(args, err=err, command="build")
+def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int:
+    """Build one supported Design Spec pattern and write a valid STEP solid.
+
+    ``command`` is the name it was asked for under, ``build`` or ``export``: the same
+    writer, and each says its own name in what it prints.
+    """
+    modules = _modules(args, err=err, command=command)
     if isinstance(modules, int):
         return modules
     import hashlib
@@ -3268,27 +3357,29 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
 
     suffix = args.output.suffix.lower()
     if suffix not in {".step", ".stp", ".3mf"}:
-        print("anvilate build: --output must end in .step, .stp or .3mf", file=err)
+        print(f"anvilate {command}: --output must end in .step, .stp or .3mf", file=err)
         return EXIT_BAD_REQUEST
     as_3mf = suffix == ".3mf"
     if as_3mf and args.ap214:
         print(
-            "anvilate build: --ap214 chooses a STEP schema and the output is 3MF; drop "
+            f"anvilate {command}: --ap214 chooses a STEP schema and the output is 3MF; drop "
             "--ap214, or write a .step file",
             file=err,
         )
         return EXIT_BAD_REQUEST
     if not args.output.parent.is_dir():
-        print(f"anvilate build: output directory does not exist: {args.output.parent}", file=err)
+        print(
+            f"anvilate {command}: output directory does not exist: {args.output.parent}", file=err
+        )
         return EXIT_BAD_REQUEST
     if args.output.exists() and not args.force:
         print(
-            f"anvilate build: output already exists: {args.output}; pass --force to replace it",
+            f"anvilate {command}: output already exists: {args.output}; pass --force to replace it",
             file=err,
         )
         return EXIT_BAD_REQUEST
 
-    spec = _load(args.spec, err=err, command="build")
+    spec = _load(args.spec, err=err, command=command)
     if isinstance(spec, int):
         return spec
     # One build, so no count: the line names what is running rather than a percentage the
@@ -3297,10 +3388,10 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
     try:
         built = build_spec(spec)
     except (GeometryUnavailable, UnsupportedGeometry) as failure:
-        print(f"anvilate build: {failure}. See {_GEOMETRY_SPEC}.", file=err)
+        print(f"anvilate {command}: {failure}. See {_GEOMETRY_SPEC}.", file=err)
         return EXIT_UNBUILT
     except GeometryError as failure:
-        print(f"anvilate build: {failure}", file=err)
+        print(f"anvilate {command}: {failure}", file=err)
         return EXIT_BAD_REQUEST
 
     from .export.gate import ExportRefused, authorize_export
@@ -3313,7 +3404,7 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         authorization = authorize_export(card, override=args.unvalidated)
     except ExportRefused as refused:
         print(
-            f"anvilate build: {refused.unmet}.\n"
+            f"anvilate {command}: {refused.unmet}.\n"
             "Pass --unvalidated only after reviewing the scorecard; the STEP will be "
             "watermarked and is not released for fabrication.",
             file=err,
@@ -3321,7 +3412,7 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         return EXIT_CODES[card.status]
     except ValueError:
         print(
-            "anvilate build: --unvalidated was given for a part whose acceptance checks "
+            f"anvilate {command}: --unvalidated was given for a part whose acceptance checks "
             "pass, so there is nothing to override. An override that is a no-op means the "
             "caller expected a failing card and did not get one. Remove --unvalidated.",
             file=err,
@@ -3351,13 +3442,13 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
             )
         digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     except ValueError as failure:  # a GeometryError, or a mesh the 3MF writer refused
-        print(f"anvilate build: {failure}", file=err)
+        print(f"anvilate {command}: {failure}", file=err)
         return EXIT_BAD_REQUEST
     except OSError as failure:
         # Named by the file the user asked for: the error's own filename is the hidden
         # staging file beside it, a path they never typed and will not find.
         print(
-            f"anvilate build: could not write {args.output} ({failure.strerror or failure})",
+            f"anvilate {command}: could not write {args.output} ({failure.strerror or failure})",
             file=err,
         )
         return EXIT_BAD_REQUEST
@@ -3377,7 +3468,17 @@ def _build(args: argparse.Namespace, *, out, err) -> int:
         },
     }
     if args.format == "json":
-        print(json.dumps(machine_document("build", result), indent=2, sort_keys=True), file=out)
+        if command == "export":
+            # `artifact` names which one, as it does for every other export, so the file's
+            # own facts go under `built`.
+            document = machine_document(
+                "export",
+                {"name": result["name"], "source": result["source"], "built": result["artifact"]},
+                artifact="3mf" if as_3mf else "step",
+            )
+        else:
+            document = machine_document("build", result)
+        print(json.dumps(document, indent=2, sort_keys=True), file=out)
     else:
         print(f"{spec.name}: BUILT", file=out)
         if as_3mf:

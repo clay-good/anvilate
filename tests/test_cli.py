@@ -2752,6 +2752,63 @@ def test_build_json_carries_geometry_identity_and_digest(tmp_path):
     ]
 
 
+def test_export_writes_the_step_and_the_3mf_that_build_writes(tmp_path):
+    """One command writes a part's files. `build` is the same writer, kept one release."""
+    pytest.importorskip("build123d")
+    import jsonschema
+
+    spec = tmp_path / "base-plate.yaml"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+    schema = json.loads(
+        (_REPO / "docs/api/schemas/cli-output.schema.json").read_text(encoding="utf-8")
+    )
+    for artifact, suffix in (("step", ".step"), ("step", ".stp"), ("3mf", ".3mf")):
+        exported, built = tmp_path / f"exported{suffix}", tmp_path / f"built{suffix}"
+        code, raw, err = _run(
+            "export", str(spec), "--artifact", artifact, "--output", str(exported),
+            "--format", "json", "--unvalidated",
+        )  # fmt: skip
+        payload = json.loads(raw)
+        assert code == EXIT_OK and err == ""
+        jsonschema.Draft202012Validator(schema).validate(payload)
+        assert payload["command"] == "export" and payload["artifact"] == artifact
+        _code, raw, _err = _run(
+            "build", str(spec), "--output", str(built), "--format", "json", "--unvalidated"
+        )
+        assert payload["built"] == {**json.loads(raw)["artifact"], "path": str(exported)}
+        assert exported.read_bytes() == built.read_bytes()
+    # The card gates it exactly as it gates `build`, and says so under its own name.
+    gated = tmp_path / "gated.step"
+    code, _raw, err = _run("export", str(spec), "--artifact", "step", "--output", str(gated))
+    assert code != EXIT_OK and not gated.exists()
+    assert err.startswith("anvilate export: ") and "--unvalidated" in err
+
+
+def test_export_refuses_a_geometry_request_it_cannot_carry_out_as_asked(tmp_path):
+    spec = tmp_path / "base-plate.yaml"
+    spec.write_text(_BASE_PLATE_SPEC, encoding="utf-8")
+    step = str(tmp_path / "part.step")
+    for arguments, reason in (
+        (("--artifact", "step"), "writes a file; name it with --output"),
+        (("--artifact", "3mf", "--output", step), "ending in .3mf, and --output is part.step"),
+        (("--artifact", "step", "--output", str(tmp_path / "part.3mf")), "ending in .step or"),
+        (("--artifact", "dxf", "--force"), "--force is for --artifact step or 3mf"),
+        (
+            ("--artifact", "qif", "--unvalidated", "--ap214"),
+            "--unvalidated, --ap214 are for --artifact step or 3mf",
+        ),
+        (("--output", step), "--output is for --artifact step or 3mf"),
+    ):
+        code, out, err = _run("export", str(spec), *arguments)
+        assert code == EXIT_BAD_REQUEST and out == "", arguments
+        assert reason in err, (arguments, err)
+    code, _out, err = _run("export", str(spec), str(spec), "--artifact", "step", "--output", step)
+    assert code == EXIT_BAD_REQUEST and "one spec document" in err
+    code, _out, err = _run("export", str(tmp_path), "--artifact", "step", "--output", step)
+    assert code == EXIT_BAD_REQUEST and "one spec document" in err
+    assert not list(tmp_path.glob("part.*"))
+
+
 def test_build_writes_the_circular_cover_plate_example_with_its_bore(tmp_path):
     pytest.importorskip("build123d")
     spec = Path(__file__).resolve().parents[1] / "examples/cover_plate.spec.yaml"
@@ -3050,8 +3107,15 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
         "viewport prerequisites",
         "database integrity",
     }
-    assert payload["status"] == "fail" and code == EXIT_FAILED and error == ""
-    assert all(check["remedy"] for check in by_name.values() if check["status"] == "fail")
+    # A healthy install is reported healthy. The solver nothing a user does can supply is
+    # named as not shipped, with what to do without it, and it does not fail the report.
+    assert payload["status"] == "pass" and code == EXIT_OK and error == ""
+    assert by_name["FEA solver"]["status"] == "not_shipped"
+    assert "screen at T1" in by_name["FEA solver"]["remedy"]
+    assert not [check for check in by_name.values() if check["status"] == "fail"]
+    _code, text, _error = _run("doctor")
+    assert text.startswith("doctor: PASS\n  not shipped  FEA solver: ")
+    assert "note: None in this release" in text and "fix:" not in text
     assert by_name["geometry kernel"]["status"] == "pass"
     assert "build123d" in by_name["geometry kernel"]["detail"]
     assert by_name["viewport prerequisites"]["status"] == "pass"
@@ -3092,7 +3156,7 @@ def test_doctor_checks_the_mcp_server_and_opens_no_connection(monkeypatch):
     assert checks["MCP server"]["status"] == "pass"
     assert "every schema they reference is embedded" in checks["MCP server"]["detail"]
     (fea,) = [c for c in json.loads(raw)["checks"] if c["name"] == "FEA solver"]
-    assert fea["status"] == "fail" and not fea["remedy"].startswith("Implement")
+    assert fea["status"] == "not_shipped" and not fea["remedy"].startswith("Implement")
 
 
 def _fake_recipe(payload: bytes):

@@ -65,7 +65,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | `combine` | place several parts by the features they share, and check where they meet | `--exploded`, `--force`, `--output`, `--picture`, `--unvalidated` |
 | `diff` | compare two spec documents and the verdicts they screen to | `--format`, `--module` |
 | `doctor` | check which Anvilate runtime capabilities are ready | `--format` |
-| `export` | write a downstream artifact from a screened spec | `--artifact`, `--format`, `--module` |
+| `export` | write a downstream artifact from a screened spec | `--ap214`, `--artifact`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |
 | `fetch` | download a dataset Anvilate may read but not ship, once, with your consent | `--consent`, `--format` |
 | `interfaces` | detect planar faces and through-hole patterns in a mating STEP | `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--confirmed-by`, `--fit`, `--format`, `--locator`, `--mating-plane`, `--max-gap`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--name`, `--requirement`, `--solid` |
 | `parts` | list the parts a spec can declare, or describe one | none |
@@ -99,7 +99,7 @@ is worth trading correctness for; the kernel is imported only by the calls that 
 | The README reaches a first part in three steps, says what comes back and what Anvilate is not. | The README's first screen; its counts and its example are each held by a test. |
 | Every docs page is reachable from the README or the docs index, by task. | A test fails on a page neither links, and on a link to a page that is gone. |
 | No page still describes the removed viewer, a web server or a built-in model. | Searched; the design-decisions page records their removal and nothing else mentions them. |
-| `anvilate doctor` says in plain words what is missing and what to do about it. | Each failing item carries a `fix:` line. Its exit status is finding 9. |
+| `anvilate doctor` says in plain words what is missing and what to do about it. | Each failing item carries a `fix:` line, and a capability that is not built carries a `note:` saying what to do without it. |
 | A bad spec is refused in the same words at the shell and over MCP. | The surface-parity tests compare the two, field by field. |
 | Every command's help opens with what the command is for. | The commands table above is generated from those lines. |
 
@@ -113,9 +113,9 @@ is worth trading correctness for; the kernel is imported only by the calls that 
 | 4 | A part with no screen could not be exported over MCP at all. | `export_artifact` refused any card that did not pass. | **Fixed.** A drawn-only part is written marked unvalidated and the result says so; a failing part is still refused. |
 | 5 | A sheet-metal bracket's STEP file crashed the server on export. | The solid carried a placement; the kernel wrote an assembly of one and segfaulted reading it back. | **Fixed.** Built in place; `write_step` refuses a placed solid before reading it; every part's STEP is written and read back in a test. |
 | 6 | A dimension label ran off a long thin part's view and read "200 M". | The rendered picture of a 4 m beam. | **Fixed.** The view makes room for the label; a test holds every stroke inside the image. |
-| 7 | `run_fea_validation` can only ever answer *not evaluated*: no solver ships. | Its own result, on every call. | **Proposed, not applied.** Removing a tool is a breaking change to the published catalog. Proposal: drop it until a solver ships, and let `run_validation` say T3 was not evaluated, as it already does. |
+| 7 | `run_fea_validation` can only ever answer *not evaluated*: no solver ships. | Its own result, on every call. | **Open.** Held by the owner (2026-10-10): it is the only tool the MCP Tasks transport serves, so removing it orphans that transport; the tool stays until a solver or another long-running tool settles what the transport is for. |
 | 8 | `compile_spec` is a step `run_validation` makes unnecessary: a bad spec is refused there with the same remedies. | The 2026-10-09 measurement scored correct runs incomplete for skipping it. | **Proposed, not applied.** Fold it into `run_validation`'s refusal; keep the tool one release with a note. |
-| 9 | `anvilate doctor` reports FAIL on every install. | It fails on the FEA solver, which nothing a user does can supply. | **Proposed, not applied.** Report a capability that is not built as *not shipped* and exit 0 when everything a user can fix is fine. It changes the published doctor result, so it wants a version bump of that contract. |
+| 9 | `anvilate doctor` reports FAIL on every install. | It fails on the FEA solver, which nothing a user does can supply. | **Fixed.** With the owner's approval (2026-10-10): the solver is reported as *not shipped*, and `doctor` exits 0 when everything a user can fix is fine. CLI output moved to 1.61.0. |
 | 10 | Only the eight pipeline tools have been measured with a real agent, and only on Claude Code. | `tools/agent-skill-measurement/results/2026-10-09.json`. | **Open.** The four tools added since (`describe_part`, `list_context`, `read_cad_file`, `build_combination`) are walked by the journey test below and have not been driven by a model. Extending the corpus means a paid run on each client. |
 | 11 | Codex has not been run at all. | Not installed where this audit ran. | **Open.** The registration line is in the README; the harness has no Codex runner yet. |
 | 12 | Install is `git clone`. | There is no `anvilate` on the package index; a CI job watches for the day there is. | **Open, the owner's decision.** Publishing is outward-facing and was not done. |
