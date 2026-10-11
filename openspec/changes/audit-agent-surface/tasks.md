@@ -32,6 +32,11 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
       the retired words out of the catalog
 - [x] 2.5 Truthful read-only, destructive and open-world hints on every tool
 - [ ] 2.6 Server instructions and the agent skill rewritten for the new set, most important first
+      — the set is settled at twelve tools (2026-10-11: the FEA tool is held, `compile_spec`
+      stays). The instructions carry the one vocabulary of 2.4 and keep the rules, part
+      names and material ids inside what a client keeps. The skill names no tool and was
+      not rewritten: its text is what the 2026-10-09 measurement scored, and a rewrite is
+      only worth having with the measured run of 3.3 behind it
 
 ## 3. Two clients
 
