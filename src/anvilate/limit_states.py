@@ -537,6 +537,16 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("parts.screen_stepped_shaft", "shoulder torsion"),
         ),
         _state(
+            "parts.shaft_shoulder_bending",
+            "a stepped shaft yielding in bending at the fillet of a shoulder",
+            ("parts.screen_stepped_shaft", "shoulder bending"),
+        ),
+        _state(
+            "parts.shaft_shoulder_combined",
+            "a stepped shaft yielding at a shoulder under bending and torsion together",
+            ("parts.screen_stepped_shaft", "shoulder combined"),
+        ),
+        _state(
             "parts.drawn_not_checked",
             "no limit state: an everyday part that is drawn, with no strength or fit check",
             ("parts.screen_angle_bracket", "screening"),

@@ -181,6 +181,7 @@ def test_faces_are_named_by_direction_and_every_face_has_a_name(element_type):
 
 # A clevis is screened once it states the load on its pin, and its example does; without
 # one it is the fifteenth drawn-only part, and is held to the same statement here.
+_SHAFT_BENDING = ("bending_moment", "shoulder_bending_stress_concentration", "allowable_bending")
 _UNLOADED = {
     "clevis": dict.fromkeys(
         (
@@ -191,7 +192,9 @@ _UNLOADED = {
             "allowable_shear",
         )
     ),
-    "stepped_shaft": dict.fromkeys(("torque", "shoulder_stress_concentration", "allowable_shear")),
+    "stepped_shaft": dict.fromkeys(
+        ("torque", "shoulder_stress_concentration", "allowable_shear", *_SHAFT_BENDING)
+    ),
 }
 
 
@@ -705,9 +708,12 @@ def test_a_shaft_torque_is_not_screened_on_anything_the_document_did_not_state()
         entry = _shaft(**changes)[0]["shoulder torsion"]
         assert entry.status is CheckStatus.NOT_EVALUATED and missing in entry.detail
         assert [need.declaration for need in entry.needs] == [declaration]
-    drawn, card = _shaft(torque=None)
+    drawn, card = _shaft(torque=None, bending_moment=None)
     assert "drawn" in drawn["screening"].detail and not card.passed
-    assert [need.declaration for need in drawn["screening"].needs] == ["element_params.torque"]
+    assert [need.declaration for need in drawn["screening"].needs] == [
+        "element_params.torque",
+        "element_params.bending_moment",
+    ]
     for changes, reason in (
         ({"shoulder_stress_concentration": 0.9}, "must be at least 1; got 0.9"),
         ({"torque": _mm(5)}, "torque must be a torque"),
@@ -718,3 +724,67 @@ def test_a_shaft_torque_is_not_screened_on_anything_the_document_did_not_state()
         (said,) = [entry for entry in refused.entries if reason in entry.detail]
         assert said.status is CheckStatus.NOT_EVALUATED, reason
         assert not refused.passed
+
+
+_BENT = {
+    "bending_moment": {"magnitude": 30.0, "unit": "N*m"},
+    "shoulder_bending_stress_concentration": 1.9,
+    "allowable_bending": _mpa(250),
+}
+
+
+def test_a_stepped_shaft_under_a_moment_is_screened_in_bending_and_under_both_together():
+    """30 N·m of bending at a shoulder of the 20 mm step, with the document's factor of 1.9.
+
+    Bending: 1.9 x 32 x 30000 / (pi x 20^3) = 72.57 MPa. With the example's torque, whose
+    peak shear is 40.74 MPa, the two together are sqrt(72.57^2 + 3 x 40.74^2) = 101.2 MPa.
+    """
+    sigma = 1.9 * 32 * 30_000 / (math.pi * 20**3)
+    tau = 1.6 * 16 * 40_000 / (math.pi * 20**3)
+    checks, card = _shaft(**_BENT)
+    assert set(checks) == {
+        "shoulder torsion",
+        "shoulder bending",
+        "shoulder combined",
+        "material resolution",
+    }
+    assert checks["shoulder bending"].safety_factor == pytest.approx(250 / sigma)
+    assert checks["shoulder torsion"].safety_factor == pytest.approx(145 / tau)
+    together = math.sqrt(sigma**2 + 3 * tau**2)
+    assert together == pytest.approx(101.2, abs=0.05)
+    assert checks["shoulder combined"].safety_factor == pytest.approx(250 / together)
+    assert card.passed
+    # Each passes alone at an allowable the two together do not: 2 x 72.57 < 180 < 2 x 101.2.
+    tight, card = _shaft(**{**_BENT, "allowable_bending": _mpa(180)})
+    assert tight["shoulder bending"].status is CheckStatus.PASS
+    assert tight["shoulder torsion"].status is CheckStatus.PASS
+    assert tight["shoulder combined"].status is CheckStatus.FAIL and not card.passed
+    # A moment alone is one check, and nothing is combined with a torque nobody stated.
+    alone, _card = _shaft(
+        **_BENT, torque=None, shoulder_stress_concentration=None, allowable_shear=None
+    )
+    assert "shoulder torsion" not in alone and "shoulder combined" not in alone
+    assert alone["shoulder bending"].safety_factor == pytest.approx(250 / sigma)
+
+
+def test_a_shaft_moment_is_not_screened_on_anything_the_document_did_not_state():
+    no_factor, card = _shaft(**{**_BENT, "shoulder_bending_stress_concentration": None})
+    assert no_factor["shoulder bending"].status is CheckStatus.NOT_EVALUATED
+    assert "declare shoulder_bending_stress_concentration" in no_factor["shoulder bending"].detail
+    assert no_factor["shoulder combined"].status is CheckStatus.NOT_EVALUATED
+    assert no_factor["shoulder torsion"].status is CheckStatus.PASS and not card.passed
+    no_allowable, card = _shaft(**{**_BENT, "allowable_bending": None})
+    for check in ("shoulder bending", "shoulder combined"):
+        assert no_allowable[check].status is CheckStatus.NOT_EVALUATED
+        assert [need.declaration for need in no_allowable[check].needs] == [
+            "element_params.allowable_bending"
+        ]
+    assert not card.passed
+    for changes, reason in (
+        ({"shoulder_bending_stress_concentration": 0.5}, "must be at least 1; got 0.5"),
+        ({"bending_moment": _mm(5)}, "bending_moment must be a moment"),
+        ({"allowable_bending": {"magnitude": 1.0, "unit": "kN"}}, "must be a stress"),
+    ):
+        refused = screen_spec(_spec("stepped_shaft", **{**_BENT, **changes}))
+        (said,) = [entry for entry in refused.entries if reason in entry.detail]
+        assert said.status is CheckStatus.NOT_EVALUATED, reason

@@ -31,7 +31,6 @@ from pydantic import ConfigDict, Field, model_validator
 from .._models import Named
 from ..analysis.sheetmetal import bend_allowance, minimum_bend_radius
 from ..analysis.stress import strength_scorecard
-from ..analysis.torsion import shaft_torsional_stress
 from ..derivation import Derivation, SymbolValue
 from ..scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from ..units import Quantity
@@ -439,12 +438,25 @@ class SteppedShaft(_Part):
     in the smaller diameter, raised by ``shoulder_stress_concentration``, against
     ``allowable_shear``. The factor is the caller's, read from a chart for the fillet radius
     and the two diameters; this element states no fillet, so none is assumed. One factor
-    covers every shoulder, so state the largest. Without a torque the shaft is drawn and
-    not checked.
+    covers every shoulder, so state the largest.
+
+    ``bending_moment`` is the largest bending moment any shoulder sees. With it the shaft
+    is screened in bending there the same way, by ``shoulder_bending_stress_concentration``
+    against ``allowable_bending``; and a shaft that states both loads is also held to the
+    two peak stresses together. Without a torque or a moment the shaft is drawn and not
+    checked.
     """
 
-    positive_fields = ("end_chamfer", "torque", "allowable_shear", "shoulder_stress_concentration")
-    not_lengths = ("torque", "allowable_shear")
+    positive_fields = (
+        "end_chamfer",
+        "torque",
+        "allowable_shear",
+        "shoulder_stress_concentration",
+        "bending_moment",
+        "allowable_bending",
+        "shoulder_bending_stress_concentration",
+    )
+    not_lengths = ("torque", "allowable_shear", "bending_moment", "allowable_bending")
 
     name: Named
     steps: tuple[ShaftStep, ...] = Field(min_length=1, max_length=20)
@@ -454,6 +466,9 @@ class SteppedShaft(_Part):
     torque: Quantity | None = None
     shoulder_stress_concentration: float | None = None
     allowable_shear: Quantity | None = None
+    bending_moment: Quantity | None = None
+    shoulder_bending_stress_concentration: float | None = None
+    allowable_bending: Quantity | None = None
 
     @model_validator(mode="after")
     def _keyways_name_real_steps(self) -> SteppedShaft:
@@ -466,20 +481,22 @@ class SteppedShaft(_Part):
         for name, wanted, kind in (
             ("torque", "[force] * [length]", "a torque"),
             ("allowable_shear", "[pressure]", "a stress"),
+            ("bending_moment", "[force] * [length]", "a moment"),
+            ("allowable_bending", "[pressure]", "a stress"),
         ):
             value = getattr(self, name)
             if value is not None and not value.has_dimension(wanted):
                 raise _refuse(
                     f"{name} must be {kind}; got {value} ({value.dimensionality})", subject=name
                 )
-        factor = self.shoulder_stress_concentration
-        if factor is not None and factor < 1.0:
-            raise _refuse(
-                f"shoulder_stress_concentration must be at least 1; got {factor:g}. It is "
-                "the peak stress at the fillet over the nominal stress, and a shoulder "
-                "never lowers it",
-                subject="shoulder_stress_concentration",
-            )
+        for name in ("shoulder_stress_concentration", "shoulder_bending_stress_concentration"):
+            factor = getattr(self, name)
+            if factor is not None and factor < 1.0:
+                raise _refuse(
+                    f"{name} must be at least 1; got {factor:g}. It is the peak stress at "
+                    "the fillet over the nominal stress, and a shoulder never lowers it",
+                    subject=name,
+                )
         return self
 
 
@@ -970,7 +987,9 @@ def screen_shaft_collar(collar: ShaftCollar) -> Scorecard:
 
 
 # Named for what it is, with no section number: none is recorded here to read it from.
-_SHOULDER_REFERENCE = "Shigley, torsion of a round shaft and stress concentration at a shoulder"
+_SHOULDER_REFERENCE = (
+    "Shigley, torsion and bending of a round shaft and stress concentration at a shoulder"
+)
 _NEEDS_A_SHAFT_TORQUE = Need(
     declaration="element_params.torque",
     takes="the torque the shaft carries through every step",
@@ -994,6 +1013,29 @@ _NEEDS_A_SHAFT_ALLOWABLE = Need(
     units=("MPa", "ksi"),
     sources=(ValueSource.USER, ValueSource.STANDARD),
 )
+_NEEDS_A_SHAFT_MOMENT = Need(
+    declaration="element_params.bending_moment",
+    takes="the largest bending moment any shoulder of the shaft sees",
+    dimension="[force] * [length]",
+    units=("N*m", "lbf*in"),
+    sources=(ValueSource.USER, ValueSource.MEASUREMENT),
+)
+_NEEDS_A_SHOULDER_BENDING_FACTOR = Need(
+    declaration="element_params.shoulder_bending_stress_concentration",
+    takes=(
+        "the bending stress-concentration factor of the shoulder fillet, read from a "
+        "chart for its radius and the two diameters; the largest, if the shoulders differ"
+    ),
+    dimension="dimensionless",
+    sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+_NEEDS_A_SHAFT_BENDING_ALLOWABLE = Need(
+    declaration="element_params.allowable_bending",
+    takes="the shaft material's allowable bending stress",
+    dimension="[pressure]",
+    units=("MPa", "ksi"),
+    sources=(ValueSource.USER, ValueSource.STANDARD),
+)
 _NEEDS_A_SHOULDER = Need(
     declaration="element_params.steps",
     takes="two neighbouring steps of different diameters, which is what a shoulder is",
@@ -1003,80 +1045,78 @@ _NEEDS_A_SHOULDER = Need(
 )
 
 
-def screen_stepped_shaft(shaft: SteppedShaft, *, required_safety_factor: float = 2.0) -> Scorecard:
-    """Screen a stepped shaft in torsion at its shoulders, or say it is only drawn.
+def _shoulder_check(
+    shaft: SteppedShaft,
+    check: str,
+    *,
+    diameter: Quantity | None,
+    load: tuple[str, str, Quantity],
+    factor: tuple[str, str, float | None, Need],
+    allowable: tuple[str, Quantity | None, Need],
+    geometry: float,
+    result: tuple[str, str],
+    required_safety_factor: float,
+) -> tuple[ScorecardEntry, Quantity | None]:
+    """One load at the governing shoulder: its entry, and the peak stress when there is one.
 
-    One limit state, at ``required_safety_factor`` (2.0, as on a clevis: the allowable is a
-    plain strength with no code margin in it). A torque makes the same nominal stress in
-    every section of one diameter, 16·T/(π·d³), so the highest is in the smallest step, and
-    a shoulder raises it there by the factor the document states. The check is made at the
-    smallest diameter any shoulder has on its small side.
-
-    The factor is not looked up: it depends on a fillet radius the element does not state.
-    Bending, a keyway's own stress raiser and fatigue are not checked here;
-    ``transmission_shaft`` screens one section under bending and torsion together.
+    The nominal stress is ``geometry``·load/(π·d³), 16 for a torque and 32 for a moment,
+    raised by the factor the document states and held against the allowable it states.
     """
-    if shaft.torque is None:
-        (drawn,) = _drawn_not_checked(
-            "stepped shaft",
-            str(shaft.name),
-            until=(
-                "its shoulders are checked in torsion once it states the torque it "
-                "carries: declare torque, shoulder_stress_concentration and allowable_shear"
-            ),
-        ).entries
-        return Scorecard(entries=(drawn.model_copy(update={"needs": (_NEEDS_A_SHAFT_TORQUE,)}),))
-    name = f"{shaft.name} shoulder torsion"
-    diameters = [step.diameter.to("mm").magnitude for step in shaft.steps]
-    small_sides = [min(here, there) for here, there in pairwise(diameters) if here != there]
+    name = f"{shaft.name} shoulder {check}"
+    symbol, described, value = load
+    factor_symbol, factor_field, stated, factor_need = factor
+    allowable_field, strength, allowable_need = allowable
     for missing, why, need in (
         (
-            not small_sides,
+            diameter is None,
             "every step is one diameter, so the shaft has no shoulder to check",
             _NEEDS_A_SHOULDER,
         ),
         (
-            shaft.shoulder_stress_concentration is None,
+            stated is None,
             "the stress at a shoulder is the nominal stress times a factor set by its "
-            "fillet, and none is assumed; declare shoulder_stress_concentration",
-            _NEEDS_A_SHOULDER_FACTOR,
-        ),
-        (
-            shaft.allowable_shear is None,
-            "shoulder torsion is held against the shaft material's allowable shear "
-            "stress, and none is assumed for a material; declare allowable_shear",
-            _NEEDS_A_SHAFT_ALLOWABLE,
+            f"fillet, and none is assumed; declare {factor_field}",
+            factor_need,
         ),
     ):
         if missing:
-            return Scorecard(
-                entries=(
-                    ScorecardEntry(
-                        name=name,
-                        status=CheckStatus.NOT_EVALUATED,
-                        detail=f"not evaluated — {why}",
-                        needs=(need,),
-                    ),
-                )
+            return (
+                ScorecardEntry(
+                    name=name,
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=f"not evaluated — {why}",
+                    needs=(need,),
+                ),
+                None,
             )
-    assert shaft.shoulder_stress_concentration is not None and shaft.allowable_shear is not None
-    diameter = Quantity(magnitude=min(small_sides), unit="mm")
-    nominal = shaft_torsional_stress(torque=shaft.torque, diameter=diameter)
+    assert diameter is not None and stated is not None
+    d = diameter.to("mm").magnitude
     peak = Quantity(
-        magnitude=shaft.shoulder_stress_concentration * nominal.to("MPa").magnitude, unit="MPa"
+        magnitude=stated * geometry * value.to("N*mm").magnitude / (math.pi * d**3), unit="MPa"
     )
-    entry = strength_scorecard(
-        name, stress=peak, allowable=shaft.allowable_shear, required=required_safety_factor
-    )
+    if strength is None:
+        return (
+            ScorecardEntry(
+                name=name,
+                status=CheckStatus.NOT_EVALUATED,
+                detail=(
+                    f"not evaluated — shoulder {check} is held against {allowable_need.takes}, "
+                    f"and none is assumed for a material; declare {allowable_field}"
+                ),
+                needs=(allowable_need,),
+            ),
+            peak,
+        )
+    result_symbol, result_described = result
     derivation = Derivation(
-        symbolic="τ = K_ts · 16 · T / (π · d³)",
+        symbolic=f"{result_symbol} = {factor_symbol} · {geometry:g} · {symbol} / (π · d³)",
         inputs=(
             SymbolValue(
-                symbol="K_ts",
-                description="torsional stress-concentration factor at the shoulder, as stated",
-                value=shaft.shoulder_stress_concentration,
+                symbol=factor_symbol,
+                description=f"stress-concentration factor at the shoulder in {check}, as stated",
+                value=stated,
             ),
-            SymbolValue(symbol="T", description="torque carried", value=shaft.torque, unit="N*mm"),
+            SymbolValue(symbol=symbol, description=described, value=value, unit="N*mm"),
             SymbolValue(
                 symbol="d",
                 description="smallest diameter on the small side of a shoulder",
@@ -1085,15 +1125,158 @@ def screen_stepped_shaft(shaft: SteppedShaft, *, required_safety_factor: float =
             ),
         ),
         result=SymbolValue(
-            symbol="τ", description="peak shear stress at the shoulder", value=peak, unit="MPa"
+            symbol=result_symbol, description=result_described, value=peak, unit="MPa"
         ),
         citation=_SHOULDER_REFERENCE,
     )
-    return Scorecard(
-        entries=(
-            entry.model_copy(update={"reference": _SHOULDER_REFERENCE, "derivation": derivation}),
-        )
+    entry = strength_scorecard(
+        name, stress=peak, allowable=strength, required=required_safety_factor
     )
+    return (
+        entry.model_copy(update={"reference": _SHOULDER_REFERENCE, "derivation": derivation}),
+        peak,
+    )
+
+
+def screen_stepped_shaft(shaft: SteppedShaft, *, required_safety_factor: float = 2.0) -> Scorecard:
+    """Screen a stepped shaft at its shoulders under a torque, a moment or both.
+
+    At ``required_safety_factor`` (2.0, as on a clevis: the allowables are plain strengths
+    with no code margin in them). A torque makes the same nominal stress in every section
+    of one diameter, 16·T/(π·d³), so the highest is in the smallest step, and a shoulder
+    raises it there by the factor the document states. A bending moment does the same with
+    32·M/(π·d³) and its own factor. Each check is made at the smallest diameter any shoulder
+    has on its small side, which for the moment is conservative: the stated moment is the
+    largest at any shoulder, wherever that shoulder is.
+
+    A shaft carrying both is also held to the two peak stresses together, √(σ² + 3·τ²),
+    against ``allowable_bending``. Neither factor is looked up: each depends on a fillet
+    radius the element does not state. A keyway's own stress raiser and fatigue are not
+    checked here; ``transmission_shaft`` screens one section for fatigue.
+    """
+    if shaft.torque is None and shaft.bending_moment is None:
+        (drawn,) = _drawn_not_checked(
+            "stepped shaft",
+            str(shaft.name),
+            until=(
+                "its shoulders are checked once it states what it carries: declare torque "
+                "with shoulder_stress_concentration and allowable_shear, or bending_moment "
+                "with shoulder_bending_stress_concentration and allowable_bending"
+            ),
+        ).entries
+        return Scorecard(
+            entries=(
+                drawn.model_copy(update={"needs": (_NEEDS_A_SHAFT_TORQUE, _NEEDS_A_SHAFT_MOMENT)}),
+            )
+        )
+    diameters = [step.diameter.to("mm").magnitude for step in shaft.steps]
+    small_sides = [min(here, there) for here, there in pairwise(diameters) if here != there]
+    diameter = Quantity(magnitude=min(small_sides), unit="mm") if small_sides else None
+    entries: list[ScorecardEntry] = []
+    shear = normal = None
+    if shaft.torque is not None:
+        entry, shear = _shoulder_check(
+            shaft,
+            "torsion",
+            diameter=diameter,
+            load=("T", "torque carried", shaft.torque),
+            factor=(
+                "K_ts",
+                "shoulder_stress_concentration",
+                shaft.shoulder_stress_concentration,
+                _NEEDS_A_SHOULDER_FACTOR,
+            ),
+            allowable=("allowable_shear", shaft.allowable_shear, _NEEDS_A_SHAFT_ALLOWABLE),
+            geometry=16,
+            result=("τ", "peak shear stress at the shoulder"),
+            required_safety_factor=required_safety_factor,
+        )
+        entries.append(entry)
+    if shaft.bending_moment is not None:
+        entry, normal = _shoulder_check(
+            shaft,
+            "bending",
+            diameter=diameter,
+            load=("M", "largest bending moment at a shoulder", shaft.bending_moment),
+            factor=(
+                "K_t",
+                "shoulder_bending_stress_concentration",
+                shaft.shoulder_bending_stress_concentration,
+                _NEEDS_A_SHOULDER_BENDING_FACTOR,
+            ),
+            allowable=(
+                "allowable_bending",
+                shaft.allowable_bending,
+                _NEEDS_A_SHAFT_BENDING_ALLOWABLE,
+            ),
+            geometry=32,
+            result=("σ", "peak bending stress at the shoulder"),
+            required_safety_factor=required_safety_factor,
+        )
+        entries.append(entry)
+    if shaft.torque is not None and shaft.bending_moment is not None:
+        entries.append(_shoulder_combined(shaft, normal, shear, required_safety_factor))
+    return Scorecard(entries=tuple(entries))
+
+
+def _shoulder_combined(
+    shaft: SteppedShaft,
+    normal: Quantity | None,
+    shear: Quantity | None,
+    required_safety_factor: float,
+) -> ScorecardEntry:
+    """Both peak stresses at once, by distortion energy, against the bending allowable.
+
+    A shaft that passes in torsion and in bending separately can still yield under the two
+    together, so a shaft that states both loads is not left with two separate passes.
+    """
+    name = f"{shaft.name} shoulder combined"
+    if normal is None or shear is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — the two stresses are combined from the torsion and "
+                "bending entries above, and one of them has no peak stress yet"
+            ),
+            needs=(_NEEDS_A_SHOULDER_FACTOR, _NEEDS_A_SHOULDER_BENDING_FACTOR),
+        )
+    if shaft.allowable_bending is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                "not evaluated — the combined stress is held against "
+                f"{_NEEDS_A_SHAFT_BENDING_ALLOWABLE.takes}, and none is assumed for a "
+                "material; declare allowable_bending"
+            ),
+            needs=(_NEEDS_A_SHAFT_BENDING_ALLOWABLE,),
+        )
+    sigma, tau = normal.to("MPa").magnitude, shear.to("MPa").magnitude
+    combined = Quantity(magnitude=math.sqrt(sigma**2 + 3 * tau**2), unit="MPa")
+    derivation = Derivation(
+        symbolic="σ' = (σ ** 2 + 3 * τ ** 2) ** 0.5",
+        inputs=(
+            SymbolValue(
+                symbol="σ", description="peak bending stress at the shoulder", value=normal
+            ),
+            SymbolValue(symbol="τ", description="peak shear stress at the shoulder", value=shear),
+        ),
+        result=SymbolValue(
+            symbol="σ'",
+            description="distortion-energy stress of the two together",
+            value=combined,
+            unit="MPa",
+        ),
+        citation=_SHOULDER_REFERENCE,
+    )
+    entry = strength_scorecard(
+        name,
+        stress=combined,
+        allowable=shaft.allowable_bending,
+        required=required_safety_factor,
+    )
+    return entry.model_copy(update={"reference": _SHOULDER_REFERENCE, "derivation": derivation})
 
 
 def screen_pulley(pulley: Pulley) -> Scorecard:

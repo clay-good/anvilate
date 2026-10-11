@@ -248,21 +248,25 @@ counted as a hole that bears. How far a hole sits from an edge is not checked.
 
 ## A stepped shaft at its shoulders
 
-A `stepped_shaft` is drawn from its steps. Add the `torque` it carries and it is screened in
-torsion where the stress is highest, at a shoulder, against an allowable the document
-states, at the document's minimum safety factor or 2.0:
+A `stepped_shaft` is drawn from its steps. Add the `torque` it carries, the largest
+`bending_moment` any shoulder sees, or both, and it is screened where the stress is highest,
+at a shoulder, each check against an allowable the document states, at the document's
+minimum safety factor or 2.0:
 
 | Check | Stress | Held against |
 | --- | --- | --- |
-| shoulder torsion | `K_ts · 16 · T / (π · d³)`, `d` being the smallest diameter on the small side of a shoulder | `allowable_shear` |
+| shoulder torsion | `τ = K_ts · 16 · T / (π · d³)` | `allowable_shear` |
+| shoulder bending | `σ = K_t · 32 · M / (π · d³)` | `allowable_bending` |
+| shoulder combined | `√(σ² + 3 · τ²)`, when the shaft states both loads | `allowable_bending` |
 
-`K_ts` is `shoulder_stress_concentration`, and it is the document's: it comes from a chart
-for the fillet radius and the two diameters, and this element states no fillet, so none is
-looked up or assumed. One factor covers every shoulder, so state the largest. A factor
-below 1 is refused. A shaft that states a torque and no factor, or no allowable, is not
-evaluated and names what is missing; one with no `torque` is drawn and not checked. Bending,
-a keyway's own stress raiser and fatigue are not checked here: `transmission_shaft` screens
-one section under bending and torsion together. See
+`d` is the smallest diameter on the small side of a shoulder. `K_ts` is
+`shoulder_stress_concentration` and `K_t` is `shoulder_bending_stress_concentration`, and
+both are the document's: each comes from a chart for the fillet radius and the two
+diameters, and this element states no fillet, so none is looked up or assumed. One factor
+covers every shoulder, so state the largest. A factor below 1 is refused. A load with no
+factor, or no allowable, is not evaluated and names what is missing; a shaft with neither
+load is drawn and not checked. A keyway's own stress raiser and fatigue are not checked
+here: `transmission_shaft` screens one section for fatigue. See
 [`examples/parts/stepped_shaft.spec.yaml`](../examples/parts/stepped_shaft.spec.yaml).
 
 ## Helical compression springs

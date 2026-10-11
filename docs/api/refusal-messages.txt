@@ -951,7 +951,7 @@ _a_flange_has_both_dimensions: a flanged bushing states flange_diameter and flan
 _a_keyseat_has_both_dimensions: a keyseat states keyway_width and keyway_depth
 _keyways_name_real_steps: a keyway names step {keyway.step} and the shaft has {len(self.steps)}
 _keyways_name_real_steps: {name} must be {kind}; got {value} ({value.dimensionality})
-_keyways_name_real_steps: shoulder_stress_concentration must be at least 1; got {factor}. It is the peak stress at the fillet over the nominal stress, and a shoulder never lowers it
+_keyways_name_real_steps: {name} must be at least 1; got {factor}. It is the peak stress at the fillet over the nominal stress, and a shoulder never lowers it
 _a_load_is_a_force_and_an_allowable_a_stress: {name} must be {kind}; got {value} ({value.dimensionality})
 _the_shape_has_its_dimensions: a {self.shape} tube needs {missing}
 _the_shape_has_its_flanges: a {self.shape} bracket needs flange_c

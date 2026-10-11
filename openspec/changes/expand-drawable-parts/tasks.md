@@ -69,9 +69,11 @@
       stress-concentration factor the document states (`shoulder_stress_concentration`)
       against a declared `allowable_shear`. No factor is looked up: the element states no
       fillet, and no fillet-shoulder chart is in the library
-- [ ] 4.9d Stepped shaft: a fillet radius per shoulder and the factor read from a published
-      chart, solved out of the chart's own values before it is written, not recalled; and
-      bending at a shoulder
+- [x] 4.9d Stepped shaft: bending at a shoulder under a declared `bending_moment`, with its
+      own stated factor and allowable, and the two peak stresses together when the shaft
+      states a torque as well
+- [ ] 4.9e Stepped shaft: a fillet radius per shoulder and the factor read from a published
+      chart, solved out of the chart's own values before it is written, not recalled
 - [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
       developed blank with its bend lines
 - [x] 4.10b Minimum bend radius reported through the existing bend-radius screen

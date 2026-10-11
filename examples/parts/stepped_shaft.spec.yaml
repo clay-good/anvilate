@@ -26,5 +26,8 @@ element_params:
   torque: {magnitude: 40.0, unit: N*m}
   shoulder_stress_concentration: 1.6
   allowable_shear: {magnitude: 145.0, unit: MPa}
+  bending_moment: {magnitude: 30.0, unit: N*m}
+  shoulder_bending_stress_concentration: 1.9
+  allowable_bending: {magnitude: 250.0, unit: MPa}
 acceptance:
   tiers: [T1_analytical]
