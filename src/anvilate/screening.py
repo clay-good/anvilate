@@ -377,7 +377,7 @@ def _screen_element(
     except ValidationError as refused:
         # With what to do about each, as a spec's own fields get: `hole_dia` is told it
         # nearly names `hole_diameter`, and `load: 60 kN` is shown as a quantity.
-        reasons = _element_reasons(refused, model)
+        reasons = _element_reasons(refused, model, tag)
         return [
             ScorecardEntry(
                 name="T1 analytical",

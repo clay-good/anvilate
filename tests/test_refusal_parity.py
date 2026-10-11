@@ -219,3 +219,46 @@ def test_the_example_follows_from_the_kind_the_refusal_names():
     # A refusal that names no kind, or a kind with no example recorded, is left as it is.
     assert _a_valid_quantity("thickness must not be negative; got -3 mm") is None
     assert _a_valid_quantity("ratio must be a [dimensionless] quantity; got 5 mm") is None
+
+
+def test_every_required_element_field_left_out_is_shown_a_value_to_write():
+    """Over every element a spec can declare, and every field each requires.
+
+    Leaving a required field out is refused naming the field, and with the value the
+    element's own shipped example gives it, so the refusal shows what to write and not only
+    that something is missing. A value too long for a sentence (a list of steps) is pointed
+    to instead, and those are counted, so the rule cannot quietly stop applying.
+    """
+    import json
+
+    from anvilate.screening import element_registry
+    from anvilate.spec.validate import _element_reasons
+
+    examples = json.loads(
+        (
+            Path(__file__).resolve().parents[1] / "src/anvilate/packs/element_examples.json"
+        ).read_text("utf-8")
+    )
+    shown, too_long, checked = 0, [], 0
+    for tag, (model, _screen) in element_registry().items():
+        required = [name for name, field in model.model_fields.items() if field.is_required()]
+        for name in required:
+            params = {key: value for key, value in examples[tag].items() if key != name}
+            try:
+                model.model_validate(params)
+            except ValueError as refused:
+                said = _element_reasons(refused, model, tag)
+            else:  # pragma: no cover - a required field cannot be left out
+                raise AssertionError(f"{tag}.{name} is required and was not missed")
+            checked += 1
+            assert f"{name}: Field required" in said and f"add `{name}`" in said, (tag, name)
+            if f", for example `{name}: " in said:
+                shown += 1
+            else:
+                assert f"`anvilate parts {tag}` and the describe_part tool show `{name}`" in said
+                too_long.append(f"{tag}.{name}")
+    assert checked > 200, f"only {checked} required fields were tried"
+    # A section, a list of steps or members, a timber grade: each a paragraph, so each is
+    # pointed to. Seven of them; a longer list means the examples grew, and is looked at.
+    assert len(too_long) <= 7, too_long
+    assert shown == checked - len(too_long)

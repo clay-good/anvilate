@@ -42,15 +42,16 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
 
 ## 4. Refusals
 
-- [ ] 4.1 Each refusal names the field, the reason and a valid example, within a length limit
-      — clause by clause, 2026-10-10. The field: every raise is a structured refusal whose
-      remedy names its subject (`tests/test_raised_refusal_ledger.py`, 21 documented
-      invariants excepted). The reason: the message. The length: none is written past 450
-      characters, and what is shown is held to 2,000 for twenty mistakes through both
-      doors. Same words on both doors: `tests/test_refusal_parity.py`. A valid example: an
-      element parameter of the wrong kind is shown a value of the right one (the spec's own
-      scenario), and a spec's own fields show the line to write. Still open for the rest:
-      elsewhere a remedy names where a valid value comes from, a source and not an example
+- [x] 4.1 Each refusal names the field, the reason and a valid example, within a length limit
+      — clause by clause. The field: every raise is a structured refusal whose remedy names
+      its subject (`tests/test_raised_refusal_ledger.py`, 21 documented invariants
+      excepted). The reason: the message. The length: none is written past 450 characters,
+      and what is shown is held to 2,000 for twenty mistakes through both doors. A valid
+      example, at the front door a spec comes through: a spec's own field shows the line to
+      write; an element parameter of the wrong kind is shown a value of the right one; and
+      every required field of every element, left out, is shown as the shipped example
+      writes it, 248 of them swept in `tests/test_refusal_parity.py`. A refusal raised
+      deeper in the library names where a valid value comes from, by its remedy's source
 - [x] 4.2 No suggestion less conservative than what was refused; near-match only when unambiguous
       (finding 23; every refusal that offers a value is listed and read in
       `tests/test_agent_surface.py`)

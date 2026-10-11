@@ -2656,7 +2656,7 @@ def build_spec(spec: DesignSpec) -> BuiltGeometry:
             # A refused parameter is stated as the scorecard states it. pydantic's own
             # text names the model, dumps the input and ends in a URL.
             reasons = (
-                _element_reasons(failure, pattern.model)
+                _element_reasons(failure, pattern.model, spec.element_type)
                 if isinstance(failure, ValidationError)
                 else str(failure)
             )

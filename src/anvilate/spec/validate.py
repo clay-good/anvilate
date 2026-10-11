@@ -120,7 +120,9 @@ def _nearest_option(written: str, expected: str) -> str | None:
     return None
 
 
-def _element_reasons(refused: ValidationError, model: type[BaseModel]) -> str:
+def _element_reasons(
+    refused: ValidationError, model: type[BaseModel], element_type: str | None = None
+) -> str:
     """Why ``model`` refused an element's parameters: each field, its reason, what to write.
 
     One sentence per failure, the same wherever an element is refused. The scorecard states
@@ -137,10 +139,48 @@ def _element_reasons(refused: ValidationError, model: type[BaseModel]) -> str:
                 f" — {remedy}"
                 if (remedy := _remedy(error, model) or _a_valid_quantity(error["msg"]))
                 else ""
-            ),
+            )
+            + _as_the_example_has_it(error, element_type),
         )
         for error in refused.errors()
     )
+
+
+def _as_the_example_has_it(error: Mapping[str, Any], element_type: str | None) -> str:
+    """A required field left out, shown as the element's own shipped example writes it.
+
+    "add `thickness`" says which field and not what one looks like. Every element ships one
+    valid set of parameters, so the missing field is shown from there. Nothing is added for
+    a field the example leaves out, or one nested inside another.
+    """
+    if element_type is None or error["type"] != "missing" or len(error["loc"]) != 1:
+        return ""
+    import json
+    from importlib import resources
+
+    examples = json.loads(
+        resources.files("anvilate.packs").joinpath("element_examples.json").read_bytes()
+    )
+    value = examples.get(element_type, {}).get(error["loc"][0])
+    if value is None:
+        return ""
+
+    def written(node: Any) -> str:
+        if isinstance(node, dict):
+            return "{" + ", ".join(f"{key}: {written(item)}" for key, item in node.items()) + "}"
+        if isinstance(node, list):
+            return "[" + ", ".join(written(item) for item in node) + "]"
+        if isinstance(node, float) and node == int(node):
+            return str(int(node))
+        return str(node)
+
+    shown = written(value)
+    if len(shown) > 80:  # a list of steps is a paragraph: say where the whole one is
+        return (
+            f"; `anvilate parts {element_type}` and the describe_part tool show "
+            f"`{error['loc'][0]}` in a whole example"
+        )
+    return f", for example `{error['loc'][0]}: {shown}`"
 
 
 # What a quantity of each kind looks like in a document, for a refusal that says a value is
