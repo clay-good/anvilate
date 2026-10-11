@@ -23,11 +23,13 @@ it justifies. A finding that needs a breaking change is proposed, not applied.
       — held by the owner, 2026-10-10: `run_fea_validation` is the only tool the MCP Tasks
       transport serves, so it stays until a solver or another long-running tool settles what
       the transport is for (`trim-agent-tool-set` 1.1)
-- [ ] 2.4 One vocabulary for spec, part, card and file across tools, results and docs
-      — measured 2026-10-10 over the twelve tool descriptions and the kept instructions:
-      spec 11 / document 4; part 18 / element 9; scorecard 3 / verdict 1; handle 7 / subject 2.
-      The argument is named `subject` and described as a handle. Choosing one word for each
-      renames a published argument, so it goes with the tool-set decision
+- [x] 2.4 One vocabulary for spec, part, card and file across tools, results and docs
+      — approved 2026-10-11, and done without renaming anything published: the argument is
+      `subject`, so the word is subject. Over the twelve tool descriptions and the kept
+      instructions: spec 12 / document 0; part 23 / element 2 (both in "finite-element");
+      scorecard 4 / verdict 0; subject 6 / handle 0. The agent guide
+      says subject the same way; "task" is the word for a long-running call. A test holds
+      the retired words out of the catalog
 - [x] 2.5 Truthful read-only, destructive and open-world hints on every tool
 - [ ] 2.6 Server instructions and the agent skill rewritten for the new set, most important first
 

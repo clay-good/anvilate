@@ -29,18 +29,18 @@ on the machine this audit ran on, so its column is from documentation and not fr
 
 | Tool | Group | Takes | Returns | Writes | Description | Budget | Journeys |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `compile_spec` | pipeline | `document` | `spec`, `errors`, `remedies`, `subject` | yes | 327 characters | 1 s | none |
-| `build_part` | pipeline | `spec` | `geometry`, `warnings`, `subject` | yes | 295 characters | 10 s | draw, export, context |
-| `render_viewport` | pipeline | `subject`, `view`, `width_px` (optional), `dimensions` (optional), `format` (optional) | an image and one line of text | yes | 476 characters | 2 s | draw, export, context, combination |
+| `compile_spec` | pipeline | `document` | `spec`, `errors`, `remedies`, `subject` | yes | 314 characters | 1 s | none |
+| `build_part` | pipeline | `spec` | `geometry`, `warnings`, `subject` | yes | 287 characters | 10 s | draw, export, context |
+| `render_viewport` | pipeline | `subject`, `view`, `width_px` (optional), `dimensions` (optional), `format` (optional) | an image and one line of text | yes | 477 characters | 2 s | draw, export, context, combination |
 | `measure_geometry` | pipeline | `subject`, `query` | `measurement` | no | 164 characters | 2 s | none |
-| `run_validation` | pipeline | `spec`, `tiers` (optional) | `scorecard`, `subject` | yes | 220 characters | 2 s | check |
+| `run_validation` | pipeline | `spec`, `tiers` (optional) | `scorecard`, `subject` | yes | 218 characters | 2 s | check |
 | `run_fea_validation` | pipeline | `spec`, `convergence_tol` (optional) | `scorecard` | yes | 470 characters | a task | none |
-| `read_scorecard` | pipeline | `subject` | `scorecard` | no | 194 characters | 1 s | none |
-| `export_artifact` | pipeline | `subject`, `format` | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 673 characters | 2 s | export, combination |
-| `build_combination` | combination | `combination` | `combination`, `scorecard`, `subject` | yes | 668 characters | 15 s | combination |
+| `read_scorecard` | pipeline | `subject` | `scorecard` | no | 195 characters | 1 s | none |
+| `export_artifact` | pipeline | `subject`, `format` | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 676 characters | 2 s | export, combination |
+| `build_combination` | combination | `combination` | `combination`, `scorecard`, `subject` | yes | 663 characters | 15 s | combination |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
 | `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 791 characters | 10 s | context |
-| `describe_part` | catalog lookup | `element_type` (optional) | `catalog` | no | 384 characters | 1 s | check, draw, export |
+| `describe_part` | catalog lookup | `element_type` (optional) | `catalog` | no | 378 characters | 1 s | check, draw, export |
 
 ## The journeys
 

@@ -20,14 +20,14 @@ patterns are callable today:
 | Find the part | `describe_part` | **Dispatched synchronously.** With no argument, every element a spec can declare, marking the ones `build_part` draws and the ones no screen checks. With an `element_type`, that element's fields and an example spec to copy and edit. Call it before writing a spec for a part. |
 | Put parts together | `build_combination` | **Dispatched synchronously.** Places catalog parts by the features they share (holes on holes, face on face, shaft in bore), adds bolts, washers and nuts as envelopes, and checks where the parts meet. Its handle goes to `render_viewport` and `export_artifact`. See [combinations](combinations.md). |
 | Build the part | `build_part` | **Dispatched synchronously** for every part in the [parts catalog](parts-catalog.md): plates, brackets, flanges, spacers, shafts, gear pairs, bearings, rolled members, lifting lugs, pipe runs, sheet-metal brackets, enclosures and their lids. Returns the published geometry summary, with each hole and slot under its tag. A part with no screen is drawn and not checked, and its exports carry the unvalidated mark. |
-| Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build handle and returns a deterministic PNG (or the SVG drawing with `format: "svg"`) with one line of text and no structured content, so the model actually sees it, and writes the image to the server's output folder. |
+| Render the part | `render_viewport` | **Dispatched synchronously.** Takes the build's subject and returns a deterministic PNG (or the SVG drawing with `format: "svg"`) with one line of text and no structured content, so the model actually sees it, and writes the image to the server's output folder. |
 | Inspect the part | `measure_geometry` | **Dispatched synchronously.** Reads dimensions, volume, face count, or tagged-face area from the regenerated B-Rep. |
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |
 | Run T3 | `run_fea_validation` | **Task-dispatched.** Returns a durable handle; poll with `tasks/get`. Until a solver lands, the typed result is `not_evaluated`. |
-| Read the scorecard | `read_scorecard` | **Dispatched.** Takes the subject handle returned by validation. |
+| Read the scorecard | `read_scorecard` | **Dispatched.** Takes the subject returned by validation. |
 
 Compile, validate, and read are separate stateless calls because every later call names its
-subject handle. T3 adds a durable task handle: `tools/call` returns immediately,
+subject. T3 adds a durable task: `tools/call` returns immediately,
 `tasks/get` reports `statusMessage` progress and eventually carries the ordinary typed tool
 result, and `tasks/cancel` terminates the worker process group, including any solver it started.
 A solver that ignores SIGTERM is killed after a 2-second grace. Cancellation completes with
@@ -534,22 +534,22 @@ task-dispatched: run_fea_validation
 - **`-32603`** you should never see. It means a handler produced a result the tool's own
   published `outputSchema` rejects, which is a bug in Anvilate, not in your client.
 
-## Subjects: a handle, not a memory
+## Subjects: a name for a result, not a memory
 
 Four tools take a **subject** — `render_viewport`, `measure_geometry`, `read_scorecard` and
-`export_artifact`. It is a handle: `sha256:` and the digest of the document it names, returned
-by an earlier call. `render_viewport` wants the handle returned by `build_part`.
-`measure_geometry` takes that same build handle and answers `volume`, `width`, `depth`,
+`export_artifact`. A subject is `sha256:` and the digest of what it names, returned
+by an earlier call. `render_viewport` wants the subject returned by `build_part`.
+`measure_geometry` takes that same subject and answers `volume`, `width`, `depth`,
 `plate_thickness`, `face_count`, or `area:<semantic-face>` from the regenerated B-Rep.
-`read_scorecard` and `export_artifact` both want the handle
-`run_validation` returns, not the spec handle `compile_spec` returns; the store records each
-document's kind, so handing over the wrong one is refused by name rather than failing three
+`read_scorecard` and `export_artifact` both want the subject
+`run_validation` returns, not the one `compile_spec` returns; the store records each
+record's kind, so handing over the wrong one is refused by name rather than failing three
 layers down in a schema you did not send.
 
-That handle names a **screening result** — the spec and the scorecard together — rather than
+That subject names a **screening result** — the spec and the scorecard together — rather than
 the card alone. `read_scorecard` gives you the card out of it; `export_artifact` builds a
-bundle from both, so the evidence bundle you receive carries the inputs its verdicts were
-computed from and can be re-run from on its own. A handle from a build before that change
+bundle from both, so the evidence bundle you receive carries the inputs its statuses were
+computed from and can be re-run from on its own. A subject from a build before that change
 resolves as a `scorecard` and is refused with what changed and what to do: call
 `run_validation` again.
 
@@ -588,10 +588,10 @@ True 71
 not_evaluated
 ```
 
-Why a handle rather than the payload, or a session: the server keeps no memory between
+Why a subject rather than the payload, or a session: the server keeps no memory between
 calls, so any instance can serve any call and a reconnect loses nothing — and the whole
 geometry does not cross the wire on every request. What it costs is a store, whose location,
-reach and retention `anvilate.store` states rather than assumes. **A handle resolves in one
+reach and retention `anvilate.store` states rather than assumes. **A subject resolves in one
 place or in none**: one the store does not hold is refused by name, never answered with
 whatever the server did most recently.
 

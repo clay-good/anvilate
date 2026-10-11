@@ -426,3 +426,46 @@ def test_no_refusal_is_written_longer_than_a_short_paragraph():
         if len(text) > 450
     }
     assert not long, f"refusals written past 450 characters: {long}"
+
+
+def test_the_catalog_says_each_thing_with_one_word():
+    """audit-agent-surface 2.4. An agent reads twelve descriptions and the kept instructions
+    as one text, and two words for one thing read as two things: a "handle" beside a
+    `subject` argument, a "document" beside a `spec`, a "verdict" beside a scorecard, an
+    "element" beside a part. The published names stay (`subject`, `element_type`,
+    `compile_spec.document`); the prose around them uses the one word."""
+    import re
+
+    from anvilate.mcp import _AGENT_RULES
+
+    def described(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in ("description", "title") and isinstance(value, str):
+                    yield value
+                elif key != "$defs":  # the published contracts' own text, not the catalog's
+                    yield from described(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from described(value)
+
+    texts = {"the kept instructions": [_AGENT_RULES]}
+    for tool in tool_catalog():
+        own = [tool.title, tool.description, *described(tool.input_schema)]
+        texts[tool.name] = own + [
+            text for text in described(tool.output_schema) if "$ref" not in text
+        ]
+    assert len(texts) == 13 and all(texts.values())
+    retired = {"handle": "subject", "document": "spec", "verdict": "scorecard", "element": "part"}
+    found = []
+    for where, passages in texts.items():
+        for passage in passages:
+            for word, kept in retired.items():
+                for match in re.finditer(rf"(?<![-_`\w]){word}s?(?![-_\w])", passage, re.I):
+                    around = passage[max(0, match.start() - 30) : match.end() + 30]
+                    found.append(f"{where}: {word!r} where the catalog says {kept!r}: {around!r}")
+    assert not found, found
+    # The detector reads what it claims to: each retired word is caught where it is written.
+    for word in retired:
+        assert re.search(rf"(?<![-_`\w]){word}s?(?![-_\w])", f"returns a {word} to pass on")
+    assert not re.search(r"(?<![-_`\w])elements?(?![-_\w])", "set element_type, finite-element")

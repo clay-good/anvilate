@@ -256,9 +256,9 @@ _SUBJECT_SCHEMA = {
     "type": "string",
     "pattern": SUBJECT_PATTERN,
     "description": (
-        "A handle returned by an earlier call — 'sha256:' and the digest of the document it "
-        "names. Resolved from the subject store; a handle that is not there is refused "
-        "rather than guessed at."
+        "The subject an earlier call returned — 'sha256:' and the digest of what it names. "
+        "Resolved from the subject store; a subject that is not there is refused rather "
+        "than guessed at."
     ),
 }
 
@@ -280,7 +280,7 @@ def _spec_input() -> dict[str, Any]:
         "$ref": _SPEC_REF,
         "type": "object",
         "description": (
-            "The Design Spec document as a JSON object, not a string holding its JSON: the "
+            "The Design Spec as a JSON object, not a string holding its JSON: the "
             "`spec` object compile_spec returned"
         ),
     }
@@ -494,11 +494,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
     return (
         ToolDefinition(
             name="compile_spec",
-            title="Compile a spec document",
+            title="Compile a spec",
             description=(
-                "Validate a Design Spec document into the typed IR, resolving material and "
+                "Validate a Design Spec into the typed IR, resolving material and "
                 "standard-component references and reporting every refusal with its reason. "
-                "Prose is compiled into a candidate document by the caller's own model — "
+                "Prose is compiled into a candidate spec by the caller's own model — "
                 "this server initiates no sampling — and this tool is where that candidate "
                 "is held to the published schema."
             ),
@@ -506,7 +506,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 {
                     "document": {
                         "type": "object",
-                        "description": "A candidate spec document, YAML- or JSON-derived.",
+                        "description": "A candidate spec, YAML- or JSON-derived.",
                     }
                 },
                 required=["document"],
@@ -538,8 +538,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Build or regenerate the part",
             description=(
                 "Build the audited pattern selected by the Design Spec and return its B-Rep "
-                "geometry summary. The drawable element types are listed in the server "
-                "instructions; an element type outside them is refused with the list. "
+                "geometry summary. The parts it draws are listed in the server "
+                "instructions; an element_type outside them is refused with the list. "
                 "No caller code "
                 "is executed, so the bounded primitive build replies synchronously."
             ),
@@ -570,7 +570,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "(view, size, digest, where the file was written): PNG by default, which a "
                 "model can look at, or the SVG drawing with format svg. The image is also "
                 "written to the server's output folder for the engineer to open. A "
-                "build_combination handle draws the whole combination on one sheet: four "
+                "build_combination subject draws the whole combination on one sheet: four "
                 "views, each part numbered, and the parts list."
             ),
             input_schema=_object_schema(
@@ -580,7 +580,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                         "type": "string",
                         "enum": ["overview", "iso", "front", "top", "right"],
                         "description": "overview is all four views on one image with the "
-                        "part's name, size, material and verdict: the one to show first",
+                        "part's name, size, material and status: the one to show first",
                     },
                     "width_px": {
                         "type": "integer",
@@ -643,7 +643,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             description=(
                 "Run the T0 geometry, T1 analytical, and T2 manufacturability checks and "
                 "return the typed scorecard. Every one of these is closed-form or a table "
-                "lookup, so the answer comes back in the reply rather than through a handle."
+                "lookup, so the answer comes back in the reply rather than through a task."
             ),
             input_schema=_object_schema(
                 {
@@ -725,7 +725,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             description=(
                 "Return the current scorecard as structured content. The status is a "
                 "four-valued enumeration and not_evaluated is not a pass, which is why this "
-                "is a typed document rather than a summary sentence."
+                "is a typed scorecard rather than a summary sentence."
             ),
             input_schema=_object_schema({"subject": _SUBJECT_SCHEMA}, required=["subject"]),
             output_schema=_object_schema(
@@ -740,10 +740,10 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             name="export_artifact",
             title="Export an artifact",
             description=(
-                "Export what the engineer takes away. From a run_validation handle: the "
+                "Export what the engineer takes away. From a run_validation subject: the "
                 "evidence bundle (returned, and written), a QIF results file, or the one-page "
-                "part sheet. From a build_part handle: the STEP file to open in CAD, a 3MF "
-                "mesh, or a DXF profile for a flat part. From a build_combination handle: "
+                "part sheet. From a build_part subject: the STEP file to open in CAD, a 3MF "
+                "mesh, or a DXF profile for a flat part. From a build_combination subject: "
                 "step, an assembly with each part a named component. Files are written to "
                 "the server's "
                 "output folder and the result names each path, size and SHA-256; no tool "
@@ -788,14 +788,14 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="Build a combination of parts",
             description=(
                 "Place two or more catalog parts by the features they share, and check "
-                "where they meet. The document names its parts, each with its own Design "
+                "where they meet. The combination names its parts, each with its own Design "
                 "Spec, and the mates that place each one on a part before it: "
                 "hole_pattern, face_to_face, edge_flush or shaft_in_bore. No coordinates "
                 "are written. hardware puts a bolt, washers and a nut in every hole of a "
                 "hole_pattern mate. Returns where each part landed, the parts list, and a "
-                "scorecard: each part's own verdict, whether mated holes line up, bolt "
+                "scorecard: each part's own status, whether mated holes line up, bolt "
                 "clearance and length, and interference between every pair. The subject "
-                "handle goes to render_viewport for the picture and to export_artifact "
+                "goes to render_viewport for the picture and to export_artifact "
                 "with format step for a STEP assembly."
             ),
             input_schema=_object_schema(
@@ -953,9 +953,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             title="List the parts, or describe one",
             description=(
                 "Call this before writing a spec for a part. With no element_type it lists "
-                "every element a spec can declare, with whether build_part draws it and "
+                "every part a spec can declare, with whether build_part draws it and "
                 "whether a screen checks it. With an element_type it returns that "
-                "element's fields, which are required and what each takes, and an example "
+                "part's fields, which are required and what each takes, and an example "
                 "spec to copy and edit. The example's values are placeholders: replace "
                 "each with what the user stated."
             ),
@@ -964,7 +964,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "element_type": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "an element to describe, such as mounting_plate",
+                        "description": "a part to describe, such as mounting_plate",
                     },
                 },
                 required=[],
@@ -1169,14 +1169,14 @@ def _for_revision(response: dict[str, Any] | None, revision: str) -> dict[str, A
 # asked for every validation tier, and named no element, so nothing would have screened. The
 # schema says what is legal; these say what a request means and which identifiers exist.
 _AGENT_RULES = """Anvilate is a local, deterministic engineering checker: you write the
-Design Spec, it validates and screens it. describe_part gives an element's fields and an
-example spec; run_validation and build_part each return a subject handle the other tools
+Design Spec, it validates and screens it. describe_part gives a part's fields and an
+example spec; run_validation and build_part each return a subject the other tools
 take. Fix what a refusal names and call again; never report a check that did not run.
 - Write only what the user stated: no invented interfaces, dimensions, exports or loads. Ask
   for a missing load, material or interface; do not guess it.
 - A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0, "origin":
   "user_stated"}); max_safety_factor is only an explicit upper limit.
-- To screen or draw a part, set element_type to an element below and its fields in
+- To screen or draw a part, set element_type to a part below and its fields in
   element_params. acceptance.tiers is ["T1_analytical"] for a check or screen.
 - Copy ids exactly as listed. A quantity is {"magnitude": 50, "unit": "kN"} in the
   user's units; a product of units uses "*": "kN*m"."""
@@ -1223,7 +1223,7 @@ def agent_instructions() -> str:
     lines = [
         _AGENT_RULES,
         "",
-        "Elements: " + ", ".join(sorted(element_registry())),
+        "Parts: " + ", ".join(sorted(element_registry())),
         "Materials: " + ", ".join(resolver.known_materials()),
         "",
         "Detail (a client may cut what follows; refusals name the same fields and ids):",
@@ -1232,8 +1232,10 @@ def agent_instructions() -> str:
         # properties are the numbers easiest to get wrong from memory.
         "Rolled sections (a member's `section` may name one instead of stating its "
         "properties): " + ", ".join(default_profile_table().designations()) + "; AISC "
-        "W-shapes such as W12x26 once the user has run `anvilate fetch aisc-shapes --consent`.",
-        "Element screens (element_type: fields; * marks required):",
+        "W-shapes such as W12x26 once the user has run `anvilate fetch aisc-shapes --consent`; "
+        "or a bar by its own dimensions in mm: FLAT 50x10 (breadth x depth), TUBE 60x4 "
+        "(outside diameter x wall), BOX 100x50x4 (breadth x depth x wall).",
+        "Part screens (element_type: fields; * marks required):",
     ]
     for tag, (model, _screen) in sorted(element_registry().items()):
         summary = (model.__doc__ or "").strip().split("\n")[0].rstrip(".")
