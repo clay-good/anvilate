@@ -320,6 +320,21 @@ profile to the published tabulations' own area and second moments: IPE to 0.1%, 
 `section` source with the dataset's citation. A name the table does not hold is refused with
 the profiles it nearly named, and any other section is declared by its properties.
 
+Three bars need no table, because each is its own dimensions in millimetres: a flat bar,
+`FLAT 50x10` (breadth across the load by depth along it); a round tube, `TUBE 60x4` (outside
+diameter by wall); and a square-cornered box, `BOX 100x50x4` (breadth, depth, wall). The
+section screened and the solid drawn are the same shape, and no `section` source is recorded
+for one: it came from the document. The box is the one welded from four plates. A rolled
+hollow section rounds its corners and has a little less metal, so declare that one by its
+properties.
+
+A hollow beam gets one check a solid one does not. The bending check holds the extreme fibre
+to yield, and a thin wall buckles before it gets there, so `wall local buckling` holds the
+beam to the moment AISC 360-16 Chapter F lets its wall carry (§F8 for a round tube, §F7
+for a box). A wall thinner
+than those clauses cover is reported as not evaluated, never as a pass. Columns and
+beam-columns are not yet held to a wall limit in compression.
+
 AISC W-shapes use the same named-section path without redistributing AISC's workbook. You
 consent to the download once, from the shell:
 

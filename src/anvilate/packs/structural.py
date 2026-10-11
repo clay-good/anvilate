@@ -26,6 +26,8 @@ from ..analysis import (
     ColumnEnd,
     CrossSection,
     aisc_flexural_buckling_stress,
+    aisc_rectangular_hss_flexural_strength,
+    aisc_round_hss_flexural_strength,
     axial_stress,
     bearing_stress,
     bolt_shear_stress,
@@ -184,6 +186,15 @@ _NEEDS_A_SHEAR_FORM_FACTOR = Need(
     takes="the section's peak-to-average shear stress ratio: 1.5 for a solid rectangle",
     dimension="dimensionless",
     sources=(ValueSource.STANDARD, ValueSource.USER),
+)
+
+
+_NEEDS_A_THICKER_WALL = Need(
+    declaration="section.wall_thickness",
+    takes="a wall thick enough for AISC 360 Chapter F to give the hollow section a strength",
+    dimension="[length]",
+    units=("mm", "in"),
+    sources=(ValueSource.USER,),
 )
 
 
@@ -362,6 +373,11 @@ _TEAROUT_BEARING_CAP_FRACTION = 2.4
 # pack, not the code-agnostic analysis layer, owns these references).
 _CLAUSE_FLEXURE = "AISC 360-16 Ch. F"
 _CLAUSE_DEFLECTION = "AISC 360-16 §L3"
+# The round tube's rule is §F8 of that chapter. It is cited by chapter, as flexure is, until
+# §F8 has an edition-difference entry read off AISC's comparison document: a clause pinned
+# to an edition says what became of it in the next, and that page has not been read.
+_CLAUSE_ROUND_HSS = _CLAUSE_FLEXURE
+_CLAUSE_BOX = "AISC 360-16 §F7"
 _CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
 _CLAUSE_BEAM_SHEAR = "AISC 360-16 Ch. G"
 _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
@@ -923,9 +939,125 @@ def screen_beam_member(
     shear_entry = _shear_entry(member, yield_allowable, required_safety_factor)
     if shear_entry is not None:
         entries.append(shear_entry)
+    wall_entry = _wall_buckling_entry(
+        member,
+        result,
+        yield_allowable,
+        record.elastic_modulus.quantity,
+        required_safety_factor,
+    )
+    if wall_entry is not None:
+        entries.append(wall_entry)
     return disclosed(
         Scorecard(entries=tuple(entries)),
         yield_allowable,
+    )
+
+
+def _wall_buckling_entry(
+    member,
+    result,
+    yield_allowable: DesignAllowable,
+    elastic_modulus: Quantity,
+    required_safety_factor: float,
+) -> ScorecardEntry | None:
+    """The wall local-buckling entry of a hollow beam, or ``None`` for any other section.
+
+    The bending entry holds the extreme fibre to yield, which a thin wall never reaches:
+    it buckles first. A section that records its wall (a round tube or a box) is held to
+    the moment AISC 360 §F8 or §F7 lets that wall carry, written as the stress it makes on
+    the elastic section, M_n / S, so it reads beside the bending entry. A stocky wall
+    carries the plastic moment and this entry then passes wherever bending does. A wall
+    past what the clause covers is NOT_EVALUATED saying so, never a pass on yield alone.
+    """
+    section = member.section
+    if section.outside is None or section.wall_thickness is None:
+        return None
+    name = f"{member.name} wall local buckling"
+    wall = section.wall_thickness.to("mm").magnitude
+    sizes = [size.to("mm").magnitude for size in section.outside]
+    round_tube = len(sizes) == 1
+    reference = _CLAUSE_ROUND_HSS if round_tube else _CLAUSE_BOX
+    if yield_allowable.quantity is None:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=yield_allowable.note,
+            reference=reference,
+            needs=(_material_need("material", "yield_strength"),),
+        )
+    common = {
+        "yield_strength": yield_allowable.quantity,
+        "elastic_modulus": elastic_modulus,
+        "elastic_section_modulus": section.section_modulus,
+    }
+    try:
+        if round_tube:
+            (outer,) = sizes
+            # Z of an annulus, (D³ − d³)/6.
+            plastic = (outer**3 - (outer - 2 * wall) ** 3) / 6
+            nominal = aisc_round_hss_flexural_strength(
+                diameter=section.outside[0],
+                thickness=section.wall_thickness,
+                plastic_section_modulus=Quantity(magnitude=plastic, unit="mm**3"),
+                **common,
+            )
+        else:
+            breadth, depth = sizes
+            flat_breadth, flat_depth = breadth - 2 * wall, depth - 2 * wall
+            # Z of a square-cornered box about its breadth, (b·h² − b_i·h_i²)/4.
+            plastic = (breadth * depth**2 - flat_breadth * flat_depth**2) / 4
+            nominal = aisc_rectangular_hss_flexural_strength(
+                flange_flat_width=Quantity(magnitude=flat_breadth, unit="mm"),
+                web_flat_height=Quantity(magnitude=flat_depth, unit="mm"),
+                wall_thickness=section.wall_thickness,
+                plastic_section_modulus=Quantity(magnitude=plastic, unit="mm**3"),
+                **common,
+            )
+    except ValueError as too_thin:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=f"not evaluated — {too_thin}",
+            reference=reference,
+            needs=(_NEEDS_A_THICKER_WALL,),
+        )
+    modulus = section.section_modulus
+    capacity = Quantity(
+        magnitude=nominal.to("N*mm").magnitude / modulus.to("mm**3").magnitude, unit="MPa"
+    )
+    return strength_scorecard(
+        name,
+        stress=result.max_bending_stress,
+        allowable=capacity,
+        required=required_safety_factor,
+    ).model_copy(
+        update={
+            "reference": reference,
+            "derivation": Derivation(
+                symbolic="σ_n = M_n / S",
+                inputs=(
+                    SymbolValue(
+                        symbol="M_n",
+                        description="moment the wall carries before it buckles locally",
+                        value=nominal,
+                        unit="kN*m",
+                    ),
+                    SymbolValue(
+                        symbol="S",
+                        description="elastic section modulus about the bending axis",
+                        value=modulus,
+                        unit="mm^3",
+                    ),
+                ),
+                result=SymbolValue(
+                    symbol="σ_n",
+                    description="bending stress at which the wall buckles locally",
+                    value=capacity,
+                ),
+                citation=reference,
+            ),
+        }
     )
 
 

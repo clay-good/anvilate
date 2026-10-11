@@ -118,6 +118,17 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Member schemas 1.5.0: a section records the tube or box it is of
+
+A section gains two optional properties, `outside` and `wall_thickness`: a round tube's one
+outside diameter or a box's breadth and depth, and its wall. `CrossSection.hollow_circular`
+and `hollow_rectangular` fill them, and so does a member that names its bar by its
+dimensions (`section: TUBE 60x4`, `BOX 100x50x4`). A section that states them is refused
+unless its area, second moment and extreme fibre are that tube's or that box's. A beam whose
+section carries them gets one more check, `wall local buckling`. `beam_member`,
+`column_member` and `beam_column_member` move to 1.5.0; nothing a document already writes
+changes meaning.
+
 ### Scorecard 1.14.0: a result from a third-party module says so
 
 `ScorecardEntry` gains an optional `origin`, set only on an entry a third-party module

@@ -1,13 +1,28 @@
 {
   "$defs": {
     "CrossSection": {
-      "description": "A prismatic cross-section's properties, all about the bending neutral axis.\n\n``area`` A, ``second_moment`` I, and ``extreme_fibre`` c (neutral axis to the\noutermost fibre) are the trio the stress checks consume;\n:attr:`section_modulus` (I/c) and :attr:`radius_of_gyration` (√(I/A)) derive\nfrom them. ``second_moment_transverse`` is I about the perpendicular\ncentroidal axis — the weak axis of a section oriented depth-into-the-load —\nwhich :attr:`least_radius_of_gyration` folds in for column slenderness.\n``shear_form_factor`` is the peak-over-average transverse-shear ratio k in\nτ_max = k·V/A (1.5 for a rectangle, 4/3 for a solid round, exact for a\ntube, the web-area ratio for I and box shapes); a hand-built section\nleaves it ``None`` and a shear screen must report NOT_EVALUATED rather\nthan guess. Build one with :meth:`rectangular`, :meth:`solid_circular`,\n:meth:`hollow_circular`, :meth:`hollow_rectangular`, or :meth:`i_section`\n(the builders fill both second moments and the form factor).",
+      "description": "A prismatic cross-section's properties, all about the bending neutral axis.\n\n``area`` A, ``second_moment`` I, and ``extreme_fibre`` c (neutral axis to the\noutermost fibre) are the trio the stress checks consume;\n:attr:`section_modulus` (I/c) and :attr:`radius_of_gyration` (√(I/A)) derive\nfrom them. ``second_moment_transverse`` is I about the perpendicular\ncentroidal axis — the weak axis of a section oriented depth-into-the-load —\nwhich :attr:`least_radius_of_gyration` folds in for column slenderness.\n``shear_form_factor`` is the peak-over-average transverse-shear ratio k in\nτ_max = k·V/A (1.5 for a rectangle, 4/3 for a solid round, exact for a\ntube, the web-area ratio for I and box shapes); a hand-built section\nleaves it ``None`` and a shear screen must report NOT_EVALUATED rather\nthan guess. Build one with :meth:`rectangular`, :meth:`solid_circular`,\n:meth:`hollow_circular`, :meth:`hollow_rectangular`, or :meth:`i_section`\n(the builders fill both second moments and the form factor).\n\nThe three numbers a stress check reads do not say how thin the wall that carries them\nis, and a thin wall buckles before the section yields. The two hollow builders\ntherefore record what they were built from: ``outside`` is a round tube's one outside\ndiameter or a box's breadth and depth, and ``wall_thickness`` its wall. A section that\nstates them is held to them, so the properties are that tube's or that box's.",
       "properties": {
         "area": {
           "$ref": "#/$defs/Quantity"
         },
         "extreme_fibre": {
           "$ref": "#/$defs/Quantity"
+        },
+        "outside": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Quantity"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outside"
         },
         "second_moment": {
           "$ref": "#/$defs/Quantity"
@@ -34,6 +49,17 @@
           ],
           "default": null,
           "title": "Shear Form Factor"
+        },
+        "wall_thickness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -87,7 +113,7 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:elements:beam_member:1.4.0",
+  "$id": "urn:anvilate:schema:elements:beam_member:1.5.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate pack element 'beam_member': the fields a Design Spec puts in `element_params` when it declares `element_type: beam_member`. Generated from anvilate.packs.structural.BeamMember.",
@@ -221,5 +247,5 @@
   ],
   "title": "BeamMember",
   "type": "object",
-  "x-anvilate-version": "1.4.0"
+  "x-anvilate-version": "1.5.0"
 }

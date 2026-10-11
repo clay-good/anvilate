@@ -420,6 +420,11 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             (_BEAM, "bending"),
         ),
         _state(
+            "steel.hollow_beam_wall_local_buckling",
+            "the wall of a round tube or box beam buckling locally before the section yields",
+            (_BEAM, "wall local buckling"),
+        ),
+        _state(
             "steel.beam_shear",
             "a beam web yielding in shear",
             (_BEAM, "shear"),

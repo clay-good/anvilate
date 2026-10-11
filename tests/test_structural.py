@@ -2812,3 +2812,125 @@ def test_every_wired_screen_refuses_and_keeps_its_check_names(
     assert card.status is CheckStatus.NOT_EVALUATED
     assert {e.name for e in card.entries} == expected_names
     assert all("AISI-4140" in e.detail for e in card.entries)
+
+
+def _hollow_beam(section: str | CrossSection, material: str = "ASTM-A36") -> BeamMember:
+    return BeamMember(
+        name="rail",
+        section=section,
+        length=_q("3 m"),
+        support=Support.SIMPLY_SUPPORTED,
+        load=_q("1 kN"),
+        load_type=LoadType.POINT,
+        material=material,
+    )
+
+
+def _wall(member: BeamMember, required: float = 1.5):
+    card = screen_beam_member(member, required_safety_factor=required)
+    by_name = {entry.name: entry for entry in card.entries}
+    return by_name.get("rail wall local buckling"), by_name["rail bending"]
+
+
+def test_a_hollow_beam_is_held_to_what_its_wall_carries_and_not_to_yield_alone():
+    """A thin wall buckles before the fibre yields, and the bending entry cannot see it.
+
+    Each range of AISC 360 §F8 is solved by hand here from the material's own E and F_y:
+    a stocky wall carries the plastic moment, and a slender one F_cr = 0.33·E/(D/t), which
+    is below yield. The wall entry divides that by the same stress the bending entry does.
+    """
+    from anvilate.standards import default_materials_db
+
+    steel = default_materials_db().get("ASTM-A36")
+    modulus = steel.elastic_modulus.quantity.to("MPa").magnitude
+    fy = steel.yield_strength.quantity.to("MPa").magnitude
+    stocky, bending = _wall(_hollow_beam("TUBE 100x10"))
+    assert 100 / 10 < 0.07 * modulus / fy
+    # M_p / M_y of an annulus: Z/S = (D³ − d³)/6 over π(D⁴ − d⁴)/(32D).
+    shape_factor = ((100**3 - 80**3) / 6) / (3.141592653589793 * (100**4 - 80**4) / (32 * 100))
+    assert stocky.status is CheckStatus.PASS and stocky.reference == "AISC 360-16 Ch. F"
+    assert stocky.safety_factor == pytest.approx(bending.safety_factor * shape_factor, rel=1e-9)
+    slender, bending = _wall(_hollow_beam("TUBE 300x1"))
+    assert 0.31 * modulus / fy < 300 < 0.45 * modulus / fy
+    critical = 0.33 * modulus / 300
+    assert critical < fy
+    assert slender.safety_factor == pytest.approx(bending.safety_factor * critical / fy, rel=1e-9)
+    # The bending entry alone passed this beam; the wall is what governs it.
+    assert slender.safety_factor < bending.safety_factor
+    one_passes = screen_beam_member(
+        _hollow_beam("TUBE 300x1"),
+        required_safety_factor=(slender.safety_factor + bending.safety_factor) / 2,
+    )
+    statuses = {entry.name: entry.status for entry in one_passes.entries}
+    assert statuses["rail bending"] is CheckStatus.PASS
+    assert statuses["rail wall local buckling"] is CheckStatus.FAIL
+    assert one_passes.status is CheckStatus.FAIL
+
+
+def test_a_wall_past_what_the_clause_covers_is_not_evaluated_and_never_a_pass():
+    past, bending = _wall(_hollow_beam("TUBE 400x1"))
+    assert bending.status is CheckStatus.PASS
+    assert past.status is CheckStatus.NOT_EVALUATED
+    assert "D/t = 400.0 exceeds the §F8 applicability limit" in past.detail
+    slender_flange, bending = _wall(_hollow_beam("BOX 300x150x2"))
+    assert bending.status is CheckStatus.PASS
+    assert slender_flange.status is CheckStatus.NOT_EVALUATED
+    assert "slender flange (b/t = 148.0" in slender_flange.detail
+    assert slender_flange.reference == "AISC 360-16 §F7"
+    card = screen_beam_member(_hollow_beam("TUBE 400x1"), required_safety_factor=1.5)
+    assert card.status is not CheckStatus.PASS
+    # A material whose yield the screen refuses leaves the wall unscreened for that reason.
+    refused, _ = _wall(_hollow_beam("TUBE 100x10", material="AISI-4140"))
+    assert refused.status is CheckStatus.NOT_EVALUATED and "AISI-4140" in refused.detail
+
+
+def test_a_box_beam_reads_its_flats_about_the_axis_it_bends_on():
+    """`BOX 100x150x8` bends about its breadth: Z = (b·h² − b_i·h_i²)/4, flats inside the walls."""
+    stocky, bending = _wall(_hollow_beam("BOX 100x150x8"))
+    plastic = (100 * 150**2 - 84 * 134**2) / 4
+    elastic = (100 * 150**3 - 84 * 134**3) / 12 / 75
+    assert stocky.status is CheckStatus.PASS
+    assert stocky.safety_factor == pytest.approx(
+        bending.safety_factor * plastic / elastic, rel=1e-9
+    )
+    built = CrossSection.hollow_rectangular(
+        width=_q("100 mm"), height=_q("150 mm"), wall_thickness=_q("8 mm")
+    )
+    assert _wall(_hollow_beam(built))[0].safety_factor == stocky.safety_factor
+
+
+def test_only_a_section_that_records_a_wall_gets_a_wall_entry():
+    for solid in ("IPE 200", "FLAT 50x100", _section()):
+        assert _wall(_hollow_beam(solid))[0] is None
+    declared = CrossSection(
+        area=_q("2827 mm**2"), second_moment=_q("2.9e6 mm**4"), extreme_fibre=_q("50 mm")
+    )
+    assert _wall(_hollow_beam(declared))[0] is None
+
+
+def test_a_section_stating_a_wall_is_held_to_being_that_tube_or_box():
+    """Otherwise it could be screened for buckling as one tube and for stress as another."""
+    tube = CrossSection.hollow_circular(outer_diameter=_q("60 mm"), inner_diameter=_q("52 mm"))
+    assert tube.outside == (_q("60 mm"),) and tube.wall_thickness == _q("4 mm")
+    box = CrossSection.hollow_rectangular(
+        width=_q("4 in"), height=_q("2 in"), wall_thickness=_q("0.25 in")
+    )
+    assert [size.to("in").magnitude for size in box.outside] == pytest.approx([4.0, 2.0])
+    for section in (tube, box):
+        assert CrossSection.model_validate_json(section.model_dump_json()) == section
+    stated = tube.model_dump()
+    for change, reason in (
+        ({"area": {"magnitude": 900.0, "unit": "mm**2"}}, "area is 900 and the tube"),
+        ({"second_moment": {"magnitude": 3.0e5, "unit": "mm**4"}}, "second_moment is 300000"),
+        ({"extreme_fibre": {"magnitude": 25.0, "unit": "mm"}}, "extreme_fibre is 25"),
+        ({"wall_thickness": None}, "both outside and wall_thickness, or neither"),
+        ({"outside": None}, "both outside and wall_thickness, or neither"),
+        ({"outside": ()}, "got 0 lengths"),
+        ({"wall_thickness": {"magnitude": 30.0, "unit": "mm"}}, "below half the smaller"),
+        ({"wall_thickness": {"magnitude": 0.0, "unit": "mm"}}, "wall_thickness must be positive"),
+    ):
+        with pytest.raises(ValueError, match=reason):
+            CrossSection.model_validate({**stated, **change})
+    wrong_shape = {**box.model_dump(), "outside": [box.outside[0].model_dump()]}
+    with pytest.raises(ValueError, match="and the tube that outside and wall_thickness describe"):
+        CrossSection.model_validate(wrong_shape)

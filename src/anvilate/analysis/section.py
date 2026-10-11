@@ -232,6 +232,21 @@ def required_section_modulus(
     return Quantity(magnitude=float(converted.magnitude), unit="mm**3")
 
 
+def _tube_properties(outer: float, inner: float) -> tuple[float, float, float]:
+    """A round tube's area, second moment and extreme fibre, in mm units."""
+    return pi * (outer**2 - inner**2) / 4, pi * (outer**4 - inner**4) / 64, outer / 2
+
+
+def _box_properties(breadth: float, depth: float, wall: float) -> tuple[float, float, float]:
+    """A square-cornered box's area, second moment about its breadth and extreme fibre."""
+    inner_breadth, inner_depth = breadth - 2 * wall, depth - 2 * wall
+    return (
+        breadth * depth - inner_breadth * inner_depth,
+        (breadth * depth**3 - inner_breadth * inner_depth**3) / 12,
+        depth / 2,
+    )
+
+
 class CrossSection(RevalidatedModel):
     """A prismatic cross-section's properties, all about the bending neutral axis.
 
@@ -248,6 +263,12 @@ class CrossSection(RevalidatedModel):
     than guess. Build one with :meth:`rectangular`, :meth:`solid_circular`,
     :meth:`hollow_circular`, :meth:`hollow_rectangular`, or :meth:`i_section`
     (the builders fill both second moments and the form factor).
+
+    The three numbers a stress check reads do not say how thin the wall that carries them
+    is, and a thin wall buckles before the section yields. The two hollow builders
+    therefore record what they were built from: ``outside`` is a round tube's one outside
+    diameter or a box's breadth and depth, and ``wall_thickness`` its wall. A section that
+    states them is held to them, so the properties are that tube's or that box's.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -257,6 +278,8 @@ class CrossSection(RevalidatedModel):
     extreme_fibre: Quantity
     second_moment_transverse: Quantity | None = None
     shear_form_factor: float | None = None
+    outside: tuple[Quantity, ...] | None = None
+    wall_thickness: Quantity | None = None
 
     @model_validator(mode="after")
     def _every_property_is_a_number(self) -> CrossSection:
@@ -291,6 +314,56 @@ class CrossSection(RevalidatedModel):
                 subject="shear_form_factor",
                 source=_DRAWING_SOURCE,
             )
+        return self
+
+    @model_validator(mode="after")
+    def _a_stated_wall_is_the_wall_of_this_section(self) -> CrossSection:
+        if self.outside is None and self.wall_thickness is None:
+            return self
+        if self.outside is None or self.wall_thickness is None:
+            raise _section_refusal(
+                "a hollow section states both outside and wall_thickness, or neither",
+                subject="outside and wall_thickness",
+                source=_DRAWING_SOURCE,
+            )
+        if len(self.outside) not in (1, 2):
+            raise _section_refusal(
+                "outside is one diameter for a round tube or a breadth and a depth for a "
+                f"box; got {len(self.outside)} lengths",
+                subject="outside",
+                source=_DRAWING_SOURCE,
+            )
+        sizes = [_require_length(size, "outside") for size in self.outside]
+        wall = _require_length(self.wall_thickness, "wall_thickness")
+        if not 2 * wall < min(sizes):
+            raise _section_refusal(
+                f"wall_thickness ({self.wall_thickness}) must be below half the smaller "
+                f"outside dimension ({min(sizes):g} mm), to leave a bore",
+                subject="wall_thickness and outside",
+                source=_DRAWING_SOURCE,
+            )
+        if len(sizes) == 1:
+            expected = _tube_properties(sizes[0], sizes[0] - 2 * wall)
+        else:
+            expected = _box_properties(sizes[0], sizes[1], wall)
+        stated = (
+            self.area.to("mm**2").magnitude,
+            self.second_moment.to("mm**4").magnitude,
+            self.extreme_fibre.to("mm").magnitude,
+        )
+        # What is stated beside a wall is checked against it. Without this a section could
+        # be screened for local buckling as one tube and for stress as another.
+        for name, have, want in zip(
+            ("area", "second_moment", "extreme_fibre"), stated, expected, strict=True
+        ):
+            if abs(have - want) > 1e-9 * want:
+                shape = "tube" if len(sizes) == 1 else "box"
+                raise _section_refusal(
+                    f"{name} is {have:.6g} and the {shape} that outside and wall_thickness "
+                    f"describe has {want:.6g}",
+                    subject=f"{name}, outside and wall_thickness",
+                    source=_DRAWING_SOURCE,
+                )
         return self
 
     @property
@@ -365,14 +438,17 @@ class CrossSection(RevalidatedModel):
                 subject="inner_diameter and outer_diameter",
                 source=_DRAWING_SOURCE,
             )
-        i = Quantity(magnitude=pi * (do**4 - di**4) / 64, unit="mm**4")
+        area, second_moment, fibre = _tube_properties(do, di)
+        i = Quantity(magnitude=second_moment, unit="mm**4")
         return cls(
-            area=Quantity(magnitude=pi * (do**2 - di**2) / 4, unit="mm**2"),
+            area=Quantity(magnitude=area, unit="mm**2"),
             second_moment=i,
-            extreme_fibre=_mm(do / 2),
+            extreme_fibre=_mm(fibre),
             second_moment_transverse=i,
             # exact neutral-axis peak for an annulus: 4/3 solid -> 2.0 thin tube
             shear_form_factor=(4.0 / 3.0) * (do**2 + do * di + di**2) / (do**2 + di**2),
+            outside=(_mm(do),),
+            wall_thickness=_mm((do - di) / 2),
         )
 
     @classmethod
@@ -393,14 +469,16 @@ class CrossSection(RevalidatedModel):
                 source=_DRAWING_SOURCE,
             )
         bi, hi = b - 2 * t, h - 2 * t
-        area = b * h - bi * hi
+        area, second_moment, fibre = _box_properties(b, h, t)
         return cls(
             area=Quantity(magnitude=area, unit="mm**2"),
-            second_moment=Quantity(magnitude=(b * h**3 - bi * hi**3) / 12, unit="mm**4"),
-            extreme_fibre=_mm(h / 2),
+            second_moment=Quantity(magnitude=second_moment, unit="mm**4"),
+            extreme_fibre=_mm(fibre),
             second_moment_transverse=Quantity(magnitude=(h * b**3 - hi * bi**3) / 12, unit="mm**4"),
             # web-area approximation: the two side walls carry the shear
             shear_form_factor=area / (2 * t * h),
+            outside=(_mm(b), _mm(h)),
+            wall_thickness=_mm(t),
         )
 
     @classmethod
