@@ -413,6 +413,26 @@ def test_the_evidence_trail_records_where_a_named_section_came_from():
     assert not [record for record in declared if record.kind == "section"]
 
 
+@pytest.mark.parametrize("section", ["FLAT 50x10", "TUBE 60x4", "BOX 100x50x4"])
+def test_a_bar_named_by_its_dimensions_keeps_the_rest_of_the_evidence_trail(section):
+    """`FLAT 50x10` is no table's record, and looking it up lost every other source.
+
+    The trail is all or nothing, so an unknown profile empties it. A bar named by its own
+    dimensions is not an unknown profile: its section came from the document, and the
+    material's record and the tolerance class are still where the rest came from.
+    """
+    from anvilate.evidence import provenance_for
+    from anvilate.spec import load_spec_yaml
+
+    def kinds(named):
+        records = provenance_for(load_spec_yaml(_BEAM_SPEC.format(section=named)))
+        return [(record.kind, record.ref) for record in records]
+
+    rolled = kinds("IPE 200")
+    assert ("section", "IPE 200") in rolled and len(rolled) > 1
+    assert kinds(section) == [record for record in rolled if record[0] != "section"]
+
+
 _STRUCTURE_SPEC = """
 anvilate_spec: "1.3.0"
 name: platform
