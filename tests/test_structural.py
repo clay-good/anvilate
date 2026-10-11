@@ -2934,3 +2934,79 @@ def test_a_section_stating_a_wall_is_held_to_being_that_tube_or_box():
     wrong_shape = {**box.model_dump(), "outside": [box.outside[0].model_dump()]}
     with pytest.raises(ValueError, match="and the tube that outside and wall_thickness describe"):
         CrossSection.model_validate(wrong_shape)
+
+
+def _hollow_column(section: str, material: str = "ASTM-A992") -> ColumnMember:
+    return ColumnMember(
+        name="post",
+        section=section,
+        length=_q("2 m"),
+        end_condition=ColumnEnd.PINNED_PINNED,
+        axial_load=_q("10 kN"),
+        material=material,
+    )
+
+
+def test_a_hollow_columns_wall_is_classified_against_the_figures_the_manual_prints():
+    """At F_y = 50 ksi and E = 29,000 ksi a round wall is slender past D/t = 63.8 and a box
+    wall past b/t = 33.7. A992 is that steel, so the limits are read back off the entries."""
+    from anvilate.standards import default_materials_db
+
+    steel = default_materials_db().get("ASTM-A992")
+    assert steel.yield_strength.quantity.to("ksi").magnitude == pytest.approx(50.0, rel=2e-3)
+    assert steel.elastic_modulus.quantity.to("ksi").magnitude == pytest.approx(29000, rel=2e-3)
+
+    def wall(section: str):
+        card = screen_column_member(_hollow_column(section), required_safety_factor=1.5)
+        (entry,) = [e for e in card.entries if e.name == "post wall slenderness"]
+        return entry, card
+
+    round_within, card = wall("TUBE 126x2")
+    assert round_within.status is CheckStatus.PASS and card.status is CheckStatus.PASS
+    assert round_within.derivation.result.value == pytest.approx(63.8, abs=0.1)
+    assert "D/t = 63.0 against 0.11·E/F_y = 63.8" in round_within.detail
+    round_past, card = wall("TUBE 130x2")
+    assert round_past.status is CheckStatus.NOT_EVALUATED
+    assert card.status is CheckStatus.NOT_EVALUATED
+    assert "D/t = 65.0" in round_past.detail and "slender element" in round_past.detail
+    assert [need.declaration for need in round_past.needs] == ["section.wall_thickness"]
+    # A box is read on the flat of its wider wall, whichever way round it is named.
+    for within, past in (("BOX 70x40x2", "BOX 72x40x2"), ("BOX 40x70x2", "BOX 40x72x2")):
+        entry, _card = wall(within)
+        assert entry.status is CheckStatus.PASS
+        assert entry.derivation.result.value == pytest.approx(33.7, abs=0.05)
+        assert "= 33.0 against" in entry.detail
+        assert wall(past)[0].status is CheckStatus.NOT_EVALUATED
+    # The buckling entry alone passed every one of them.
+    for section in ("TUBE 130x2", "BOX 72x40x2"):
+        card = screen_column_member(_hollow_column(section), required_safety_factor=1.5)
+        assert card.entries[0].status is CheckStatus.PASS
+
+
+def test_only_a_hollow_compression_member_gets_a_wall_slenderness_entry():
+    for solid in ("IPE 200", "FLAT 50x100"):
+        card = screen_column_member(_hollow_column(solid), required_safety_factor=1.5)
+        assert not [e for e in card.entries if "wall" in e.name]
+
+    def leg(section: str, axial: str):
+        return BeamColumnMember(
+            name="leg",
+            section=section,
+            length=_q("2 m"),
+            end_condition=ColumnEnd.PINNED_PINNED,
+            axial_load=_q(axial),
+            moment=_q("0.2 kN*m"),
+            material="ASTM-A992",
+        )
+
+    for axial in ("10 kN", "-10 kN"):
+        names = {
+            section: {
+                e.name: e.status
+                for e in screen_beam_column(leg(section, axial), required_safety_factor=1.5).entries
+            }
+            for section in ("TUBE 126x2", "TUBE 130x2", "IPE 200")
+        }
+        assert names["TUBE 126x2"]["leg wall slenderness"] is CheckStatus.PASS
+        assert names["TUBE 130x2"]["leg wall slenderness"] is CheckStatus.NOT_EVALUATED
+        assert "leg wall slenderness" not in names["IPE 200"]

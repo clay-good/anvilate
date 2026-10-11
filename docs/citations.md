@@ -337,8 +337,13 @@ A hollow beam gets one check a solid one does not. The bending check holds the e
 to yield, and a thin wall buckles before it gets there, so `wall local buckling` holds the
 beam to the moment AISC 360-16 Chapter F lets its wall carry (§F8 for a round tube, §F7
 for a box). A wall thinner
-than those clauses cover is reported as not evaluated, never as a pass. Columns and
-beam-columns are not yet held to a wall limit in compression.
+than those clauses cover is reported as not evaluated, never as a pass.
+
+A hollow column or beam-column gets `wall slenderness`. The column curve's stress is
+multiplied by the whole area, which is right while the wall is not a slender element: a
+round tube's `D/t` up to `0.11·E/F_y`, a box wall's `b/t` up to `1.40·√(E/F_y)` (AISC 360
+Table B4.1a). Past that only part of the area is effective, which is not computed, so the
+entry is not evaluated and the card is not a pass.
 
 AISC W-shapes use the same named-section path without redistributing AISC's workbook. You
 consent to the download once, from the shell:

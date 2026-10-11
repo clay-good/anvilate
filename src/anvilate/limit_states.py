@@ -385,6 +385,13 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             implementation="analysis.aisc_flexural_buckling_stress",
         ),
         _state(
+            "steel.hollow_wall_slender_in_compression",
+            "the wall of a hollow compression member buckling before the member does",
+            (_COLUMN, "wall slenderness"),
+            ("structural.screen_beam_column", "wall slenderness"),
+            implementation="packs.structural._wall_slenderness_entries",
+        ),
+        _state(
             "steel.beam_column_interaction",
             "a member failing under axial load and bending together (AISC §H1.1)",
             ("structural.screen_beam_column", "interaction"),

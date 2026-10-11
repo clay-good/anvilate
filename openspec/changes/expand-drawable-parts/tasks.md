@@ -39,9 +39,12 @@
 - [x] 3.3e A hollow beam is held to what its wall carries: `wall local buckling`, from the
       moment AISC 360-16 Chapter F gives a round tube (§F8) or a box (§F7), and NOT_EVALUATED
       past what those clauses cover. A section records the tube or box it is of
-- [ ] 3.3f The same for a hollow column and beam-column in compression (no wall limit in
-      compression is in the library), and §F8's edition-difference entry, which waits on
-      reading AISC's 360-22 comparison (the publisher refused the fetch on 2026-10-10)
+- [x] 3.3f A hollow column and beam-column: `wall slenderness`, passing while the wall is
+      not a slender element (AISC 360 Table B4.1a) and NOT_EVALUATED past it, since the
+      effective area of a slender wall (§E7) is not computed
+- [ ] 3.3g §E7 effective area for a slender wall; and §F8's edition-difference entry, which
+      waits on reading AISC's 360-22 comparison (the publisher refused the fetch on
+      2026-10-10)
 - [x] 3.4 Shaft key; stepped shaft with shoulders and keyways
 - [x] 3.5 Pipe run: drawn straight from an optional `designation` (NPS and schedule), and
       refused when the declared bore is not that pipe's

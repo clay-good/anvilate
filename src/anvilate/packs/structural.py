@@ -97,7 +97,7 @@ from ..standards import (
     default_materials_db,
     resolve_profile,
 )
-from ..units import Quantity, spoken
+from ..units import Quantity, decimals_distinguishing, spoken
 from ._guarded import (
     DESIGN_BASIS,
     DesignAllowable,
@@ -191,7 +191,7 @@ _NEEDS_A_SHEAR_FORM_FACTOR = Need(
 
 _NEEDS_A_THICKER_WALL = Need(
     declaration="section.wall_thickness",
-    takes="a wall thick enough for AISC 360 Chapter F to give the hollow section a strength",
+    takes="a wall thick enough for AISC 360 to give the hollow section a strength",
     dimension="[length]",
     units=("mm", "in"),
     sources=(ValueSource.USER,),
@@ -378,6 +378,13 @@ _CLAUSE_DEFLECTION = "AISC 360-16 §L3"
 # to an edition says what became of it in the next, and that page has not been read.
 _CLAUSE_ROUND_HSS = _CLAUSE_FLEXURE
 _CLAUSE_BOX = "AISC 360-16 §F7"
+
+# AISC 360 Table B4.1a, the width-to-thickness ratio past which a wall in uniform compression
+# is a slender element: 0.11·E/F_y for a round tube's D/t and 1.40·√(E/F_y) for a box wall.
+# Solved out of the figures AISC's Manual prints for F_y = 50 ksi and E = 29,000 ksi, 63.8 and
+# 33.7 (16th edition errata of 2025-02-28): 63.8·50/29000 = 0.110, 33.7/√580 = 1.399.
+_ROUND_WALL_SLENDER = 0.11
+_BOX_WALL_SLENDER = 1.40
 _CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
 _CLAUSE_BEAM_SHEAR = "AISC 360-16 Ch. G"
 _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
@@ -954,6 +961,78 @@ def screen_beam_member(
     )
 
 
+def _wall_slenderness_entries(
+    member, yield_strength: Quantity, elastic_modulus: Quantity
+) -> tuple[ScorecardEntry, ...]:
+    """Whether a hollow compression member's wall is a slender element, or nothing.
+
+    The column curve gives a stress, and the screens multiply it by the whole area. That is
+    right while the wall holds its shape to yield: a round tube up to D/t = 0.11·E/F_y and
+    a box wall up to b/t = 1.40·√(E/F_y), b being the flat between the walls (AISC 360
+    Table B4.1a; at F_y = 50 ksi and E = 29,000 ksi those are 63.8 and 33.7, the figures
+    AISC's Manual prints). Within them the entry passes and says so. Past them the wall
+    buckles first and only part of the area is effective (§E7), which is not computed here,
+    so the entry is NOT_EVALUATED: the strength beside it counts metal that is not working.
+    """
+    section = member.section
+    if section.outside is None or section.wall_thickness is None:
+        return ()
+    name = f"{member.name} wall slenderness"
+    wall = section.wall_thickness.to("mm").magnitude
+    sizes = [size.to("mm").magnitude for size in section.outside]
+    ratio = elastic_modulus.to("MPa").magnitude / yield_strength.to("MPa").magnitude
+    if len(sizes) == 1:
+        slenderness, limit = sizes[0] / wall, _ROUND_WALL_SLENDER * ratio
+        measure, bound = "D/t", f"{_ROUND_WALL_SLENDER:g}·E/F_y"
+        symbolic = f"λ_r = {_ROUND_WALL_SLENDER:g} * E / F_y"
+    else:
+        slenderness, limit = (max(sizes) - 2 * wall) / wall, _BOX_WALL_SLENDER * ratio**0.5
+        measure, bound = "b/t of the wider wall", f"{_BOX_WALL_SLENDER:.2f}·√(E/F_y)"
+        symbolic = f"λ_r = {_BOX_WALL_SLENDER:.2f} * (E / F_y) ** 0.5"
+    places = decimals_distinguishing(slenderness, limit, minimum=1)
+    figures = f"{measure} = {slenderness:.{places}f} against {bound} = {limit:.{places}f}"
+    derivation = Derivation(
+        symbolic=symbolic,
+        inputs=(
+            SymbolValue(symbol="E", description="elastic modulus", value=elastic_modulus),
+            SymbolValue(symbol="F_y", description="material yield strength", value=yield_strength),
+        ),
+        result=SymbolValue(
+            symbol="λ_r",
+            description=f"largest {measure} at which the wall is not a slender element",
+            value=limit,
+        ),
+        citation=_CLAUSE_COMPRESSION,
+    )
+    if slenderness <= limit:
+        return (
+            ScorecardEntry(
+                name=name,
+                status=CheckStatus.PASS,
+                detail=(
+                    f"{figures}: the wall is not a slender element, so the whole area "
+                    "carries the buckling stress"
+                ),
+                reference=_CLAUSE_COMPRESSION,
+                derivation=derivation,
+            ),
+        )
+    return (
+        ScorecardEntry(
+            name=name,
+            status=CheckStatus.NOT_EVALUATED,
+            detail=(
+                f"not evaluated — {figures}: the wall is a slender element and buckles "
+                "before the member does. The strength on this card counts its whole area, "
+                "and the effective area of a slender wall (AISC 360 §E7) is not computed here"
+            ),
+            reference=_CLAUSE_COMPRESSION,
+            derivation=derivation,
+            needs=(_NEEDS_A_THICKER_WALL,),
+        ),
+    )
+
+
 def _wall_buckling_entry(
     member,
     result,
@@ -1428,7 +1507,7 @@ def screen_column_member(
             }
         )
     return disclosed(
-        Scorecard(entries=(entry,)),
+        Scorecard(entries=(entry, *_wall_slenderness_entries(member, yield_strength, modulus))),
         column_allowable,
     )
 
@@ -3089,7 +3168,13 @@ def screen_beam_column(
             }
         )
         return disclosed(
-            Scorecard(entries=(axial_entry, entry)),
+            Scorecard(
+                entries=(
+                    axial_entry,
+                    entry,
+                    *_wall_slenderness_entries(member, yield_strength, modulus),
+                )
+            ),
             beam_column_allowable,
         )
     axial_safety = axial_capacity / pr if pr > 0 else None
@@ -3120,7 +3205,13 @@ def screen_beam_column(
         }
     )
     return disclosed(
-        Scorecard(entries=(axial_entry, entry)),
+        Scorecard(
+            entries=(
+                axial_entry,
+                entry,
+                *_wall_slenderness_entries(member, yield_strength, modulus),
+            )
+        ),
         beam_column_allowable,
     )
 
