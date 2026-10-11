@@ -118,6 +118,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### `interfaces` flags: one `--accept`, one `--limit`
+
+No schema moved; the command line did. `anvilate interfaces --accept ID` accepts a hole
+pattern, a planar contact, a cylindrical mate or a planar gap, read from the id's own prefix,
+and `--limit NAME=QUANTITY` states `min-contact-area`, `min-engagement`, `basic-size`,
+`min-gap` or `max-gap`. `--accept-contact`, `--accept-mate`, `--accept-gap` and the five
+limit flags stay one release with the same meaning.
+
 ### CLI output 1.61.0: one command writes a part's files, and a healthy install is healthy
 
 `export --artifact step` and `export --artifact 3mf` write the part itself to the file

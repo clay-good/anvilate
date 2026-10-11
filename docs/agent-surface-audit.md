@@ -67,7 +67,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | `doctor` | check which Anvilate runtime capabilities are ready | `--format` |
 | `export` | write a downstream artifact from a screened spec | `--ap214`, `--artifact`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |
 | `fetch` | download a dataset Anvilate may read but not ship, once, with your consent | `--consent`, `--format` |
-| `interfaces` | detect planar faces and through-hole patterns in a mating STEP | `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--confirmed-by`, `--fit`, `--format`, `--locator`, `--mating-plane`, `--max-gap`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--name`, `--requirement`, `--solid` |
+| `interfaces` | detect planar faces and through-hole patterns in a mating STEP | `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--confirmed-by`, `--fit`, `--format`, `--limit`, `--locator`, `--mating-plane`, `--max-gap`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--name`, `--requirement`, `--solid` |
 | `parts` | list the parts a spec can declare, or describe one | none |
 | `read` | measure a STEP, DXF, STL or 3MF file, or list a folder of them | `--against`, `--material`, `--unit` |
 | `verify` | verify an attestation envelope or STEP import integrity | `--artifact`, `--format`, `--hmac-key-file` |

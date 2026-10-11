@@ -1969,6 +1969,60 @@ def test_terminal_controls_in_a_document_are_shown_not_obeyed(tmp_path):
     assert "\n" in out
 
 
+def test_interfaces_accepts_any_candidate_with_one_flag_and_states_any_limit_with_one(tmp_path):
+    """A candidate's id says what it is, so one `--accept` takes them all, and one `--limit`
+    states any limit. Each answers exactly as the flag it replaces does."""
+    pytest.importorskip("build123d")
+
+    def found(step, kind):
+        _code, raw, _err = _run("interfaces", str(step), "--format", "json")
+        return json.loads(raw)["candidates"][kind][0]["id"]
+
+    contact_step = _write_four_hole_assembly_step(tmp_path / "c.step", touching=True)
+    mate_step = _write_cylindrical_mate_step(tmp_path / "m.step")
+    gap_step = _write_planar_gap_step(tmp_path / "g.step")
+    who = ("--name", "n", "--confirmed-by", "R", "--format", "json")
+    for step, kind, older, limits in (
+        (contact_step, "planar_contacts", "--accept-contact", {"min-contact-area": "1 mm^2"}),
+        (mate_step, "cylindrical_mates", "--accept-mate", {"min-engagement": "1 mm"}),
+        (gap_step, "planar_gaps", "--accept-gap", {"min-gap": "0.5 mm", "max-gap": "1.5 mm"}),
+    ):
+        candidate = found(step, kind)
+        clause = ("--requirement", "note 7")
+        as_flags = [part for name, value in limits.items() for part in (f"--{name}", value)]
+        as_limits = [
+            part for name, value in limits.items() for part in ("--limit", f"{name}={value}")
+        ]
+        old = _run("interfaces", str(step), older, candidate, *who, *as_flags, *clause)
+        new = _run("interfaces", str(step), "--accept", candidate, *who, *as_limits, *clause)
+        assert old[0] == EXIT_OK and old[2] == "", old[2]
+        assert new == old
+        # Saying it both ways is refused, not settled by whichever was read last.
+        code, _out, err = _run(
+            "interfaces", str(step), "--accept", candidate, older, candidate, *who
+        )
+        assert code == EXIT_BAD_REQUEST and "both name a candidate to accept" in err
+        name, value = next(iter(limits.items()))
+        code, _out, err = _run(
+            "interfaces", str(step), "--accept", candidate, *who,
+            "--limit", f"{name}={value}", f"--{name}", value,
+        )  # fmt: skip
+        assert code == EXIT_BAD_REQUEST and f"{name} is stated twice" in err
+    fit = ("--fit", "H7/g6")
+    mate = found(mate_step, "cylindrical_mates")
+    old = _run(
+        "interfaces", str(mate_step), "--accept-mate", mate, *who, *fit, "--basic-size", "10 mm"
+    )
+    new = _run(
+        "interfaces", str(mate_step), "--accept", mate, *who, *fit, "--limit", "basic-size=10 mm"
+    )
+    assert new == old and "fit_check" in new[1]
+    for wrong in ("min-gap", "min-gap=", "gap=1 mm", "min_gap=1 mm"):
+        code, _out, err = _run("interfaces", str(gap_step), "--limit", wrong)
+        assert code == EXIT_BAD_REQUEST and "--limit takes NAME=QUANTITY" in err, wrong
+        assert repr(wrong) in err
+
+
 def test_interfaces_refuses_non_finite_limits_in_words(tmp_path):
     """`nan`, `inf`, or `1e400` (which overflows to inf) parses as a quantity, and each check
     let it through to its result model, whose finite field refused it as a pydantic dump

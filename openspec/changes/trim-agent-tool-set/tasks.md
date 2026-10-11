@@ -17,7 +17,9 @@ Each task waits on the owner's approval of its row in `proposal.md`.
       (approved 2026-10-10; one spec, `--output`, the same writer and the same bytes)
 - [x] 2.2 `doctor`: *not shipped* for an unbuilt capability, exit 0 when the rest is fine
       (approved 2026-10-10; CLI output 1.61.0)
-- [ ] 2.3 `interfaces`: one `--accept KIND` flag (its own change)
+- [x] 2.3 `interfaces`: one `--accept` flag (approved 2026-10-11). The candidate's id says
+      its kind, so `--accept ID` takes all four; one `--limit NAME=QUANTITY` states the five
+      limits. The nine flags they replace stay one release as the same thing
 
 ## 3. After each
 

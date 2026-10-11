@@ -13,7 +13,7 @@ has not shipped exits 4 naming that gap.
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format`, `--module` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214`, `--module` | a valid, watermarked STEP artifact was written |
-| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--fit`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
+| `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--limit`, `--fit`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by`; kept one release as the same thing: `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | nothing you can change is wrong (a capability this release does not build is listed as not shipped) |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
@@ -715,20 +715,26 @@ topology, not STEP mate metadata and not an LLM:
 anvilate interfaces mating.step
 anvilate interfaces mating.step --format json
 anvilate interfaces assembly.step --solid solid-64934fb6edee
-anvilate interfaces assembly.step --accept-contact contact-8569e40e0840 \
+anvilate interfaces assembly.step --accept contact-8569e40e0840 \
   --name housing_to_plate --confirmed-by "R. Engineer" --format json
-anvilate interfaces assembly.step --accept-gap planar-gap-bff757cde0a6 \
+anvilate interfaces assembly.step --accept planar-gap-bff757cde0a6 \
   --name seal_gap --confirmed-by "R. Engineer" \
-  --min-gap "0.5 mm" --max-gap "1.5 mm" \
+  --limit min-gap="0.5 mm" --limit max-gap="1.5 mm" \
   --requirement "Drawing A-101, note 7" --format json
-anvilate interfaces shaft-assembly.step --accept-mate cylindrical-mate-60dd2b4091cd \
+anvilate interfaces shaft-assembly.step --accept cylindrical-mate-60dd2b4091cd \
   --name bearing_journal --confirmed-by "R. Engineer" \
-  --fit H7/g6 --basic-size "10 mm" --format json
+  --fit H7/g6 --limit basic-size="10 mm" --format json
 anvilate interfaces mating.step --accept pattern-d32fc45f9b2e \
   --locator locator-506abe765ff1 \
   --name motor_mount --mating-plane motor_mount_face \
   --confirmed-by "R. Engineer" --format json
 ```
+
+One `--accept` takes any candidate, because its id says what it is: `pattern-`, `contact-`,
+`cylindrical-mate-` or `planar-gap-`. One `--limit NAME=QUANTITY` states any limit:
+`min-contact-area`, `min-engagement`, `basic-size`, `min-gap` or `max-gap`. The flag per
+kind and per limit (`--accept-contact`, `--min-gap` and the rest, named below) stay one
+release and mean the same; saying one thing both ways is refused.
 
 ```text
 mating.step: 6 planar interface candidates

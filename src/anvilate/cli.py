@@ -391,23 +391,34 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     interfaces.add_argument(
         "--accept",
-        metavar="PATTERN_ID",
-        help="accept this exact detected hole-pattern candidate as an interface contract",
+        metavar="CANDIDATE_ID",
+        help="accept this exact detected candidate. Its id says what it is: a hole pattern "
+        "(pattern-...) becomes an interface contract, and a planar contact (contact-...), "
+        "a cylindrical mate (cylindrical-mate-...) or a planar gap (planar-gap-...) is "
+        "accepted as measured, with no fit or clearance invented",
+    )
+    interfaces.add_argument(
+        "--limit",
+        action="append",
+        metavar="NAME=QUANTITY",
+        help="a limit the accepted candidate is checked against, with its unit; repeat for "
+        "each. NAME is min-contact-area (a contact), min-engagement or basic-size (a mate), "
+        "min-gap or max-gap (a gap). Example: --limit min-gap='0.5 mm'",
     )
     interfaces.add_argument(
         "--accept-contact",
         metavar="CONTACT_ID",
-        help="accept this exact detected planar contact without inventing a hole pattern",
+        help="the same as --accept with a contact id; kept for one release",
     )
     interfaces.add_argument(
         "--accept-mate",
         metavar="MATE_ID",
-        help="accept this exact detected cylindrical mate without judging its fit",
+        help="the same as --accept with a cylindrical-mate id; kept for one release",
     )
     interfaces.add_argument(
         "--accept-gap",
         metavar="GAP_ID",
-        help="accept this exact detected planar gap without inventing an allowable clearance",
+        help="the same as --accept with a planar-gap id; kept for one release",
     )
     interfaces.add_argument(
         "--fit",
@@ -417,27 +428,27 @@ def _build_parser() -> argparse.ArgumentParser:
     interfaces.add_argument(
         "--basic-size",
         metavar="QUANTITY",
-        help="basic size with unit for --fit, for example '10 mm'",
+        help="the same as --limit basic-size=QUANTITY; kept for one release",
     )
     interfaces.add_argument(
         "--min-contact-area",
         metavar="QUANTITY",
-        help="minimum required overlap area with unit for --accept-contact",
+        help="the same as --limit min-contact-area=QUANTITY; kept for one release",
     )
     interfaces.add_argument(
         "--min-engagement",
         metavar="QUANTITY",
-        help="minimum required axial engagement with unit for --accept-mate",
+        help="the same as --limit min-engagement=QUANTITY; kept for one release",
     )
     interfaces.add_argument(
         "--min-gap",
         metavar="QUANTITY",
-        help="minimum allowed gap with unit for --accept-gap",
+        help="the same as --limit min-gap=QUANTITY; kept for one release",
     )
     interfaces.add_argument(
         "--max-gap",
         metavar="QUANTITY",
-        help="maximum allowed gap with unit for --accept-gap",
+        help="the same as --limit max-gap=QUANTITY; kept for one release",
     )
     interfaces.add_argument(
         "--requirement",
@@ -1848,6 +1859,58 @@ def _margin_figure(value: float | None) -> str:
     return "none" if value is None else f"{value:.{_MARGIN_DECIMALS}f}"
 
 
+# What a candidate's id says it is, and the flag that accepted that kind before `--accept`
+# took them all. A hole pattern's id starts `pattern-` and is `--accept`'s own.
+_ACCEPTED_BY_ID = {
+    "contact-": "accept_contact",
+    "cylindrical-mate-": "accept_mate",
+    "planar-gap-": "accept_gap",
+}
+_LIMITS = ("min-contact-area", "min-engagement", "basic-size", "min-gap", "max-gap")
+
+
+def _one_accept_and_one_limit(args: argparse.Namespace, *, err) -> int | None:
+    """Read ``--accept ID`` and ``--limit NAME=QUANTITY`` into the flags they stand for.
+
+    One flag accepts any candidate, because the id already says which kind it is, and one
+    flag states any limit. The flag per kind and per limit stay one release and mean the
+    same; saying one thing both ways is refused rather than settled by whichever is read
+    last.
+    """
+    for prefix, older in _ACCEPTED_BY_ID.items():
+        if args.accept is not None and args.accept.startswith(prefix):
+            flag = "--" + older.replace("_", "-")
+            if getattr(args, older) is not None:
+                print(
+                    f"anvilate interfaces: --accept {args.accept} and {flag} both name a "
+                    "candidate to accept; give one",
+                    file=err,
+                )
+                return EXIT_BAD_REQUEST
+            setattr(args, older, args.accept)
+            args.accept = None
+    for stated in args.limit or ():
+        name, equals, quantity = stated.partition("=")
+        if not equals or not quantity.strip() or name not in _LIMITS:
+            print(
+                f"anvilate interfaces: --limit takes NAME=QUANTITY, such as "
+                f"--limit min-gap='0.5 mm', and NAME is one of {', '.join(_LIMITS)}; "
+                f"got {stated!r}",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
+        older = name.replace("-", "_")
+        if getattr(args, older) is not None:
+            print(
+                f"anvilate interfaces: {name} is stated twice; give it once, as "
+                f"--limit {name}=QUANTITY",
+                file=err,
+            )
+            return EXIT_BAD_REQUEST
+        setattr(args, older, quantity.strip())
+    return None
+
+
 def _interfaces(args: argparse.Namespace, *, out, err) -> int:
     """Inspect one local STEP file for measured, unconfirmed mating interfaces."""
     from .geometry import (
@@ -1866,6 +1929,9 @@ def _interfaces(args: argparse.Namespace, *, out, err) -> int:
         detect_step_interfaces,
     )
 
+    refused = _one_accept_and_one_limit(args, err=err)
+    if refused is not None:
+        return refused
     pattern_acceptance = {
         "--accept": args.accept,
         "--name": args.name,
