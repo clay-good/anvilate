@@ -525,7 +525,8 @@ def _fetch_a_test_aisc_table(tmp_path, monkeypatch, rows: tuple[dict, ...]) -> N
     from anvilate.standards import fetch_aisc_profile_table, profiles
 
     head = {"A": "Type", "C": "AISC_Manual_Label", "G": "d", "I": "Ht", "K": "OD", "L": "bf",
-            "N": "B", "Q": "tw", "T": "tf", "X": "tdes", "Y": "kdes"}  # fmt: skip
+            "N": "B", "O": "b", "Q": "tw", "T": "tf", "V": "t", "X": "tdes",
+            "Y": "kdes"}  # fmt: skip
     strings = sorted({v for row in (head, *rows) for v in row.values() if isinstance(v, str)})
     sheet = "".join(
         f'<row r="{n}">'
@@ -564,11 +565,13 @@ def _fetch_a_test_aisc_table(tmp_path, monkeypatch, rows: tuple[dict, ...]) -> N
     fetch_aisc_profile_table(retrieved="2026-10-11", consent=True, opener=lambda _url: payload)
 
 
-# Two real channel rows, as the workbook's US customary columns give them.
+# Real channel and angle rows, as the workbook's US customary columns give them.
 _CHANNEL_ROWS = (
     {"A": "W", "C": "W12X26", "G": 12.2, "L": 6.49, "Q": 0.23, "T": 0.38, "Y": 0.68},
     {"A": "C", "C": "C10X30", "G": 10.0, "L": 3.03, "Q": 0.673, "T": 0.436},
     {"A": "MC", "C": "MC18X51.9", "G": 18.0, "L": 4.1, "Q": 0.6, "T": 0.625},
+    {"A": "L", "C": "L8X4X1", "G": 4.0, "O": 8.0, "V": 1.0},
+    {"A": "L", "C": "L4X4X1/2", "G": 4.0, "O": 4.0, "V": 0.5},
 )
 
 
@@ -644,6 +647,83 @@ def test_a_channel_column_is_refused_because_its_weak_axis_was_not_derived(tmp_p
         assert model.model_validate({**document["element_params"], "section": "IPE 200"})
 
 
+def test_a_column_may_be_a_rolled_angle_and_it_buckles_about_its_principal_axis(
+    tmp_path, monkeypatch
+):
+    """`L8X4X1` is a column, screened on the axis a strut actually bows about.
+
+    A single angle's weakest axis is neither of its legs: it lies across them. The section
+    states that axis, so the buckling screen takes it — 0.844 in for an L8X4X1, where the
+    weaker leg alone would give 1.02 and over-state the capacity.
+    """
+    from anvilate.packs.structural import ColumnMember, screen_column_member
+    from anvilate.scorecard import CheckStatus
+
+    _fetch_a_test_aisc_table(tmp_path, monkeypatch, _CHANNEL_ROWS)
+    document = yaml.safe_load((_EXAMPLES / "column_member.spec.yaml").read_text("utf-8"))
+    member = ColumnMember.model_validate({**document["element_params"], "section": "L8X4X1"})
+    section = member.section
+    assert section.least_radius_of_gyration.to("in").magnitude == pytest.approx(0.844, rel=4e-3)
+    assert section.radius_of_gyration_transverse.to("in").magnitude == pytest.approx(1.02, rel=1e-2)
+    assert section.principal_axis_tangent == pytest.approx(0.247, rel=3e-3)
+    card = screen_column_member(member, required_safety_factor=1.5)
+    buckling = next(one for one in card.entries if "buckling" in one.name)
+    # At 3 m on a 21 mm radius of gyration this angle is slender, so the elastic branch of
+    # §E3 governs — which is the branch the principal axis put it in.
+    assert buckling.status is CheckStatus.PASS
+    assert buckling.name.endswith("buckling (AISC E3 elastic)")
+
+    # An equal-leg angle's principal axis is the diagonal, so tan(α) is 1 and its two legs
+    # carry the same second moment.
+    equal = ColumnMember.model_validate({**document["element_params"], "section": "L4X4X1/2"})
+    assert equal.section.principal_axis_tangent == pytest.approx(1.0)
+    assert equal.section.second_moment.to("mm**4").magnitude == pytest.approx(
+        equal.section.second_moment_transverse.to("mm**4").magnitude, rel=1e-12
+    )
+    # And its minor principal axis is well below either leg's: the diagonal is the weak way.
+    assert (
+        equal.section.minor_principal_second_moment.to("mm**4").magnitude
+        < 0.5 * equal.section.second_moment.to("mm**4").magnitude
+    )
+
+    # Drawn as the two legs the screen took its properties from.
+    built = build_spec(_spec("column_member", section="L8X4X1"))
+    box = built.shape.bounding_box().size
+    assert (box.X, box.Y, box.Z) == pytest.approx((101.6, 203.2, 3000.0), abs=1e-3)
+    area = section.area.to("mm**2").magnitude
+    assert built.dimensions_mm["section_area"] == pytest.approx(area, rel=1e-12)
+    assert built.volume_mm3 == pytest.approx(area * 3000, rel=1e-9)
+
+
+def test_an_angle_beam_is_refused_because_a_leg_is_not_a_principal_axis(tmp_path, monkeypatch):
+    """Bending an angle in the plane of a leg is not uniaxial bending, so it is refused.
+
+    The screens compute M/S about the declared axis. A single angle curves about both of
+    its principal axes at once and deflects out of the load plane, so that M/S reads under
+    the real stress — the unconservative direction — and AISC 360-16 §F10, which covers it,
+    is not implemented. Both flexural members refuse it; the column does not.
+    """
+    from anvilate.packs.structural import BeamColumnMember, BeamMember, ColumnMember
+
+    _fetch_a_test_aisc_table(tmp_path, monkeypatch, _CHANNEL_ROWS)
+    for element, model in (
+        ("beam_member", BeamMember),
+        ("beam_column_member", BeamColumnMember),
+    ):
+        document = yaml.safe_load((_EXAMPLES / f"{element}.spec.yaml").read_text("utf-8"))
+        for designation in ("L8X4X1", "L4X4X1/2"):
+            with pytest.raises(ValueError, match="principal axes are tilted off its legs") as bad:
+                model.model_validate({**document["element_params"], "section": designation})
+            assert "AISC 360-16 Chapter F" in str(bad.value)
+            assert "column_member" in str(bad.value)
+            with pytest.raises(ValueError, match="principal axes are tilted off its legs"):
+                build_spec(_spec(element, section=designation))
+        # An I-section bends about its own axes and is screened as before.
+        assert model.model_validate({**document["element_params"], "section": "IPE 200"})
+    upright = yaml.safe_load((_EXAMPLES / "column_member.spec.yaml").read_text("utf-8"))
+    assert ColumnMember.model_validate({**upright["element_params"], "section": "L8X4X1"})
+
+
 def test_a_section_declared_by_its_properties_is_drawn_when_it_records_its_wall():
     """Three properties do not say a shape. A tube's or a box's own dimensions do."""
     from anvilate.analysis.section import CrossSection
@@ -686,7 +766,8 @@ def test_a_rolled_hss_member_is_screened_and_drawn_with_its_corners(tmp_path, mo
     from anvilate.standards import fetch_aisc_profile_table, profiles
 
     head = {"A": "Type", "C": "AISC_Manual_Label", "G": "d", "I": "Ht", "K": "OD", "L": "bf",
-            "N": "B", "Q": "tw", "T": "tf", "X": "tdes", "Y": "kdes"}  # fmt: skip
+            "N": "B", "O": "b", "Q": "tw", "T": "tf", "V": "t", "X": "tdes",
+            "Y": "kdes"}  # fmt: skip
     rows = (
         {"A": "W", "C": "W12X26", "G": 12.2, "L": 6.49, "Q": 0.23, "T": 0.38, "Y": 0.68},
         {"A": "HSS", "C": "HSS6X4X1/4", "I": 6, "K": "–", "N": 4, "X": 0.233},

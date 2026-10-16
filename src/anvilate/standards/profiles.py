@@ -51,6 +51,7 @@ def _profile_refusal(message: str, *, subject: str, source: str) -> _ProfileInpu
 
 __all__ = [
     "RolledProfile",
+    "AngleProfile",
     "ChannelProfile",
     "ProfileTable",
     "AiscProfileDataRequired",
@@ -58,6 +59,7 @@ __all__ = [
     "AISC_SHAPES_V16",
     "UnknownProfileError",
     "canonical_aisc_designation",
+    "canonical_angle_designation",
     "canonical_channel_designation",
     "canonical_designation",
     "cached_aisc_profile_table",
@@ -260,6 +262,61 @@ class ChannelProfile(RevalidatedModel):
         return f"{self.designation} ({dims} mm)"
 
 
+_ANGLE_DESIGNATION = re.compile(r"L[\d./-]{1,10}(?:X[\d./-]{1,10}){2}")
+
+
+def canonical_angle_designation(text: str) -> str | None:
+    """AISC's spelling of a rolled single angle (``L8X4X1``, ``L6X3-1/2X1/2``), or ``None``.
+
+    An angle is its two legs and its thickness, the longer leg first, and any of the three
+    may be written as a mixed fraction. The compact spelling is kept as the Manual writes
+    it, the way a rectangular HSS's is: the fractions are the designation, not a rounding
+    of it.
+    """
+    compact = re.sub(r"\s", "", text[:48]).upper().replace("×", "X")
+    return compact if _ANGLE_DESIGNATION.fullmatch(compact) else None
+
+
+class AngleProfile(RevalidatedModel):
+    """One rolled single angle: its two legs and its thickness, each cited.
+
+    ``depth`` is the leg standing up the reference y axis, which AISC names first and
+    tabulates as ``b``; ``width`` is the other, its ``d``. An angle's legs are not tapered,
+    so :meth:`~anvilate.analysis.section.CrossSection.angle` computes every property from
+    these three — including the principal axes its legs are not.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    designation: Named
+    depth: Length
+    width: Length
+    thickness: Length
+
+    def section(self) -> CrossSection:
+        """The cross-section the structural screens take, with its principal axes."""
+        return CrossSection.angle(
+            depth=self.depth.quantity,
+            width=self.width.quantity,
+            thickness=self.thickness.quantity,
+        )
+
+    def citations(self) -> dict[str, PropertyCitation]:
+        """Every dimension's citation, keyed by property name — the evidence trail."""
+        return {
+            field: value.citation
+            for field in type(self).model_fields
+            if isinstance(value := getattr(self, field), QuantityProperty)
+        }
+
+    def __str__(self) -> str:
+        dims = ", ".join(
+            f"{symbol} {getattr(self, field).quantity.magnitude:g}"
+            for symbol, field in (("b", "depth"), ("d", "width"), ("t", "thickness"))
+        )
+        return f"{self.designation} ({dims} mm)"
+
+
 class HollowProfile(RevalidatedModel):
     """One rolled HSS: its outside dimensions and design wall, each cited.
 
@@ -401,10 +458,12 @@ class AiscProfileTable:
         provenance: FetchProvenance,
         hollow: dict[str, HollowProfile] | None = None,
         channels: dict[str, ChannelProfile] | None = None,
+        angles: dict[str, AngleProfile] | None = None,
     ) -> None:
         self._profiles = profiles
         self._hollow = hollow or {}
         self._channels = channels or {}
+        self._angles = angles or {}
         self.provenance = provenance
 
     def designations(self) -> list[str]:
@@ -416,7 +475,28 @@ class AiscProfileTable:
     def channel_designations(self) -> list[str]:
         return sorted(self._channels)
 
-    def get(self, designation: str) -> RolledProfile | HollowProfile | ChannelProfile:
+    def angle_designations(self) -> list[str]:
+        return sorted(self._angles)
+
+    def get(
+        self, designation: str
+    ) -> RolledProfile | HollowProfile | ChannelProfile | AngleProfile:
+        angle = canonical_angle_designation(designation)
+        if angle is not None:
+            if angle in self._angles:
+                return self._angles[angle]
+            suggestions = difflib.get_close_matches(angle, self._angles, n=3, cutoff=0.8)
+            hint = f"; did you mean {', '.join(suggestions)}?" if suggestions else ""
+            raise UnknownProfileError(
+                designation,
+                suggestions,
+                detail=(
+                    f"no AISC angle record for profile {designation!r}{hint}; an angle is "
+                    "written longer leg, shorter leg, thickness, the fractions as the "
+                    "Manual writes them (L8X4X1, L6X3-1/2X1/2). Declare its section "
+                    "properties rather than substituting another shape"
+                ),
+            )
         channel = canonical_channel_designation(designation)
         if channel is not None:
             if channel in self._channels:
@@ -527,7 +607,9 @@ _AISC_COLUMNS = {
     "L": "bf",
     "N": "B",
     "Q": "tw",
+    "O": "b",
     "T": "tf",
+    "V": "t",
     "X": "tdes",
     "Y": "kdes",
 }
@@ -543,12 +625,12 @@ def _xlsx_value(cell: ElementTree.Element, shared: list[str]) -> str | None:
 
 
 def _aisc_rows(
-    path: Path, kinds: tuple[str, ...] = ("W", "HSS", "C", "MC")
+    path: Path, kinds: tuple[str, ...] = ("W", "HSS", "C", "MC", "L")
 ) -> list[dict[str, str]]:
     """Read the pinned workbook's geometry for ``kinds`` without a spreadsheet dependency.
 
     ``kinds`` are the workbook's own shape-type codes. The library builds its tables from
-    the W, HSS, C and MC rows; the other types are read only to check a claim about them.
+    the W, HSS, C, MC and L rows; the other types are read only to check a claim about them.
     """
     try:
         with ZipFile(path) as workbook:
@@ -602,15 +684,19 @@ def _load_aisc_profiles(path: str, provenance_json: str) -> AiscProfileTable:
     profiles: dict[str, RolledProfile] = {}
     hollow: dict[str, HollowProfile] = {}
     channels: dict[str, ChannelProfile] = {}
+    angles: dict[str, AngleProfile] = {}
     for row in _aisc_rows(Path(path)):
         is_hss = row.get("A") == "HSS"
         is_channel = row.get("A") in ("C", "MC")
-        kind = "HSS" if is_hss else "channel" if is_channel else "W-shape"
+        is_angle = row.get("A") == "L"
+        kind = "HSS" if is_hss else "channel" if is_channel else "angle" if is_angle else "W-shape"
         canonical = (
             canonical_hss_designation
             if is_hss
             else canonical_channel_designation
             if is_channel
+            else canonical_angle_designation
+            if is_angle
             else canonical_aisc_designation
         )
         try:
@@ -644,6 +730,14 @@ def _load_aisc_profiles(path: str, provenance_json: str) -> AiscProfileTable:
                     flange_thickness=_dimension(float(row["T"]), designation, "flange thickness"),
                 )
                 continue
+            if is_angle:
+                angles[designation] = AngleProfile(
+                    designation=designation,
+                    depth=_dimension(float(row["O"]), designation, "longer leg"),
+                    width=_dimension(float(row["G"]), designation, "shorter leg"),
+                    thickness=_dimension(float(row["V"]), designation, "leg thickness"),
+                )
+                continue
             flange_thickness = float(row["T"])
             root_radius = float(row["Y"]) - flange_thickness
             profiles[designation] = RolledProfile(
@@ -659,7 +753,7 @@ def _load_aisc_profiles(path: str, provenance_json: str) -> AiscProfileTable:
             raise ValueError(f"invalid AISC {kind} row {label}: {_reason(invalid)}") from invalid
     if not profiles:
         raise ValueError("the AISC workbook contains no W-shape geometry")
-    return AiscProfileTable(profiles, provenance, hollow, channels)
+    return AiscProfileTable(profiles, provenance, hollow, channels, angles)
 
 
 def _is_number(cell: str | None) -> bool:
@@ -702,7 +796,7 @@ def fetch_aisc_profile_table(
 
 def resolve_profile(
     designation: str, *, cache_dir: str | Path | None = None
-) -> RolledProfile | HollowProfile | ChannelProfile:
+) -> RolledProfile | HollowProfile | ChannelProfile | AngleProfile:
     """Resolve a bundled EN profile or a fetched AISC shape, never fetching implicitly."""
     if canonical_designation(designation) is not None:
         return default_profile_table().get(designation)
@@ -710,6 +804,7 @@ def resolve_profile(
         canonical_aisc_designation(designation) is None
         and canonical_hss_designation(designation) is None
         and canonical_channel_designation(designation) is None
+        and canonical_angle_designation(designation) is None
     ):
         return default_profile_table().get(designation)
     table = cached_aisc_profile_table(cache_dir=cache_dir)

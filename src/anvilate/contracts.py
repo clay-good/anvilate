@@ -577,12 +577,14 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # 1.6.0: and a rolled box's outside `corner_radius`.
     # 1.7.0: and an open section's `shear_centre_offset`, which a channel beam's `twist`
     # entry reports and which makes a channel column refuse.
-    "beam_column_member": "1.7.0",
-    "beam_member": "1.7.0",
+    # 1.8.0: and `minor_principal_second_moment` with `principal_axis_tangent`, the axes an
+    # angle's legs are not — the first governs its buckling, the second refuses its flexure.
+    "beam_column_member": "1.8.0",
+    "beam_member": "1.8.0",
     "bolted_connection": "1.3.0",
     # 1.2.0 adds the pin load and the four allowables its pin and ears are screened against.
     "clevis": "1.2.0",
-    "column_member": "1.7.0",
+    "column_member": "1.8.0",
     "concrete_bearing": "1.3.0",
     "cover_plate": "1.3.0",
     "driven_pile": "1.3.0",

@@ -17,7 +17,7 @@ Construction Manual* for the section-property and shear-centre relations.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import isfinite, pi
+from math import hypot, isfinite, pi
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -310,6 +310,8 @@ class CrossSection(RevalidatedModel):
     wall_thickness: Quantity | None = None
     corner_radius: Quantity | None = None
     shear_centre_offset: Quantity | None = None
+    minor_principal_second_moment: Quantity | None = None
+    principal_axis_tangent: float | None = None
 
     @model_validator(mode="after")
     def _every_property_is_a_number(self) -> CrossSection:
@@ -342,6 +344,36 @@ class CrossSection(RevalidatedModel):
                     subject="shear_centre_offset",
                     source=_DRAWING_SOURCE,
                 )
+        # The minor principal moment is the smallest second moment the section has, so a
+        # value above the reference axis's would make `least_radius_of_gyration` return the
+        # reference axis and read as though the principal one had been considered.
+        if self.minor_principal_second_moment is not None:
+            require_finite(self.minor_principal_second_moment, name="minor_principal_second_moment")
+            minor = self.minor_principal_second_moment.to("mm**4").magnitude
+            if minor <= 0:
+                raise _section_refusal(
+                    "minor_principal_second_moment must be greater than zero; got "
+                    f"{self.minor_principal_second_moment}",
+                    subject="minor_principal_second_moment",
+                    source=_DRAWING_SOURCE,
+                )
+            others = [self.second_moment] + (
+                [self.second_moment_transverse] if self.second_moment_transverse else []
+            )
+            if minor > min(one.to("mm**4").magnitude for one in others) * (1 + 1e-9):
+                raise _section_refusal(
+                    f"minor_principal_second_moment ({self.minor_principal_second_moment}) is "
+                    "the smallest second moment the section has, and this one is above an "
+                    "axis the section already states",
+                    subject="minor_principal_second_moment",
+                    source=_DRAWING_SOURCE,
+                )
+        if self.principal_axis_tangent is not None and not isfinite(self.principal_axis_tangent):
+            raise _section_refusal(
+                f"principal_axis_tangent must be finite; got {self.principal_axis_tangent}",
+                subject="principal_axis_tangent",
+                source=_DRAWING_SOURCE,
+            )
         if self.shear_form_factor is not None and not isfinite(self.shear_form_factor):
             raise _section_refusal(
                 f"shear_form_factor must be finite; got {self.shear_form_factor}",
@@ -469,15 +501,21 @@ class CrossSection(RevalidatedModel):
 
     @property
     def least_radius_of_gyration(self) -> Quantity:
-        """The governing column slenderness r = √(min(I)/A) over both axes.
+        """The governing column slenderness r = √(min(I)/A) over every axis stated.
 
         A column buckles about whichever centroidal axis is weaker, so this is
         the value a buckling check should use. Falls back to the bending-axis
         value when the section carries no transverse second moment.
+
+        For a section whose weakest axis is neither of its reference axes — an angle, whose
+        principal axes lie across its legs — that axis is
+        ``minor_principal_second_moment``, and it governs here. Without it a single angle
+        would be buckled about the weaker of its two legs, which is not the way it goes.
         """
         i = self.second_moment.to("mm**4").magnitude
-        if self.second_moment_transverse is not None:
-            i = min(i, self.second_moment_transverse.to("mm**4").magnitude)
+        for other in (self.second_moment_transverse, self.minor_principal_second_moment):
+            if other is not None:
+                i = min(i, other.to("mm**4").magnitude)
         return _mm((i / self.area.to("mm**2").magnitude) ** 0.5)
 
     @classmethod
@@ -753,6 +791,76 @@ class CrossSection(RevalidatedModel):
             # The web carries the shear, as it does in an I-section (AISC G2).
             shear_form_factor=area / (d * tw),
             shear_centre_offset=_mm(offset),
+        )
+
+    @classmethod
+    def angle(
+        cls,
+        *,
+        depth: Quantity,
+        width: Quantity,
+        thickness: Quantity,
+    ) -> CrossSection:
+        """A rolled single angle, with the principal axes its legs are not.
+
+        Two sharp-cornered rectangles meeting at the heel: a leg of ``depth`` standing up the
+        reference y axis and a leg of ``width`` running out along x, both ``thickness``
+        thick. ``second_moment`` is about the horizontal centroidal axis and
+        ``second_moment_transverse`` about the vertical one, as they are for any other
+        section here.
+
+        An angle's own axes, though, are neither of those. It has no axis of symmetry
+        unless its legs are equal, and even then the symmetry is the diagonal, so its
+        principal axes lie across the legs: ``minor_principal_second_moment`` is the
+        smallest second moment it has, from the eigenvalues of its inertia tensor, and
+        ``principal_axis_tangent`` is the slope of the axis that goes with it — AISC's
+        ``tan(α)``. The minor principal axis is what a single angle buckles about, and
+        :attr:`least_radius_of_gyration` takes it from here, so a strut is screened on the
+        axis it actually bows about rather than on the weaker of its two legs.
+
+        Anchored on the AISC Shapes Database's 137 L rows. Unlike a channel, an angle's legs
+        are not tapered, so sharp rectangles reproduce it closely: area within 1.4%, both
+        geometric second moments within 2.4%, the minor principal moment within 6.0% and the
+        radius of gyration that comes from it within 2.7%, and ``tan(α)`` within 1.2% —
+        0.11% on average, which is what confirms the axis orientation rather than the
+        magnitudes. The residual is the heel fillet and the toe radii, which a sharp corner
+        has none of; the small sections are the loose ones.
+        """
+        d = _require_length(depth, "depth")
+        b = _require_length(width, "width")
+        t = _require_length(thickness, "thickness")
+        if t >= min(d, b):
+            raise _section_refusal(
+                f"a {t:g} mm thickness leaves no angle inside legs of {d:g} and {b:g} mm",
+                subject="thickness, depth and width",
+                source=_DRAWING_SOURCE,
+            )
+        # Heel at the origin: the depth leg up y, the width leg out along x.
+        outstand = b - t
+        # (area, x of its centroid, y of it, its own I about x, its own I about y)
+        legs = (
+            (t * d, t / 2, d / 2, t * d**3 / 12, d * t**3 / 12),
+            (outstand * t, t + outstand / 2, t / 2, outstand * t**3 / 12, t * outstand**3 / 12),
+        )
+        area = sum(leg[0] for leg in legs)
+        across = sum(leg[0] * leg[1] for leg in legs) / area
+        up = sum(leg[0] * leg[2] for leg in legs) / area
+        strong = sum(leg[3] + leg[0] * (leg[2] - up) ** 2 for leg in legs)
+        weak = sum(leg[4] + leg[0] * (leg[1] - across) ** 2 for leg in legs)
+        # A rectangle has no product of inertia about its own axes, so only the offsets
+        # contribute. It is what tilts the principal axes off the legs.
+        product = sum(leg[0] * (leg[1] - across) * (leg[2] - up) for leg in legs)
+        middle = (strong + weak) / 2
+        half = hypot((strong - weak) / 2, product)
+        minor = middle - half
+        tangent = (minor - weak) / product if product else 0.0
+        return cls(
+            area=Quantity(magnitude=area, unit="mm**2"),
+            second_moment=Quantity(magnitude=strong, unit="mm**4"),
+            extreme_fibre=_mm(max(up, d - up)),
+            second_moment_transverse=Quantity(magnitude=weak, unit="mm**4"),
+            minor_principal_second_moment=Quantity(magnitude=minor, unit="mm**4"),
+            principal_axis_tangent=abs(tangent),
         )
 
 

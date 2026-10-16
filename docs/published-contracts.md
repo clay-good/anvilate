@@ -175,6 +175,26 @@ too stiff on a C10X30. `beam_member`, `column_member` and `beam_column_member` m
 1.7.0; nothing a document already writes changes meaning, and no document that validated
 before is refused now, because the property did not exist to write.
 
+### Member schemas 1.8.0: a section records the axes its reference axes are not
+
+A section gains two more optional properties: `minor_principal_second_moment`, the smallest
+second moment it has, and `principal_axis_tangent`, the slope of the axis that goes with it.
+`CrossSection.angle` fills both, and so does a member that names a rolled single angle
+(`section: L8X4X1`). The minor principal moment must be at or below every axis the section
+already states, since it is the smallest one there is.
+
+`least_radius_of_gyration` now takes it into account, so a column is screened on the axis it
+really bows about. This changes no section that does not state it — nothing in the library
+did before — and for a single angle it is the difference between buckling it about its
+diagonal and about the weaker of its two legs.
+
+A `beam_member` or `beam_column_member` whose section states a non-zero
+`principal_axis_tangent` is refused: bending it about a reference axis is not uniaxial
+bending, and the screens' `M/S` would read under the real stress. `beam_member`,
+`column_member` and `beam_column_member` move to 1.8.0; nothing a document already writes
+changes meaning, and no document that validated before is refused now, because the
+properties did not exist to write.
+
 ### Scorecard 1.14.0: a result from a third-party module says so
 
 `ScorecardEntry` gains an optional `origin`, set only on an entry a third-party module

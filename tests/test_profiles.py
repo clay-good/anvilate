@@ -15,6 +15,7 @@ from anvilate.standards import (
     UnknownProfileError,
     cached_aisc_profile_table,
     canonical_aisc_designation,
+    canonical_angle_designation,
     canonical_channel_designation,
     canonical_designation,
     default_profile_table,
@@ -186,10 +187,11 @@ _AISC_FIXTURE_ROWS = (
     {"A": "HSS", "C": "HSS6X4X1/4", "I": 6, "K": "–", "N": 4, "X": 0.233},
     {"A": "HSS", "C": "HSS6.000X0.250", "I": "–", "K": 6, "N": "–", "X": 0.233},
     {"A": "C", "C": "C10X30", "G": 10.0, "L": 3.03, "Q": 0.673, "T": 0.436},
+    {"A": "L", "C": "L8X4X1", "G": 4.0, "O": 8.0, "V": 1.0},
 )
 _AISC_FIXTURE_HEAD = {
     "A": "Type", "C": "AISC_Manual_Label", "G": "d", "I": "Ht", "K": "OD", "L": "bf",
-    "N": "B", "Q": "tw", "T": "tf", "X": "tdes", "Y": "kdes",
+    "N": "B", "O": "b", "Q": "tw", "T": "tf", "V": "t", "X": "tdes", "Y": "kdes",
 }  # fmt: skip
 
 
@@ -526,6 +528,114 @@ def test_every_rolled_channel_in_a_fetched_workbook_reproduces_its_tabulated_pro
         )
         uniform.append(abs(naive.to("in").magnitude / float(row["AD"]) - 1))
     assert max(uniform) > 0.5
+
+
+@pytest.mark.parametrize(
+    ("written", "designation"),
+    [
+        ("L8X4X1", "L8X4X1"),
+        ("l8x4x1", "L8X4X1"),
+        ("L 8 X 4 X 1", "L8X4X1"),
+        ("L8×4×1", "L8X4X1"),
+        ("L6X3-1/2X1/2", "L6X3-1/2X1/2"),
+        ("L2X2X1/8", "L2X2X1/8"),
+    ],
+)
+def test_an_angle_designation_resolves_however_it_is_written(written, designation):
+    assert canonical_angle_designation(written) == designation
+
+
+@pytest.mark.parametrize(
+    "written", ["L8X4", "C10X30", "HSS6X4X1/4", "W12X26", "IPE 200", "NPS 4 SCH 40", "2L3X3X1/4"]
+)
+def test_only_a_single_angle_designation_is_read_as_one(written):
+    assert canonical_angle_designation(written) is None
+
+
+def test_an_angle_is_computed_from_its_legs_including_the_axes_they_are_not(tmp_path, monkeypatch):
+    """`L8X4X1` resolves to a section that knows its principal axes are across its legs.
+
+    The fixture's angle row is a real one, so it reads against the Manual's: A 11.1 in²,
+    I_x 69.7 in⁴, I_y 11.6 in⁴, a minor principal I_z of 7.83 in⁴ and tan(α) 0.247. The
+    last two are the point: the least radius of gyration a column is screened on comes from
+    I_z, not from the weaker leg.
+    """
+    from anvilate.standards import profiles
+
+    payload = _test_aisc_workbook()
+    monkeypatch.setattr(profiles, "AISC_SHAPES_V16", _test_aisc_recipe(payload))
+    table = fetch_aisc_profile_table(
+        retrieved="2026-09-27", consent=True, cache_dir=tmp_path, opener=lambda _url: payload
+    )
+    assert table.angle_designations() == ["L8X4X1"]
+    angle = table.get("l8 x 4 x 1")
+    assert angle.designation == "L8X4X1"
+    # The longer leg is the one AISC names first, and it is the workbook's `b`, not its `d`.
+    assert angle.depth.quantity.to("in").magnitude == pytest.approx(8.0)
+    assert angle.width.quantity.to("in").magnitude == pytest.approx(4.0)
+    assert "L8X4X1 longer leg" in angle.citations()["depth"].condition
+    assert str(angle) == "L8X4X1 (b 203.2, d 101.6, t 25.4 mm)"
+
+    section = angle.section()
+    assert section.area.to("in**2").magnitude == pytest.approx(11.1, rel=1e-2)
+    assert section.second_moment.to("in**4").magnitude == pytest.approx(69.7, rel=3e-3)
+    assert section.second_moment_transverse.to("in**4").magnitude == pytest.approx(11.6, rel=5e-3)
+    assert section.minor_principal_second_moment.to("in**4").magnitude == pytest.approx(
+        7.83, rel=6e-3
+    )
+    assert section.principal_axis_tangent == pytest.approx(0.247, rel=3e-3)
+    # The governing column axis is the minor principal one, not the weaker leg.
+    assert section.least_radius_of_gyration.to("in").magnitude == pytest.approx(0.844, rel=4e-3)
+    assert section.radius_of_gyration_transverse.to("in").magnitude == pytest.approx(1.02, rel=1e-2)
+
+    with pytest.raises(UnknownProfileError) as refused:
+        table.get("L8X4X2")
+    assert "longer leg, shorter leg, thickness" in str(refused.value)
+
+
+def test_every_rolled_angle_in_a_fetched_workbook_reproduces_its_tabulated_properties(monkeypatch):
+    """All 137 L rows, where the workbook has been fetched.
+
+    An angle's legs are not tapered, so sharp rectangles track it far better than they do a
+    channel — and `tan(α)` to 0.11% on average is what says the *orientation* is right, not
+    just the magnitudes. Both ends of every range are pinned: the minor principal moment is
+    the one a column is screened on, and it reads high here, which is the unconservative
+    direction, so the ceiling is the part of this test that matters.
+    """
+    from anvilate.fetch import cached_dataset
+    from anvilate.standards import profiles
+
+    where = os.environ.get("ANVILATE_FETCHED_DATA")
+    found = cached_dataset(profiles.AISC_SHAPES_V16, cache_dir=where) if where else None
+    if found is None:
+        pytest.skip(
+            "fetch the workbook (`anvilate fetch aisc-shapes --consent`) and set "
+            "ANVILATE_FETCHED_DATA to its folder to check every angle row"
+        )
+    table = cached_aisc_profile_table(cache_dir=where)
+    extra = {"F": "A", "AM": "Ix", "AQ": "Iy", "AU": "Iz", "AV": "rz", "BI": "tan(α)"}
+    for column, heading in extra.items():
+        monkeypatch.setitem(profiles._AISC_COLUMNS, column, heading)
+    rows = profiles._aisc_rows(found[0], kinds=("L",))
+    assert len(rows) == 137 == len(table.angle_designations())
+    for row in rows:
+        section = table.get(row["C"]).section()
+        for have, column, unit, floor, ceiling in (
+            (section.area, "F", "in**2", -1.4e-2, 5e-3),
+            (section.second_moment, "AM", "in**4", -6e-3, 2.5e-2),
+            (section.second_moment_transverse, "AQ", "in**4", -5e-3, 2.5e-2),
+            (section.minor_principal_second_moment, "AU", "in**4", -1.2e-2, 6.1e-2),
+            (section.least_radius_of_gyration, "AV", "in", -3e-3, 2.8e-2),
+        ):
+            error = have.to(unit).magnitude / float(row[column]) - 1
+            assert floor <= error <= ceiling, (row["C"], column, error)
+        assert section.principal_axis_tangent == pytest.approx(abs(float(row["BI"])), rel=1.2e-2), (
+            row["C"]
+        )
+        # An equal-leg angle's principal axis is its diagonal, whatever its thickness.
+        legs = (table.get(row["C"]).depth, table.get(row["C"]).width)
+        if legs[0].quantity == legs[1].quantity:
+            assert section.principal_axis_tangent == pytest.approx(1.0, rel=1e-9), row["C"]
 
 
 def test_the_workbooks_pipe_areas_do_not_follow_from_its_own_pipe_dimensions(monkeypatch):

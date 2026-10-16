@@ -288,6 +288,7 @@ spec.version.UnsupportedSchemaVersion
 spec.version.migrate_to_current
 standards.AISC_SHAPES_V16
 standards.AllowableBasis
+standards.AngleProfile
 standards.ChannelProfile
 standards.DatasetVersion
 standards.AiscProfileDataRequired
@@ -372,6 +373,7 @@ standards.components.UnknownComponentError
 standards.components.default_components_db
 standards.cached_aisc_profile_table
 standards.canonical_aisc_designation
+standards.canonical_angle_designation
 standards.canonical_channel_designation
 standards.canonical_designation
 standards.default_bearing_table
@@ -414,12 +416,14 @@ standards.fetch_aisc_profile_table
 standards.profiles.AISC_SHAPES_V16
 standards.profiles.AiscProfileDataRequired
 standards.profiles.AiscProfileTable
+standards.profiles.AngleProfile
 standards.profiles.ChannelProfile
 standards.profiles.RolledProfile
 standards.profiles.ProfileTable
 standards.profiles.UnknownProfileError
 standards.profiles.cached_aisc_profile_table
 standards.profiles.canonical_aisc_designation
+standards.profiles.canonical_angle_designation
 standards.profiles.canonical_channel_designation
 standards.profiles.canonical_designation
 standards.profiles.default_profile_table

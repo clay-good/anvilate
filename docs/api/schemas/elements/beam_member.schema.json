@@ -20,6 +20,17 @@
         "extreme_fibre": {
           "$ref": "#/$defs/Quantity"
         },
+        "minor_principal_second_moment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "outside": {
           "anyOf": [
             {
@@ -34,6 +45,18 @@
           ],
           "default": null,
           "title": "Outside"
+        },
+        "principal_axis_tangent": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Principal Axis Tangent"
         },
         "second_moment": {
           "$ref": "#/$defs/Quantity"
@@ -135,7 +158,7 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:elements:beam_member:1.7.0",
+  "$id": "urn:anvilate:schema:elements:beam_member:1.8.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate pack element 'beam_member': the fields a Design Spec puts in `element_params` when it declares `element_type: beam_member`. Generated from anvilate.packs.structural.BeamMember.",
@@ -269,5 +292,5 @@
   ],
   "title": "BeamMember",
   "type": "object",
-  "x-anvilate-version": "1.7.0"
+  "x-anvilate-version": "1.8.0"
 }

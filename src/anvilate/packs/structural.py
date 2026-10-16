@@ -354,9 +354,10 @@ def _named_section(value: object) -> object:
     ``TUBE 60x4``, and a square-cornered box, ``BOX 100x50x4``, are each their own
     dimensions, and a pipe, ``NPS 4 SCH 40``, is its nominal size and schedule.
 
-    A channel resolves here for every member kind, and the two compression members then
-    refuse it: the section it resolves to withholds the weak axis they would buckle it
-    about. The refusal is theirs, so the reason names the member.
+    A channel and a single angle resolve here for every member kind, and the members that
+    cannot screen them then refuse: a channel column, because the section withholds the weak
+    axis it would buckle about, and an angle beam, because a leg is not a principal axis. The
+    refusal is the member's, so each reason names the member and the kind it should be.
     """
     if isinstance(value, str):
         pipe = _pipe_section(value)
@@ -395,8 +396,8 @@ def _named_section(value: object) -> object:
 
 
 #: A member's section: its properties, or the designation of a rolled profile the library
-#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape, HSS or channel
-#: (``W12x26``, ``HSS6X4X1/4``, ``C10X30``), or a bar named
+#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape, HSS, channel or single
+#: angle (``W12x26``, ``HSS6X4X1/4``, ``C10X30``, ``L8X4X1``), or a bar named
 #: by its own dimensions in millimetres: a flat bar by breadth and depth (``FLAT 50x10``), a
 #: round tube by outside diameter and wall (``TUBE 60x4``), or a square-cornered box by
 #: breadth, depth and wall (``BOX 100x50x4``); or pipe, by the nominal size and schedule the
@@ -831,6 +832,7 @@ class BeamMember(GuardedInputs):
                 subject="triangle_mirrored, load_type, and support",
                 source=_LOAD_SOURCE,
             )
+        _refuse_a_non_principal_bending_axis(self.section, "beam")
         return self
 
 
@@ -1487,6 +1489,36 @@ def _refuse_a_withheld_weak_axis(section, kind: str) -> None:
         "or state second_moment_transverse with the section's other properties",
         subject="section",
         source="the rolled-section table's weak-axis second moment (I_y), or the section drawing",
+    )
+
+
+def _refuse_a_non_principal_bending_axis(section, kind: str) -> None:
+    """Refuse a flexural member whose section bends about an axis that is not principal.
+
+    A section stating a ``principal_axis_tangent`` says its own axes are tilted off the ones
+    its properties are given about — a single angle, whose principal axes lie across its
+    legs. Bending such a section in the plane of a leg is not uniaxial bending: it curves
+    about both principal axes at once and deflects out of the load plane, so the stress is
+    higher than ``M/S`` about either leg. The screens here compute exactly that ``M/S``, so
+    they would under-state it. The single-angle flexure clause of AISC 360-16 Chapter F is
+    not implemented, so this is refused rather than screened low. It is cited by chapter,
+    as flexure is here, because pinning the clause number would need the edition-difference
+    entry read off AISC's 360-22 comparison, and the publisher refuses that fetch (403).
+
+    An angle in pure compression is fine, and screened: :attr:`least_radius_of_gyration`
+    takes the minor principal axis, which is the one a strut bows about.
+    """
+    tangent = getattr(section, "principal_axis_tangent", None)
+    if not tangent:
+        return
+    raise _structural_pack_refusal(
+        f"this section's principal axes are tilted off its legs (tan α = {tangent:.3g}), so "
+        f"a {kind} loaded in the plane of a leg bends about both at once and this screen's "
+        "M/S would read under the real stress. The single-angle flexure clause of AISC "
+        "360-16 Chapter F is not implemented. Screen it as a column_member, which buckles "
+        "it about its minor principal axis, or state a section whose axes are its own",
+        subject="section",
+        source="the single-angle flexure clause of AISC 360-16 Chapter F, or the section drawing",
     )
 
 
@@ -3033,6 +3065,7 @@ class BeamColumnMember(GuardedInputs):
                 source=_LOAD_SOURCE,
             )
         _refuse_a_withheld_weak_axis(self.section, "beam-column")
+        _refuse_a_non_principal_bending_axis(self.section, "beam-column")
         return self
 
 

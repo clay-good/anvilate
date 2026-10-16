@@ -365,6 +365,35 @@ def build_gear_mesh(mesh: SpurGearMesh, name: str, params: Mapping[str, Any]) ->
     return _built(mesh, tag, shape, dimensions, envelope=True, name=name)
 
 
+def _angle_outline(profile: Any) -> tuple[Any, dict[str, float]]:
+    """A rolled single angle's outline, centred on its own bounding box, and its dimensions.
+
+    Two sharp-cornered rectangles meeting at the heel, the shape
+    :meth:`~anvilate.analysis.section.CrossSection.angle` takes its properties from. The
+    heel sits at the lower left of the bounding box, so the drawn solid stands the way the
+    section was computed.
+    """
+    from build123d import Pos, Rectangle
+
+    depth, width, thickness = (
+        float(getattr(profile, field).quantity.to("mm").magnitude)
+        for field in ("depth", "width", "thickness")
+    )
+    # Centred on the bounding box: the heel's outer corner at (-width/2, -depth/2).
+    heel_x, heel_y = -width / 2, -depth / 2
+    outline = Pos(heel_x + thickness / 2, heel_y + depth / 2) * Rectangle(thickness, depth)
+    outstand = width - thickness
+    outline += Pos(heel_x + thickness + outstand / 2, heel_y + thickness / 2) * Rectangle(
+        outstand, thickness
+    )
+    return outline, {
+        "depth": depth,
+        "width": width,
+        "thickness": thickness,
+        "section_area": depth * thickness + outstand * thickness,
+    }
+
+
 def _channel_outline(profile: Any) -> tuple[Any, dict[str, float]]:
     """A rolled channel's outline, centred on its own bounding box, and its dimensions.
 
@@ -490,9 +519,11 @@ def _rolled_section(
     if hollow is not None:
         return _hollow_outline(hollow[:-1], hollow[-1])
     profile = resolve_profile(named)
+    if hasattr(profile, "thickness"):  # a rolled single angle: two legs at the heel
+        return _angle_outline(profile)
     if not hasattr(profile, "flange_width"):  # a rolled HSS: drawn from its own section
         return _section_outline(section)
-    if not hasattr(profile, "root_radius"):  # a rolled channel
+    if not hasattr(profile, "root_radius"):  # a rolled channel: web and two flanges
         return _channel_outline(profile)
     depth, flange, web, thick, root = (
         float(getattr(profile, field).quantity.to("mm").magnitude)
@@ -631,17 +662,18 @@ _register(
     "A beam cut to length from a rolled I, H or channel profile, or a flat bar, round tube "
     "or box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
     "by its nominal size and schedule (`NPS 4 SCH 40`). A channel's card says its twist "
-    "is not evaluated.",
+    "is not evaluated. Not a single angle: a leg is not a principal axis.",
     example_params={"section": "IPE 200"},
 )
 _register(
     "column_member",
     ColumnMember,
     _member("column_member", upright=True),
-    "A column cut to length from a rolled I or H profile, or a flat bar, round tube or "
-    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
-    "by its nominal size and schedule (`NPS 4 SCH 40`). Not a channel: the weak axis "
-    "it would buckle about is not derived.",
+    "A column cut to length from a rolled I or H profile, a single angle, or a flat bar, "
+    "round tube or box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), "
+    "or pipe by its nominal size and schedule (`NPS 4 SCH 40`). An angle buckles about "
+    "its minor principal axis. Not a channel: the weak axis it would buckle about is "
+    "not derived.",
     example_params={"section": "IPE 200"},
 )
 _register(
@@ -650,7 +682,7 @@ _register(
     _member("beam_column_member", upright=True),
     "A beam-column cut to length from a rolled I or H profile, or a flat bar, round tube or "
     "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
-    "by its nominal size and schedule (`NPS 4 SCH 40`). Not a channel: the weak axis "
-    "it would buckle about is not derived.",
+    "by its nominal size and schedule (`NPS 4 SCH 40`). Not a channel, whose weak axis "
+    "is not derived, and not a single angle, whose legs are not principal axes.",
     example_params={"section": "IPE 200"},
 )

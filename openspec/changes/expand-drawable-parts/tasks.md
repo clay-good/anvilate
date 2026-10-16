@@ -62,10 +62,23 @@
       member an optional declaration that the load acts through the shear centre or that
       the section is restrained against rotating, and let the entry pass on it — a member
       schema change, so it moves those schemas again
-- [ ] 3.3h Angle members. An angle bends about principal axes that are not its legs, which
-      the member screens do not model; the workbook tabulates `tan(α)` and `Iz` for them.
-      The same flange-taper limit does not apply — an angle's legs are untapered — so the
-      open question is the principal-axis screen, not the geometry
+- [x] 3.3h Angle columns: `section: L8X4X1`, `L6X3-1/2X1/2`, from the fetched workbook, the
+      longer leg named first. An angle's legs are untapered, so every property follows from
+      three dimensions — including the principal axes its legs are not, from the eigenvalues
+      of its inertia tensor. Held to all 137 L rows: area within 1.4%, both geometric
+      second moments within 2.5%, `Iz` within 6.1%, `rz` within 2.8%, and `tan(α)` within
+      1.2% (0.11% mean), which is what pins the axis *orientation*. An equal-leg angle comes
+      out at exactly `tan(α)` = 1. `least_radius_of_gyration` now takes the minor principal
+      axis, so a strut is buckled about its diagonal (0.844 in on an L8X4X1) and not about
+      the weaker leg (1.02). A `beam_member` or `beam_column_member` is REFUSED: bending in
+      the plane of a leg curves it about both principal axes at once, so the screens' M/S
+      reads under the real stress, and the single-angle flexure clause is not implemented
+      (cited by chapter, since pinning its number needs the 360-22 comparison AISC refuses
+      to serve — 403 again on 2026-10-16)
+- [ ] 3.3m Angle flexure, the single-angle clause of AISC 360-16 Chapter F, which would let
+      an angle be a beam, and that clause's edition-difference entry. Both need the
+      publisher's comparison document, which still 403s to curl and WebFetch (2026-10-16) —
+      the same block 3.3g sits behind
 - [x] 3.3e A hollow beam is held to what its wall carries: `wall local buckling`, from the
       moment AISC 360-16 Chapter F gives a round tube (§F8) or a box (§F7), and NOT_EVALUATED
       past what those clauses cover. A section records the tube or box it is of

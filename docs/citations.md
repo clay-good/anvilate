@@ -346,6 +346,24 @@ channel beam is screened in bending, deflection and shear, and carries one more 
 `twist`, which is NOT_EVALUATED on every channel: a transverse load that misses the shear
 centre twists the section, and the entries beside it are pure bending.
 
+A rolled single angle, `L8X4X1` or `L6X3-1/2X1/2`, resolves from the same workbook, its
+longer leg named first and its fractions kept as the Manual writes them. Its legs are not
+tapered, so all of its properties follow from three dimensions: area within 1.4%, both
+geometric second moments within 2.5%, and — because an angle has no axis of symmetry unless
+its legs are equal, and then only the diagonal — its principal axes, from the eigenvalues of
+its inertia tensor. The minor principal second moment holds the workbook's `Iz` within 6.1%
+and the radius of gyration from it holds `rz` within 2.8%, and `tan(α)`, the slope of that
+axis, within 1.2% — 0.11% on average, which is what confirms the orientation rather than the
+magnitudes. An equal-leg angle comes out at exactly `tan(α)` = 1, its diagonal.
+
+An angle is a column only. A single angle bent in the plane of a leg curves about both
+principal axes at once and deflects out of the load plane, so the `M/S` these screens compute
+about a leg reads under the real stress; the single-angle flexure clause of AISC 360-16
+Chapter F covers that case and is not implemented, so a `beam_member` or
+`beam_column_member` given an angle is refused with the reason. A `column_member` is screened, and on the right axis: the section states its minor
+principal moment, so the least radius of gyration is the diagonal's — 0.844 in for an L8X4X1,
+where the weaker leg alone would say 1.02 and over-state what the strut carries.
+
 Pipe is a table, not a dimension pair: an NPS 4 pipe is 114.3 mm across, not 4 inches, and
 the wall a schedule carries is a tabulated entry. A member names it the way a pipe run does,
 `section: NPS 4 SCH 40`, and the bundled ASME B36.10M schedule table gives the outside
