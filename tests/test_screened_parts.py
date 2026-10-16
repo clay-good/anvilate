@@ -511,6 +511,139 @@ def test_a_pipe_members_wall_is_screened_and_a_slender_one_is_not_passed():
         assert "0.11·E/F_y = 88.0" in entry.detail
 
 
+def _fetch_a_test_aisc_table(tmp_path, monkeypatch, rows: tuple[dict, ...]) -> None:
+    """Cache a one-sheet workbook holding ``rows``, so a named AISC shape resolves.
+
+    The suite keeps every test out of the user's own cache, and the workbook is not
+    redistributable, so a test that needs a named AISC shape writes the few rows it needs.
+    """
+    import hashlib
+    import io
+    from zipfile import ZIP_DEFLATED, ZipFile
+
+    from anvilate.fetch import DatasetRecipe
+    from anvilate.standards import fetch_aisc_profile_table, profiles
+
+    head = {"A": "Type", "C": "AISC_Manual_Label", "G": "d", "I": "Ht", "K": "OD", "L": "bf",
+            "N": "B", "Q": "tw", "T": "tf", "X": "tdes", "Y": "kdes"}  # fmt: skip
+    strings = sorted({v for row in (head, *rows) for v in row.values() if isinstance(v, str)})
+    sheet = "".join(
+        f'<row r="{n}">'
+        + "".join(
+            f'<c r="{c}{n}" t="s"><v>{strings.index(v)}</v></c>'
+            if isinstance(v, str)
+            else f'<c r="{c}{n}"><v>{v}</v></c>'
+            for c, v in row.items()
+        )
+        + "</row>"
+        for n, row in enumerate((head, *rows), start=1)
+    )
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    output = io.BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        shared = "".join(f"<si><t>{value}</t></si>" for value in strings)
+        archive.writestr("xl/sharedStrings.xml", f'<sst xmlns="{namespace}">{shared}</sst>')
+        archive.writestr(
+            "xl/worksheets/sheet2.xml",
+            f'<worksheet xmlns="{namespace}"><sheetData>{sheet}</sheetData></worksheet>',
+        )
+    payload = output.getvalue()
+    monkeypatch.setattr(
+        profiles,
+        "AISC_SHAPES_V16",
+        DatasetRecipe(
+            name="aisc-shapes-database-v16.0.xlsx",
+            url="https://example.invalid/aisc-shapes-database-v16.0.xlsx",
+            sha256=hashlib.sha256(payload).hexdigest(),
+            license="LicenseRef-AISC-Terms",
+            source="AISC Shapes Database v16.0, test fixture",
+            redistributable=False,
+        ),
+    )
+    monkeypatch.setenv("ANVILATE_DATA_HOME", str(tmp_path))
+    fetch_aisc_profile_table(retrieved="2026-10-11", consent=True, opener=lambda _url: payload)
+
+
+# Two real channel rows, as the workbook's US customary columns give them.
+_CHANNEL_ROWS = (
+    {"A": "W", "C": "W12X26", "G": 12.2, "L": 6.49, "Q": 0.23, "T": 0.38, "Y": 0.68},
+    {"A": "C", "C": "C10X30", "G": 10.0, "L": 3.03, "Q": 0.673, "T": 0.436},
+    {"A": "MC", "C": "MC18X51.9", "G": 18.0, "L": 4.1, "Q": 0.6, "T": 0.625},
+)
+
+
+def test_a_beam_may_be_a_rolled_channel_and_its_twist_is_named_rather_than_passed(
+    tmp_path, monkeypatch
+):
+    """`C10X30` is screened in bending and drawn, and the card says the twist is not checked.
+
+    A channel's shear centre is off its web, so a transverse load through the web twists it
+    as well as bending it. The bending, deflection and shear entries beside the twist entry
+    are pure bending, and the twist entry is NOT_EVALUATED saying so, on every channel,
+    because the screen has no way to be told where the load acts.
+    """
+    from anvilate.packs.structural import BeamMember, screen_beam_member
+    from anvilate.scorecard import CheckStatus
+
+    _fetch_a_test_aisc_table(tmp_path, monkeypatch, _CHANNEL_ROWS)
+    document = yaml.safe_load((_EXAMPLES / "beam_member.spec.yaml").read_text("utf-8"))
+    params = {**document["element_params"], "section": "C10X30"}
+    member = BeamMember.model_validate(params)
+    section = member.section
+    assert section.area.to("in**2").magnitude == pytest.approx(8.81, rel=3e-3)
+    assert section.shear_centre_offset.to("in").magnitude == pytest.approx(0.368, rel=3e-3)
+
+    card = screen_beam_member(member, required_safety_factor=1.5)
+    statuses = {entry.name.removeprefix("floor-beam "): entry.status for entry in card.entries}
+    assert statuses["bending"] is CheckStatus.PASS
+    assert statuses["twist"] is CheckStatus.NOT_EVALUATED
+    twist = next(one for one in card.entries if one.name.endswith("twist"))
+    assert "9.33 mm outside the back of its web" in twist.detail
+    assert "do not carry the torsion" in twist.detail
+    assert twist.reference == "AISC 360-16 Ch. H"
+    # A section with no shear centre offset gets no such entry at all.
+    plain = BeamMember.model_validate({**params, "section": "IPE 200"})
+    assert all(
+        not entry.name.endswith("twist")
+        for entry in screen_beam_member(plain, required_safety_factor=1.5).entries
+    )
+
+    # Drawn as the three rectangles the screen took its properties from.
+    built = build_spec(_spec("beam_member", section="C10X30"))
+    box = built.shape.bounding_box().size
+    assert (box.X, box.Z, box.Y) == pytest.approx((76.962, 254.0, 4000.0), abs=1e-3)
+    area = section.area.to("mm**2").magnitude
+    assert built.dimensions_mm["section_area"] == pytest.approx(area, rel=1e-12)
+    assert built.volume_mm3 == pytest.approx(area * 4000, rel=1e-9)
+
+
+def test_a_channel_column_is_refused_because_its_weak_axis_was_not_derived(tmp_path, monkeypatch):
+    """The weak axis a channel buckles about is withheld, so it is refused, not screened.
+
+    `least_radius_of_gyration` falls back to the bending axis when a section carries no
+    transverse second moment. On a C10X30 that is 3.43 in where the weak axis is nearer
+    0.92, so a channel column screened through the fallback would be told it carries about
+    four times what it does. Both compression members refuse it at validation.
+    """
+    from anvilate.packs.structural import BeamColumnMember, ColumnMember
+
+    _fetch_a_test_aisc_table(tmp_path, monkeypatch, _CHANNEL_ROWS)
+    for element, model in (
+        ("column_member", ColumnMember),
+        ("beam_column_member", BeamColumnMember),
+    ):
+        document = yaml.safe_load((_EXAMPLES / f"{element}.spec.yaml").read_text("utf-8"))
+        for designation in ("C10X30", "MC18X51.9"):
+            with pytest.raises(ValueError, match="buckles about the weak axis") as refused:
+                model.model_validate({**document["element_params"], "section": designation})
+            assert "beam_member" in str(refused.value)
+            assert "flange taper" in str(refused.value)
+            with pytest.raises(ValueError, match="buckles about the weak axis"):
+                build_spec(_spec(element, section=designation))
+        # The same member with a section that carries its weak axis is screened as before.
+        assert model.model_validate({**document["element_params"], "section": "IPE 200"})
+
+
 def test_a_section_declared_by_its_properties_is_drawn_when_it_records_its_wall():
     """Three properties do not say a shape. A tube's or a box's own dimensions do."""
     from anvilate.analysis.section import CrossSection

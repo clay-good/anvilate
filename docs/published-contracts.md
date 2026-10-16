@@ -158,6 +158,23 @@ section carries them gets one more check, `wall local buckling`. `beam_member`,
 `column_member` and `beam_column_member` move to 1.5.0; nothing a document already writes
 changes meaning.
 
+### Member schemas 1.7.0: a section records where its shear centre is
+
+A section gains one more optional property, `shear_centre_offset`: the distance from the
+back of an open section's web to the point a transverse load has to act through to bend it
+without twisting it. `CrossSection.channel` fills it, and so does a member that names a
+rolled channel (`section: C10X30`, `MC18X51.9`). It is a positive length, measured the way
+AISC's `eo` column is.
+
+A beam whose section carries it gets one more check, `twist`, which is `not_evaluated` on
+every channel: the bending and deflection entries beside it are pure bending, and the screen
+has no way to be told where the load acts. A `column_member` or `beam_column_member` whose
+section carries it and states no `second_moment_transverse` is refused, because the axis
+those screens buckle a member about would otherwise fall back to the strong one — four times
+too stiff on a C10X30. `beam_member`, `column_member` and `beam_column_member` move to
+1.7.0; nothing a document already writes changes meaning, and no document that validated
+before is refused now, because the property did not exist to write.
+
 ### Scorecard 1.14.0: a result from a third-party module says so
 
 `ScorecardEntry` gains an optional `origin`, set only on an entry a third-party module

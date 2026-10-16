@@ -1232,8 +1232,10 @@ def agent_instructions() -> str:
         # properties are the numbers easiest to get wrong from memory.
         "Rolled sections (a member's `section` may name one instead of stating its "
         "properties): " + ", ".join(default_profile_table().designations()) + "; AISC "
-        "W-shapes such as W12x26 and HSS such as HSS6X4X1/4 or HSS6.000X0.250 once the "
-        "user has run `anvilate fetch aisc-shapes --consent`; "
+        "W-shapes such as W12x26, HSS such as HSS6X4X1/4 or HSS6.000X0.250, and channels "
+        "such as C10X30 or MC18X51.9 once the "
+        "user has run `anvilate fetch aisc-shapes --consent` (a channel is a beam_member "
+        "only: the weak axis a column buckles about is not derived from its dimensions); "
         "or a bar by its own dimensions in mm: FLAT 50x10 (breadth x depth), TUBE 60x4 "
         "(outside diameter x wall), BOX 100x50x4 (breadth x depth x wall); or pipe by "
         "its bundled ASME B36.10M nominal size and schedule: NPS 4 SCH 40.",

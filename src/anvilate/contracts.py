@@ -575,12 +575,14 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # 1.5.0, with beam_member and column_member: a section may record the tube or box it
     # is of (`outside`, `wall_thickness`), which a hollow beam's wall is screened on.
     # 1.6.0: and a rolled box's outside `corner_radius`.
-    "beam_column_member": "1.6.0",
-    "beam_member": "1.6.0",
+    # 1.7.0: and an open section's `shear_centre_offset`, which a channel beam's `twist`
+    # entry reports and which makes a channel column refuse.
+    "beam_column_member": "1.7.0",
+    "beam_member": "1.7.0",
     "bolted_connection": "1.3.0",
     # 1.2.0 adds the pin load and the four allowables its pin and ears are screened against.
     "clevis": "1.2.0",
-    "column_member": "1.6.0",
+    "column_member": "1.7.0",
     "concrete_bearing": "1.3.0",
     "cover_plate": "1.3.0",
     "driven_pile": "1.3.0",

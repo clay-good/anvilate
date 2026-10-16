@@ -60,6 +60,17 @@
           ],
           "default": null
         },
+        "shear_centre_offset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "shear_form_factor": {
           "anyOf": [
             {
@@ -112,7 +123,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:elements:beam_column_member:1.6.0",
+  "$id": "urn:anvilate:schema:elements:beam_column_member:1.7.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate pack element 'beam_column_member': the fields a Design Spec puts in `element_params` when it declares `element_type: beam_column_member`. Generated from anvilate.packs.structural.BeamColumnMember.",
@@ -159,5 +170,5 @@
   ],
   "title": "BeamColumnMember",
   "type": "object",
-  "x-anvilate-version": "1.6.0"
+  "x-anvilate-version": "1.7.0"
 }

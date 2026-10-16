@@ -432,6 +432,11 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             (_BEAM, "wall local buckling"),
         ),
         _state(
+            "steel.open_beam_twist",
+            "an open-section beam rotating under a load that misses its shear centre",
+            (_BEAM, "twist"),
+        ),
+        _state(
             "steel.beam_shear",
             "a beam web yielding in shear",
             (_BEAM, "shear"),

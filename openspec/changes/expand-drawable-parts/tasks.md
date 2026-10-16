@@ -46,11 +46,26 @@
       passed. Read from that standard and not from the workbook's Pipe rows, whose areas do
       not follow from their own dimensions on 18 of 51 rows (`Pipe20XS` by 3.4%): measured,
       and pinned by a test where the workbook is fetched
-- [ ] 3.3h Channel and angle members. A channel twists unless loaded through its shear
-      centre and an angle bends about principal axes that are not its legs, neither of
-      which the member screens model. Their areas also need the flange taper the workbook
-      does not tabulate: from d, bf, tw and tf alone a channel's area is out by up to 1.7%,
-      and a fillet of (1 − π/4)·r² at each root overshoots by 5.5%
+- [x] 3.3j Channel beams: `section: C10X30`, `MC18X51.9`, from the fetched AISC workbook.
+      The strong axis is computed from its four dimensions, sharp-cornered, and held to all
+      72 C and MC rows between 1.8% low and 0.2% high, low on at least 64 — the fillets add
+      metal the sharp corner does not, so low is the conservative side. The shear centre is
+      computed too, `3·t_f·b²/(6·b·t_f + h·t_w) − t_w/2` from the back of the web, holding
+      the workbook's `eo` within 0.65% where the uniform-thickness formula misses by 23%.
+      A channel beam carries a `twist` entry, NOT_EVALUATED on every one of them. A channel
+      column or beam-column is REFUSED: the weak axis they buckle about depends on the
+      flange taper the four dimensions do not give (sharp rectangles put it up to 30% high,
+      and the best single taper constant still 10% high), and the fallback would screen one
+      on its strong axis
+- [ ] 3.3k A channel beam's `twist` entry states no `needs`, because there is no field to
+      declare: `check` prints "1 could not run and none states what it needs". Give the
+      member an optional declaration that the load acts through the shear centre or that
+      the section is restrained against rotating, and let the entry pass on it — a member
+      schema change, so it moves those schemas again
+- [ ] 3.3h Angle members. An angle bends about principal axes that are not its legs, which
+      the member screens do not model; the workbook tabulates `tan(α)` and `Iz` for them.
+      The same flange-taper limit does not apply — an angle's legs are untapered — so the
+      open question is the principal-axis screen, not the geometry
 - [x] 3.3e A hollow beam is held to what its wall carries: `wall local buckling`, from the
       moment AISC 360-16 Chapter F gives a round tube (§F8) or a box (§F7), and NOT_EVALUATED
       past what those clauses cover. A section records the tube or box it is of

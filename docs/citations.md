@@ -328,6 +328,24 @@ for one: it came from the document. The box is the one welded from four plates. 
 hollow section rounds its corners and has a little less metal, so declare that one by its
 properties.
 
+A rolled channel, `C10X30` or `MC18X51.9`, resolves from the same fetched AISC workbook as
+a W-shape, and its strong axis is computed from the four dimensions that workbook gives it:
+depth, flange width, web thickness and flange thickness. The corners are sharp, so the area
+and both strong-axis moduli come out between 1.8% low and 0.2% high against the tabulated
+values over all 72 C and MC rows, and low on at least 64 of them. Its shear centre is
+computed too, `e = 3·t_f·b²/(6·b·t_f + h·t_w) − t_w/2` from the back of the web, which holds
+the workbook's own `eo` column within 0.65%; the uniform-thickness `3·b²/(h + 6·b)` misses
+those rows by 23% on average and is not used for a rolled channel.
+
+A channel is a beam only. The weak-axis second moment a column buckles about is deliberately
+absent from the section: it turns on how the rolled flange tapers from root to toe, which
+those four dimensions do not say, and modelled as sharp rectangles it comes out up to 30%
+*high* — the unconservative direction. A `column_member` or `beam_column_member` given a
+channel is refused with that reason rather than screened on the strong axis by fallback. A
+channel beam is screened in bending, deflection and shear, and carries one more entry,
+`twist`, which is NOT_EVALUATED on every channel: a transverse load that misses the shear
+centre twists the section, and the entries beside it are pure bending.
+
 Pipe is a table, not a dimension pair: an NPS 4 pipe is 114.3 mm across, not 4 inches, and
 the wall a schedule carries is a tabulated entry. A member names it the way a pipe run does,
 `section: NPS 4 SCH 40`, and the bundled ASME B36.10M schedule table gives the outside

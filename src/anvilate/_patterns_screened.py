@@ -365,6 +365,35 @@ def build_gear_mesh(mesh: SpurGearMesh, name: str, params: Mapping[str, Any]) ->
     return _built(mesh, tag, shape, dimensions, envelope=True, name=name)
 
 
+def _channel_outline(profile: Any) -> tuple[Any, dict[str, float]]:
+    """A rolled channel's outline, centred on its own bounding box, and its dimensions.
+
+    Three sharp-cornered rectangles: the web down one side and a flange along each end,
+    the same shape :meth:`~anvilate.analysis.section.CrossSection.channel` takes its
+    properties from, so the metal drawn is the area the screen divides the load by. A
+    rolled channel's root fillets add a little more than this, which is why the screened
+    properties sit up to 1.8% under the published ones, on the safe side.
+    """
+    from build123d import Pos, Rectangle
+
+    depth, flange, web, thick = (
+        float(getattr(profile, field).quantity.to("mm").magnitude)
+        for field in ("depth", "flange_width", "web_thickness", "flange_thickness")
+    )
+    # Centred on the bounding box: the web's back face at x = -flange/2.
+    outline = Pos(-(flange - web) / 2, 0) * Rectangle(web, depth)
+    outstand = flange - web
+    for side in (1, -1):
+        outline += Pos(web / 2, side * (depth - thick) / 2) * Rectangle(outstand, thick)
+    return outline, {
+        "depth": depth,
+        "flange_width": flange,
+        "web_thickness": web,
+        "flange_thickness": thick,
+        "section_area": depth * web + 2 * outstand * thick,
+    }
+
+
 def _hollow_outline(
     sizes: tuple[float, ...], wall: float, corner: float = 0.0
 ) -> tuple[Any, dict[str, float]]:
@@ -463,6 +492,8 @@ def _rolled_section(
     profile = resolve_profile(named)
     if not hasattr(profile, "flange_width"):  # a rolled HSS: drawn from its own section
         return _section_outline(section)
+    if not hasattr(profile, "root_radius"):  # a rolled channel
+        return _channel_outline(profile)
     depth, flange, web, thick, root = (
         float(getattr(profile, field).quantity.to("mm").magnitude)
         for field in (
@@ -597,9 +628,10 @@ _register(
     "beam_member",
     BeamMember,
     _member("beam_member", upright=False),
-    "A beam cut to length from a rolled I or H profile, or a flat bar, round tube or "
-    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
-    "by its nominal size and schedule (`NPS 4 SCH 40`).",
+    "A beam cut to length from a rolled I, H or channel profile, or a flat bar, round tube "
+    "or box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
+    "by its nominal size and schedule (`NPS 4 SCH 40`). A channel's card says its twist "
+    "is not evaluated.",
     example_params={"section": "IPE 200"},
 )
 _register(
@@ -608,7 +640,8 @@ _register(
     _member("column_member", upright=True),
     "A column cut to length from a rolled I or H profile, or a flat bar, round tube or "
     "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
-    "by its nominal size and schedule (`NPS 4 SCH 40`).",
+    "by its nominal size and schedule (`NPS 4 SCH 40`). Not a channel: the weak axis "
+    "it would buckle about is not derived.",
     example_params={"section": "IPE 200"},
 )
 _register(
@@ -617,6 +650,7 @@ _register(
     _member("beam_column_member", upright=True),
     "A beam-column cut to length from a rolled I or H profile, or a flat bar, round tube or "
     "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
-    "by its nominal size and schedule (`NPS 4 SCH 40`).",
+    "by its nominal size and schedule (`NPS 4 SCH 40`). Not a channel: the weak axis "
+    "it would buckle about is not derived.",
     example_params={"section": "IPE 200"},
 )

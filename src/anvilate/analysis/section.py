@@ -309,6 +309,7 @@ class CrossSection(RevalidatedModel):
     outside: tuple[Quantity, ...] | None = None
     wall_thickness: Quantity | None = None
     corner_radius: Quantity | None = None
+    shear_centre_offset: Quantity | None = None
 
     @model_validator(mode="after")
     def _every_property_is_a_number(self) -> CrossSection:
@@ -330,6 +331,17 @@ class CrossSection(RevalidatedModel):
                         subject=name,
                         source=_section_input_source(name),
                     )
+        # An open section's shear centre lies outside its web, so this is a positive
+        # length. A non-finite one would reach the twist entry and read as a distance.
+        if self.shear_centre_offset is not None:
+            require_finite(self.shear_centre_offset, name="shear_centre_offset")
+            if self.shear_centre_offset.magnitude <= 0:
+                raise _section_refusal(
+                    "shear_centre_offset is measured from the back of the web to a shear "
+                    f"centre outside it, so it is positive; got {self.shear_centre_offset}",
+                    subject="shear_centre_offset",
+                    source=_DRAWING_SOURCE,
+                )
         if self.shear_form_factor is not None and not isfinite(self.shear_form_factor):
             raise _section_refusal(
                 f"shear_form_factor must be finite; got {self.shear_form_factor}",
@@ -674,6 +686,73 @@ class CrossSection(RevalidatedModel):
             second_moment_transverse=Quantity(magnitude=plated_weak + weak, unit="mm**4"),
             # The same AISC G2 web-area ratio as :meth:`i_section`, over the filleted area.
             shear_form_factor=area / (h * tw),
+        )
+
+    @classmethod
+    def channel(
+        cls,
+        *,
+        depth: Quantity,
+        flange_width: Quantity,
+        flange_thickness: Quantity,
+        web_thickness: Quantity,
+    ) -> CrossSection:
+        """A rolled channel about its strong axis, and where its shear centre is.
+
+        Three rectangles: a web of the full ``depth`` d by ``web_thickness`` tw, and two
+        flanges of ``flange_thickness`` tf reaching ``flange_width`` bf from the back of the
+        web. The corners are sharp, which is why the properties come out a little under a
+        rolled channel's: against the AISC Shapes Database's 32 C and 40 MC rows this gives
+        the tabulated A, I_x and S_x between 1.8% low and 0.2% high, and low on at least 64
+        of the 72, because the root fillets add metal the sharp corner does not. The handful
+        that read high do so inside the three figures the database prints. Low is the
+        conservative side for all three.
+
+        It reports **no** ``second_moment_transverse``, deliberately. A channel's weak axis
+        turns on how the flange metal is spread across bf, and a rolled flange tapers from
+        root to toe — which these four dimensions do not say. Modelled as sharp rectangles
+        the weak-axis I_y comes out up to 30% *above* the tabulated value, and the best
+        single taper constant over those 72 rows still leaves it 10% above. High is the
+        unconservative side for a column, so the number is withheld rather than guessed:
+        :attr:`least_radius_of_gyration` falls back to the bending axis when it is absent,
+        so the structural pack refuses a channel column rather than screening one.
+
+        ``shear_centre_offset`` is where a transverse load has to act to bend the channel
+        without twisting it, measured from the back of the web as AISC's ``eo`` column is:
+        e = 3·tf·b²/(6·b·tf + h·tw) − tw/2, with b = bf − tw/2 to the flange tip and
+        h = d − tf between flange centrelines. Taking the flange and web thicknesses apart
+        matters: the uniform-thickness 3·b²/(h + 6·b) misses those 72 rows by 23% on average,
+        and this form reproduces them within 0.65%.
+        """
+        d = _require_length(depth, "depth")
+        bf = _require_length(flange_width, "flange_width")
+        tf = _require_length(flange_thickness, "flange_thickness")
+        tw = _require_length(web_thickness, "web_thickness")
+        if 2 * tf >= d:
+            raise _section_refusal(
+                f"two flanges of {tf:g} mm leave no web in a {d:g} mm depth",
+                subject="flange_thickness and depth",
+                source=_DRAWING_SOURCE,
+            )
+        if tw >= bf:
+            raise _section_refusal(
+                f"a {tw:g} mm web leaves no flange inside a {bf:g} mm flange_width",
+                subject="web_thickness and flange_width",
+                source=_DRAWING_SOURCE,
+            )
+        outstand = bf - tw
+        flange = outstand * tf
+        area = d * tw + 2 * flange
+        strong = tw * d**3 / 12 + 2 * (outstand * tf**3 / 12 + flange * ((d - tf) / 2) ** 2)
+        b, h = bf - tw / 2, d - tf
+        offset = 3 * tf * b**2 / (6 * b * tf + h * tw) - tw / 2
+        return cls(
+            area=Quantity(magnitude=area, unit="mm**2"),
+            second_moment=Quantity(magnitude=strong, unit="mm**4"),
+            extreme_fibre=_mm(d / 2),
+            # The web carries the shear, as it does in an I-section (AISC G2).
+            shear_form_factor=area / (d * tw),
+            shear_centre_offset=_mm(offset),
         )
 
 

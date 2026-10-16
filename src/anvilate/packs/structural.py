@@ -348,11 +348,15 @@ def _pipe_section(designation: str) -> CrossSection | None:
 def _named_section(value: object) -> object:
     """A profile designation such as ``IPE 200`` or ``W12x26`` resolves to its section.
 
-    EN profiles and ASME B36.10M pipe are bundled. AISC W-shapes and HSS resolve only from
-    the verified local cache; this validator never downloads implicitly. A name no table
-    holds is refused with near misses. A flat bar, ``FLAT 50x10``, a round tube,
+    EN profiles and ASME B36.10M pipe are bundled. AISC W-shapes, HSS and channels resolve
+    only from the verified local cache; this validator never downloads implicitly. A name no
+    table holds is refused with near misses. A flat bar, ``FLAT 50x10``, a round tube,
     ``TUBE 60x4``, and a square-cornered box, ``BOX 100x50x4``, are each their own
     dimensions, and a pipe, ``NPS 4 SCH 40``, is its nominal size and schedule.
+
+    A channel resolves here for every member kind, and the two compression members then
+    refuse it: the section it resolves to withholds the weak axis they would buckle it
+    about. The refusal is theirs, so the reason names the member.
     """
     if isinstance(value, str):
         pipe = _pipe_section(value)
@@ -391,8 +395,8 @@ def _named_section(value: object) -> object:
 
 
 #: A member's section: its properties, or the designation of a rolled profile the library
-#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape or HSS (``W12x26``,
-#: ``HSS6X4X1/4``), or a bar named
+#: carries (``IPE 200``, ``HEA 300``), or a fetched AISC W-shape, HSS or channel
+#: (``W12x26``, ``HSS6X4X1/4``, ``C10X30``), or a bar named
 #: by its own dimensions in millimetres: a flat bar by breadth and depth (``FLAT 50x10``), a
 #: round tube by outside diameter and wall (``TUBE 60x4``), or a square-cornered box by
 #: breadth, depth and wall (``BOX 100x50x4``); or pipe, by the nominal size and schedule the
@@ -432,6 +436,9 @@ _CLAUSE_BOX = "AISC 360-16 §F7"
 _ROUND_WALL_SLENDER = 0.11
 _BOX_WALL_SLENDER = 1.40
 _CLAUSE_COMPRESSION = "AISC 360-16 Ch. E"
+# Torsion and combined stress on a member that is not an HSS. Cited by chapter, as flexure
+# is: the clause number inside Chapter H has not been read from the publisher.
+_CLAUSE_TORSION = "AISC 360-16 Ch. H"
 _CLAUSE_BEAM_SHEAR = "AISC 360-16 Ch. G"
 _CLAUSE_BOLT_SHEAR = "AISC 360-16 §J3.6"
 _CLAUSE_BOLT_COMBINED = "AISC 360-16 §J3.7"
@@ -1001,9 +1008,41 @@ def screen_beam_member(
     )
     if wall_entry is not None:
         entries.append(wall_entry)
+    twist_entry = _twist_entry(member)
+    if twist_entry is not None:
+        entries.append(twist_entry)
     return disclosed(
         Scorecard(entries=tuple(entries)),
         yield_allowable,
+    )
+
+
+def _twist_entry(member) -> ScorecardEntry | None:
+    """An open section's twist entry, or ``None`` for a section with no shear centre offset.
+
+    A channel is not symmetric about the axis the load acts along, so its shear centre is
+    not on its web: a transverse load through the web twists it as well as bending it, which
+    is why a channel purlin rolls over unless it is restrained. The bending and deflection
+    entries beside this one are pure bending, and this says so rather than letting the card
+    read as though the twist had been checked. It is NOT_EVALUATED on every channel, because
+    the screen has no way to be told where the load acts.
+    """
+    offset = getattr(member.section, "shear_centre_offset", None)
+    if offset is None:
+        return None
+    millimetres = offset.to("mm").magnitude
+    return ScorecardEntry(
+        name=f"{member.name} twist",
+        status=CheckStatus.NOT_EVALUATED,
+        detail=(
+            f"not evaluated — the shear centre of this section is {millimetres:.3g} mm "
+            "outside the back of its web, so a transverse load applied anywhere else "
+            "twists it as well as bending it. The bending and deflection entries on this "
+            "card are pure bending: they do not carry the torsion, and the stress a twist "
+            "adds is not computed here. Load through the shear centre, or restrain the "
+            "section against rotating, and check the twist by another means"
+        ),
+        reference=_CLAUSE_TORSION,
     )
 
 
@@ -1421,7 +1460,34 @@ class ColumnMember(GuardedInputs):
                 subject="axial_load",
                 source=_LOAD_SOURCE,
             )
+        _refuse_a_withheld_weak_axis(self.section, "column")
         return self
+
+
+def _refuse_a_withheld_weak_axis(section, kind: str) -> None:
+    """Refuse a compression member whose section withheld the weak axis it would buckle on.
+
+    A section that records a shear centre off its web is an open, singly-symmetric one — a
+    channel. :meth:`~anvilate.analysis.section.CrossSection.channel` reports no
+    ``second_moment_transverse`` on purpose, because a rolled channel's weak axis turns on
+    the flange taper its four tabulated dimensions do not give. The compression screens
+    buckle a member about the least axis the section carries, and with the weak one absent
+    that falls back to the STRONG axis: a C10X30 would be screened on r = 3.43 in where its
+    weak axis is nearer 0.92, over-stating what it carries by about four times. So this is
+    refused, not screened and not passed.
+    """
+    if getattr(section, "shear_centre_offset", None) is None:
+        return
+    if section.second_moment_transverse is not None:
+        return
+    raise _structural_pack_refusal(
+        f"this is a channel, and a {kind} buckles about the weak axis it states none for. A "
+        "rolled channel's weak axis turns on the flange taper its four dimensions do not "
+        "give, and derived from them it reads up to 30% high. Screen it as a beam_member, "
+        "or state second_moment_transverse with the section's other properties",
+        subject="section",
+        source="the rolled-section table's weak-axis second moment (I_y), or the section drawing",
+    )
 
 
 def screen_column_member(
@@ -2966,6 +3032,7 @@ class BeamColumnMember(GuardedInputs):
                 subject="moment",
                 source=_LOAD_SOURCE,
             )
+        _refuse_a_withheld_weak_axis(self.section, "beam-column")
         return self
 
 

@@ -15,6 +15,7 @@ from anvilate.standards import (
     UnknownProfileError,
     cached_aisc_profile_table,
     canonical_aisc_designation,
+    canonical_channel_designation,
     canonical_designation,
     default_profile_table,
     fetch_aisc_profile_table,
@@ -184,6 +185,7 @@ _AISC_FIXTURE_ROWS = (
     {"A": "W", "C": "W12X26", "G": 12.2, "L": 6.49, "Q": 0.23, "T": 0.38, "Y": 0.68},
     {"A": "HSS", "C": "HSS6X4X1/4", "I": 6, "K": "–", "N": 4, "X": 0.233},
     {"A": "HSS", "C": "HSS6.000X0.250", "I": "–", "K": 6, "N": "–", "X": 0.233},
+    {"A": "C", "C": "C10X30", "G": 10.0, "L": 3.03, "Q": 0.673, "T": 0.436},
 )
 _AISC_FIXTURE_HEAD = {
     "A": "Type", "C": "AISC_Manual_Label", "G": "d", "I": "Ht", "K": "OD", "L": "bf",
@@ -376,6 +378,154 @@ def test_every_rolled_hss_in_a_fetched_workbook_reproduces_its_tabulated_propert
                 [float(row["AI"]), float(row["AK"])], rel=8e-3, abs=0.07
             ), row["C"]
     assert boxes == 525
+
+
+@pytest.mark.parametrize(
+    ("written", "designation"),
+    [
+        ("C10X30", "C10X30"),
+        ("c10x30", "C10X30"),
+        ("C 10 X 30", "C10X30"),
+        ("C10×30", "C10X30"),
+        ("MC18X51.9", "MC18X51.9"),
+        ("mc18x51.9", "MC18X51.9"),
+        ("C15X33.9", "C15X33.9"),
+    ],
+)
+def test_a_channel_designation_resolves_however_it_is_written(written, designation):
+    assert canonical_channel_designation(written) == designation
+
+
+@pytest.mark.parametrize("written", ["W12X26", "HSS6X4X1/4", "IPE 200", "L4X4X1/2", "C10", "MC"])
+def test_only_a_channel_designation_is_read_as_one(written):
+    assert canonical_channel_designation(written) is None
+
+
+def test_a_channel_is_computed_from_the_four_dimensions_the_workbook_gives_it(
+    tmp_path, monkeypatch
+):
+    """`C10X30` resolves to the section its strong axis follows from, and nothing more.
+
+    The fixture's channel row is a real one, so the properties can be read against the
+    Manual's: A 8.81 in², I_x 103 in⁴, S_x 20.7 in³, and a shear centre 0.368 in off the
+    back of the web. The weak axis is absent on purpose.
+    """
+    from anvilate.standards import profiles
+
+    payload = _test_aisc_workbook()
+    monkeypatch.setattr(profiles, "AISC_SHAPES_V16", _test_aisc_recipe(payload))
+    table = fetch_aisc_profile_table(
+        retrieved="2026-09-27", consent=True, cache_dir=tmp_path, opener=lambda _url: payload
+    )
+    assert table.channel_designations() == ["C10X30"]
+    channel = table.get("c10 x 30")
+    assert channel.designation == "C10X30"
+    assert channel.depth.quantity.to("in").magnitude == pytest.approx(10.0)
+    assert "C10X30 flange width" in channel.citations()["flange_width"].condition
+    assert str(channel).startswith("C10X30 (d 254, b_f 76.96")
+
+    section = channel.section()
+    assert section.area.to("in**2").magnitude == pytest.approx(8.81, rel=3e-3)
+    assert section.second_moment.to("in**4").magnitude == pytest.approx(103.0, rel=3e-3)
+    assert section.section_modulus.to("in**3").magnitude == pytest.approx(20.7, rel=4e-3)
+    assert section.shear_centre_offset.to("in").magnitude == pytest.approx(0.368, rel=3e-3)
+    # The weak axis is withheld, so nothing downstream can read a strong axis as one.
+    assert section.second_moment_transverse is None
+    assert section.radius_of_gyration_transverse is None
+
+    with pytest.raises(UnknownProfileError) as refused:
+        table.get("C10X31")
+    assert refused.value.suggestions == ["C10X30"]
+    assert "series, depth, weight per foot" in str(refused.value)
+
+
+def test_every_rolled_channel_in_a_fetched_workbook_reproduces_its_tabulated_properties(
+    monkeypatch,
+):
+    """All 72 C and MC rows, where the workbook has been fetched.
+
+    The sharp-cornered model is held to the strong-axis properties it claims, and to the
+    direction it claims them in. A, I_x and S_x come out under the tabulated value on 69 or
+    more of the 72 rows, because the root fillets add metal the sharp corner does not; the
+    few that sit above it do so by no more than 0.2%, which is the three figures the
+    database prints, not the model drifting. Both ends are pinned, because a model that
+    drifted *above* the tabulation would be unconservative and the bound alone would not
+    catch it.
+
+    The weak axis is checked the other way: it is NOT derived, and this measures how far
+    out it would be if it were, which is what the withholding rests on.
+    """
+    from anvilate.fetch import cached_dataset
+    from anvilate.standards import profiles
+
+    where = os.environ.get("ANVILATE_FETCHED_DATA")
+    found = cached_dataset(profiles.AISC_SHAPES_V16, cache_dir=where) if where else None
+    if found is None:
+        pytest.skip(
+            "fetch the workbook (`anvilate fetch aisc-shapes --consent`) and set "
+            "ANVILATE_FETCHED_DATA to its folder to check every channel row"
+        )
+    table = cached_aisc_profile_table(cache_dir=where)
+    extra = {"F": "A", "AD": "eo", "AM": "Ix", "AN": "Zx", "AO": "Sx", "AQ": "Iy", "AB": "x"}
+    for column, heading in extra.items():
+        monkeypatch.setitem(profiles._AISC_COLUMNS, column, heading)
+    rows = profiles._aisc_rows(found[0], kinds=("C", "MC"))
+    assert len(rows) == 72 == len(table.channel_designations())
+    weak_errors: list[float] = []
+    low = dict.fromkeys(("F", "AM", "AO"), 0)
+    for row in rows:
+        profile = table.get(row["C"])
+        section = profile.section()
+        depth = profile.depth.quantity
+        for have, column, unit in (
+            (section.area, "F", "in**2"),
+            (section.second_moment, "AM", "in**4"),
+            (section.section_modulus, "AO", "in**3"),
+        ):
+            ratio = have.to(unit).magnitude / float(row[column])
+            assert 1 - 1.8e-2 <= ratio <= 1 + 2e-3, (row["C"], column, ratio)
+            low[column] += ratio <= 1.0
+        # The shear centre is computed, not read, and it is held tightly.
+        assert section.shear_centre_offset.to("in").magnitude == pytest.approx(
+            float(row["AD"]), rel=7e-3
+        ), row["C"]
+        # What the weak axis would be, modelled as sharp rectangles: up to 30% HIGH.
+        flange = profile.flange_width.quantity.to("mm").magnitude
+        web = profile.web_thickness.quantity.to("mm").magnitude
+        thick = profile.flange_thickness.quantity.to("mm").magnitude
+        tall = depth.to("mm").magnitude
+        outstand = flange - web
+        areas = ((tall * web, web / 2), (outstand * thick, web + outstand / 2))
+        total = areas[0][0] + 2 * areas[1][0]
+        centroid = (areas[0][0] * areas[0][1] + 2 * areas[1][0] * areas[1][1]) / total
+        weak = tall * web**3 / 12 + areas[0][0] * (areas[0][1] - centroid) ** 2
+        weak += 2 * (thick * outstand**3 / 12 + areas[1][0] * (areas[1][1] - centroid) ** 2)
+        tabulated = float(row["AQ"]) * 25.4**4
+        weak_errors.append(weak / tabulated - 1)
+    # Low on nearly every row, which is the direction the sharp corner should err in.
+    assert min(low.values()) >= 64, low
+    assert max(weak_errors) == pytest.approx(0.30, abs=0.01)
+    assert min(weak_errors) > 0.05  # every row high, so no row is safe to derive
+    # The uniform-thickness shear-centre formula is not the one used, and this is why.
+    from anvilate.analysis.section import channel_shear_center
+    from anvilate.units import Quantity
+
+    uniform = []
+    for row in rows[:12]:
+        profile = table.get(row["C"])
+        web = profile.web_thickness.quantity.to("mm").magnitude
+        naive = channel_shear_center(
+            flange_width=Quantity(
+                magnitude=profile.flange_width.quantity.to("mm").magnitude - web / 2, unit="mm"
+            ),
+            web_height=Quantity(
+                magnitude=profile.depth.quantity.to("mm").magnitude
+                - profile.flange_thickness.quantity.to("mm").magnitude,
+                unit="mm",
+            ),
+        )
+        uniform.append(abs(naive.to("in").magnitude / float(row["AD"]) - 1))
+    assert max(uniform) > 0.5
 
 
 def test_the_workbooks_pipe_areas_do_not_follow_from_its_own_pipe_dimensions(monkeypatch):
