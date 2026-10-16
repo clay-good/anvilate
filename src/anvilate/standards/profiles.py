@@ -444,8 +444,12 @@ def _xlsx_value(cell: ElementTree.Element, shared: list[str]) -> str | None:
     return value.text
 
 
-def _aisc_rows(path: Path) -> list[dict[str, str]]:
-    """Read the pinned workbook's W-shape and HSS geometry without a spreadsheet dependency."""
+def _aisc_rows(path: Path, kinds: tuple[str, ...] = ("W", "HSS")) -> list[dict[str, str]]:
+    """Read the pinned workbook's geometry for ``kinds`` without a spreadsheet dependency.
+
+    ``kinds`` are the workbook's own shape-type codes. The library builds its tables from
+    the W and HSS rows; the other types are read only to check a claim about them.
+    """
     try:
         with ZipFile(path) as workbook:
             strings = ElementTree.fromstring(workbook.read("xl/sharedStrings.xml"))
@@ -477,7 +481,7 @@ def _aisc_rows(path: Path) -> list[dict[str, str]]:
             f"{path} does not carry the expected AISC v16.0 geometry columns "
             f"{sorted(_AISC_COLUMNS.values())}"
         )
-    return [row for row in rows[1:] if row.get("A") in ("W", "HSS")]
+    return [row for row in rows[1:] if row.get("A") in kinds]
 
 
 @cache

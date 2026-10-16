@@ -151,7 +151,8 @@ script that read exit 1 as "no solver" should read the check's status instead.
 A section gains two optional properties, `outside` and `wall_thickness`: a round tube's one
 outside diameter or a box's breadth and depth, and its wall. `CrossSection.hollow_circular`
 and `hollow_rectangular` fill them, and so does a member that names its bar by its
-dimensions (`section: TUBE 60x4`, `BOX 100x50x4`). A section that states them is refused
+dimensions (`section: TUBE 60x4`, `BOX 100x50x4`) or names pipe by its nominal size and
+schedule (`section: NPS 4 SCH 40`). A section that states them is refused
 unless its area, second moment and extreme fibre are that tube's or that box's. A beam whose
 section carries them gets one more check, `wall local buckling`. `beam_member`,
 `column_member` and `beam_column_member` move to 1.5.0; nothing a document already writes

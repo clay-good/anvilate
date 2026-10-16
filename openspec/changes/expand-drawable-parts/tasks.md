@@ -39,10 +39,18 @@
       (`section: HSS6X4X1/4`, `HSS6.000X0.250`): computed from dimensions and design wall,
       drawn with their corners, and held to the workbook's tabulated properties on all 714
       rows where it is fetched
-- [ ] 3.3h Channel and angle members, and pipe. A channel twists unless loaded through its
-      shear centre and an angle bends about principal axes that are not its legs, neither of
-      which the member screens model; the workbook's pipe areas disagree with their own
-      dimensions by up to 3%
+- [x] 3.3i Pipe members: `section: NPS 4 SCH 40`, read from the bundled ASME B36.10M
+      schedule table a pipe run already uses, computed from its outside diameter and
+      nominal wall on all 108 rows, drawn as the round tube it is, and screened with the
+      round-tube wall entries — `NPS 24 SCH 10` is a slender element at D/t = 96 and is not
+      passed. Read from that standard and not from the workbook's Pipe rows, whose areas do
+      not follow from their own dimensions on 18 of 51 rows (`Pipe20XS` by 3.4%): measured,
+      and pinned by a test where the workbook is fetched
+- [ ] 3.3h Channel and angle members. A channel twists unless loaded through its shear
+      centre and an angle bends about principal axes that are not its legs, neither of
+      which the member screens model. Their areas also need the flange taper the workbook
+      does not tabulate: from d, bf, tw and tf alone a channel's area is out by up to 1.7%,
+      and a fillet of (1 − π/4)·r² at each root overshoots by 5.5%
 - [x] 3.3e A hollow beam is held to what its wall carries: `wall local buckling`, from the
       moment AISC 360-16 Chapter F gives a round tube (§F8) or a box (§F7), and NOT_EVALUATED
       past what those clauses cover. A section records the tube or box it is of

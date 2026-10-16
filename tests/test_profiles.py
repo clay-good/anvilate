@@ -378,6 +378,58 @@ def test_every_rolled_hss_in_a_fetched_workbook_reproduces_its_tabulated_propert
     assert boxes == 525
 
 
+def test_the_workbooks_pipe_areas_do_not_follow_from_its_own_pipe_dimensions(monkeypatch):
+    """Why a pipe member is read from ASME B36.10M and not from this workbook's Pipe rows.
+
+    A member's section is computed from dimensions, so a table it is held to has to agree
+    with its own. The W and HSS rows do, to their rounding, which is what lets those shapes
+    be computed. The Pipe rows do not: a third of them put the tabulated area more than half
+    a percent from the area their own outside diameter and design wall make, which is why
+    `_pipe_section` goes to the bundled standard instead. Reading the claim is the test; if
+    a later edition fixes these rows, this fails and the sourcing can be revisited.
+    """
+    import math
+
+    from anvilate.fetch import cached_dataset
+    from anvilate.standards import profiles
+
+    where = os.environ.get("ANVILATE_FETCHED_DATA")
+    found = cached_dataset(profiles.AISC_SHAPES_V16, cache_dir=where) if where else None
+    if found is None:
+        pytest.skip(
+            "fetch the workbook (`anvilate fetch aisc-shapes --consent`) and set "
+            "ANVILATE_FETCHED_DATA to its folder to check the Pipe rows"
+        )
+    monkeypatch.setitem(profiles._AISC_COLUMNS, "F", "A")
+    rows = profiles._aisc_rows(found[0], kinds=("PIPE",))
+    assert len(rows) == 51
+    gaps = {}
+    for row in rows:
+        outer, wall, tabulated = (float(row[column]) for column in ("K", "X", "F"))
+        computed = math.pi * (outer**2 - (outer - 2 * wall) ** 2) / 4
+        gaps[row["C"]] = (computed - tabulated) / tabulated
+    assert sum(1 for gap in gaps.values() if abs(gap) > 0.005) == 18
+    # The two worst rows, in both directions, named rather than counted.
+    assert gaps["Pipe20XS"] == pytest.approx(0.034, abs=5e-4)
+    assert gaps["Pipe10STD"] == pytest.approx(-0.033, abs=5e-4)
+    assert max(abs(gap) for gap in gaps.values()) == pytest.approx(0.034, abs=5e-4)
+    # The same arithmetic on the bundled standard's own dimensions is exact, which is the
+    # difference that decides where pipe is read from.
+    from anvilate.packs.structural import _pipe_section
+    from anvilate.standards import default_pipe_schedule_table
+
+    table = default_pipe_schedule_table()
+    for designation in table.designations():
+        record = table.get(*designation.removeprefix("NPS ").split(" SCH "))
+        diameter = record.outside_diameter.quantity.to("mm").magnitude
+        thickness = record.wall_thickness.quantity.to("mm").magnitude
+        section = _pipe_section(designation)
+        assert section is not None
+        assert section.area.to("mm**2").magnitude == pytest.approx(
+            math.pi * (diameter**2 - (diameter - 2 * thickness) ** 2) / 4, rel=1e-12
+        ), designation
+
+
 def test_an_absent_w_shape_suggests_the_weights_either_side_at_its_depth(tmp_path, monkeypatch):
     from anvilate.standards import profiles
 

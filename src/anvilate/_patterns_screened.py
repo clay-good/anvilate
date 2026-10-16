@@ -422,9 +422,10 @@ def _rolled_section(
 ) -> tuple[Any, dict[str, float]]:
     """The 2D outline of the member's section, centred, and its dimensions.
 
-    A named rolled profile is drawn from its table, and a bar named by its dimensions from
-    them. A section declared by its properties says its shape only when it records the tube
-    or box it is of, and then it is drawn as that.
+    A named rolled profile is drawn from its table, pipe from the schedule table's two
+    dimensions, and a bar named by its dimensions from them. A section declared by its
+    properties says its shape only when it records the tube or box it is of, and then it is
+    drawn as that.
     """
     from build123d import Circle, Pos, Rectangle
 
@@ -442,8 +443,12 @@ def _rolled_section(
             subject=f"the {tag} element_params.section",
             source="the bundled rolled-profile table, by designation",
         )
-    from .packs.structural import _flat_bar, _hollow_bar
+    from .packs.structural import _flat_bar, _hollow_bar, _pipe_section
 
+    # Pipe is a table lookup, and the lookup already happened: the member's section is the
+    # round tube the standard's two dimensions make, so it is drawn from that.
+    if _pipe_section(named) is not None:
+        return _section_outline(section)
     flat = _flat_bar(named)
     if flat is not None:
         breadth, bar_depth = flat
@@ -593,7 +598,8 @@ _register(
     BeamMember,
     _member("beam_member", upright=False),
     "A beam cut to length from a rolled I or H profile, or a flat bar, round tube or "
-    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`).",
+    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
+    "by its nominal size and schedule (`NPS 4 SCH 40`).",
     example_params={"section": "IPE 200"},
 )
 _register(
@@ -601,7 +607,8 @@ _register(
     ColumnMember,
     _member("column_member", upright=True),
     "A column cut to length from a rolled I or H profile, or a flat bar, round tube or "
-    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`).",
+    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
+    "by its nominal size and schedule (`NPS 4 SCH 40`).",
     example_params={"section": "IPE 200"},
 )
 _register(
@@ -609,6 +616,7 @@ _register(
     BeamColumnMember,
     _member("beam_column_member", upright=True),
     "A beam-column cut to length from a rolled I or H profile, or a flat bar, round tube or "
-    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`).",
+    "box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
+    "by its nominal size and schedule (`NPS 4 SCH 40`).",
     example_params={"section": "IPE 200"},
 )

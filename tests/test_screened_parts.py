@@ -406,6 +406,111 @@ def test_a_member_may_be_a_round_tube_or_a_box_named_by_its_dimensions():
         assert near in str(said.value)
 
 
+def test_a_member_may_be_a_pipe_named_by_its_nominal_size_and_schedule():
+    """`NPS 4 SCH 40` is a pipe from the bundled ASME B36.10M table, not a dimension pair.
+
+    A pipe's outside diameter does not follow from its nominal size, so the designation is a
+    table lookup — the same table and the same spelling a pipe run is drawn from. The section
+    is then computed from the two dimensions the standard publishes, which is why the whole
+    table can be held to the formula exactly rather than to a tabulated area.
+    """
+    from anvilate.packs.structural import BeamMember, _pipe_section
+    from anvilate.standards import default_pipe_schedule_table
+
+    assert _pipe_section("IPE 200") is None and _pipe_section("TUBE 60x4") is None
+    assert _pipe_section("NPS 4 SCH 40") is not None
+
+    # Every bundled pipe, against the formula and not against a second tabulation of it.
+    table = default_pipe_schedule_table()
+    assert len(table.designations()) == 108
+    for designation in table.designations():
+        size, schedule = designation.removeprefix("NPS ").split(" SCH ")
+        record = table.get(size, schedule)
+        outer = record.outside_diameter.quantity.to("mm").magnitude
+        wall = record.wall_thickness.quantity.to("mm").magnitude
+        section = _pipe_section(designation)
+        assert section is not None
+        bore = outer - 2 * wall
+        assert section.area.to("mm**2").magnitude == pytest.approx(
+            math.pi * (outer**2 - bore**2) / 4, rel=1e-12
+        ), designation
+        assert section.second_moment.to("mm**4").magnitude == pytest.approx(
+            math.pi * (outer**4 - bore**4) / 64, rel=1e-12
+        ), designation
+        assert section.wall_thickness.to("mm").magnitude == pytest.approx(wall, rel=1e-12)
+
+    # NPS 4 pipe is 114.3 mm across, not 4 inches: the point of the lookup.
+    document = yaml.safe_load((_EXAMPLES / "beam_member.spec.yaml").read_text("utf-8"))
+    params = document["element_params"]
+    section = BeamMember.model_validate({**params, "section": "NPS 4 SCH 40"}).section
+    assert section.outside is not None
+    assert section.outside[0].to("mm").magnitude == pytest.approx(114.3)
+    assert section.wall_thickness.to("mm").magnitude == pytest.approx(6.02)
+    area = math.pi * (114.3**2 - (114.3 - 2 * 6.02) ** 2) / 4
+
+    # Drawn as the round tube it is, for every member kind.
+    for kind, length in (("beam_member", 4000.0), ("column_member", 3000.0)):
+        built = build_spec(_spec(kind, section="NPS 4 SCH 40"))
+        box = built.shape.bounding_box().size
+        assert sorted(round(value, 6) for value in (box.X, box.Y, box.Z)) == pytest.approx(
+            sorted((114.3, 114.3, length)), abs=1e-6
+        )
+        assert built.volume_mm3 == pytest.approx(area * length, rel=1e-6)
+        assert built.dimensions_mm["section_area"] == pytest.approx(area, rel=1e-12)
+
+    # A size or schedule the table does not hold is refused by name, with its neighbours,
+    # rather than carried on to the profile tables, which hold no pipe at all.
+    with pytest.raises(ValueError, match="no bundled pipe is designated NPS 4 SCH 999") as said:
+        BeamMember.model_validate({**params, "section": "NPS 4 SCH 999"})
+    assert "NPS 4 SCH 40" in str(said.value)
+    with pytest.raises(ValueError, match="no bundled pipe is designated NPS 99 SCH 40"):
+        BeamMember.model_validate({**params, "section": "NPS 99 SCH 40"})
+    # A spelling that is not the designation's is shown the one that is.
+    for near in ("NPS 4 SCH40", "NPS4 SCH 40", "PIPE NPS 4 SCH 40", "NPS 4"):
+        with pytest.raises(ValueError, match="`NPS 4 SCH 40`"):
+            BeamMember.model_validate({**params, "section": near})
+
+
+def test_a_pipe_members_wall_is_screened_and_a_slender_one_is_not_passed():
+    """The round-tube wall entries a hollow member earns apply to pipe, which is one.
+
+    Pipe is the thinnest-walled section the library names, so this is where the wall
+    entries matter most: `NPS 24 SCH 10` is a slender element at D/t = 96 for A36 steel,
+    and the column screen says so rather than passing on an area that is not all working.
+    """
+    from anvilate.packs.structural import (
+        BeamMember,
+        ColumnMember,
+        screen_beam_member,
+        screen_column_member,
+    )
+    from anvilate.scorecard import CheckStatus
+
+    beam = yaml.safe_load((_EXAMPLES / "beam_member.spec.yaml").read_text("utf-8"))
+    card = screen_beam_member(
+        BeamMember.model_validate({**beam["element_params"], "section": "NPS 4 SCH 40"}),
+        required_safety_factor=1.5,
+    )
+    buckling = next(entry for entry in card.entries if entry.name.endswith("wall local buckling"))
+    assert buckling.status is CheckStatus.PASS
+    assert buckling.reference == "AISC 360-16 Ch. F"
+    assert buckling.name == "floor-beam wall local buckling"
+
+    column = yaml.safe_load((_EXAMPLES / "column_member.spec.yaml").read_text("utf-8"))
+    for designation, status, expected in (
+        ("NPS 24 SCH STD", CheckStatus.PASS, "the wall is not a slender element"),
+        ("NPS 24 SCH 10", CheckStatus.NOT_EVALUATED, "the wall is a slender element"),
+    ):
+        card = screen_column_member(
+            ColumnMember.model_validate({**column["element_params"], "section": designation}),
+            required_safety_factor=1.5,
+        )
+        entry = next(one for one in card.entries if one.name.endswith("wall slenderness"))
+        assert entry.status is status, designation
+        assert expected in entry.detail, designation
+        assert "0.11·E/F_y = 88.0" in entry.detail
+
+
 def test_a_section_declared_by_its_properties_is_drawn_when_it_records_its_wall():
     """Three properties do not say a shape. A tube's or a box's own dimensions do."""
     from anvilate.analysis.section import CrossSection

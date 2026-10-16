@@ -95,6 +95,7 @@ from ..standards import (
     AllowableBasis,
     MaterialsDatabase,
     default_materials_db,
+    default_pipe_schedule_table,
     resolve_profile,
 )
 from ..units import Quantity, decimals_distinguishing, spoken
@@ -306,15 +307,57 @@ def _hollow_bar(designation: str) -> tuple[float, ...] | None:
     return sizes
 
 
+def _pipe_section(designation: str) -> CrossSection | None:
+    """The section of a pipe written ``NPS 4 SCH 40``, or ``None`` for anything else.
+
+    Pipe is read from the bundled ASME B36.10M schedule table — the same table a pipe run is
+    drawn from, written the same way — and not from the AISC Shapes Database's Pipe rows.
+    That workbook tabulates a pipe's area to three figures beside its own outside diameter
+    and design wall, and on 18 of its 51 Pipe rows the two disagree by more than half a
+    percent: ``Pipe20XS`` is tabulated at 27.6 in², where its own 20.000 in diameter and
+    0.465 in design wall give 28.54 in², 3.4% more, and ``Pipe10STD`` disagrees by 3.3% the
+    other way. A section computed from the dimensions cannot be held to an area that does
+    not follow from them, so the dimensions are taken from the standard that publishes them
+    and the member is computed from those.
+
+    A nominal size and schedule the table does not hold is refused by name rather than
+    carried on to the profile tables, which hold no pipe: the spelling says what was meant.
+    """
+    import re
+
+    named = re.fullmatch(r"NPS (\S{1,12}) SCH (\S{1,12})", designation.strip())
+    if named is None:
+        return None
+    table = default_pipe_schedule_table()
+    size, schedule = named.groups()
+    if not table.has_pipe(size, schedule):
+        import difflib
+
+        near = difflib.get_close_matches(f"NPS {size} SCH {schedule}", table.designations(), n=4)
+        raise _structural_pack_refusal(
+            f"no bundled pipe is designated NPS {size} SCH {schedule}"
+            + (f"; did you mean {', '.join(near)}?" if near else ""),
+            subject="section",
+            source="the bundled ASME B36.10M pipe schedule table",
+        )
+    record = table.get(size, schedule)
+    outer = record.outside_diameter.quantity
+    return CrossSection.hollow_circular(outer_diameter=outer, inner_diameter=record.inside_diameter)
+
+
 def _named_section(value: object) -> object:
     """A profile designation such as ``IPE 200`` or ``W12x26`` resolves to its section.
 
-    EN profiles are bundled. AISC W-shapes and HSS resolve only from the verified local cache; this
-    validator never downloads implicitly. A name no table holds is refused with near misses.
-    A flat bar, ``FLAT 50x10``, a round tube, ``TUBE 60x4``, and a square-cornered box,
-    ``BOX 100x50x4``, are each their own dimensions.
+    EN profiles and ASME B36.10M pipe are bundled. AISC W-shapes and HSS resolve only from
+    the verified local cache; this validator never downloads implicitly. A name no table
+    holds is refused with near misses. A flat bar, ``FLAT 50x10``, a round tube,
+    ``TUBE 60x4``, and a square-cornered box, ``BOX 100x50x4``, are each their own
+    dimensions, and a pipe, ``NPS 4 SCH 40``, is its nominal size and schedule.
     """
     if isinstance(value, str):
+        pipe = _pipe_section(value)
+        if pipe is not None:
+            return pipe
         flat = _flat_bar(value)
         if flat is not None:
             return CrossSection.rectangular(
@@ -339,7 +382,8 @@ def _named_section(value: object) -> object:
             # can say. A member has one more way, and `TUBE 60 x 4` is asking for it.
             raise _structural_pack_refusal(
                 f"{unknown.args[0]}, or, for a flat bar, a round tube or a box, by its "
-                "dimensions in millimetres: `FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`",
+                "dimensions in millimetres: `FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`, or, "
+                "for pipe, by its nominal size and schedule: `NPS 4 SCH 40`",
                 subject="section",
                 source=_SECTION_SOURCE,
             ) from None
@@ -351,7 +395,8 @@ def _named_section(value: object) -> object:
 #: ``HSS6X4X1/4``), or a bar named
 #: by its own dimensions in millimetres: a flat bar by breadth and depth (``FLAT 50x10``), a
 #: round tube by outside diameter and wall (``TUBE 60x4``), or a square-cornered box by
-#: breadth, depth and wall (``BOX 100x50x4``).
+#: breadth, depth and wall (``BOX 100x50x4``); or pipe, by the nominal size and schedule the
+#: bundled ASME B36.10M table holds (``NPS 4 SCH 40``).
 MemberSection = Annotated[
     CrossSection, BeforeValidator(_named_section, json_schema_input_type=str | CrossSection)
 ]

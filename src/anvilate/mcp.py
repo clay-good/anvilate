@@ -1235,7 +1235,8 @@ def agent_instructions() -> str:
         "W-shapes such as W12x26 and HSS such as HSS6X4X1/4 or HSS6.000X0.250 once the "
         "user has run `anvilate fetch aisc-shapes --consent`; "
         "or a bar by its own dimensions in mm: FLAT 50x10 (breadth x depth), TUBE 60x4 "
-        "(outside diameter x wall), BOX 100x50x4 (breadth x depth x wall).",
+        "(outside diameter x wall), BOX 100x50x4 (breadth x depth x wall); or pipe by "
+        "its bundled ASME B36.10M nominal size and schedule: NPS 4 SCH 40.",
         "Part screens (element_type: fields; * marks required):",
     ]
     for tag, (model, _screen) in sorted(element_registry().items()):
