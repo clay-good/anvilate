@@ -273,3 +273,43 @@ def test_required_section_modulus_rejects_bad_inputs():
         required_section_modulus(
             bending_moment=_q("5 kN*m"), allowable_stress=_q("165 MPa"), required_safety_factor=0.0
         )
+
+
+def test_a_hand_built_section_cannot_state_half_of_a_tilt_or_a_force_for_an_offset():
+    """The principal-axis pair and the shear-centre offset, from a document rather than a
+    constructor. Each refusal here was an acceptance once.
+
+    A minor principal moment below both reference axes IS a tilt, and the flexural screens
+    refuse on the tangent, so stating the moment without the tangent let a hand-built angle
+    pass a beam screen on M/S about a leg. An offset in newtons validated and then ended the
+    beam screen converting it to millimetres.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    from anvilate.analysis.section import CrossSection
+    from anvilate.packs.structural import BeamMember
+
+    base = {
+        "area": Quantity.parse("1100 mm**2"),
+        "second_moment": Quantity.parse("2.9e7 mm**4"),
+        "extreme_fibre": Quantity.parse("130 mm"),
+        "second_moment_transverse": Quantity.parse("4.8e6 mm**4"),
+    }
+    minor = Quantity.parse("3.2e6 mm**4")
+    with pytest.raises(ValueError, match="no principal_axis_tangent"):
+        CrossSection(**base, minor_principal_second_moment=minor)
+    with pytest.raises(ValueError, match="no minor_principal_second_moment"):
+        CrossSection(**base, principal_axis_tangent=0.25)
+    with pytest.raises(ValueError, match=r"shear_centre_offset is a distance.*\[force\]"):
+        CrossSection(**base, shear_centre_offset=Quantity.parse("5 N"))
+    # A minor moment equal to the weak axis is no tilt, and needs no tangent.
+    CrossSection(**base, minor_principal_second_moment=Quantity.parse("4.8e6 mm**4"))
+    # Stated together, the pair reaches the beam refusal it was missing.
+    tilted = CrossSection(**base, minor_principal_second_moment=minor, principal_axis_tangent=0.25)
+    params = yaml.safe_load(
+        (Path(__file__).parents[1] / "examples" / "parts" / "beam_member.spec.yaml").read_text()
+    )["element_params"]
+    with pytest.raises(ValueError, match="principal axes are tilted off its legs"):
+        BeamMember.model_validate({**params, "section": tilted.model_dump(mode="json")})

@@ -118,6 +118,17 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Sections: a tilt is stated whole, and an offset is a length
+
+Two rules on hand-built sections, both added the day the properties shipped. A
+`minor_principal_second_moment` below every axis the section states is a tilt, so it now
+needs a non-zero `principal_axis_tangent` beside it, and a tangent needs the moment. Without
+the tangent, such a section reached a beam screen and passed bending on `M/S` about an axis
+that is not principal, because the beam refusal reads the tangent. A `shear_centre_offset`
+must be a length: one in newtons validated, then stopped the beam screen with a dimension
+error. The schemas' shape is unchanged. Neither rule refuses a section the library's own
+constructors build.
+
 ### `compile_spec` is going: its description says so
 
 The tool's description now ends by saying it goes in the next release, and to call

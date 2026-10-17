@@ -337,6 +337,14 @@ class CrossSection(RevalidatedModel):
         # length. A non-finite one would reach the twist entry and read as a distance.
         if self.shear_centre_offset is not None:
             require_finite(self.shear_centre_offset, name="shear_centre_offset")
+            # A force here validated and then ended the beam screen converting it to mm.
+            if not self.shear_centre_offset.has_dimension("[length]"):
+                raise _section_refusal(
+                    "shear_centre_offset is a distance from the back of the web, so it is a "
+                    f"[length]; got {self.shear_centre_offset.dimensionality}",
+                    subject="shear_centre_offset",
+                    source=_DRAWING_SOURCE,
+                )
             if self.shear_centre_offset.magnitude <= 0:
                 raise _section_refusal(
                     "shear_centre_offset is measured from the back of the web to a shear "
@@ -374,6 +382,33 @@ class CrossSection(RevalidatedModel):
                 subject="principal_axis_tangent",
                 source=_DRAWING_SOURCE,
             )
+        # The two describe one thing, the tilt of the principal axes off the reference ones,
+        # and the flexural screens refuse on the tangent. So a minor moment below both
+        # reference axes, which is what a tilt is, has to come with a tangent that says so:
+        # without one, a hand-built angle passed a beam screen on M/S about a leg.
+        tilted = bool(self.principal_axis_tangent)
+        if tilted and self.minor_principal_second_moment is None:
+            raise _section_refusal(
+                f"principal_axis_tangent is {self.principal_axis_tangent:g}, which says the "
+                "principal axes are tilted, and no minor_principal_second_moment says how "
+                "weak the axis it names is; state both",
+                subject="minor_principal_second_moment",
+                source=_DRAWING_SOURCE,
+            )
+        if self.minor_principal_second_moment is not None and not tilted:
+            minor = self.minor_principal_second_moment.to("mm**4").magnitude
+            stated = [self.second_moment] + (
+                [self.second_moment_transverse] if self.second_moment_transverse else []
+            )
+            if minor < min(one.to("mm**4").magnitude for one in stated) * (1 - 1e-6):
+                raise _section_refusal(
+                    "minor_principal_second_moment is below every axis the section states, so "
+                    "its principal axes are tilted off them, and no principal_axis_tangent "
+                    "says by how much; state principal_axis_tangent beside it, or a bending "
+                    "screen reads M/S about an axis that is not principal",
+                    subject="principal_axis_tangent",
+                    source=_DRAWING_SOURCE,
+                )
         if self.shear_form_factor is not None and not isfinite(self.shear_form_factor):
             raise _section_refusal(
                 f"shear_form_factor must be finite; got {self.shear_form_factor}",
