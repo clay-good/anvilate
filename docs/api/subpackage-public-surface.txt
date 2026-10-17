@@ -616,3 +616,5 @@ standards.compare_editions
 standards.edition_differences.compare_editions
 standards.default_edition_differences
 standards.edition_differences.default_edition_differences
+standards.effectivity.standard_identity
+standards.standard_identity

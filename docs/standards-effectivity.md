@@ -74,6 +74,14 @@ That third row is the misspelling case, and it is the likeliest one: `"AISC-360"
 exact-match miss against `AISC 360`, and screening a basis against nothing must not read
 as agreement. The refusal names the near misses, the way every retrieval refusal here does.
 
+Two names are not misspellings, because the publisher gives its document both: AISC
+publishes `ANSI/AISC 360`, and ASCE writes `ASCE/SEI 7` and `ASCE 7` for one standard. A
+citation, a pin or a waiver under either name is compared as the same standard
+(`standard_identity`), so `ANSI/AISC 360-16` beside `AISC 360-22` is one standard at two
+editions, and fails as one. Each citation is still shown as written. No other prefix is
+folded: `AISC-360` above stays a miss, and so does `ANSI/ASME`, for which no publisher's
+word is recorded here.
+
 ## An editionless reference is NOT_EVALUATED, never a pass
 
 A clause with no edition cannot be checked against a basis at all. Reporting only the

@@ -61,6 +61,7 @@ from .effectivity import (
     design_basis_scorecard,
     names_a_standard,
     parse_citation,
+    standard_identity,
 )
 from .extrusions import (
     ExtrusionProfile,
@@ -200,6 +201,7 @@ __all__ = [
     "WRITTEN_AGAINST",
     "parse_citation",
     "names_a_standard",
+    "standard_identity",
     "design_basis_scorecard",
     "Material",
     "MaterialsDatabase",

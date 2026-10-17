@@ -26,7 +26,7 @@ from pydantic import ConfigDict
 from .._models import Provenance, RevalidatedModel, _near_identifiers, cited, parse_yaml
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
-from .effectivity import Citation, parse_citation
+from .effectivity import Citation, parse_citation, standard_identity
 
 __all__ = [
     "EditionChange",
@@ -124,7 +124,7 @@ class EditionDifferenceTable:
         clause = _CLAUSE.search(text) or _BARE_CLAUSE.match(text)
         if clause is None:
             return None
-        key = f"{citation.standard}-{citation.edition} §{clause.group(1).upper()}"
+        key = f"{citation.identity}-{citation.edition} §{clause.group(1).upper()}"
         entry = self._entries.get(key)
         return entry if entry is not None and entry.to_edition == to_edition else None
 
@@ -197,8 +197,10 @@ def _target_edition(cited: Citation, written: str) -> str:
     prefix, separator, edition = text.rpartition(cited.separator)
     if separator:
         named = prefix.strip()
-        # `360` names AISC 360 and `60` does not: the designation ends on a word.
-        if named and not (cited.standard == named or cited.standard.endswith(f" {named}")):
+        # `360` names AISC 360 and `60` does not: the designation ends on a word. Either of
+        # the publisher's names for it is the same standard (`ANSI/AISC 360`).
+        identity = standard_identity(named)
+        if named and not (cited.identity == identity or cited.identity.endswith(f" {named}")):
             raise _EditionInputError(
                 f"{written!r} is an edition of {named}, and {cited} is {cited.standard}: the "
                 "comparison is between two editions of one standard",

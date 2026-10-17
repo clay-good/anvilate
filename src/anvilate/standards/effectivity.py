@@ -85,6 +85,7 @@ __all__ = [
     "WRITTEN_AGAINST",
     "parse_citation",
     "names_a_standard",
+    "standard_identity",
     "design_basis_scorecard",
 ]
 
@@ -221,6 +222,24 @@ _EUROCODE_NUMBERS = {str(n) for n in range(1990, 2000)}
 _EUROCODE = re.compile(r"\bEN 199\d(?:-\d+)*(?::(?P<edition>(?:19|20)\d{2}))?")
 
 
+# The two designations each of these publishers gives one document, and no others. AISC
+# publishes its specification as ANSI/AISC 360: the comparison data/edition_differences.yaml
+# was read off is "of ANSI/AISC 360-22 to ANSI/AISC 360-16", and its rows are AISC 360. ASCE
+# writes "the 2022 edition of ASCE 7, which supersedes ASCE/SEI 7-16" (asce.org, 2021-12-01).
+# Read as written, `ANSI/AISC 360-16` beside `AISC 360-22` was two standards at one edition
+# each, and a bundle mixing them passed. Nothing else is folded: a prefix with no
+# publisher's word behind it (`ANSI/ASME`, `AISC-360`) stays its own designation.
+_SAME_STANDARD = (("ANSI/AISC ", "AISC "), ("ASCE/SEI ", "ASCE "))
+
+
+def standard_identity(designation: str) -> str:
+    """The one name a standard is compared by, whichever of its publisher's names is used."""
+    for written, identity in _SAME_STANDARD:
+        if designation.startswith(written):
+            return identity + designation[len(written) :]
+    return designation
+
+
 class EditionAgreement(StrEnum):
     """How a project's pinned edition relates to the one a check was written against."""
 
@@ -250,6 +269,12 @@ class Citation(RevalidatedModel):
     # *length* (two digits meant a hyphen), which was right only while four-digit editions
     # could reach it in one spelling: it rendered `ASME B31.3-2022` as `ASME B31.3 2022`.
     separator: Literal["-", " ", ":"] = "-"
+
+    @property
+    def identity(self) -> str:
+        """The standard this cites, compared across its publisher's names; the citation
+        itself is still shown as written."""
+        return standard_identity(self.standard)
 
     def __str__(self) -> str:
         base = f"{self.standard}{self.separator}{self.edition}"
@@ -371,10 +396,17 @@ class DesignBasis(RevalidatedModel):
         """
         if citation is None:
             return EditionAgreement.NOT_RECORDED
-        pinned = self.pins.get(citation.standard)
+        pinned = self.pinned(citation.identity)
         if pinned is None:
             return EditionAgreement.NOT_PINNED
         return EditionAgreement.MATCHES if pinned == citation.edition else EditionAgreement.DIFFERS
+
+    def pinned(self, identity: str) -> str | None:
+        """The edition pinned for ``identity``, under whichever of its names it was pinned."""
+        for standard, edition in self.pins.items():
+            if standard_identity(standard) == identity:
+                return edition
+        return None
 
     def conflicts(self, citations: list[Citation | None]) -> tuple[str, ...]:
         """Every standard appearing at more than one edition without a recorded waiver.
@@ -387,8 +419,8 @@ class DesignBasis(RevalidatedModel):
         for citation in citations:
             if citation is None:
                 continue
-            seen.setdefault(citation.standard, set()).add(citation.edition)
-        waived = {w.standard: set(w.editions) for w in self.waivers}
+            seen.setdefault(citation.identity, set()).add(citation.edition)
+        waived = {standard_identity(w.standard): set(w.editions) for w in self.waivers}
         out: list[str] = []
         for standard, editions in sorted(seen.items()):
             if len(editions) < 2:
@@ -466,21 +498,24 @@ def design_basis_scorecard(
     # library still knows which edition its checks were written to, and a project pinning
     # ASCE 7-16 against load combinations written to ASCE 7-22 must hear about it whether
     # or not this particular bundle happens to cite ASCE 7.
-    cited_standards = {c.standard for c in citations if c is not None}
-    uncited_pins = {s: e for s, e in basis.pins.items() if s not in cited_standards}
+    cited_standards = {c.identity for c in citations if c is not None}
+    uncited_pins = {
+        s: e for s, e in basis.pins.items() if standard_identity(s) not in cited_standards
+    }
     against_library = sorted(
         f"{standard}-{edition} is pinned while this library's checks are written "
-        f"against {standard}-{WRITTEN_AGAINST[standard]}"
+        f"against {standard_identity(standard)}-{WRITTEN_AGAINST[standard_identity(standard)]}"
         for standard, edition in uncited_pins.items()
-        if standard in WRITTEN_AGAINST and WRITTEN_AGAINST[standard] != edition
+        if standard_identity(standard) in WRITTEN_AGAINST
+        and WRITTEN_AGAINST[standard_identity(standard)] != edition
     )
     # What is left is a pin naming a designation nothing in this bundle cites and this
     # library does not declare — most often a spelling that cannot match ("AISC-360" for
     # "AISC 360"). It screens against nothing, so the card may not say it passed.
-    unread_pins = sorted(s for s in uncited_pins if s not in WRITTEN_AGAINST)
+    unread_pins = sorted(s for s in uncited_pins if standard_identity(s) not in WRITTEN_AGAINST)
     differing = sorted(
         {
-            f"{c.standard}-{c.edition} against the pinned {basis.pins[c.standard]}"
+            f"{c.standard}-{c.edition} against the pinned {basis.pinned(c.identity)}"
             for c in citations
             if c is not None and basis.agreement(c) is EditionAgreement.DIFFERS
         }

@@ -96,6 +96,16 @@ def test_a_subclause_or_an_equation_does_not_borrow_its_clauses_entry(written):
     assert compare_editions(written, "22").difference is None
 
 
+def test_the_publishers_own_designation_finds_the_same_entry():
+    """AISC writes its specification ANSI/AISC 360, and this registry was read off that
+    document; the citation is still stated the way it was written."""
+    comparison = compare_editions("ANSI/AISC 360-16 §F6", "ANSI/AISC 360-22")
+    assert comparison.difference is not None
+    assert comparison.difference.key == "AISC 360-16 §F6"
+    assert compare_editions("ANSI/AISC 360-16 §F6", "AISC 360-22").difference is not None
+    assert comparison.citation == "ANSI/AISC 360-16 §F6"
+
+
 @pytest.mark.parametrize(
     ("written", "reason"),
     [

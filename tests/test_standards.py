@@ -1477,6 +1477,54 @@ def test_one_bundle_spanning_two_editions_fails_until_someone_signs_for_it():
         assert still_failed.status is CheckStatus.FAIL
 
 
+@pytest.mark.parametrize(
+    ("split", "standard"),
+    [
+        (["ANSI/AISC 360-16 §D2", "AISC 360-22 §E3"], "AISC 360"),
+        (["ASCE/SEI 7-16 §2.3", "ASCE 7-22 §2.3"], "ASCE 7"),
+    ],
+)
+def test_one_standard_under_its_publishers_two_names_is_still_one_standard(split, standard):
+    """`ANSI/AISC 360-16` beside `AISC 360-22` read as two standards at one edition each,
+    and the bundle passed as though it came from one book.
+
+    The publishers use both names for one document. AISC's own comparison, which
+    data/edition_differences.yaml was read off, is "of ANSI/AISC 360-22 to ANSI/AISC
+    360-16", and its rows are AISC 360. ASCE writes "the 2022 edition of ASCE 7, which
+    supersedes ASCE/SEI 7-16". Each citation is still shown as it was written.
+    """
+    from anvilate.scorecard import CheckStatus
+    from anvilate.standards import DesignBasis, design_basis_scorecard
+
+    failed = design_basis_scorecard("bundle", basis=DesignBasis(), references=split)
+    assert failed.status is CheckStatus.FAIL, failed.detail
+    assert f"{standard} appears at editions 16, 22" in failed.detail
+
+    # A waiver and a pin written under either name answer the citation under the other.
+    other_name = {"AISC 360": "ANSI/AISC 360", "ASCE 7": "ASCE/SEI 7"}[standard]
+    waived = DesignBasis(waivers=(_waiver(standard=other_name),))
+    assert design_basis_scorecard("bundle", basis=waived, references=split).status is (
+        CheckStatus.PASS
+    )
+    read = design_basis_scorecard(
+        "bundle", basis=DesignBasis(pins={other_name: "22"}), references=split[1:]
+    )
+    assert read.status is CheckStatus.PASS, read.detail
+
+
+def test_only_the_two_names_the_publishers_give_are_folded():
+    """A prefix with no publisher's word behind it stays its own designation."""
+    from anvilate.standards import parse_citation
+    from anvilate.standards.effectivity import standard_identity
+
+    assert standard_identity("ANSI/AISC 360") == "AISC 360"
+    assert standard_identity("ASCE/SEI 7") == "ASCE 7"
+    for kept in ("ANSI/ASME B30.20", "AISC360", "AISC-360", "ASCE 41", "ANSI/AISC"):
+        assert standard_identity(kept) == kept
+    # The citation keeps the text it was written with.
+    assert str(parse_citation("ANSI/AISC 360-16 §D2")) == "ANSI/AISC 360-16 §D2"
+
+
 def test_a_waiver_with_nobody_s_name_on_it_is_a_suppressed_warning():
     """The two required fields are the two that make it an accepted risk rather than a
     silenced one."""
