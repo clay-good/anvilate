@@ -60,6 +60,20 @@ SHALL be evaluated through the budget mechanism.
   up to 8 degrees of tilt
 - **THEN** the entry reports the tilt at which the center of mass leaves the footprint
 
+### Requirement: Mass carries its maturity and growth allowance
+
+Each mass contribution SHALL carry a maturity: estimated, calculated from geometry, or
+measured. A product SHALL be able to declare a growth allowance per maturity, with its
+source. The roll-up SHALL report the basic mass, the growth, and the predicted mass, and
+a mass budget SHALL be evaluated on predicted mass.
+
+#### Scenario: Growth on an estimate
+
+- **WHEN** a 2.4 kg estimated gearbox carries a declared 15% growth allowance and the
+  calculated parts carry 5%
+- **THEN** the roll-up reports basic, growth and predicted mass by maturity, and the
+  budget is checked against predicted mass
+
 ### Requirement: Minimum clearance is reported between every pair
 
 Every product build SHALL report the minimum distance between each pair of items that do
