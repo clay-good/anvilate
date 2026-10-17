@@ -57,11 +57,15 @@
       flange taper the four dimensions do not give (sharp rectangles put it up to 30% high,
       and the best single taper constant still 10% high), and the fallback would screen one
       on its strong axis
-- [ ] 3.3k A channel beam's `twist` entry states no `needs`, because there is no field to
-      declare: `check` prints "1 could not run and none states what it needs". Give the
-      member an optional declaration that the load acts through the shear centre or that
-      the section is restrained against rotating, and let the entry pass on it — a member
-      schema change, so it moves those schemas again
+- [x] 3.3k A channel beam's `twist` entry is answered by `twist_restraint` on the member:
+      `through_shear_centre` (no torsion is applied) or `restrained` (the twist is held).
+      The entry passes on the declaration and its detail says that is what it rests on, not
+      a calculation; the restrained case adds that the restraint's own force is not sized
+      here. Without it the entry stays NOT_EVALUATED and now names the declaration, so the
+      needs report ranks it and `check` no longer prints "none states what it needs". The
+      declaration is refused on a section whose shear centre is on the load axis. Each twist
+      entry carries one shared `Underived` (LOOKUP): the shear centre's position is
+      arithmetic, where the load lands is not. `beam_member` moves to 1.9.0 alone
 - [x] 3.3h Angle columns: `section: L8X4X1`, `L6X3-1/2X1/2`, from the fetched workbook, the
       longer leg named first. An angle's legs are untapered, so every property follows from
       three dimensions — including the principal axes its legs are not, from the eigenvalues

@@ -343,8 +343,11 @@ those four dimensions do not say, and modelled as sharp rectangles it comes out 
 *high* — the unconservative direction. A `column_member` or `beam_column_member` given a
 channel is refused with that reason rather than screened on the strong axis by fallback. A
 channel beam is screened in bending, deflection and shear, and carries one more entry,
-`twist`, which is NOT_EVALUATED on every channel: a transverse load that misses the shear
-centre twists the section, and the entries beside it are pure bending.
+`twist`: a transverse load that misses the shear centre twists the section, and the entries
+beside it are pure bending. It is NOT_EVALUATED until the member declares a
+`twist_restraint` — `through_shear_centre`, so no torsion is applied, or `restrained`, so
+the twist is held — and then it passes on that declaration and says that is what it rests
+on. Neither is a section property, so neither can be read off the table.
 
 A rolled single angle, `L8X4X1` or `L6X3-1/2X1/2`, resolves from the same workbook, its
 longer leg named first and its fractions kept as the Manual writes them. Its legs are not

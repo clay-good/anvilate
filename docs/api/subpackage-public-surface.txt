@@ -138,6 +138,7 @@ packs.structural.ShearPlate
 packs.structural.StructuralMember
 packs.structural.Support
 packs.structural.TensionMember
+packs.structural.TwistRestraint
 packs.structural.WeldedConnection
 packs.structural.screen_base_plate
 packs.structural.screen_beam_column

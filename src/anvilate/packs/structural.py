@@ -80,7 +80,7 @@ from ..analysis import (
     strength_scorecard,
     von_mises_plane_stress,
 )
-from ..derivation import Derivation, SymbolValue
+from ..derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from ..refusal import RefusalError, Remedy
 from ..scorecard import (
     CheckStatus,
@@ -254,6 +254,7 @@ __all__ = [
     "ShearPlate",
     "screen_shear_plate",
     "StructuralMember",
+    "TwistRestraint",
     "screen_structure",
 ]
 
@@ -469,6 +470,21 @@ class Support(StrEnum):
     OVERHANG = "overhang"  # simply supported with the section run past one support
 
 
+class TwistRestraint(StrEnum):
+    """How an open-section beam's twist is dealt with, when it is dealt with.
+
+    A channel's shear centre is off its web, so a transverse load anywhere else twists it.
+    Only two things make the bending entries the whole story: the load acting through the
+    shear centre, so no torsion is applied at all, or a restraint holding the section
+    against rotating. Both are facts about the installation that no section property
+    carries, so they are declared, and the twist entry says the pass rests on the
+    declaration rather than on a calculation.
+    """
+
+    THROUGH_SHEAR_CENTRE = "through_shear_centre"
+    RESTRAINED = "restrained"
+
+
 class LoadType(StrEnum):
     """How the member is loaded: a single point load, a uniform distributed load,
     a linearly varying (triangular) one — zero at one support, peaking at the
@@ -617,6 +633,14 @@ class BeamMember(GuardedInputs):
     dock-edge cases; the shear entry uses the full overhang reaction); other
     load types, positions, patches, and the resonance screen are not encoded
     for it.
+
+    A section with a shear centre off its own axis — a channel — carries a ``twist``
+    entry, and ``twist_restraint`` is how that entry is answered: declare
+    ``through_shear_centre`` when the load acts through the shear centre, so no torsion is
+    applied, or ``restrained`` when something holds the section against rotating. Without
+    it the entry is NOT_EVALUATED, because the screen cannot tell where the load acts.
+    Declaring it on a section that has no shear-centre offset is refused, rather than
+    accepted and ignored.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -645,6 +669,9 @@ class BeamMember(GuardedInputs):
     min_frequency: Quantity | None = None  # the resonance floor (needs mass_per_length)
     patch_centered: bool = False  # the patch may sit at mid-span instead of at a support
     triangle_mirrored: bool = False  # a triangle may peak at the tip/prop instead of the wall
+    #: How the twist of an open section is dealt with. Only an open section has one, and
+    #: without it that section's `twist` entry is NOT_EVALUATED.
+    twist_restraint: TwistRestraint | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> BeamMember:
@@ -833,6 +860,18 @@ class BeamMember(GuardedInputs):
                 source=_LOAD_SOURCE,
             )
         _refuse_a_non_principal_bending_axis(self.section, "beam")
+        if self.twist_restraint is not None and self.section.shear_centre_offset is None:
+            raise _structural_pack_refusal(
+                f"twist_restraint is declared {self.twist_restraint.value!r}, and this "
+                "section's shear centre is on the axis the load acts along, so there is no "
+                "twist to restrain and no entry for this to answer. Remove twist_restraint from "
+                "element_params, or state a section with a shear_centre_offset",
+                subject="twist_restraint",
+                source=(
+                    "the member's section, which says whether its shear centre is off the "
+                    "axis the load acts along"
+                ),
+            )
         return self
 
 
@@ -1019,6 +1058,29 @@ def screen_beam_member(
     )
 
 
+# Every twist entry renders the same absence, so the sentence is written once: the shear
+# centre's position is arithmetic, and whether the load passes through it is not.
+_TWIST_IS_NOT_ARITHMETIC = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason=(
+        "the verdict is a declaration about the installation, not arithmetic: the shear "
+        "centre's position is computed from the section, but whether the load acts through "
+        "it, or something holds the section, is a fact nothing here calculates"
+    ),
+)
+
+
+_NEEDS_THE_TWIST_SETTLED = Need(
+    declaration="element_params.twist_restraint",
+    takes=(
+        "how the twist of this open section is dealt with: `through_shear_centre` when the "
+        "load acts through the shear centre, or `restrained` when something holds the "
+        "section against rotating"
+    ),
+    sources=(ValueSource.USER,),
+)
+
+
 def _twist_entry(member) -> ScorecardEntry | None:
     """An open section's twist entry, or ``None`` for a section with no shear centre offset.
 
@@ -1026,25 +1088,55 @@ def _twist_entry(member) -> ScorecardEntry | None:
     not on its web: a transverse load through the web twists it as well as bending it, which
     is why a channel purlin rolls over unless it is restrained. The bending and deflection
     entries beside this one are pure bending, and this says so rather than letting the card
-    read as though the twist had been checked. It is NOT_EVALUATED on every channel, because
-    the screen has no way to be told where the load acts.
+    read as though the twist had been checked. It is NOT_EVALUATED until ``twist_restraint``
+    says how the twist is dealt with, and then it passes on that declaration and says so.
     """
     offset = getattr(member.section, "shear_centre_offset", None)
     if offset is None:
         return None
+    name = f"{member.name} twist"
     millimetres = offset.to("mm").magnitude
+    where = f"{millimetres:.3g} mm outside the back of its web"
+    declared = getattr(member, "twist_restraint", None)
+    if declared is TwistRestraint.THROUGH_SHEAR_CENTRE:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.PASS,
+            detail=(
+                f"the load is declared to act through the shear centre, {where}, so no "
+                "torsion is applied and the bending entries on this card are the whole of "
+                "it. This passes on that declaration, not on a calculation: nothing here "
+                "measures where the load lands"
+            ),
+            reference=_CLAUSE_TORSION,
+            underived=_TWIST_IS_NOT_ARITHMETIC,
+        )
+    if declared is TwistRestraint.RESTRAINED:
+        return ScorecardEntry(
+            name=name,
+            status=CheckStatus.PASS,
+            detail=(
+                f"the section is declared restrained against rotating, so the twist a load "
+                f"off the shear centre ({where}) would cause is held. This passes on that "
+                "declaration, not on a calculation, and the force the restraint carries is "
+                "not sized here — screen the restraint itself"
+            ),
+            reference=_CLAUSE_TORSION,
+            underived=_TWIST_IS_NOT_ARITHMETIC,
+        )
     return ScorecardEntry(
-        name=f"{member.name} twist",
+        name=name,
         status=CheckStatus.NOT_EVALUATED,
         detail=(
-            f"not evaluated — the shear centre of this section is {millimetres:.3g} mm "
-            "outside the back of its web, so a transverse load applied anywhere else "
-            "twists it as well as bending it. The bending and deflection entries on this "
-            "card are pure bending: they do not carry the torsion, and the stress a twist "
-            "adds is not computed here. Load through the shear centre, or restrain the "
-            "section against rotating, and check the twist by another means"
+            f"not evaluated — the shear centre of this section is {where}, so a transverse "
+            "load applied anywhere else twists it as well as bending it. The bending and "
+            "deflection entries on this card are pure bending: they do not carry the "
+            "torsion, and the stress a twist adds is not computed here. Declare "
+            "twist_restraint once the load line or the restraint is known"
         ),
         reference=_CLAUSE_TORSION,
+        needs=(_NEEDS_THE_TWIST_SETTLED,),
+        underived=_TWIST_IS_NOT_ARITHMETIC,
     )
 
 

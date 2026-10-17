@@ -156,9 +156,18 @@
       ],
       "title": "Support",
       "type": "string"
+    },
+    "TwistRestraint": {
+      "description": "How an open-section beam's twist is dealt with, when it is dealt with.\n\nA channel's shear centre is off its web, so a transverse load anywhere else twists it.\nOnly two things make the bending entries the whole story: the load acting through the\nshear centre, so no torsion is applied at all, or a restraint holding the section\nagainst rotating. Both are facts about the installation that no section property\ncarries, so they are declared, and the twist entry says the pass rests on the\ndeclaration rather than on a calculation.",
+      "enum": [
+        "through_shear_centre",
+        "restrained"
+      ],
+      "title": "TwistRestraint",
+      "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:elements:beam_member:1.8.0",
+  "$id": "urn:anvilate:schema:elements:beam_member:1.9.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate pack element 'beam_member': the fields a Design Spec puts in `element_params` when it declares `element_type: beam_member`. Generated from anvilate.packs.structural.BeamMember.",
@@ -279,6 +288,17 @@
       "default": false,
       "title": "Triangle Mirrored",
       "type": "boolean"
+    },
+    "twist_restraint": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TwistRestraint"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
@@ -292,5 +312,5 @@
   ],
   "title": "BeamMember",
   "type": "object",
-  "x-anvilate-version": "1.8.0"
+  "x-anvilate-version": "1.9.0"
 }

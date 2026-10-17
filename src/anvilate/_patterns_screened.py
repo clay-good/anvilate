@@ -662,7 +662,8 @@ _register(
     "A beam cut to length from a rolled I, H or channel profile, or a flat bar, round tube "
     "or box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe "
     "by its nominal size and schedule (`NPS 4 SCH 40`). A channel's card says its twist "
-    "is not evaluated. Not a single angle: a leg is not a principal axis.",
+    "is not evaluated until twist_restraint says how it is dealt with. Not a single angle: "
+    "a leg is not a principal axis.",
     example_params={"section": "IPE 200"},
 )
 _register(

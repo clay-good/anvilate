@@ -67,12 +67,12 @@ A beam-column cut to length from a rolled I or H profile, or a flat bar, round t
 
 ### `beam_member`
 
-A beam cut to length from a rolled I, H or channel profile, or a flat bar, round tube or box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe by its nominal size and schedule (`NPS 4 SCH 40`). A channel's card says its twist is not evaluated. Not a single angle: a leg is not a principal axis.
+A beam cut to length from a rolled I, H or channel profile, or a flat bar, round tube or box named by its dimensions (`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`), or pipe by its nominal size and schedule (`NPS 4 SCH 40`). A channel's card says its twist is not evaluated until twist_restraint says how it is dealt with. Not a single angle: a leg is not a principal axis.
 
 ![beam_member](parts/beam_member.png)
 
 - Required: `name` (text), `section` (CrossSection), `length` (quantity), `support` (cantilever | simply_supported | fixed_fixed | fixed_pinned | overhang), `load` (quantity), `load_type` (point | distributed | triangular | moment), `material` (text)
-- Optional: `deflection_limit` (quantity), `load_position` (quantity), `pair_offset` (quantity), `loaded_length` (quantity), `overhang_length` (quantity), `mass_per_length` (quantity), `min_frequency` (quantity), `patch_centered` (true or false), `triangle_mirrored` (true or false)
+- Optional: `deflection_limit` (quantity), `load_position` (quantity), `pair_offset` (quantity), `loaded_length` (quantity), `overhang_length` (quantity), `mass_per_length` (quantity), `min_frequency` (quantity), `patch_centered` (true or false), `triangle_mirrored` (true or false), `twist_restraint` (through_shear_centre | restrained)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/beam_member.spec.yaml`](../examples/parts/beam_member.spec.yaml)
 

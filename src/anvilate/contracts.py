@@ -579,8 +579,10 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # entry reports and which makes a channel column refuse.
     # 1.8.0: and `minor_principal_second_moment` with `principal_axis_tangent`, the axes an
     # angle's legs are not — the first governs its buckling, the second refuses its flexure.
+    # beam_member 1.9.0 adds `twist_restraint`, which answers an open section's `twist`
+    # entry; the compression members have no twist entry, so they stay at 1.8.0.
     "beam_column_member": "1.8.0",
-    "beam_member": "1.8.0",
+    "beam_member": "1.9.0",
     "bolted_connection": "1.3.0",
     # 1.2.0 adds the pin load and the four allowables its pin and ears are screened against.
     "clevis": "1.2.0",

@@ -195,6 +195,20 @@ bending, and the screens' `M/S` would read under the real stress. `beam_member`,
 changes meaning, and no document that validated before is refused now, because the
 properties did not exist to write.
 
+### `beam_member` 1.9.0: a channel's twist is declared, not guessed
+
+`beam_member` gains an optional `twist_restraint`, one of `through_shear_centre` or
+`restrained`. It answers the `twist` entry an open section earns: declare that the load acts
+through the shear centre, so no torsion is applied, or that something holds the section
+against rotating, and the entry passes — on the declaration, which its detail says plainly,
+not on a calculation. Without it the entry stays `not_evaluated` and now names
+`element_params.twist_restraint` as what it is waiting on, so the needs report can rank it.
+
+Declaring it on a section whose shear centre is on the axis the load acts along is refused,
+rather than accepted and ignored: there is no twist to restrain and no entry for it to
+answer. `column_member` and `beam_column_member` have no twist entry — a channel is refused
+there for its weak axis — so they stay at 1.8.0.
+
 ### Scorecard 1.14.0: a result from a third-party module says so
 
 `ScorecardEntry` gains an optional `origin`, set only on an entry a third-party module

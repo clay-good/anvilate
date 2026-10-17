@@ -582,8 +582,8 @@ def test_a_beam_may_be_a_rolled_channel_and_its_twist_is_named_rather_than_passe
 
     A channel's shear centre is off its web, so a transverse load through the web twists it
     as well as bending it. The bending, deflection and shear entries beside the twist entry
-    are pure bending, and the twist entry is NOT_EVALUATED saying so, on every channel,
-    because the screen has no way to be told where the load acts.
+    are pure bending, and the twist entry is NOT_EVALUATED saying so until the member
+    declares how the twist is dealt with.
     """
     from anvilate.packs.structural import BeamMember, screen_beam_member
     from anvilate.scorecard import CheckStatus
@@ -604,6 +604,8 @@ def test_a_beam_may_be_a_rolled_channel_and_its_twist_is_named_rather_than_passe
     assert "9.33 mm outside the back of its web" in twist.detail
     assert "do not carry the torsion" in twist.detail
     assert twist.reference == "AISC 360-16 Ch. H"
+    # It names the declaration that answers it, so the needs report can rank it.
+    assert [need.declaration for need in twist.needs] == ["element_params.twist_restraint"]
     # A section with no shear centre offset gets no such entry at all.
     plain = BeamMember.model_validate({**params, "section": "IPE 200"})
     assert all(
@@ -618,6 +620,64 @@ def test_a_beam_may_be_a_rolled_channel_and_its_twist_is_named_rather_than_passe
     area = section.area.to("mm**2").magnitude
     assert built.dimensions_mm["section_area"] == pytest.approx(area, rel=1e-12)
     assert built.volume_mm3 == pytest.approx(area * 4000, rel=1e-9)
+
+
+def test_a_declared_twist_restraint_passes_the_entry_and_says_what_it_rests_on(
+    tmp_path, monkeypatch
+):
+    """Two things make a channel's bending entries the whole story, and both are declared.
+
+    Where the load acts and whether anything holds the section are facts about the
+    installation that no section property carries, so the entry passes on the declaration
+    and the detail says so rather than implying a calculation. Declaring it on a section
+    with no shear centre off its axis is refused instead of accepted and ignored.
+    """
+    from anvilate.packs.structural import BeamMember, TwistRestraint, screen_beam_member
+    from anvilate.scorecard import CheckStatus
+
+    _fetch_a_test_aisc_table(tmp_path, monkeypatch, _CHANNEL_ROWS)
+    params = yaml.safe_load((_EXAMPLES / "beam_member.spec.yaml").read_text("utf-8"))[
+        "element_params"
+    ]
+    for declared, says in (
+        (TwistRestraint.THROUGH_SHEAR_CENTRE, "no torsion is applied"),
+        (TwistRestraint.RESTRAINED, "declared restrained against rotating"),
+    ):
+        member = BeamMember.model_validate(
+            {**params, "section": "C10X30", "twist_restraint": declared.value}
+        )
+        card = screen_beam_member(member, required_safety_factor=1.5)
+        twist = next(one for one in card.entries if one.name.endswith("twist"))
+        assert twist.status is CheckStatus.PASS, declared
+        assert says in twist.detail, declared
+        # A pass on a word, and the card says which.
+        assert "not on a calculation" in twist.detail
+        assert twist.needs == ()
+    # The restrained case does not pretend to have sized the restraint.
+    held = BeamMember.model_validate(
+        {**params, "section": "C10X30", "twist_restraint": "restrained"}
+    )
+    entry = next(
+        one
+        for one in screen_beam_member(held, required_safety_factor=1.5).entries
+        if one.name.endswith("twist")
+    )
+    assert "not sized here" in entry.detail
+
+    # A section whose shear centre is on the load axis has no twist for this to answer.
+    for section in ("IPE 200", "TUBE 60x4", "FLAT 50x10"):
+        with pytest.raises(ValueError, match="no twist to restrain"):
+            BeamMember.model_validate(
+                {**params, "section": section, "twist_restraint": "restrained"}
+            )
+    # And without the declaration the channel is still not evaluated.
+    bare = BeamMember.model_validate({**params, "section": "C10X30"})
+    plain = next(
+        one
+        for one in screen_beam_member(bare, required_safety_factor=1.5).entries
+        if one.name.endswith("twist")
+    )
+    assert plain.status is CheckStatus.NOT_EVALUATED
 
 
 def test_a_channel_column_is_refused_because_its_weak_axis_was_not_derived(tmp_path, monkeypatch):
