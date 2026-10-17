@@ -208,6 +208,34 @@ def test_export_rejects_non_positive_plate(tmp_path):
         )
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_plate_length_that_is_no_number_is_refused_not_summed(bad, tmp_path):
+    """`plate_cut_length` answered `nan mm` for a NaN width and `inf mm` for an infinite one:
+    every guard here was `<= 0`, which a NaN passes. A Hole took a NaN diameter the same way,
+    and the writer drew it."""
+    from anvilate.export.dxf import plate_cut_length, plate_mass
+
+    odd = Quantity(magnitude=bad, unit="mm")
+    with pytest.raises(ValueError, match="width must be finite"):
+        plate_cut_length(width=odd, height=_q("50 mm"))
+    with pytest.raises(ValueError, match="thickness must be finite"):
+        plate_mass(
+            width=_q("100 mm"), height=_q("50 mm"), thickness=odd, density=_q("7850 kg/m**3")
+        )
+    with pytest.raises(ValueError, match="diameter must be finite"):
+        Hole(x=_q("0 mm"), y=_q("0 mm"), diameter=odd)
+    pytest.importorskip("ezdxf")
+    with pytest.raises(ValueError, match=r"holes\[0\]\.x must be finite|x must be finite"):
+        export_plate_dxf(
+            authorization=_AUTH,
+            width=_q("100 mm"),
+            height=_q("50 mm"),
+            holes=[Hole(x=odd, y=_q("0 mm"), diameter=_q("6 mm"))],
+            path=tmp_path / "odd.dxf",
+        )
+    assert not (tmp_path / "odd.dxf").exists()
+
+
 def test_bolt_circle_holes_places_evenly_on_the_circle():
     from math import cos, radians, sin
 

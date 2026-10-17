@@ -21,7 +21,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from io import StringIO
-from math import cos, pi, radians, sin, tan
+from math import cos, isfinite, pi, radians, sin, tan
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING
@@ -376,6 +376,12 @@ def _positive_length(value: Quantity, field: str) -> Quantity:
             subject=field,
             source=_dxf_input_source(field),
         )
+    if not isfinite(value.to("mm").magnitude):
+        raise _dxf_refusal(
+            f"{field} must be finite; got {value}",
+            subject=field,
+            source=_dxf_input_source(field),
+        )
     if value.to("mm").magnitude <= 0:
         raise _dxf_refusal(
             f"{field} must be positive; got {value}. A feature with no size is not a feature, "
@@ -448,7 +454,16 @@ def _mm(value: Quantity, name: str) -> float:
             subject=name,
             source=_dxf_input_source(name),
         )
-    return value.to("mm").magnitude
+    magnitude = value.to("mm").magnitude
+    # Every guard after this one is `<= 0`, which a NaN passes: `plate_cut_length` answered
+    # `nan mm`, and the writer drew a hole at a NaN position.
+    if not isfinite(magnitude):
+        raise _dxf_refusal(
+            f"{name} must be finite; got {value}",
+            subject=name,
+            source=_dxf_input_source(name),
+        )
+    return magnitude
 
 
 def bolt_circle_holes(
