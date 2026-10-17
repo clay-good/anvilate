@@ -29,3 +29,5 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 - [ ] 4.1 Grübler–Kutzbach count with axis caveats
 - [ ] 4.2 Part count, unique fasteners, tool count, merge candidates (advisory)
 - [ ] 4.3 A docs page for product screening: each check, its method and its citation
+- [ ] 4.4 Mass maturity (estimated, calculated, measured) and growth allowance per
+      maturity; budgets on predicted mass

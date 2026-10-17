@@ -20,7 +20,7 @@ change connects them across a product tree.
 | Area | Change |
 | --- | --- |
 | Load path | Loads declared on the product are carried through its connections to ground by rigid-body statics, and each part is screened with the interface loads it carries. A statically indeterminate path is reported as such, never solved by guessing a split. |
-| Mass properties | Mass, center of mass and inertia rolled up the tree, with each item's basis (computed, declared, placeholder) shown; comparable against a declared mass or CG budget through the existing budget mechanism. |
+| Mass properties | Mass, center of mass and inertia rolled up the tree, with each item's basis (computed, declared, placeholder) and maturity with its growth allowance shown; comparable against a declared mass or CG budget through the existing budget mechanism. |
 | Clearance | Minimum gap between every pair of items, against declared clearances, alongside the existing interference check; swept clearance over each declared joint range. |
 | Stack-ups across parts | A 1D tolerance chain may run through connections, picking up each part's toleranced dimension and each connection's fit. |
 | Mobility | A Grübler–Kutzbach count of the product's declared joints, reported as a first-pass count that names parallel or coincident axes, never as a verdict on motion. |
