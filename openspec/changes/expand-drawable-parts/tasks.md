@@ -120,7 +120,16 @@
       own stated factor and allowable, and the two peak stresses together when the shaft
       states a torque as well
 - [ ] 4.9e Stepped shaft: a fillet radius per shoulder and the factor read from a published
-      chart, solved out of the chart's own values before it is written, not recalled
+      chart, solved out of the chart's own values before it is written, not recalled.
+      Searched 2026-10-17. The one open source found is a 2025 ASEE Midwest paper (Rogers
+      and Fleming), which transcribes Roark's 8th edition bending fit Kt = C0 + C1(2h/D) +
+      C2(2h/D)² + C3(2h/D)³ with coefficients in √(h/r) and h/r, for 0.25 ≤ h/r ≤ 2.0 only.
+      It gives no torsion fit and no fit for 2 < h/r ≤ 20, and reports poor agreement
+      with Shigley's chart at D/d = 1.02. That range misses most real shoulders: D/d = 1.2
+      at r/d = 0.04 is already h/r = 2.5. The other copies found are images of Peterson's
+      charts, which can only be read off by eye. Unblocked by Roark's own table (both
+      loadings, both h/r ranges) to check the transcription against, or by a tabulated
+      Peterson data set
 - [x] 4.10 Flat profiles as DXF: mounting plate, flange, lug, and a sheet-metal bracket's
       developed blank with its bend lines
 - [x] 4.10b Minimum bend radius reported through the existing bend-radius screen
