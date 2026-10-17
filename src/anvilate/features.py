@@ -495,6 +495,12 @@ def round_corners(shape: Any, radius: float, *, along: Vec = (0.0, 0.0, 1.0)) ->
     from build123d import Axis, fillet
 
     _positive(radius, "corner radius", "the corner fillet")
+    _finite(along, "along", "the corner fillet")
+    if not any(along):
+        raise _refuse(
+            "the corner fillet's direction is (0, 0, 0), which is no direction",
+            subject="along, the direction the corner fillet's edges run",
+        )
     axis = Axis((0, 0, 0), along)
     edges = shape.edges().filter_by(axis)
     if not edges:

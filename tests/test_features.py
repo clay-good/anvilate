@@ -248,6 +248,17 @@ def test_plate_corners_round_and_an_oversize_radius_is_refused():
         features.round_corners(_plate(), 40.0)
 
 
+@pytest.mark.parametrize(
+    ("along", "reason"),
+    [((0.0, 0.0, 0.0), "no direction"), ((math.nan, 0.0, 1.0), "finite")],
+)
+def test_a_corner_direction_that_is_no_direction_is_refused_by_what_it_is(along, reason):
+    """A zero vector escaped as the kernel's "Invalid Axis parameters", and a NaN one was
+    told the part had no edges along it."""
+    with pytest.raises(GeometryError, match=reason):
+        features.round_corners(_plate(), 5.0, along=along)
+
+
 def test_one_table_says_what_draws():
     from anvilate.geometry import _drawn_element_types
     from anvilate.screening import element_registry
