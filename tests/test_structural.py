@@ -1139,6 +1139,22 @@ def test_column_screen_falls_back_to_the_declared_axis_without_transverse_i():
     assert "AISC E3 inelastic" in card.entries[0].name  # strong-axis lambda = 86.6 < lambda_1
 
 
+def test_a_zero_length_member_is_refused_by_the_field_the_document_wrote():
+    """A column or beam-column 0 mm long used to build, and the screen then refused
+    `effective_length`, a field no document writes. The refusal names `length`."""
+    with pytest.raises(ValidationError, match=r"\blength must be greater than zero"):
+        _column("0 mm")
+    with pytest.raises(ValidationError, match=r"\blength must be greater than zero"):
+        BeamColumnMember(
+            name="bc",
+            section=CrossSection.rectangular(width=_q("60 mm"), height=_q("100 mm")),
+            length=_q("0 mm"),
+            axial_load=_q("100 kN"),
+            moment=_q("20 kN*m"),
+            material="ASTM-A992",
+        )
+
+
 def test_overloaded_column_fails():
     # A large axial load drops the buckling safety factor below the requirement.
     card = screen_column_member(_column("500 mm", load="20 kN"), required_safety_factor=2.0)

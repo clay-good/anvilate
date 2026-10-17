@@ -129,7 +129,7 @@ class GuardedInputs(RevalidatedModel):
     #: allowable the screen divides by. Zero passes the sign check, and a zero plate
     #: thickness reached `force / (width · thickness)` and ended `anvilate check` with an
     #: internal error. A sweep that zeroes every number in every registered element found
-    #: fifteen such fields in twelve elements. Thirteen are declared here, plain numbers as
+    #: fifteen such fields in twelve elements. Thirteen were declared then, plain numbers as
     #: well as quantities, and a cross-section refuses its own two. A class attribute
     #: rather than a field, so it is not something a document can set.
     positive_fields: ClassVar[tuple[str, ...]] = ()

@@ -1538,6 +1538,9 @@ class ColumnMember(GuardedInputs):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     signed_fields = ("axial_load",)
+    # A zero length got past construction and was refused by the buckling formula as
+    # `effective_length`, a field no document writes.
+    positive_fields = ("length",)
 
     name: Named
     section: MemberSection
@@ -3133,6 +3136,7 @@ class BeamColumnMember(GuardedInputs):
         "axial_load",
         "moment",
     )
+    positive_fields = ("length",)  # as on ColumnMember: refused as `length`, not later
 
     name: Named
     section: MemberSection
