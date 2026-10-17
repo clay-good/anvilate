@@ -322,7 +322,10 @@ class SeatedKey(StatableModel):
     def _a_key(self) -> SeatedKey:
         for name in ("width", "height", "length"):
             value = getattr(self, name)
-            if not value.has_dimension("[length]") or value.to("mm").magnitude <= 0:
+            # `not > 0` and not `<= 0`: a NaN compares false both ways, and passed.
+            if not value.has_dimension("[length]") or not (
+                math.isfinite(value.to("mm").magnitude) and value.to("mm").magnitude > 0
+            ):
                 raise _refuse(
                     f"the key in mate '{self.mate}' states its {name} as {value}",
                     subject=f"keys[].{name}",
@@ -337,16 +340,32 @@ class SeatedKey(StatableModel):
             )
         if not missing:
             assert self.torque is not None
+            # The domains the key screen holds them to, refused here as the document they are
+            # in: from the screen they escaped as its own model's ValidationError, which the
+            # MCP tool reported as a defect in anvilate rather than a problem with the request.
+            torque = self.torque.magnitude
             if not self.torque.has_dimension("[force] * [length]"):
                 raise _refuse(
                     f"the key in mate '{self.mate}' states its torque as {self.torque}",
                     subject="keys[].torque",
                 )
+            if not (math.isfinite(torque) and torque >= 0):
+                raise _refuse(
+                    f"the key in mate '{self.mate}' states torque as {self.torque}; it is a "
+                    "magnitude, finite and not negative",
+                    subject="keys[].torque",
+                )
             for name in joint[1:]:
-                if not getattr(self, name).has_dimension("[pressure]"):
+                stress = getattr(self, name)
+                if not stress.has_dimension("[pressure]"):
                     raise _refuse(
-                        f"the key in mate '{self.mate}' states {name} as "
-                        f"{getattr(self, name)}; it is a stress",
+                        f"the key in mate '{self.mate}' states {name} as {stress}; it is a stress",
+                        subject=f"keys[].{name}",
+                    )
+                if not (math.isfinite(stress.magnitude) and stress.magnitude > 0):
+                    raise _refuse(
+                        f"the key in mate '{self.mate}' states {name} as {stress}; an "
+                        "allowable stress is finite and above zero",
                         subject=f"keys[].{name}",
                     )
         if self.min_safety_factor is not None and (

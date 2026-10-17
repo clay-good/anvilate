@@ -934,6 +934,43 @@ def test_a_key_document_that_cannot_be_seated_is_refused(change, reason):
         _keyed(lambda d: change(d["keys"][0]))
 
 
+_LOADED_KEY = {
+    "torque": {"magnitude": 60.0, "unit": "N*m"},
+    "allowable_shear": {"magnitude": 100.0, "unit": "MPa"},
+    "allowable_bearing": {"magnitude": 180.0, "unit": "MPa"},
+}
+
+
+@pytest.mark.parametrize(
+    ("over", "reason"),
+    [
+        ({"allowable_shear": {"magnitude": -100.0, "unit": "MPa"}}, "allowable_shear as -100"),
+        ({"allowable_shear": {"magnitude": 0.0, "unit": "MPa"}}, "allowable_shear as 0"),
+        ({"allowable_bearing": {"magnitude": -180.0, "unit": "MPa"}}, "allowable_bearing as -180"),
+        ({"allowable_shear": {"magnitude": math.nan, "unit": "MPa"}}, "allowable_shear as nan"),
+        ({"torque": {"magnitude": -60.0, "unit": "N*m"}}, "torque as -60"),
+        ({"torque": {"magnitude": math.nan, "unit": "N*m"}}, "torque as nan"),
+        ({"width": {"magnitude": math.nan, "unit": "mm"}}, "width as nan"),
+        ({"length": {"magnitude": math.inf, "unit": "mm"}}, "length as inf"),
+    ],
+)
+def test_a_loaded_key_out_of_its_domain_is_refused_as_the_document_it_is(over, reason):
+    """These reached the internal ShaftKey and escaped as a pydantic ValidationError, which
+    the MCP `build_combination` tool answered with -32603, "a defect in anvilate rather than
+    a problem with the request". A NaN width passed `<= 0` and was screened."""
+    with pytest.raises(
+        CombinationError, match=rf"keys\.0: the key in mate 'seated' states (its )?{reason}"
+    ):
+        _keyed(**{**_LOADED_KEY, **over})
+
+
+def test_a_key_carrying_no_torque_is_still_seated_and_not_screened():
+    """Zero torque is a key with nothing to screen, not an error: it says so."""
+    built = _keyed(**{**_LOADED_KEY, "torque": {"magnitude": 0.0, "unit": "N*m"}})
+    shear = _entry(built, "seated key shear")
+    assert shear.status is CheckStatus.NOT_EVALUATED
+
+
 def test_a_failing_check_is_marked_on_the_part_it_is_about():
     """An X beside the part a failing mate places, and a row under the parts list.
 
