@@ -129,6 +129,14 @@ _UNIT_NAMES = {
     "m": "metres",
     "in": "inches",
     "ft": "feet",
+    # Units a STEP file may be written in and a caller does not state.
+    "mil": "mils",
+    "microinch": "microinches",
+    "mile": "miles",
+    "um": "micrometres",
+    "nm": "nanometres",
+    "dm": "decimetres",
+    "km": "kilometres",
 }
 Point3 = tuple[float, float, float]
 
@@ -476,7 +484,11 @@ class CadFacts(StatableModel):
 
     def __str__(self) -> str:
         unit = "mm" if self.unit_reported == "mm" else "file units"
-        written = _UNIT_NAMES.get(self.unit_written or "", "no stated unit")
+        written = (
+            _UNIT_NAMES.get(self.unit_written, self.unit_written)
+            if self.unit_written
+            else "no stated unit"
+        )
         size = " x ".join(f"{value:g}" for value in self.size_mm if value or self.kind != "dxf")
         lines = [
             f"{self.file}: {self.kind}, written in {written}, {size} {unit}",
@@ -665,18 +677,59 @@ def _density(material: str | None, kind: str) -> float | None:
 # --- STEP ------------------------------------------------------------------------------
 
 
-def _step_unit(text: str) -> str | None:
-    """The length unit a STEP file declares, read from its unit entities."""
-    upper = text.upper()
-    for marker, unit in (
-        ("CONVERSION_BASED_UNIT('INCH'", "in"),
-        ("CONVERSION_BASED_UNIT('FOOT'", "ft"),
-        ("SI_UNIT(.MILLI.,.METRE.)", "mm"),
-        ("SI_UNIT(.CENTI.,.METRE.)", "cm"),
-        ("SI_UNIT($,.METRE.)", "m"),
-    ):
-        if marker in upper.replace(" ", ""):
-            return unit
+# The metre and its SI multiples a STEP length unit may be written in, in mm.
+_SI_METRE = {
+    "$": ("m", 1000.0),
+    ".KILO.": ("km", 1e6),
+    ".DECI.": ("dm", 100.0),
+    ".CENTI.": ("cm", 10.0),
+    ".MILLI.": ("mm", 1.0),
+    ".MICRO.": ("um", 1e-3),
+    ".NANO.": ("nm", 1e-6),
+}
+# The two conversion-based units a caller may also state, by the name it states them as.
+_CONVERSION_NAMES = {"INCH": "in", "FOOT": "ft"}
+
+
+def _step_length_unit(text: str) -> tuple[str, float] | None:
+    """The length unit a STEP file declares, and its size in mm, read from the file itself.
+
+    A conversion-based unit (an inch, a mil) is defined in the file as a measure of an SI
+    unit, so its size is that measure, read rather than looked up: a unit this reader has
+    no name for is still the size the file says. It is the one declared, and the SI unit
+    it is defined against is not: matching names in the text took a mil file's millimetre
+    for the file's own unit, and knew no micrometre at all.
+    """
+    import re
+
+    flat = re.sub(r"\s+", "", text.upper())
+    entities = dict(re.findall(r"#(\d+)=((?:'(?:[^']|'')*'|[^;'])*);", flat))
+
+    def metre(body: str) -> tuple[str, float] | None:
+        found = re.search(r"SI_UNIT\((\$|\.[A-Z]+\.),\.METRE\.\)", body)
+        return _SI_METRE.get(found[1]) if found else None
+
+    lengths = [body for body in entities.values() if "LENGTH_UNIT()" in body]
+    for body in lengths:
+        converted = re.search(r"CONVERSION_BASED_UNIT\('((?:[^']|'')*)',#(\d+)\)", body)
+        if converted is None:
+            continue
+        measure = re.fullmatch(
+            r"LENGTH_MEASURE_WITH_UNIT\((?:LENGTH_MEASURE\()?([-+0-9.E]+)\)?,#(\d+)\)",
+            entities.get(converted[2], ""),
+        )
+        base = metre(entities.get(measure[2], "")) if measure else None
+        if base is None:
+            return None  # a unit is declared, and not in a form this reader can size
+        size = float(measure[1]) * base[1]
+        if not (math.isfinite(size) and size > 0):
+            return None
+        name = converted[1]
+        return _CONVERSION_NAMES.get(name, name.lower()), size
+    for body in lengths:
+        found = metre(body)
+        if found is not None:
+            return found
     return None
 
 
@@ -844,8 +897,9 @@ def _step_facts(
             subject="path",
             source="a readable STEP file",
         ) from failure
-    written = _step_unit(text)
-    if unit is not None and written is not None and unit != written:
+    declared = _step_length_unit(text)
+    written, file_mm = declared if declared is not None else (None, 1.0)
+    if unit is not None and written is not None and not math.isclose(_TO_MM[unit], file_mm):
         raise _refuse(
             f"{path.name} declares its unit as {written}, and the call states {unit}",
             action="remove",
@@ -883,14 +937,15 @@ def _step_facts(
         )
     elif written != "mm":
         notes.append(
-            f"the file was written in {_UNIT_NAMES[written]}; every value here is converted to mm"
+            f"the file was written in {_UNIT_NAMES.get(written, written)}; every value here "
+            "is converted to mm"
         )
     if len(solids) > 1:
         notes.append(
             f"{len(solids)} solids: an assembly or a multi-body part, each measured separately"
         )
     products = _step_products(text)
-    occurrences = _step_assembly(text, _TO_MM.get(written or "mm", 1.0))
+    occurrences = _step_assembly(text, file_mm)
     volume = sum(float(solid.volume) for solid in solids)
     listed = [_solid_facts(solid) for solid in solids[:LISTED]]
     # One solid and one product name each other. With more of either, which name belongs to

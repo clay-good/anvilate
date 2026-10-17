@@ -264,6 +264,75 @@ def test_an_inch_file_is_not_silently_millimetres(tmp_path):
         read_cad_file(tmp_path / "inch.step", unit="mm")
 
 
+def _step_in(tmp_path, unit: str):
+    """The 50.8 x 25.4 x 12.7 mm block, written by the kernel in ``unit``."""
+    from build123d import Box
+    from OCP.Interface import Interface_Static
+    from OCP.STEPControl import (
+        STEPControl_Controller,
+        STEPControl_StepModelType,
+        STEPControl_Writer,
+    )
+
+    STEPControl_Controller.Init_s()
+    before = Interface_Static.CVal_s("write.step.unit")
+    assert Interface_Static.SetCVal_s("write.step.unit", unit), unit
+    try:
+        writer = STEPControl_Writer()
+        writer.Transfer(Box(50.8, 25.4, 12.7).wrapped, STEPControl_StepModelType.STEPControl_AsIs)
+        writer.Write(str(tmp_path / f"{unit}.step"))
+    finally:
+        Interface_Static.SetCVal_s("write.step.unit", before)
+    return tmp_path / f"{unit}.step"
+
+
+@pytest.mark.parametrize(
+    ("unit", "written", "named"),
+    [
+        ("MIL", "mil", "mils"),
+        ("UIN", "microinch", "microinches"),
+        ("UM", "um", "micrometres"),
+        ("KM", "km", "kilometres"),
+        ("FT", "ft", "feet"),
+        ("CM", "cm", "centimetres"),
+    ],
+)
+def test_a_step_file_says_the_unit_it_was_written_in(unit, written, named, tmp_path):
+    """A mil file said it was written in millimetres, and a micrometre one in nothing.
+
+    A mil is defined in the file as a conversion of the millimetre, and the reader matched
+    the millimetre inside that definition. The solids were right either way, since the
+    kernel converts them, but the assembly placements are read from the text at this scale:
+    a mil assembly's were 39.37 times too large and a micrometre one's 1000 times.
+    """
+    pytest.importorskip("build123d")
+    facts = read_cad_file(_step_in(tmp_path, unit))
+    assert facts.unit_written == written
+    assert facts.size_mm == pytest.approx((50.8, 25.4, 12.7), abs=1e-6)
+    assert any(f"written in {named}" in note for note in facts.notes), facts.notes
+    assert f"written in {named}," in str(facts)
+
+
+def test_the_scale_an_assembly_is_placed_at_is_the_one_the_file_defines():
+    """A conversion-based unit carries its own factor; the reader takes it from the file."""
+    from anvilate.context import _step_assembly, _step_length_unit
+
+    mil = """
+#100 = ( CONVERSION_BASED_UNIT('MIL',#102) LENGTH_UNIT() NAMED_UNIT(#101) );
+#101 = DIMENSIONAL_EXPONENTS(1.,0.,0.,0.,0.,0.,0.);
+#102 = LENGTH_MEASURE_WITH_UNIT(2.54E-02,#103);
+#103 = ( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) );
+"""
+    assert _step_length_unit(mil) == ("mil", pytest.approx(0.0254))
+    (shaft, _key) = _step_assembly(_TWO_LEVELS + mil, _step_length_unit(mil)[1])
+    assert shaft.translation_mm == pytest.approx((0.0254, 0.0508, -0.0127))
+    # Written the other way: LENGTH_MEASURE(...) wrapped, against the metre itself.
+    inch = mil.replace("'MIL'", "'INCH'").replace("2.54E-02,#103", "LENGTH_MEASURE(0.0254),#103")
+    inch = inch.replace("SI_UNIT(.MILLI.,.METRE.)", "SI_UNIT($,.METRE.)")
+    assert _step_length_unit(inch) == ("in", pytest.approx(25.4))
+    assert _step_length_unit("#1 = PRODUCT('a','a','',(#2));") is None
+
+
 def test_a_file_with_no_solid_is_refused_with_what_it_holds(tmp_path):
     pytest.importorskip("build123d")
     from build123d import Rectangle, export_step

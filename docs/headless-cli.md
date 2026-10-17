@@ -1174,7 +1174,9 @@ against what the file measures for the same fields, prints each pair with its tw
 and flags the ones that disagree.
 
 A DXF that declares no unit is refused until `--unit` states one: a drawing in inches read
-as millimetres is wrong by 25.4. DWG, IGES, Parasolid and native CAD files are refused by
+as millimetres is wrong by 25.4. A STEP file's unit is read from the file, including one
+defined there as a measure of another (a mil, a microinch), whose size the file itself
+gives; an assembly's placements are converted at that size. DWG, IGES, Parasolid and native CAD files are refused by
 name with what to export instead. These are the facts an agent gets from the MCP tools
 `read_cad_file` and `list_context`; see
 [pointing your agent at a folder](agent-mcp-integration.md#pointing-your-agent-at-a-folder).
