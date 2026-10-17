@@ -175,7 +175,7 @@ def test_tolerance_range_refusals_carry_structured_remedies() -> None:
             ):
                 sites.append((relative, node.exc))
 
-    assert len(sites) == 21
+    assert len(sites) == 22
     for path, call in sites:
         keywords = {keyword.arg for keyword in call.keywords}
         assert {"action", "subject", "source"} <= keywords, f"{path}:{call.lineno}"
@@ -211,6 +211,12 @@ def test_angular_open_top_range() -> None:
     g = general_angular_tolerance(_mm(5000), "m")
     assert g.deviation.to("arcminute").magnitude == pytest.approx(5)
     assert "over 400" in g.leg_range
+
+
+def test_angular_open_top_range_is_not_infinity() -> None:
+    """The open-top band took an infinite leg: "±5 arcminute over a inf mm shorter leg"."""
+    with pytest.raises(ToleranceRangeError, match="must be a finite number"):
+        general_angular_tolerance(_mm(float("inf")), "m")
 
 
 def test_angular_coarse_below_10mm() -> None:

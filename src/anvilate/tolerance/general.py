@@ -10,7 +10,7 @@ drawings and in the evidence bundle. The class bridges to the Spec IR's
 from __future__ import annotations
 
 from enum import StrEnum
-from math import isnan
+from math import isfinite, isnan
 
 from pydantic import ConfigDict
 
@@ -351,6 +351,14 @@ def general_angular_tolerance(
         # for a number.
         raise ToleranceRangeError(
             f"shorter leg must be a number; got {shorter_leg}",
+            action="replace",
+            subject=f"the angular-tolerance shorter leg {shorter_leg}",
+            source=f"a positive shorter-leg length governed by {doc['dataset']['source']}",
+        )
+    if not isfinite(magnitude):
+        # The open-top band ("over 400") took it as a leg: ±5' over an inf mm shorter leg.
+        raise ToleranceRangeError(
+            f"shorter leg must be a finite number; got {shorter_leg}",
             action="replace",
             subject=f"the angular-tolerance shorter leg {shorter_leg}",
             source=f"a positive shorter-leg length governed by {doc['dataset']['source']}",
