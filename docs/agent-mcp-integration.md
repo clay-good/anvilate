@@ -16,7 +16,7 @@ patterns are callable today:
 
 | Step | Tool | Today |
 | --- | --- | --- |
-| Compile the spec | `compile_spec` | **Dispatched.** |
+| Compile the spec | `compile_spec` | **Dispatched, and going in the next release.** `run_validation` and `build_part` refuse a bad spec with the same remedies, so call them directly. |
 | Find the part | `describe_part` | **Dispatched synchronously.** With no argument, every element a spec can declare, marking the ones `build_part` draws and the ones no screen checks. With an `element_type`, that element's fields and an example spec to copy and edit. Call it before writing a spec for a part. |
 | Put parts together | `build_combination` | **Dispatched synchronously.** Places catalog parts by the features they share (holes on holes, face on face, shaft in bore), adds bolts, washers and nuts as envelopes, and checks where the parts meet. Its handle goes to `render_viewport` and `export_artifact`. See [combinations](combinations.md). |
 | Build the part | `build_part` | **Dispatched synchronously** for every part in the [parts catalog](parts-catalog.md): plates, brackets, flanges, spacers, shafts, gear pairs, bearings, rolled members, lifting lugs, pipe runs, sheet-metal brackets, enclosures and their lids. Returns the published geometry summary, with each hole and slot under its tag. A part with no screen is drawn and not checked, and its exports carry the unvalidated mark. |

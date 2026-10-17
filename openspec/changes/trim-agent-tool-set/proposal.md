@@ -18,7 +18,7 @@ or renames something a published contract carries, so each is the owner's to app
 | Tool | Proposal | Why |
 | --- | --- | --- |
 | `run_fea_validation` | **Remove** until a solver ships. | It can only answer *not evaluated*. `run_validation` already says the FEA tier did not run. |
-| `compile_spec` | **Remove** after one release with a note in its description. | `run_validation` and `build_part` refuse a bad spec with the same remedies. The 2026-10-09 measurement marked correct runs incomplete for skipping it. |
+| `compile_spec` | **Remove** after one release with a note in its description. Approved 2026-10-17; the note shipped the same day. | `run_validation` and `build_part` refuse a bad spec with the same remedies. The 2026-10-09 measurement marked correct runs incomplete for skipping it. |
 | `measure_geometry`, `read_scorecard` | **Hold.** Decide from the next measured run on both clients. | Both are an agent checking its own work. No journey needs them; a recorded run may show a model using them. |
 | the other eight | **Keep, unchanged.** | Each is a step of at least one journey. |
 

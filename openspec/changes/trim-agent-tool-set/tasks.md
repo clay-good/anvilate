@@ -8,7 +8,12 @@ Each task waits on the owner's approval of its row in `proposal.md`.
       — held by the owner, 2026-10-10: it is the only tool the MCP Tasks transport serves, so
       removing it orphans that transport. It stays until a solver or another long-running
       tool settles what the transport is for
-- [ ] 1.2 Mark `compile_spec` as going, then remove it one release later
+- [x] 1.2 Mark `compile_spec` as going (approved 2026-10-17): its description says it goes
+      in the next release and to call `run_validation` or `build_part`, which refuse a bad
+      spec with the same remedies. Checked on a misspelt parameter and on a document missing
+      its required fields. Same input, same output until it goes
+- [ ] 1.2b Remove `compile_spec` in the next release, with `REQUIRED_OPERATIONS`, its
+      handler, the agent-eval task that requires it, and the docs that name it
 - [ ] 1.3 Decide `measure_geometry` and `read_scorecard` from a measured run on both clients
 
 ## 2. Commands

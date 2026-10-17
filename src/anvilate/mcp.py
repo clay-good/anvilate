@@ -500,7 +500,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "standard-component references and reporting every refusal with its reason. "
                 "Prose is compiled into a candidate spec by the caller's own model — "
                 "this server initiates no sampling — and this tool is where that candidate "
-                "is held to the published schema."
+                "is held to the published schema. Going in the next release: run_validation "
+                "and build_part refuse a bad spec with the same remedies, so call them "
+                "directly; this tool behaves as before until then."
             ),
             input_schema=_object_schema(
                 {

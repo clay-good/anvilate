@@ -118,6 +118,66 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### `compile_spec` is going: its description says so
+
+The tool's description now ends by saying it goes in the next release, and to call
+`run_validation` or `build_part` instead. Both refuse a bad spec with the same remedies: a
+misspelt parameter is named with its nearest real one, and a document missing a required
+field is told the line to add. Until it is removed it accepts the same input and returns the
+same `spec`, `errors`, `remedies` and `subject`, so a client calling it today is not broken.
+Only the description text changes.
+
+### `beam_member` 1.9.0: a channel's twist is declared, not guessed
+
+`beam_member` gains an optional `twist_restraint`, one of `through_shear_centre` or
+`restrained`. It answers the `twist` entry an open section earns: declare that the load acts
+through the shear centre, so no torsion is applied, or that something holds the section
+against rotating, and the entry passes — on the declaration, which its detail says plainly,
+not on a calculation. Without it the entry stays `not_evaluated` and now names
+`element_params.twist_restraint` as what it is waiting on, so the needs report can rank it.
+
+Declaring it on a section whose shear centre is on the axis the load acts along is refused,
+rather than accepted and ignored: there is no twist to restrain and no entry for it to
+answer. `column_member` and `beam_column_member` have no twist entry — a channel is refused
+there for its weak axis — so they stay at 1.8.0.
+
+### Member schemas 1.8.0: a section records the axes its reference axes are not
+
+A section gains two more optional properties: `minor_principal_second_moment`, the smallest
+second moment it has, and `principal_axis_tangent`, the slope of the axis that goes with it.
+`CrossSection.angle` fills both, and so does a member that names a rolled single angle
+(`section: L8X4X1`). The minor principal moment must be at or below every axis the section
+already states, since it is the smallest one there is.
+
+`least_radius_of_gyration` now takes it into account, so a column is screened on the axis it
+really bows about. This changes no section that does not state it — nothing in the library
+did before — and for a single angle it is the difference between buckling it about its
+diagonal and about the weaker of its two legs.
+
+A `beam_member` or `beam_column_member` whose section states a non-zero
+`principal_axis_tangent` is refused: bending it about a reference axis is not uniaxial
+bending, and the screens' `M/S` would read under the real stress. `beam_member`,
+`column_member` and `beam_column_member` move to 1.8.0; nothing a document already writes
+changes meaning, and no document that validated before is refused now, because the
+properties did not exist to write.
+
+### Member schemas 1.7.0: a section records where its shear centre is
+
+A section gains one more optional property, `shear_centre_offset`: the distance from the
+back of an open section's web to the point a transverse load has to act through to bend it
+without twisting it. `CrossSection.channel` fills it, and so does a member that names a
+rolled channel (`section: C10X30`, `MC18X51.9`). It is a positive length, measured the way
+AISC's `eo` column is.
+
+A beam whose section carries it gets one more check, `twist`, which is `not_evaluated` on
+every channel: the bending and deflection entries beside it are pure bending, and the screen
+has no way to be told where the load acts. A `column_member` or `beam_column_member` whose
+section carries it and states no `second_moment_transverse` is refused, because the axis
+those screens buckle a member about would otherwise fall back to the strong one — four times
+too stiff on a C10X30. `beam_member`, `column_member` and `beam_column_member` move to
+1.7.0; nothing a document already writes changes meaning, and no document that validated
+before is refused now, because the property did not exist to write.
+
 ### Member schemas 1.6.0: a rolled box states its corner
 
 A section that records its box gains an optional `corner_radius`, the outside corner radius
@@ -157,57 +217,6 @@ unless its area, second moment and extreme fibre are that tube's or that box's. 
 section carries them gets one more check, `wall local buckling`. `beam_member`,
 `column_member` and `beam_column_member` move to 1.5.0; nothing a document already writes
 changes meaning.
-
-### Member schemas 1.7.0: a section records where its shear centre is
-
-A section gains one more optional property, `shear_centre_offset`: the distance from the
-back of an open section's web to the point a transverse load has to act through to bend it
-without twisting it. `CrossSection.channel` fills it, and so does a member that names a
-rolled channel (`section: C10X30`, `MC18X51.9`). It is a positive length, measured the way
-AISC's `eo` column is.
-
-A beam whose section carries it gets one more check, `twist`, which is `not_evaluated` on
-every channel: the bending and deflection entries beside it are pure bending, and the screen
-has no way to be told where the load acts. A `column_member` or `beam_column_member` whose
-section carries it and states no `second_moment_transverse` is refused, because the axis
-those screens buckle a member about would otherwise fall back to the strong one — four times
-too stiff on a C10X30. `beam_member`, `column_member` and `beam_column_member` move to
-1.7.0; nothing a document already writes changes meaning, and no document that validated
-before is refused now, because the property did not exist to write.
-
-### Member schemas 1.8.0: a section records the axes its reference axes are not
-
-A section gains two more optional properties: `minor_principal_second_moment`, the smallest
-second moment it has, and `principal_axis_tangent`, the slope of the axis that goes with it.
-`CrossSection.angle` fills both, and so does a member that names a rolled single angle
-(`section: L8X4X1`). The minor principal moment must be at or below every axis the section
-already states, since it is the smallest one there is.
-
-`least_radius_of_gyration` now takes it into account, so a column is screened on the axis it
-really bows about. This changes no section that does not state it — nothing in the library
-did before — and for a single angle it is the difference between buckling it about its
-diagonal and about the weaker of its two legs.
-
-A `beam_member` or `beam_column_member` whose section states a non-zero
-`principal_axis_tangent` is refused: bending it about a reference axis is not uniaxial
-bending, and the screens' `M/S` would read under the real stress. `beam_member`,
-`column_member` and `beam_column_member` move to 1.8.0; nothing a document already writes
-changes meaning, and no document that validated before is refused now, because the
-properties did not exist to write.
-
-### `beam_member` 1.9.0: a channel's twist is declared, not guessed
-
-`beam_member` gains an optional `twist_restraint`, one of `through_shear_centre` or
-`restrained`. It answers the `twist` entry an open section earns: declare that the load acts
-through the shear centre, so no torsion is applied, or that something holds the section
-against rotating, and the entry passes — on the declaration, which its detail says plainly,
-not on a calculation. Without it the entry stays `not_evaluated` and now names
-`element_params.twist_restraint` as what it is waiting on, so the needs report can rank it.
-
-Declaring it on a section whose shear centre is on the axis the load acts along is refused,
-rather than accepted and ignored: there is no twist to restrain and no entry for it to
-answer. `column_member` and `beam_column_member` have no twist entry — a channel is refused
-there for its weak axis — so they stay at 1.8.0.
 
 ### Scorecard 1.14.0: a result from a third-party module says so
 
