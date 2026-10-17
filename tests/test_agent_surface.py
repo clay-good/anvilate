@@ -350,7 +350,7 @@ _OFFERS_A_VALUE = {
     ("_patterns_screened.py", "build_pipe_run"): (
         "lists catalog pipes by name; the drawing is then refused unless the bore agrees"
     ),
-    ("packs/structural.py", "_pipe_section"): (
+    ("packs/structural.py", "_pipe_record"): (
         "lists bundled pipe designations by name; a nominal size and schedule names a pipe "
         "the standard holds and says nothing about what the member needs"
     ),

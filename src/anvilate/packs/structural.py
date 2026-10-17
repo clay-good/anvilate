@@ -94,6 +94,7 @@ from ..scorecard import (
 from ..standards import (
     AllowableBasis,
     MaterialsDatabase,
+    PipeDimensions,
     default_materials_db,
     default_pipe_schedule_table,
     resolve_profile,
@@ -317,6 +318,21 @@ def _hollow_bar(designation: str) -> tuple[float, ...] | None:
 def _pipe_section(designation: str) -> CrossSection | None:
     """The section of a pipe written ``NPS 4 SCH 40``, or ``None`` for anything else.
 
+    The round tube :func:`_pipe_record`'s two dimensions make.
+    """
+    record = _pipe_record(designation)
+    if record is None:
+        return None
+    outer = record.outside_diameter.quantity
+    return CrossSection.hollow_circular(outer_diameter=outer, inner_diameter=record.inside_diameter)
+
+
+def _pipe_record(designation: str) -> PipeDimensions | None:
+    """The bundled pipe written ``NPS 4 SCH 40``, or ``None`` for anything else.
+
+    The member's section and the evidence trail's record of where it came from are both
+    read from here, so the two cannot name different pipes.
+
     Pipe is read from the bundled ASME B36.10M schedule table — the same table a pipe run is
     drawn from, written the same way — and not from the AISC Shapes Database's Pipe rows.
     That workbook tabulates a pipe's area to three figures beside its own outside diameter
@@ -353,9 +369,7 @@ def _pipe_section(designation: str) -> CrossSection | None:
             subject="section",
             source="the bundled ASME B36.10M pipe schedule table",
         )
-    record = table.get(size, schedule)
-    outer = record.outside_diameter.quantity
-    return CrossSection.hollow_circular(outer_diameter=outer, inner_diameter=record.inside_diameter)
+    return table.get(size, schedule)
 
 
 def _named_section(value: object) -> object:

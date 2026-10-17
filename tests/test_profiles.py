@@ -860,6 +860,21 @@ def test_a_bar_named_by_its_dimensions_keeps_the_rest_of_the_evidence_trail(sect
     assert kinds(section) == [record for record in rolled if record[0] != "section"]
 
 
+@pytest.mark.parametrize("written", ["NPS 4 SCH 40", "nps 4 sch 40"])
+def test_a_pipe_member_records_the_schedule_table_it_was_read_from(written):
+    """A pipe is the B36.10M table's record, and looking it up as a rolled profile, which no
+    profile table holds, emptied the whole trail: material and tolerance class went too."""
+    from anvilate.evidence import provenance_for
+    from anvilate.spec import load_spec_yaml
+
+    records = provenance_for(load_spec_yaml(_BEAM_SPEC.format(section=written)))
+    rolled = provenance_for(load_spec_yaml(_BEAM_SPEC.format(section="IPE 200")))
+    assert [r.kind for r in records] == [r.kind for r in rolled]
+    (section,) = [record for record in records if record.kind == "section"]
+    assert section.ref == written and section.name == "NPS 4 SCH 40"
+    assert any("B36.10M" in source for source in section.sources), section.sources
+
+
 _STRUCTURE_SPEC = """
 anvilate_spec: "1.3.0"
 name: platform

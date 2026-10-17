@@ -966,7 +966,7 @@ _a_lip_has_all_three_dimensions: a lip states lip_inset, lip_wall and lip_height
 
 [packs/structural.py]
 _hollow_bar: {text} has a {wall} mm wall, which must be more than zero and less than half its {across}, {min(outside)} mm, to leave a bore
-_pipe_section: no bundled pipe is designated NPS {size} SCH {schedule}; did you mean {', '.join(near)}? |
+_pipe_record: no bundled pipe is designated NPS {size} SCH {schedule}; did you mean {', '.join(near)}? |
 _named_section: {unknown.args[0]}, or, for a flat bar, a round tube or a box, by its dimensions in millimetres: `FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`, or, for pipe, by its nominal size and schedule: `NPS 4 SCH 40`
 _well_formed: length must be a [length] quantity; got {self.length}
 _well_formed: deflection_limit must be a [length] quantity; got {self.deflection_limit}

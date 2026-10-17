@@ -371,7 +371,8 @@ where the weaker leg alone would say 1.02 and over-state what the strut carries.
 Pipe is a table, not a dimension pair: an NPS 4 pipe is 114.3 mm across, not 4 inches, and
 the wall a schedule carries is a tabulated entry. A member names it the way a pipe run does,
 `section: NPS 4 SCH 40`, and the bundled ASME B36.10M schedule table gives the outside
-diameter and nominal wall the section is computed from. A nominal size or schedule the table
+diameter and nominal wall the section is computed from, and the evidence bundle records that
+table as the section's source. A nominal size or schedule the table
 does not hold is refused with its neighbours rather than interpolated. Pipe is read from
 that standard and not from the AISC Shapes Database's Pipe rows, whose tabulated areas do
 not follow from their own outside diameter and design wall: on 18 of the 51 rows the two are

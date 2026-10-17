@@ -213,7 +213,7 @@ def collect_provenance(
             records.append(_component_source(interface.ref, providers, components))
     # A member section named by its profile designation resolved from the bundled EN 10365
     # table or the verified local AISC cache, so its dimensions' source travels with it.
-    from .packs.structural import _flat_bar, _hollow_bar
+    from .packs.structural import _flat_bar, _hollow_bar, _pipe_record
 
     for named_section in _named_sections(spec.element_params or {}):
         # A bar named by its own dimensions (`FLAT 50x10`, `TUBE 60x4`) is no table's
@@ -221,7 +221,9 @@ def collect_provenance(
         # does. Looked up as a profile it was not found, and the whole trail went with it.
         if _flat_bar(named_section) is not None or _hollow_bar(named_section) is not None:
             continue
-        profile = resolve_profile(named_section)
+        # Pipe is the B36.10M schedule table's record, which no profile table holds: looked
+        # up as a profile, it emptied the trail the same way.
+        profile = _pipe_record(named_section) or resolve_profile(named_section)
         records.append(
             SourceRecord(
                 ref=named_section,
