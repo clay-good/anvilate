@@ -61,6 +61,29 @@ def test_no_entry_is_stated_as_no_entry_and_never_as_agreement():
     assert compare_editions("AISC 360-16 §J3.6", "10").difference is None
 
 
+@pytest.mark.parametrize("written", ["22", " 22", "22 ", "360-22", "AISC 360-22", "AISC 360 - 22"])
+def test_the_target_edition_is_read_however_the_standard_is_written(written):
+    """`AISC 360-22` and `22 ` were told "no difference is registered" for a clause whose
+    difference is registered: the lookup matched the spelling, not the edition."""
+    comparison = compare_editions("AISC 360-16 §F6", written)
+    assert comparison.difference is not None, comparison.statement
+    assert comparison.to_edition == "22"
+
+
+@pytest.mark.parametrize(
+    ("written", "reason"),
+    [
+        ("", "names no edition"),
+        ("  ", "names no edition"),
+        ("ASCE 7-22", "AISC 360"),
+        ("60-22", "AISC 360"),
+    ],
+)
+def test_a_target_edition_that_is_none_or_another_standards_is_refused(written, reason):
+    with pytest.raises(ValueError, match=reason):
+        compare_editions("AISC 360-16 §F6", written)
+
+
 def test_a_citation_without_an_edition_cannot_be_compared():
     """ "AISC 360 §J3.6" is bolt strength in one edition and bolt spacing in the next."""
     with pytest.raises(ValueError, match="names no edition"):

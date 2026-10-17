@@ -180,6 +180,46 @@ class EditionComparison(RevalidatedModel):
         return self.statement
 
 
+def _target_edition(cited: Citation, written: str) -> str:
+    """The edition ``written`` names, read the way the citation's own edition is.
+
+    The registry is keyed on the bare edition, so `AISC 360-22` and `22 ` were looked up as
+    themselves and told that no difference is registered for a clause that has one. A
+    designation is accepted when it is the cited standard's, and refused when it is another's.
+    """
+    text = written.strip()
+    prefix, separator, edition = text.rpartition(cited.separator)
+    if separator:
+        named = prefix.strip()
+        # `360` names AISC 360 and `60` does not: the designation ends on a word.
+        if named and not (cited.standard == named or cited.standard.endswith(f" {named}")):
+            raise _EditionInputError(
+                f"{written!r} is an edition of {named}, and {cited} is {cited.standard}: the "
+                "comparison is between two editions of one standard",
+                remedies=(
+                    Remedy(
+                        action="replace",
+                        subject="to_edition",
+                        source=f"an edition of {cited.standard}, e.g. {cited.edition}",
+                    ),
+                ),
+            )
+        text = edition.strip()
+    if not text:
+        raise _EditionInputError(
+            f"to_edition {written!r} names no edition of {cited.standard} to compare to",
+            remedies=(
+                Remedy(
+                    action="replace",
+                    subject="to_edition",
+                    source=f"an edition of {cited.standard}, written as the citation writes "
+                    f"its own ({cited.edition})",
+                ),
+            ),
+        )
+    return text
+
+
 def compare_editions(
     citation: str | Citation,
     to_edition: str,
@@ -206,6 +246,7 @@ def compare_editions(
                 ),
             ),
         )
+    to_edition = _target_edition(parsed, to_edition)
     results = (
         ()
         if evaluate is None
