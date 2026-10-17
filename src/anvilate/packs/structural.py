@@ -271,7 +271,11 @@ def _flat_bar(designation: str) -> tuple[float, float] | None:
     """
     import re
 
-    matched = re.fullmatch(r"FLAT (\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)", designation.strip())
+    number = r"(\d+(?:\.\d+)?)"
+    # In any case and spacing, as every other designation is read.
+    matched = re.fullmatch(
+        rf"FLAT\s{{0,8}}{number}\s{{0,8}}x\s{{0,8}}{number}", designation.strip(), re.IGNORECASE
+    )
     if matched is None:
         return None
     breadth, depth = float(matched[1]), float(matched[2])
@@ -290,9 +294,11 @@ def _hollow_bar(designation: str) -> tuple[float, ...] | None:
     import re
 
     number = r"(\d+(?:\.\d+)?)"
+    by = r"\s{0,8}x\s{0,8}"
     text = designation.strip()
-    tube = re.fullmatch(rf"TUBE {number}x{number}", text)
-    box = re.fullmatch(rf"BOX {number}x{number}x{number}", text)
+    # In any case and spacing, as every other designation is read.
+    tube = re.fullmatch(rf"TUBE\s{{0,8}}{number}{by}{number}", text, re.IGNORECASE)
+    box = re.fullmatch(rf"BOX\s{{0,8}}{number}{by}{number}{by}{number}", text, re.IGNORECASE)
     if tube is None and box is None:
         return None
     sizes = tuple(float(size) for size in (tube or box).groups())

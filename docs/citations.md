@@ -322,7 +322,8 @@ the profiles it nearly named, and any other section is declared by its propertie
 
 Three bars need no table, because each is its own dimensions in millimetres: a flat bar,
 `FLAT 50x10` (breadth across the load by depth along it); a round tube, `TUBE 60x4` (outside
-diameter by wall); and a square-cornered box, `BOX 100x50x4` (breadth, depth, wall). The
+diameter by wall); and a square-cornered box, `BOX 100x50x4` (breadth, depth, wall). Each is
+read in any case and spacing, as a profile name is: `tube 60 X 4` is `TUBE 60x4`. The
 section screened and the solid drawn are the same shape, and no `section` source is recorded
 for one: it came from the document. The box is the one welded from four plates. A rolled
 hollow section rounds its corners and has a little less metal, so declare that one by its

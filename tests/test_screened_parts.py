@@ -353,6 +353,15 @@ def test_a_member_may_be_a_round_tube_or_a_box_named_by_its_dimensions():
     assert _hollow_bar("BOX 100x50x4") == (100.0, 50.0, 4.0)
     assert _hollow_bar("IPE 200") is None and _hollow_bar("FLAT 50x10") is None
     assert _hollow_bar("TUBE 60") is None and _hollow_bar("BOX 100x50") is None
+    # Read in any case and spacing, as every other designation is: these were refused as
+    # "no record for profile", while `nps 4 sch 40` and `w8x31` resolved.
+    from anvilate.packs.structural import _flat_bar
+
+    for written in ("flat 50x10", "FLAT 50X10", "FLAT50x10", "Flat 50 x 10"):
+        assert _flat_bar(written) == (50.0, 10.0), written
+    for written in ("tube 60x4", "TUBE 60X4", "TUBE60x4", "Tube 60 x 4"):
+        assert _hollow_bar(written) == (60.0, 4.0), written
+    assert _hollow_bar("box 100X50x4") == (100.0, 50.0, 4.0)
     document = yaml.safe_load((_EXAMPLES / "beam_member.spec.yaml").read_text("utf-8"))
     params = document["element_params"]
     tube_area = math.pi * (60**2 - 52**2) / 4
@@ -399,8 +408,9 @@ def test_a_member_may_be_a_round_tube_or_a_box_named_by_its_dimensions():
             BeamMember.model_validate({**params, "section": solid})
         with pytest.raises(ValueError, match=reason):
             build_spec(_spec("beam_member", section=solid))
-    # A near miss is not a profile nobody rolls: it is shown the spelling it wanted.
-    for near in ("TUBE 60 x 4", "tube 60x4", "BOX 100x50", "HSS 100x50x4"):
+    # A near miss is not a profile nobody rolls: it is shown the spelling it wanted. A
+    # change of case or spacing (`tube 60 x 4`) is not a near miss; it is read, above.
+    for near in ("TUBE 60", "BOX 100x50", "HSS 100x50x4", "TUBE 60x4x"):
         with pytest.raises(ValueError, match="`FLAT 50x10`, `TUBE 60x4`, `BOX 100x50x4`") as said:
             BeamMember.model_validate({**params, "section": near})
         assert near in str(said.value)
