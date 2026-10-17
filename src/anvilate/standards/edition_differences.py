@@ -43,8 +43,12 @@ if TYPE_CHECKING:
 else:
     _Clause = cited("the clause number as the standard writes it, e.g. §J3.6")
 
-# The clause a citation's free text starts with: "§J3.6 (bolt shear)" is §J3.6.
-_CLAUSE = re.compile(r"§\s?[A-Z]\d+(?:\.\d+)*")
+# The clause a citation's free text names: "§J3.6 (bolt shear)" is §J3.6, and so are
+# "§ J3.6", "Section J3.6", "Chapter J, §J3.6" and a bare "J3.6". Each of those was matched
+# as written, found no entry, and was told no difference is registered. A subclause
+# (§J3.6.1) or an equation (Eq. J3-1) is not its clause, and does not borrow its entry.
+_CLAUSE = re.compile(r"(?:§|\bSect(?:ion|\.)?)\s*([A-Za-z]\d+(?:\.\d+)*)(?![\d.])")
+_BARE_CLAUSE = re.compile(r"([A-Z]\d+(?:\.\d+)*)(?![\d.\w-])")
 
 
 class EditionChange(StrEnum):
@@ -116,10 +120,12 @@ class EditionDifferenceTable:
             ) from None
 
     def find(self, citation: Citation, to_edition: str) -> EditionDifference | None:
-        clause = _CLAUSE.match(citation.clause.strip())
+        text = citation.clause.strip()
+        clause = _CLAUSE.search(text) or _BARE_CLAUSE.match(text)
         if clause is None:
             return None
-        entry = self._entries.get(f"{citation.standard}-{citation.edition} {clause.group()}")
+        key = f"{citation.standard}-{citation.edition} §{clause.group(1).upper()}"
+        entry = self._entries.get(key)
         return entry if entry is not None and entry.to_edition == to_edition else None
 
 

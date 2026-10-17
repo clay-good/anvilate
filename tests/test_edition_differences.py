@@ -71,6 +71,32 @@ def test_the_target_edition_is_read_however_the_standard_is_written(written):
 
 
 @pytest.mark.parametrize(
+    "written",
+    [
+        "AISC 360-16 § F6",
+        "AISC 360-16 F6",
+        "AISC 360-16 Section F6",
+        "AISC 360-16 Sect. F6",
+        "AISC 360-16 §f6",
+        "AISC 360-16 Chapter F, §F6",
+        "AISC 360-16 §F6 (doubly symmetric I, minor axis)",
+    ],
+)
+def test_the_clause_is_read_however_it_is_written(written):
+    """Each of these was told "no difference is registered" for §F6, which has one."""
+    difference = compare_editions(written, "22").difference
+    assert difference is not None and difference.key == "AISC 360-16 §F6"
+
+
+@pytest.mark.parametrize(
+    "written", ["AISC 360-16 §F6.1", "AISC 360-16 Eq. F6-4", "AISC 360-16 Chapter F"]
+)
+def test_a_subclause_or_an_equation_does_not_borrow_its_clauses_entry(written):
+    """§F6's change may be in a subclause other than the one cited, so it is not inherited."""
+    assert compare_editions(written, "22").difference is None
+
+
+@pytest.mark.parametrize(
     ("written", "reason"),
     [
         ("", "names no edition"),
