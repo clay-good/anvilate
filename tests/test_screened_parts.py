@@ -465,8 +465,12 @@ def test_a_member_may_be_a_pipe_named_by_its_nominal_size_and_schedule():
     assert "NPS 4 SCH 40" in str(said.value)
     with pytest.raises(ValueError, match="no bundled pipe is designated NPS 99 SCH 40"):
         BeamMember.model_validate({**params, "section": "NPS 99 SCH 40"})
-    # A spelling that is not the designation's is shown the one that is.
-    for near in ("NPS 4 SCH40", "NPS4 SCH 40", "PIPE NPS 4 SCH 40", "NPS 4"):
+    # Read in any case and spacing, as every other designation is.
+    for written in ("nps 4 sch 40", "NPS4 SCH40", "NPS 4  SCH 40", "Nps 4 Sch Std"):
+        resolved = BeamMember.model_validate({**params, "section": written}).section
+        assert resolved.outside[0].to("mm").magnitude == pytest.approx(114.3), written
+    # A spelling that is not a designation at all is shown the one that is.
+    for near in ("PIPE NPS 4 SCH 40", "NPS 4", "SCH 40", "NPS 4 SCHEDULE 40"):
         with pytest.raises(ValueError, match="`NPS 4 SCH 40`"):
             BeamMember.model_validate({**params, "section": near})
 

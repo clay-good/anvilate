@@ -326,11 +326,17 @@ def _pipe_section(designation: str) -> CrossSection | None:
     """
     import re
 
-    named = re.fullmatch(r"NPS (\S{1,12}) SCH (\S{1,12})", designation.strip())
+    # In any case and spacing, as every other designation is read: `nps 4 sch 40` and
+    # `NPS4 SCH40` are the same pipe, and the table key is written back the standard's way.
+    named = re.fullmatch(
+        r"NPS\s{0,8}([\d/-]{1,12})\s{0,8}SCH\s{0,8}(\w{1,12})",
+        designation.strip(),
+        re.IGNORECASE,
+    )
     if named is None:
         return None
     table = default_pipe_schedule_table()
-    size, schedule = named.groups()
+    size, schedule = named[1], named[2].upper()
     if not table.has_pipe(size, schedule):
         import difflib
 
