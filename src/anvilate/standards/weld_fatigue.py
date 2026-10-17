@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from functools import cache
 from importlib.resources import files
-from math import log10
+from math import isfinite, log10
 
 from .._models import _near_identifiers, parse_yaml
 from ..units import Quantity
@@ -93,18 +93,45 @@ def mean_curve_from_failures(points: tuple[tuple[float, float], ...]) -> Fatigue
     ``m = -B``. The single segment is anchored at the longest failure and runs down to the
     shortest: the range the specimens cover, and nothing past it.
     """
+    source = "the campaign's failed specimens, tested at more than one stress range"
+    # The fit takes logarithms of both, so each has to be a finite positive number, and the
+    # line has to fall: these ended as a ZeroDivisionError, a bare "math domain error", or a
+    # complaint about the fitted segment that said nothing about the points.
+    for stress, cycles in points:
+        if not (isfinite(stress) and isfinite(cycles)):
+            raise _fatigue_record_refusal(
+                f"every failure is a finite stress range and cycle count; got {stress} MPa "
+                f"at {cycles} cycles",
+                subject="points",
+                source=source,
+            )
+        if stress <= 0 or cycles <= 0:
+            raise _fatigue_record_refusal(
+                f"a stress range and a cycle count to failure are both positive; got "
+                f"{stress:g} MPa at {cycles:g} cycles",
+                subject="points",
+                source=source,
+            )
     if len({stress for stress, _cycles in points}) < 2:
         raise _fatigue_record_refusal(
             "an S-N line needs failures at two or more stress ranges; at one there is no "
             "slope to fit",
             subject="points",
-            source="the campaign's failed specimens, tested at more than one stress range",
+            source=source,
         )
     xs = [log10(stress) for stress, _cycles in points]
     ys = [log10(cycles) for _stress, cycles in points]
     mean_x, mean_y = sum(xs) / len(xs), sum(ys) / len(ys)
     spread = sum((x - mean_x) ** 2 for x in xs)
     slope_b = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True)) / spread
+    if not slope_b < 0:
+        raise _fatigue_record_refusal(
+            "these failures make no S-N line: their life does not fall as the stress range "
+            f"rises (the fitted log-log slope is {slope_b:+.3g}), so there is no exponent m "
+            "to report; check that each pair is (stress range, cycles) and not the reverse",
+            subject="points",
+            source=source,
+        )
     intercept = mean_y - slope_b * mean_x
     longest = max(cycles for _stress, cycles in points)
     # The fitted stress range at the longest failure: log10 Δσ = (log10 N - A) / B.

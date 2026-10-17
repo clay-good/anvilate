@@ -109,6 +109,27 @@ def test_the_fit_needs_more_than_one_stress_level():
         mean_curve_from_failures(((100.0, 1e5), (100.0, 2e5)))
 
 
+@pytest.mark.parametrize(
+    ("points", "reason"),
+    [
+        # These ended as a ZeroDivisionError, a bare "math domain error", and a pydantic
+        # error about FatigueSegment's slope: none of them said what was wrong with the points.
+        (((100.0, 1e6), (200.0, 1e6)), "life does not fall as the stress range rises"),
+        (((100.0, 1e5), (200.0, 1e6)), "life does not fall as the stress range rises"),
+        (((0.0, 1e6), (200.0, 1e5)), "positive"),
+        (((100.0, -5.0), (200.0, 1e5)), "positive"),
+        (((100.0, float("nan")), (200.0, 1e5)), "finite"),
+        (((float("inf"), 1e6), (200.0, 1e5)), "finite"),
+    ],
+)
+def test_points_that_make_no_s_n_line_are_refused_by_what_is_wrong(points, reason):
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(RefusalError, match=reason) as refused:
+        mean_curve_from_failures(points)
+    assert refused.value.remedies[0].subject == "points"
+
+
 def _check(stress: float, cycles: float, survival=CurveSurvival.MEAN):  # type: ignore[no-untyped-def]
     from anvilate.units import Quantity
 
