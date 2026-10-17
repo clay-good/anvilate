@@ -179,6 +179,68 @@ def test_a_feature_that_is_not_a_feature_is_refused_when_declared(make):
         make()
 
 
+@pytest.mark.parametrize(
+    ("make", "named"),
+    [
+        (lambda: features.through_hole("h", math.nan, 0, 6), "u"),
+        (lambda: features.blind_hole("h", 0, math.inf, 6, 2), "v"),
+        (lambda: features.slot("h", 0, 0, 20, 6, angle_deg=math.nan), "angle_deg"),
+        (lambda: features.slot("h", 0, 0, 20, 6, angle_deg=math.inf), "angle_deg"),
+        (
+            lambda: features.bolt_circle(
+                "h", count=4, circle_diameter=40, diameter=6, start_angle_deg=math.nan
+            ),
+            "u",
+        ),
+        (
+            lambda: features.bolt_circle(
+                "h", count=4, circle_diameter=40, diameter=6, centre=(math.nan, 0.0)
+            ),
+            "u",
+        ),
+        (
+            lambda: features.rectangular_pattern(
+                "h", count_u=2, count_v=2, pitch_u=10, pitch_v=math.nan, diameter=4
+            ),
+            "pitch along v",
+        ),
+        (lambda: features.Cut("h", "through_hole", 0.0, 0.0, math.nan), "diameter"),
+    ],
+)
+def test_a_cut_at_no_finite_place_is_refused_before_the_kernel_sees_it(make, named):
+    """A hole at a NaN position passed every fit check, since NaN compares false, and then
+    hung the CAD kernel: killed after 120 s, where the same hole at a real place takes
+    milliseconds. A NaN or infinite slot angle crashed it with "Null TopoDS_Shape object".
+    """
+    with pytest.raises(GeometryError, match=rf"{named}.* finite|finite.*{named}"):
+        make()
+
+
+def test_a_host_with_no_finite_extent_is_refused():
+    with pytest.raises(GeometryError, match="thickness.*finite"):
+        features.Host(
+            name="top",
+            origin=(0.0, 0.0, 8.0),
+            u=(1.0, 0.0, 0.0),
+            v=(0.0, 1.0, 0.0),
+            normal=(0.0, 0.0, 1.0),
+            thickness=math.nan,
+            width=100.0,
+            height=60.0,
+        )
+    with pytest.raises(GeometryError, match="origin.*finite"):
+        features.Host(
+            name="top",
+            origin=(0.0, math.nan, 8.0),
+            u=(1.0, 0.0, 0.0),
+            v=(0.0, 1.0, 0.0),
+            normal=(0.0, 0.0, 1.0),
+            thickness=8.0,
+            width=100.0,
+            height=60.0,
+        )
+
+
 def test_plate_corners_round_and_an_oversize_radius_is_refused():
     rounded = features.round_corners(_plate(), 10.0)
     assert _W * _H * _T - rounded.volume == pytest.approx((4 - math.pi) * 100 * _T, rel=1e-6)

@@ -9,7 +9,8 @@ comes back as a tagged :class:`Feature` a caller can measure by name.
 
 A cut that cannot be made in its host is refused, naming the cut, the host and the
 shortfall: a hole bigger than the face it is in, one that breaks out through an edge, two
-that overlap, a blind hole deeper than the material. A tapped hole is a hole that carries its
+that overlap, a blind hole deeper than the material, and a position, size or angle that is
+not a finite number. A tapped hole is a hole that carries its
 thread designation as data. Thread helices are never modelled.
 """
 
@@ -72,6 +73,11 @@ class Host:
     height: float | None = None
     radius: float | None = None
 
+    def __post_init__(self) -> None:
+        # A NaN compares false, so a host with one passed every fit check below it.
+        for name in ("origin", "u", "v", "normal", "thickness", "width", "height", "radius"):
+            _finite(getattr(self, name), name, self.name)
+
 
 @dataclass(frozen=True)
 class Cut:
@@ -85,6 +91,14 @@ class Cut:
     depth: float | None = None
     extra: Mapping[str, float] = field(default_factory=dict)
     thread: str | None = None
+
+    def __post_init__(self) -> None:
+        # A NaN position compares false against every edge and every other cut, so it passed
+        # `apply`'s fit checks and then hung the CAD kernel; a NaN slot angle crashed it.
+        for name in ("u", "v", "diameter", "depth"):
+            _finite(getattr(self, name), name, self.tag)
+        for name, value in self.extra.items():
+            _finite(value, name, self.tag)
 
     @property
     def radius(self) -> float:
@@ -148,10 +162,23 @@ class Feature:
         return float(values[quantity])
 
 
+def _finite(value: object, what: str, tag: str) -> None:
+    """Refuse a number, or a coordinate triple, that is not finite; ``None`` is no value."""
+    for number in value if isinstance(value, tuple) else (value,):
+        if number is not None and not (
+            isinstance(number, int | float)
+            and not isinstance(number, bool)
+            and math.isfinite(number)
+        ):
+            raise _refuse(
+                f"{tag}: {what} must be finite; got {value}", subject=f"the {what} of {tag}"
+            )
+
+
 def _positive(value: float, what: str, tag: str) -> float:
     if not (isinstance(value, int | float) and math.isfinite(value) and value > 0):
         raise _refuse(
-            f"{tag}: {what} must be a positive length in mm; got {value}",
+            f"{tag}: {what} must be a finite, positive length in mm; got {value}",
             subject=f"the {what} of {tag}",
         )
     return float(value)
