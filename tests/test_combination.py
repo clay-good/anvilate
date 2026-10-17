@@ -964,6 +964,54 @@ def test_a_loaded_key_out_of_its_domain_is_refused_as_the_document_it_is(over, r
         _keyed(**{**_LOADED_KEY, **over})
 
 
+def _with_nan(name: str, change) -> dict:
+    document = copy.deepcopy(_document(name))
+    change(document)
+    return document
+
+
+@pytest.mark.parametrize(
+    ("name", "change", "reason"),
+    [
+        (
+            "flange_pair",
+            lambda d: d["hardware"][0].update(length={"magnitude": math.nan, "unit": "mm"}),
+            r"hardware\.0: hardware in mate 'joint' states its bolt length as nan",
+        ),
+        (
+            "bracket_on_plate",
+            lambda d: d["hardware"][0].update(
+                load={"magnitude": math.nan, "unit": "kN"},
+                bolt_material="ASTM-A36",
+                min_safety_factor=2.0,
+            ),
+            r"hardware\.0: hardware in mate 'bolted' states its load as nan",
+        ),
+        (
+            "lug_on_base_plate",
+            lambda d: d.update(
+                welds=[
+                    {
+                        "mate": "welded",
+                        "type": "fillet",
+                        "size": {"magnitude": math.nan, "unit": "mm"},
+                    }
+                ]
+            ),
+            r"welds\.0: the weld on mate 'welded' states its size as nan",
+        ),
+    ],
+)
+def test_a_size_or_load_that_is_no_number_is_refused_when_the_document_is_read(
+    name, change, reason
+):
+    """Each guard was `<= 0`, which a NaN passes. A NaN bolt length went on to the kernel and
+    hung it (killed after 120 s); a NaN weld was listed as one; a NaN load was refused only
+    once the joint's screen ran. Read alone, so a regression fails here rather than hangs."""
+    with pytest.raises(CombinationError, match=reason):
+        parse_combination(_with_nan(name, change))
+
+
 def test_a_key_carrying_no_torque_is_still_seated_and_not_screened():
     """Zero torque is a key with nothing to screen, not an error: it says so."""
     built = _keyed(**{**_LOADED_KEY, "torque": {"magnitude": 0.0, "unit": "N*m"}})

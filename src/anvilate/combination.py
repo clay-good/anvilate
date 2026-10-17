@@ -97,6 +97,12 @@ class CombinationError(RefusalError, ValueError):
     """A combination that cannot be placed or built as written, with what would fix it."""
 
 
+def _above_zero(magnitude: float) -> bool:
+    """Finite and positive. `<= 0` is not its negation: a NaN fails both, so a NaN bolt length
+    passed the guard and hung the kernel that drew it."""
+    return math.isfinite(magnitude) and magnitude > 0
+
+
 def _refuse(message: str, *, subject: str, action: str = "correct") -> CombinationError:
     return CombinationError(
         message, remedies=(Remedy(action=action, subject=subject, source=_DOCUMENT),)
@@ -255,7 +261,7 @@ class HardwareStack(StatableModel):
                 subject=f"hardware[].{missing[0] if missing else 'load'}",
             )
         assert self.load is not None and self.min_safety_factor is not None
-        if not self.load.has_dimension("[force]") or self.load.to("N").magnitude <= 0:
+        if not self.load.has_dimension("[force]") or not _above_zero(self.load.to("N").magnitude):
             raise _refuse(
                 f"hardware in mate '{self.mate}' states its load as {self.load}; it is the "
                 "shear force the joint carries",
@@ -279,7 +285,9 @@ class HardwareStack(StatableModel):
                 subject="hardware[].bolt",
             )
         what = "bolt" if self.bolt is not None else "pin"
-        if not self.length.has_dimension("[length]") or self.length.to("mm").magnitude <= 0:
+        if not self.length.has_dimension("[length]") or not _above_zero(
+            self.length.to("mm").magnitude
+        ):
             raise _refuse(
                 f"hardware in mate '{self.mate}' states its {what} length as {self.length}",
                 subject="hardware[].length",
@@ -395,7 +403,7 @@ class Weld(StatableModel):
 
     @model_validator(mode="after")
     def _a_size(self) -> Weld:
-        if not self.size.has_dimension("[length]") or self.size.to("mm").magnitude <= 0:
+        if not self.size.has_dimension("[length]") or not _above_zero(self.size.to("mm").magnitude):
             raise _refuse(
                 f"the weld on mate '{self.mate}' states its size as {self.size}",
                 subject="welds[].size",
