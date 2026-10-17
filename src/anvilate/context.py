@@ -133,6 +133,8 @@ _UNIT_NAMES = {
     "mil": "mils",
     "microinch": "microinches",
     "mile": "miles",
+    "mi": "miles",
+    "yd": "yards",
     "um": "micrometres",
     "nm": "nanometres",
     "dm": "decimetres",
@@ -1145,7 +1147,7 @@ def _dxf_facts(path: Path, unit: str | None) -> dict[str, Any]:
             subject="path",
             source="a DXF file saved from the CAD tool, R12 or later",
         ) from failure
-    written = _DXF_UNITS.get(int(document.header.get("$INSUNITS", 0) or 0))
+    written, file_mm = _dxf_unit(path, int(document.header.get("$INSUNITS", 0) or 0))
     if unit is None and written is None:
         raise _refuse(
             f"{path.name} declares no drawing unit, and a drawing in inches read as "
@@ -1154,14 +1156,14 @@ def _dxf_facts(path: Path, unit: str | None) -> dict[str, Any]:
             subject="unit",
             source="the drawing's unit: mm, cm, m, in or ft",
         )
-    if unit is not None and written is not None and unit != written:
+    if unit is not None and written is not None and not math.isclose(_TO_MM[unit], file_mm):
         raise _refuse(
             f"{path.name} declares its unit as {written}, and the call states {unit}",
             action="remove",
             subject="unit",
             source="the unit the DXF file itself declares",
         )
-    scale = _TO_MM[unit or written]  # type: ignore[index]
+    scale = _TO_MM[unit] if written is None else file_mm  # type: ignore[index]
     loops: list[tuple[str, str, list[tuple[float, float]], float | None]] = []
     strands: list[tuple[str, list[tuple[float, float]]]] = []
     dimensions: list[DimensionFacts] = []
@@ -1236,7 +1238,8 @@ def _dxf_facts(path: Path, unit: str | None) -> dict[str, Any]:
         )
     elif written != "mm":
         notes.append(
-            f"the file was drawn in {_UNIT_NAMES[written]}; every value here is converted to mm"
+            f"the file was drawn in {_UNIT_NAMES.get(written, written)}; every value here is "
+            "converted to mm"
         )
     if any(dimension.disagrees for dimension in dimensions):
         notes.append(
@@ -1253,6 +1256,36 @@ def _dxf_facts(path: Path, unit: str | None) -> dict[str, Any]:
         "dimensions": tuple(dimensions[:LISTED]),
         "open_entities": loose + ignored,
     }
+
+
+def _dxf_unit(path: Path, code: int) -> tuple[str | None, float]:
+    """The unit a drawing's ``$INSUNITS`` declares, and its size in mm; ``None`` for none.
+
+    The five a caller may state are exact here. Any other is sized by ezdxf's own table,
+    and one it cannot size is refused by name: a drawing in microns or mils was taken for
+    one that declares no unit, and the unit the call then stated was applied to it.
+    """
+    if code == 0:
+        return None, 1.0
+    if code in _DXF_UNITS:
+        return _DXF_UNITS[code], _TO_MM[_DXF_UNITS[code]]
+    from ezdxf import units
+
+    named = units.unit_name(code)
+    try:
+        size = float(units.conversion_factor(code, units.MM))
+        written = units.decode(code)
+    except (KeyError, TypeError, ValueError):
+        size, written = math.nan, None
+    if not (written and math.isfinite(size) and size > 0):
+        raise _refuse(
+            f"{path.name} declares its unit as {named or f'$INSUNITS {code}'}, which this "
+            "reader has no size for; export the drawing in mm or inches",
+            action="replace",
+            subject="path",
+            source="a DXF drawn in mm, cm, m, in or ft",
+        )
+    return {"µm": "um"}.get(written, written), size
 
 
 def _arc_points(entity: Any, scale: float) -> list[tuple[float, float]]:

@@ -360,6 +360,58 @@ def test_two_bodies_are_two_solids(tmp_path):
 # --- DXF -------------------------------------------------------------------------------
 
 
+def _rectangle_dxf(path, insunits: int, width: float, height: float):
+    import ezdxf
+
+    document = ezdxf.new()
+    document.header["$INSUNITS"] = insunits
+    document.modelspace().add_lwpolyline(
+        [(0, 0), (width, 0), (width, height), (0, height)], close=True
+    )
+    document.saveas(path)
+    return path
+
+
+@pytest.mark.parametrize(
+    ("insunits", "width", "written", "named"),
+    [
+        (13, 25400.0, "um", "micrometres"),
+        (14, 0.254, "dm", "decimetres"),
+        (7, 2.54e-5, "km", "kilometres"),
+    ],
+)
+def test_a_drawing_in_a_unit_outside_the_five_is_read_at_that_unit(
+    insunits, width, written, named, tmp_path
+):
+    """A drawing that declared microns was refused as declaring no unit; stated in mm it was
+    then read 1000 times too small, beside a note saying the file declares none."""
+    pytest.importorskip("ezdxf")
+    facts = read_cad_file(_rectangle_dxf(tmp_path / "plate.dxf", insunits, width, width / 2))
+    assert facts.unit_written == written
+    assert facts.size_mm[:2] == pytest.approx((25.4, 12.7), rel=1e-9)
+    assert any(f"drawn in {named}" in note for note in facts.notes), facts.notes
+    with pytest.raises(
+        ContextError, match=f"declares its unit as {written}, and the call states mm"
+    ):
+        read_cad_file(tmp_path / "plate.dxf", unit="mm")
+
+
+@pytest.mark.parametrize(
+    ("insunits", "named"), [(9, "Mils"), (8, "Microinches"), (21, "USSurveyFeet")]
+)
+def test_a_drawing_in_a_unit_with_no_size_here_is_refused_by_what_it_declares(
+    insunits, named, tmp_path
+):
+    """A mils drawing was told it declared no unit, and whatever unit the call then stated
+    was applied: an inch (the obvious guess) read it 1000 times too large."""
+    pytest.importorskip("ezdxf")
+    path = _rectangle_dxf(tmp_path / "plate.dxf", insunits, 1000.0, 500.0)
+    for stated in (None, "in", "mm"):
+        with pytest.raises(ContextError, match=f"declares its unit as {named}") as refused:
+            read_cad_file(path, unit=stated)
+        assert "declares no drawing unit" not in str(refused.value)
+
+
 def test_a_drawing_in_inches_is_read_in_millimetres_with_its_holes(tmp_path):
     facts = read_cad_file(_plate_dxf(tmp_path / "plate.dxf"))
     assert (facts.kind, facts.unit_written, facts.unit_reported) == ("dxf", "in", "mm")
