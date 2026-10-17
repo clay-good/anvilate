@@ -106,6 +106,9 @@ that already ran and does one more thing with them:
   what, and the one implementation every screen evaluating it composes.
 - :mod:`anvilate.margin` — the margin ledger: every conservatism applied to a
   result, attributed, multiplied out, and its duplicates named.
+- :mod:`anvilate.margin_of_safety` — margins of safety as a regulated program reviews
+  them: limit and ultimate loads kept apart, a cited factor set, an allowable basis per
+  load path, and one governing row per check across every load case.
 - :mod:`anvilate.mcp` — the pipeline as MCP tool contracts, and the rule that
   decides which operations are tasks rather than synchronous calls.
 - :mod:`anvilate._mcp_tasks` — the private durable task store and fixed worker
