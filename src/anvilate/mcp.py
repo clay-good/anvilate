@@ -592,7 +592,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     },
                     "dimensions": {
                         "type": "boolean",
-                        "description": "add the overall dimensions, measured from the solid",
+                        "description": "add the overall dimensions, measured from the solid; "
+                        "front, top and right only, since an iso view has no true length",
                     },
                     "format": {
                         "type": "string",

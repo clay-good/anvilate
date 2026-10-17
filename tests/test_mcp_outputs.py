@@ -243,3 +243,6 @@ def test_the_overview_is_one_picture_with_the_part_its_size_material_and_verdict
     plain = _call("render_viewport", {"subject": built, "view": "front"})["result"]
     labelled = _call("render_viewport", {"subject": built, "view": "front", "dimensions": True})
     assert labelled["result"]["content"][1]["data"] != plain["content"][1]["data"]
+    # The iso view has no true length to label, and the agent is told which views do.
+    iso = _call("render_viewport", {"subject": built, "view": "iso", "dimensions": True})
+    assert "front, top or right" in str(iso.get("error") or iso["result"]), iso

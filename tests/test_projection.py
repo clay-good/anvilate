@@ -88,8 +88,44 @@ def test_a_dimension_is_measured_from_the_solid_in_the_unit_asked_for():
 
 def test_a_dimensioned_view_says_it_is_not_a_manufacturing_drawing():
     """The note is drawn as strokes like every label; its presence is the extra path."""
-    assert _view("iso", dimensions=True).count("<path") > _view("iso").count("<path")
-    assert "<text" not in _view("iso", dimensions=True), "text is strokes, so PNG and SVG agree"
+    assert _view("front", dimensions=True).count("<path") > _view("front").count("<path")
+    assert "<text" not in _view("front", dimensions=True), "text is strokes, so PNG and SVG agree"
+
+
+def _labels(monkeypatch, shape, view: str, **options) -> list[str]:
+    """Every string the view draws, as asked of the stroke font."""
+    drawn: list[str] = []
+    real = projection._text
+
+    def record(text, *args, **kwargs):
+        drawn.append(text)
+        return real(text, *args, **kwargs)
+
+    monkeypatch.setattr(projection, "_text", record)
+    projection.render_view(shape, {}, name="probe", view=view, width_px=640, **options)
+    return drawn
+
+
+def test_an_isometric_view_carries_no_dimension_because_it_has_no_true_length():
+    """The iso view's projected extent is no length of the part. A 100 x 80 x 35 mm plate
+    was labelled 127.3 mm across and 71.37 mm up, as though they were its dimensions; the
+    overview already left them off its iso view for that reason."""
+    from anvilate.geometry import GeometryError
+
+    with pytest.raises(GeometryError, match="isometric.*front, top or right"):
+        _view("iso", dimensions=True)
+    assert _view("iso")  # drawn, without dimensions
+
+
+def test_a_long_part_is_dimensioned_in_whole_millimetres_not_an_exponent(monkeypatch):
+    """`:.4g` labelled a 12 m bar `1.2E+04 MM`."""
+    from build123d import Box
+
+    labels = _labels(monkeypatch, Box(12000, 100, 50), "front", dimensions=True)
+    assert "12000 mm" in labels and "50 mm" in labels, labels
+    assert not [label for label in labels if "e+" in label.lower()], labels
+    inches = _labels(monkeypatch, Box(12000, 100, 50), "front", dimensions=True, unit="in")
+    assert "472.4 in" in inches, inches
 
 
 def test_the_overview_is_one_image_of_all_four_views():
@@ -114,7 +150,8 @@ def test_every_character_a_label_can_carry_has_a_glyph():
 
 
 @pytest.mark.parametrize("size", [(100, 4000, 200), (4000, 100, 200), (10, 10, 4000)])
-@pytest.mark.parametrize("view", projection.VIEWS)
+# The iso view is not dimensioned: its extent is no length of the part.
+@pytest.mark.parametrize("view", [view for view in projection.VIEWS if view != "iso"])
 def test_a_dimension_label_never_leaves_the_view(size, view):
     """On a 4 m beam the right view's "200 MM" ran off the edge and read "200 M".
 

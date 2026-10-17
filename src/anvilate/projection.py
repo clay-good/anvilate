@@ -282,6 +282,13 @@ _GLYPHS: Mapping[str, tuple[tuple[tuple[float, float], ...], ...]] = {
 _DIMENSION_OFFSET = 26.0
 
 
+def _length(value: float, unit: str) -> str:
+    """A dimension's label: four figures, and never an exponent. `:.4g` alone wrote a 12 m
+    bar as `1.2E+04 MM`, which no drawing writes; past four figures it is whole units."""
+    figures = f"{value:.4g}"
+    return f"{f'{value:.0f}' if 'e' in figures else figures} {unit}"
+
+
 def _text_width(text: str, height: float) -> float:
     """How wide ``text`` is drawn at ``height`` px."""
     unit = height / 6
@@ -376,7 +383,7 @@ def _view_markup(
         factor = 1 / 25.4 if unit == "in" else 1.0
         height = max(9.0, min(13.0, w / 48))
         width_mm, height_mm = max(xs) - min(xs), max(ys) - min(ys)
-        across, upward = f"{width_mm * factor:.4g} {unit}", f"{height_mm * factor:.4g} {unit}"
+        across, upward = _length(width_mm * factor, unit), _length(height_mm * factor, unit)
         # The upright dimension's label stands to the right of the part, so the part gives
         # up the room it needs: on a long thin part "200 MM" ran off the view as "200 M".
         right = max(right, _DIMENSION_OFFSET + 10 + _text_width(upward, height))
@@ -481,8 +488,20 @@ def render_view(
     """One view of ``shape`` as SVG bytes, and its height in pixels.
 
     With ``dimensions`` the view carries the overall width and height of what it shows,
-    measured from the projected solid, and a line saying it is a check picture.
+    measured from the projected solid, and a line saying it is a check picture. The iso view
+    takes none: its projected extent is no length of the part, so a label on it would read
+    as one (a 100 x 80 x 35 mm plate's iso view is 127.3 mm across).
     """
+    if dimensions and view == "iso":
+        from .geometry import GeometryError
+
+        raise GeometryError(
+            "an isometric view foreshortens every edge, so its extent is no length of the "
+            "part and is not dimensioned; ask for the front, top or right view",
+            action="replace",
+            subject="dimensions, on the iso view",
+            source="a front, top or right view, whose extents are the part's own",
+        )
     height_px = max(64, round(width_px * 0.75))
     body = _view_markup(
         shape, tags, view, 0, 0, width_px, height_px, dimensions=dimensions, unit=unit
