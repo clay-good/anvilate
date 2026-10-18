@@ -47,7 +47,9 @@ def test_every_worked_product_holds_to_the_released_schema():
         (_ROOT / "docs" / "api" / "schemas" / "released"
          / f"product-document-{PRODUCT_DOCUMENT_SCHEMA_VERSION}.json").read_text()
     )  # fmt: skip
-    assert released["$id"] == "urn:anvilate:schema:product-document:1.0.0"
+    assert (
+        released["$id"] == f"urn:anvilate:schema:product-document:{PRODUCT_DOCUMENT_SCHEMA_VERSION}"
+    )
     validator = jsonschema.Draft202012Validator(released)
     for path in sorted((_ROOT / "examples" / "products").glob("*.product.yaml")):
         product, _library = load_product(path)

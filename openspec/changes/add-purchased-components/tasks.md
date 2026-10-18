@@ -5,7 +5,7 @@ Depends on `add-product-structure`, `add-interface-contracts`, and the STEP read
 
 ## 1. Record
 
-- [ ] 1.1 Component record schema: identity, supplier numbers, envelope, interfaces,
+- [x] 1.1 Component record schema: identity, supplier numbers, envelope, interfaces,
       ratings, provenance per value
 - [ ] 1.2 Vendor STEP by path and SHA-256; hash mismatch makes geometry not evaluated
 - [ ] 1.3 Draft records from a measured vendor STEP; confirmation before use
@@ -19,12 +19,12 @@ Depends on `add-product-structure`, `add-interface-contracts`, and the STEP read
 
 ## 3. Ratings
 
-- [ ] 3.1 Rating-to-quantity map per family
-- [ ] 3.2 Bearing basic rating life (cited life equation), motor torque margin, guide
+- [x] 3.1 Rating-to-quantity map per family
+- [x] 3.2 Bearing basic rating life (cited life equation), motor torque margin, guide
       stroke and load, gas spring force — each a card entry
-- [ ] 3.3 Not evaluated when the product does not supply the quantity
+- [x] 3.3 Not evaluated when the product does not supply the quantity
 
 ## 4. Sourcing
 
-- [ ] 4.1 Unsourced marking; release export blocked on unsourced components
+- [x] 4.1 Unsourced marking; release export blocked on unsourced components
 - [ ] 4.2 A docs page for components: writing a record, citing a datasheet, using a vendor model

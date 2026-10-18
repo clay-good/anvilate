@@ -18,3 +18,5 @@ packs/hydraulics.py | screen_pipe_run | a budget, not a strength: the head the s
 packs/machinery.py | _undercut_entry | a geometric criterion: the tooth count against the undercut limit, with no factor applied
 packs/machinery.py | _spring_buckling_entry | a stability criterion: the free-length ratio against the buckling boundary for the end condition, with no factor applied
 screening.py | _duty_cycle_entries | a criterion: Miner's damage of 1 per declared life, with the scatter left in the S-N curve the document declares and its source
+components.py | _ratio | a datasheet rating against the product's demand, compared as stated; any derating is the record's to state
+components.py | _rating_entries | a criterion: the bearing's basic rating life against the required life, with no factor applied to it here

@@ -38,10 +38,133 @@
       "title": "CircularPattern",
       "type": "object"
     },
+    "ComponentRecord": {
+      "additionalProperties": false,
+      "description": "A purchased component: identity, where to buy it, the space it takes, its ratings.\n\n``envelope`` is the box it occupies, centred on its own origin, and ``holes`` the\ninterfaces it offers a mate, as a placeholder's; ``envelope_source`` and ``mass_source``\nname where they were read. ``ratings`` must include every rating\n:data:`FAMILY_RATINGS` lists for ``family``, each with its source.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "envelope": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            }
+          ],
+          "title": "Envelope",
+          "type": "array"
+        },
+        "envelope_source": {
+          "title": "Envelope Source",
+          "type": "string"
+        },
+        "family": {
+          "enum": [
+            "ball_bearing",
+            "roller_bearing",
+            "motor",
+            "coupling",
+            "linear_guide",
+            "gas_spring",
+            "other"
+          ],
+          "title": "Family",
+          "type": "string"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlaceholderHole"
+          },
+          "maxItems": 64,
+          "title": "Holes",
+          "type": "array"
+        },
+        "manufacturer": {
+          "title": "Manufacturer",
+          "type": "string"
+        },
+        "mass": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "mass_source": {
+          "title": "Mass Source",
+          "type": "string"
+        },
+        "part_number": {
+          "title": "Part Number",
+          "type": "string"
+        },
+        "ratings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Rating"
+          },
+          "maxItems": 32,
+          "title": "Ratings",
+          "type": "array"
+        },
+        "suppliers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SupplierNumber"
+          },
+          "maxItems": 16,
+          "title": "Suppliers",
+          "type": "array"
+        },
+        "unit_of_measure": {
+          "default": "each",
+          "title": "Unit Of Measure",
+          "type": "string"
+        }
+      },
+      "required": [
+        "manufacturer",
+        "part_number",
+        "description",
+        "family",
+        "envelope",
+        "envelope_source",
+        "mass",
+        "mass_source"
+      ],
+      "title": "ComponentRecord",
+      "type": "object"
+    },
     "Definition": {
       "additionalProperties": false,
-      "description": "One item defined once: a catalog part's spec, a sub-product by name, or a placeholder.",
+      "description": "One item defined once: a catalog part's spec, a sub-product, a placeholder, or a\npurchased component.\n\n``component`` is a :class:`~anvilate.components.ComponentRecord`: placed as its envelope\nwith its holes, and checked by its ratings against ``demands``, what the product asks\nof it. Only a component states demands, and a component is bought.",
       "properties": {
+        "component": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "demands": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Demand"
+          },
+          "maxItems": 32,
+          "title": "Demands",
+          "type": "array"
+        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -91,6 +214,30 @@
         "identity"
       ],
       "title": "Definition",
+      "type": "object"
+    },
+    "Demand": {
+      "additionalProperties": false,
+      "description": "What the product asks of a component, and where that requirement came from.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "source"
+      ],
+      "title": "Demand",
       "type": "object"
     },
     "Instance": {
@@ -628,6 +775,50 @@
       "title": "Quantity",
       "type": "object"
     },
+    "Rating": {
+      "additionalProperties": false,
+      "description": "One rating the component is sold with, and the datasheet line it was read from.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "source"
+      ],
+      "title": "Rating",
+      "type": "object"
+    },
+    "SupplierNumber": {
+      "additionalProperties": false,
+      "description": "Where to buy it: a supplier and that supplier's part number.",
+      "properties": {
+        "number": {
+          "title": "Number",
+          "type": "string"
+        },
+        "supplier": {
+          "title": "Supplier",
+          "type": "string"
+        }
+      },
+      "required": [
+        "supplier",
+        "number"
+      ],
+      "title": "SupplierNumber",
+      "type": "object"
+    },
     "Variant": {
       "additionalProperties": false,
       "description": "A named variant: layout parameters overridden and definitions substituted.\n\n``parameters`` gives new values to layout parameters by name. ``substitutions`` are\ndefinitions that replace the base definitions with the same ``id``. A variant is resolved\nto a complete product of its own by :func:`resolve_variant`.",
@@ -658,14 +849,17 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.0.0",
+  "$id": "urn:anvilate:schema:product-document:1.1.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "const": "1.0.0",
-      "default": "1.0.0",
+      "default": "1.1.0",
+      "enum": [
+        "1.0.0",
+        "1.1.0"
+      ],
       "title": "Anvilate Product",
       "type": "string"
     },
@@ -756,5 +950,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.0.0"
+  "x-anvilate-version": "1.1.0"
 }

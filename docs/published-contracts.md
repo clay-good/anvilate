@@ -121,6 +121,12 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.1.0: a definition may be a purchased component
+
+A definition gains `component`, a purchased component's record, and `demands`, what the
+product asks of it; a node's `kind` may be `component`. Product summary 1.1.0, node card
+1.1.0 and CLI output 1.64.0 move with it. A 1.0.0 product document reads unchanged.
+
 ### Design Spec 1.21.0: a part declares its duty cycle
 
 `duty_cycle` holds a `life` (a time, a distance or a number of cycles, with its source),

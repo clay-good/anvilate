@@ -157,6 +157,12 @@ compilation.field_value
 compilation.score_candidate
 compilation.score_task_set
 compilation.task_set_issues
+components.FAMILY_RATINGS
+components.ComponentError
+components.SupplierNumber
+components.Rating
+components.Demand
+components.ComponentRecord
 context.AssemblyOccurrence
 context.CadFacts
 context.ContextError

@@ -150,6 +150,13 @@ read layout parameters too, and gets the variant's values. A substitute that doe
 the holes or feature a mate uses is refused, naming the mate. A variant that overrides an
 undeclared parameter or substitutes an undefined item is refused.
 
+## Purchased components
+
+A definition can be a bought `component`: a record with its manufacturer, part numbers,
+suppliers, envelope, holes and sourced ratings, and the `demands` the product puts on it.
+It is placed like a placeholder and checked by its ratings. See
+[Purchased components](components.md).
+
 ## Placeholders
 
 A placeholder stands in for an item nobody here details yet, such as a bought motor before

@@ -90,7 +90,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.0.0"] = "1.0.0"
+PRODUCT_VERSION: Literal["1.1.0"] = "1.1.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -186,8 +186,19 @@ class Placeholder(StatableModel):
         return self
 
 
+# A component record offers holes as a placeholder does, so components imports this module
+# at its end; importing it here, after PlaceholderHole, keeps either import order working.
+from .components import ComponentRecord, Demand  # noqa: E402
+
+
 class Definition(StatableModel):
-    """One item defined once: a catalog part's spec, a sub-product by name, or a placeholder."""
+    """One item defined once: a catalog part's spec, a sub-product, a placeholder, or a
+    purchased component.
+
+    ``component`` is a :class:`~anvilate.components.ComponentRecord`: placed as its envelope
+    with its holes, and checked by its ratings against ``demands``, what the product asks
+    of it. Only a component states demands, and a component is bought.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -196,24 +207,43 @@ class Definition(StatableModel):
     spec: FrozenMap[str, Any] | None = None
     product: Named | None = None
     placeholder: Placeholder | None = None
+    component: ComponentRecord | None = None
+    demands: tuple[Demand, ...] = Field(default=(), max_length=32)
 
     @model_validator(mode="after")
     def _exactly_one_kind(self) -> Definition:
-        kinds = [k for k in ("spec", "product", "placeholder") if getattr(self, k) is not None]
+        kinds = [k for k in ("spec", "product", "placeholder", "component")
+                 if getattr(self, k) is not None]  # fmt: skip
         if len(kinds) != 1:
             raise _refuse(
-                f"definition '{self.id}' states {kinds or 'none'} of spec, product and "
-                "placeholder; a definition is exactly one of them",
+                f"definition '{self.id}' states {kinds or 'none'} of spec, product, "
+                "placeholder and component; a definition is exactly one of them",
                 subject="definitions[].spec",
             )
+        if self.demands and self.component is None:
+            raise _refuse(f"definition '{self.id}' states demands and is not a component; "
+                          "demands are what a product asks of a bought component",
+                          subject="definitions[].demands")  # fmt: skip
+        if self.component is not None:
+            if self.identity.source is not ItemSource.BUY:
+                raise _refuse(f"definition '{self.id}' is a purchased component and its "
+                              f"identity says {self.identity.source.value}; a component is "
+                              "bought", subject="definitions[].identity.source")  # fmt: skip
+            names = [d.name for d in self.demands]
+            doubled = sorted({n for n in names if names.count(n) > 1})
+            if doubled:
+                raise _refuse(f"definition '{self.id}' states demands {doubled} twice",
+                              subject="definitions[].demands")  # fmt: skip
         return self
 
     @property
     def kind(self) -> str:
-        """``part``, ``product`` or ``placeholder``."""
+        """``part``, ``product``, ``placeholder`` or ``component``."""
         if self.spec is not None:
             return "part"
-        return "product" if self.product is not None else "placeholder"
+        if self.product is not None:
+            return "product"
+        return "component" if self.component is not None else "placeholder"
 
 
 class LinearPattern(StatableModel):
@@ -368,7 +398,8 @@ class Product(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    anvilate_product: Literal["1.0.0"] = PRODUCT_VERSION
+    # 1.1.0 adds a definition's component and demands; a 1.0.0 document reads unchanged.
+    anvilate_product: Literal["1.0.0", "1.1.0"] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
     identity: ItemIdentity | None = None
@@ -701,7 +732,7 @@ class ProductNode(StatableModel):
 
     path: Named
     definition: Named
-    kind: Literal["part", "product", "placeholder"]
+    kind: Literal["part", "product", "placeholder", "component"]
     part_number: Named
     provisional: bool
     revision: str | None
@@ -726,6 +757,11 @@ def _content(definition: Definition, library: Mapping[str, Product]) -> str:
         payload: Any = {"spec": dict(definition.spec)}
     elif definition.placeholder is not None:
         payload = {"placeholder": definition.placeholder.model_dump(mode="json")}
+    elif definition.component is not None:
+        payload = {
+            "component": definition.component.model_dump(mode="json"),
+            "demands": [d.model_dump(mode="json") for d in definition.demands],
+        }
     else:
         sub = library.get(definition.product or "")
         payload = {
@@ -828,7 +864,7 @@ class PartsListLine(StatableModel):
     revision: str | None
     description: Named
     source: ItemSource
-    kind: Literal["part", "product", "placeholder"]
+    kind: Literal["part", "product", "placeholder", "component"]
     quantity: int
 
     def __str__(self) -> str:
@@ -897,7 +933,7 @@ class NodeCard(StatableModel):
     model_config = ConfigDict(frozen=True)
 
     path: Named
-    kind: Literal["part", "product", "placeholder"]
+    kind: Literal["part", "product", "placeholder", "component"]
     entries: tuple[ScorecardEntry, ...]
     children: tuple[NodeCard, ...] = ()
 
@@ -1130,6 +1166,7 @@ class _Leaf:
         key: str = "",
         built: Any = None,
         where: Any = None,
+        kind: str = "",
     ) -> None:
         self.path, self.shape, self.placeholder, self.mass = path, shape, placeholder, mass
         # The centre of mass as a vertex, moved with the shape; ``assumed`` when it is a
@@ -1138,11 +1175,12 @@ class _Leaf:
         # For export: the definition's content key, its shape as built, and every move
         # applied to it since, so a repeated item is one STEP product placed many times.
         self.key, self.built, self.where = key, built if built is not None else shape, where
+        self.kind = kind or ("placeholder" if placeholder else "part")
 
     def moved(self, path: str, where: Any) -> _Leaf:
         return _Leaf(path, self.shape.moved(where), self.placeholder, self.mass,
                      self.com.moved(where), self.assumed, self.entries, self.key, self.built,
-                     where if self.where is None else where * self.where)  # fmt: skip
+                     where if self.where is None else where * self.where, self.kind)  # fmt: skip
 
 
 class _Assembly:
@@ -1189,10 +1227,9 @@ def _placed_leaves(
     product_tree(product, library=shelf)  # the identity and containment refusals first
 
     def assemble(current: Product, prefix: str) -> _Assembly:
-        from build123d import Box, CenterOf, Compound, Vertex
+        from build123d import CenterOf, Compound, Vertex
 
         from .combination import _mass
-        from .features import Feature
         from .geometry import BuiltGeometry, GeometryError, build_spec
         from .screening import screen_spec
         from .spec import SpecValidationError, parse_spec
@@ -1236,22 +1273,19 @@ def _placed_leaves(
                 return built, spec, _Leaf(path, built.shape, False, mass,
                                           Vertex(centre.X, centre.Y, centre.Z), False,
                                           screen_spec(spec).entries)  # fmt: skip
+            if definition.component is not None:
+                from .components import _rating_entries
+
+                record = definition.component
+                built = _boxed(record.envelope, record.holes, "component")
+                return built, None, _Leaf(path, built.shape, False,
+                                          float(record.mass.to("kg").magnitude), Vertex(0, 0, 0),
+                                          True, _rating_entries(record, definition.demands),
+                                          kind="component")  # fmt: skip
             holder = definition.placeholder
             if holder is None:  # a placeholder definition holds one, by its validator
                 raise _refuse(f"'{path}' has no placeholder", subject="definitions[]")
-            x, y, z = (q.to("mm").magnitude for q in holder.envelope)
-            holes = tuple(
-                Feature(
-                    tag=h.tag, kind="blind_hole", diameter_mm=h.diameter.to("mm").magnitude,
-                    depth_mm=0.0,
-                    position_mm=(h.x.to("mm").magnitude, h.y.to("mm").magnitude,
-                                 h.z.to("mm").magnitude),
-                    axis=_OUTWARD[h.face],
-                )
-                for h in holder.holes
-            )  # fmt: skip
-            built = BuiltGeometry(name="placeholder", pattern="placeholder", shape=Box(x, y, z),
-                                  faces={}, dimensions_mm={}, features=holes)  # fmt: skip
+            built = _boxed(holder.envelope, holder.holes, "placeholder")
             declared = holder.center_of_mass
             com = (0.0, 0.0, 0.0) if declared is None else tuple(
                 q.to("mm").magnitude for q in declared
@@ -1274,7 +1308,7 @@ def _placed_leaves(
             definition = definitions[instance.item]
             path = f"{prefix}/{instance.name}"
             spec = None
-            if definition.kind in ("part", "placeholder"):
+            if definition.kind in ("part", "placeholder", "component"):
                 key = _content(definition, shelf)
                 if key not in store:
                     store[key] = make(definition, path)
@@ -1283,7 +1317,7 @@ def _placed_leaves(
                     reused.add(key)
                 built, spec, leaf = store[key]
                 inner = [_Leaf(path, leaf.shape, leaf.placeholder, leaf.mass, leaf.com,
-                               leaf.assumed, leaf.entries, key)]  # fmt: skip
+                               leaf.assumed, leaf.entries, key, kind=leaf.kind)]  # fmt: skip
             else:
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
@@ -1418,8 +1452,7 @@ def _card(path: str, leaves: list[_Leaf]) -> NodeCard:
 
     if len(leaves) == 1 and leaves[0].path == path:
         leaf = leaves[0]
-        return NodeCard(path=path, kind="placeholder" if leaf.placeholder else "part",
-                        entries=leaf.entries)  # fmt: skip
+        return NodeCard(path=path, kind=leaf.kind, entries=leaf.entries)  # type: ignore[arg-type]
     groups: dict[str, list[_Leaf]] = {}
     for leaf in leaves:
         child = leaf.path[len(path) + 1 :].split("/")[0]
@@ -1482,6 +1515,27 @@ _OUTWARD: dict[str, tuple[float, float, float]] = {
     "back": (0.0, 1.0, 0.0),
     "front": (0.0, -1.0, 0.0),
 }
+
+
+def _boxed(envelope: Any, holes: Any, pattern: str) -> Any:
+    """An envelope box centred on its own origin, carrying its holes as features."""
+    from build123d import Box
+
+    from .features import Feature
+    from .geometry import BuiltGeometry
+
+    x, y, z = (q.to("mm").magnitude for q in envelope)
+    features = tuple(
+        Feature(
+            tag=h.tag, kind="blind_hole", diameter_mm=h.diameter.to("mm").magnitude,
+            depth_mm=0.0,
+            position_mm=(h.x.to("mm").magnitude, h.y.to("mm").magnitude, h.z.to("mm").magnitude),
+            axis=_OUTWARD[h.face],
+        )
+        for h in holes
+    )  # fmt: skip
+    return BuiltGeometry(name=pattern, pattern=pattern, shape=Box(x, y, z), faces={},
+                         dimensions_mm={}, features=features)  # fmt: skip
 
 
 def _corner(v: Any) -> tuple[float, float, float]:
