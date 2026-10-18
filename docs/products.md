@@ -80,6 +80,25 @@ layout does not declare is refused. A parameter nothing reads is listed under `u
 named by the placed product. The layout is in no parts list and no mass roll-up. A
 provisional part number follows the values its item reads.
 
+## Variants
+
+A variant names a set of parameter overrides and definition substitutions against the base
+product. `resolve_variant(product, "long")` returns it as a complete product of its own,
+`stage-long`, to place and check like any other, so a check that fails only on the long
+stage fails there alone.
+
+```yaml
+variants:
+  - name: long
+    parameters: {stroke: {magnitude: 350, unit: mm}}
+    substitutions: [{id: motor, identity: {...}, placeholder: {...}}]   # replaces 'motor'
+```
+
+Each override reaches every place the base layout records as reading it. A substitute may
+read layout parameters too, and gets the variant's values. A substitute that does not offer
+the holes or feature a mate uses is refused, naming the mate. A variant that overrides an
+undeclared parameter or substitutes an undefined item is refused.
+
 ## Placeholders
 
 A placeholder stands in for an item nobody here details yet, such as a bought motor before
@@ -94,5 +113,5 @@ it is chosen. It is a box, centred on its own origin.
 A hole or a centre of mass outside the envelope is refused. Any interference result that
 involves a placeholder says it is provisional and names the placeholders it rests on.
 
-Not yet built: layout datums (points, axes and planes to mate to), variants, a card per node with roll-up, and rebuilds keyed
+Not yet built: layout datums (points, axes and planes to mate to), a card per node with roll-up, and rebuilds keyed
 on content.

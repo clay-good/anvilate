@@ -512,11 +512,13 @@ product.CircularPattern
 product.Instance
 product.Layout
 product.LayoutParameter
+product.Variant
 product.Product
 product.ProductNode
 product.PartsListLine
 product.ProductError
 product.parse_product
+product.resolve_variant
 product.product_tree
 product.parts_list
 product.PlacedBody

@@ -42,7 +42,15 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import FrozenMap, ItemCollection, Named, Provenance, StatableModel, _refusal_line
+from ._models import (
+    EMPTY_MAP,
+    FrozenMap,
+    ItemCollection,
+    Named,
+    Provenance,
+    StatableModel,
+    _refusal_line,
+)
 from .combination import Mate
 from .refusal import RefusalError, Remedy
 from .scorecard import ScorecardEntry
@@ -60,11 +68,13 @@ __all__ = [
     "Instance",
     "LayoutParameter",
     "Layout",
+    "Variant",
     "Product",
     "ProductNode",
     "PartsListLine",
     "ProductError",
     "parse_product",
+    "resolve_variant",
     "product_tree",
     "parts_list",
     "PlacedBody",
@@ -284,11 +294,27 @@ class Layout(ItemCollection, StatableModel):
         return tuple(p.name for p in self.parameters if not p.read_by)
 
 
+class Variant(StatableModel):
+    """A named variant: layout parameters overridden and definitions substituted.
+
+    ``parameters`` gives new values to layout parameters by name. ``substitutions`` are
+    definitions that replace the base definitions with the same ``id``. A variant is resolved
+    to a complete product of its own by :func:`resolve_variant`.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    parameters: FrozenMap[str, Quantity] = Field(default_factory=lambda: EMPTY_MAP)
+    substitutions: tuple[Definition, ...] = Field(default=(), max_length=256)
+
+
 class Product(StatableModel):
     """A product document: its definitions, the instances that place them, and the ground.
 
     ``layout`` holds the driving parameters its items read by name; it is in no parts list
-    and no mass roll-up.
+    and no mass roll-up. ``variants`` are named alternatives to it, each resolved by
+    :func:`resolve_variant`.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -302,6 +328,7 @@ class Product(StatableModel):
     ground: Named
     mates: tuple[Mate, ...] = Field(default=(), max_length=512)
     layout: Layout | None = None
+    variants: tuple[Variant, ...] = Field(default=(), max_length=64)
 
     @model_validator(mode="after")
     def _refers_to_its_own(self) -> Product:
@@ -337,6 +364,23 @@ class Product(StatableModel):
                         raise _refuse(f"layout parameter '{parameter.name}' lists '{place}' as "
                                       f"a reader, which does not hold {parameter.value}",
                                       subject="layout.parameters[].read_by")  # fmt: skip
+        known = sorted(p.name for p in self.layout.parameters) if self.layout is not None else []
+        seen: set[str] = set()
+        for variant in self.variants:
+            if variant.name in seen:
+                raise _refuse(f"variant '{variant.name}' is declared twice",
+                              subject="variants[].name")  # fmt: skip
+            seen.add(variant.name)
+            for name in variant.parameters:
+                if name not in known:
+                    raise _refuse(f"variant '{variant.name}' overrides '{name}', which the "
+                                  f"layout does not declare ({', '.join(known) or 'none'})",
+                                  subject="variants[].parameters")  # fmt: skip
+            for definition in variant.substitutions:
+                if definition.id not in ids:
+                    raise _refuse(f"variant '{variant.name}' substitutes '{definition.id}', "
+                                  f"which is not a definition here ({', '.join(ids)})",
+                                  subject="variants[].substitutions[].id")  # fmt: skip
         return self
 
 
@@ -388,13 +432,36 @@ def _resolve(document: Mapping[str, Any]) -> dict[str, Any]:
             definition = {k: walk(v, owner, k) if k in ("spec", "placeholder") else v
                           for k, v in definition.items()}  # fmt: skip
         definitions.append(definition)
+    variants = []
+    for variant in document.get("variants") or ():
+        if isinstance(variant, Mapping) and isinstance(variant.get("substitutions"), list):
+            overrides = variant.get("parameters")
+            saved = dict(values)
+            if isinstance(overrides, Mapping):
+                values.update({k: v for k, v in overrides.items() if k in readers})
+            label = f"variant {variant.get('name')!s}"
+            variant = {**variant, "substitutions": [
+                {k: walk(v, f"{label} {d.get('id')!s}", k) if k in ("spec", "placeholder") else v
+                 for k, v in d.items()} if isinstance(d, Mapping) else d
+                for d in variant["substitutions"]
+            ]}  # fmt: skip
+            values.clear()
+            values.update(saved)
+        variants.append(variant)
+    for name in readers:
+        # a substitution's reads are not the base product's
+        readers[name] = [r for r in readers[name] if not r.startswith("variant ")]
     parameters = [
         {**p, "read_by": readers[p["name"]]}
         if isinstance(p, Mapping) and p.get("name") in readers and "read_by" not in p
         else p
         for p in layout["parameters"]
     ]
-    return {**document, "definitions": definitions, "layout": {**layout, "parameters": parameters}}
+    resolved = {**document, "definitions": definitions,
+                "layout": {**layout, "parameters": parameters}}  # fmt: skip
+    if "variants" in document:
+        resolved["variants"] = variants
+    return resolved
 
 
 def parse_product(document: Mapping[str, Any]) -> Product:
@@ -415,6 +482,84 @@ def parse_product(document: Mapping[str, Any]) -> Product:
         where = ".".join(str(p) for p in first["loc"]) or "the document"
         raise _refuse(f"the product document is not valid at {where}: "
                       f"{_refusal_line('', first['msg'])}", subject=where) from failure  # fmt: skip
+
+
+def resolve_variant(product: Product, name: str) -> Product:
+    """The variant ``name`` of ``product`` as a complete product of its own, ``<product>-<name>``.
+
+    Each overridden layout parameter takes its new value at every place that reads it, and
+    each substitution replaces the base definition with its id. A substitute that does not
+    offer a hole or feature a mate uses is refused, naming the mate. A substituted
+    sub-product's interfaces are checked when it is placed.
+    """
+    if not isinstance(name, str):
+        raise _refuse(f"a variant is named by a string, not {name!r}", subject="name")
+    variants = {v.name: v for v in product.variants}
+    if name not in variants:
+        raise _refuse(f"'{product.name}' has no variant '{name}' "
+                      f"({', '.join(variants) or 'it declares none'})", subject="name")  # fmt: skip
+    variant = variants[name]
+    data = product.model_dump(mode="json")
+    replaced = {d.id: d for d in variant.substitutions}
+    index = {d["id"]: d for d in data["definitions"]}
+    for parameter in (data["layout"] or {}).get("parameters", ()):
+        if parameter["name"] not in variant.parameters:
+            continue
+        value = variant.parameters[parameter["name"]].model_dump(mode="json")
+        parameter["value"] = value
+        kept = []
+        for place in parameter["read_by"]:
+            owner, _, path = place.partition(":")
+            if owner in replaced:
+                continue  # the substitute stands in for this reader
+            *parents, last = path.split(".")
+            node = index[owner]
+            for step in parents:
+                node = node[int(step)] if isinstance(node, list) else node[step]
+            node[int(last) if isinstance(node, list) else last] = value
+            kept.append(place)
+        parameter["read_by"] = kept
+    if data["layout"] is not None:
+        for parameter in data["layout"]["parameters"]:
+            parameter["read_by"] = [p for p in parameter["read_by"]
+                                    if p.partition(":")[0] not in replaced]  # fmt: skip
+    data["definitions"] = [
+        replaced[d["id"]].model_dump(mode="json") if d["id"] in replaced else d
+        for d in data["definitions"]
+    ]
+    data["name"], data["variants"] = f"{product.name}-{name}", []
+    items = {i.name: i.item for i in product.instances}
+    for mate in product.mates:
+        for end in (mate.place, mate.on):
+            substitute = replaced.get(items[end.part])
+            wanted = [*end.holes, *([end.feature] if end.feature is not None else [])]
+            if substitute is None or not wanted:
+                continue
+            offered = _interfaces(substitute)
+            missing = [tag for tag in wanted if offered is not None and tag not in offered]
+            if missing:
+                raise _refuse(f"variant '{name}' puts '{substitute.id}' where mate '{mate.id}' "
+                              f"uses {missing}, which it does not offer "
+                              f"({', '.join(sorted(offered or ())) or 'none'})",
+                              subject="name")  # fmt: skip
+    return Product.model_validate(data)
+
+
+def _interfaces(definition: Definition) -> set[str] | None:
+    """The hole and feature tags a definition offers to a mate; None for a sub-product."""
+    if definition.placeholder is not None:
+        return {hole.tag for hole in definition.placeholder.holes}
+    if definition.spec is None:
+        return None
+    from .geometry import GeometryError, build_spec
+    from .spec import SpecValidationError, parse_spec
+
+    try:
+        built = build_spec(parse_spec(dict(definition.spec)))
+    except (SpecValidationError, GeometryError) as failure:
+        raise _refuse(f"'{definition.id}' cannot be built: {failure}",
+                      subject="product") from failure  # fmt: skip
+    return {feature.tag for feature in built.features}
 
 
 # --- the tree ------------------------------------------------------------------------------
