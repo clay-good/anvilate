@@ -155,4 +155,12 @@ it is chosen. It is a box, centred on its own origin.
 A hole or a centre of mass outside the envelope is refused. Any interference result that
 involves a placeholder says it is provisional and names the placeholders it rests on.
 
-Not yet built: rebuilds keyed on content.
+## Rebuilding what changed
+
+Pass one `BuildCache` to successive `place_product(..., cache=cache)` calls. Each item is
+keyed on its content (its spec or placeholder, not its id or part number), so an
+unchanged item is reused, built geometry and card alike. Only changed items are built
+again. Placement and every check that spans items run on each build. `placed.rebuilt` and
+`placed.reused` count distinct items each way, and the summary line says
+`1 of 5 items built, 4 reused`. CI holds a warm rebuild equal to a cold build of the same
+product.

@@ -81,6 +81,7 @@ __all__ = [
     "PlacedBody",
     "NodeCard",
     "PlacedProduct",
+    "BuildCache",
     "place_product",
 ]
 
@@ -889,7 +890,9 @@ class PlacedProduct(StatableModel):
     envelope's centre, and ``mass_unknown`` each leaf whose material gives no density, so
     the roll-up never reads as more complete than it is. ``unused_parameters`` names each
     layout parameter no item reads. ``card`` is the tree of cards, one per node, each
-    product node owning the interference between its own children.
+    product node owning the interference between its own children. ``rebuilt`` and
+    ``reused`` count the distinct items built for this placement and taken from a
+    :class:`BuildCache`.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -904,6 +907,8 @@ class PlacedProduct(StatableModel):
     center_assumed: tuple[str, ...] = ()
     unused_parameters: tuple[str, ...] = ()
     card: NodeCard
+    rebuilt: int = Field(default=0, ge=0)
+    reused: int = Field(default=0, ge=0)
 
     def __str__(self) -> str:
         rests = f"; rests on placeholders {list(self.mass_rests_on)}" if self.mass_rests_on else ""
@@ -919,7 +924,8 @@ class PlacedProduct(StatableModel):
         return (
             f"{self.name}: {len(self.bodies)} bodies, {self.mass_kg:.4g} kg{rests}{unknown}"
             f"{centre}; "
-            f"interference {self.interference.status.value}; card {self.card.status.value}"
+            f"interference {self.interference.status.value}; card {self.card.status.value}; "
+            f"{self.rebuilt} of {self.rebuilt + self.reused} items built, {self.reused} reused"
         )
 
 
@@ -951,8 +957,31 @@ class _Assembly:
         self.shape, self.leaves, self.features = shape, leaves, ()
 
 
+class BuildCache:
+    """Built items kept between product builds, keyed on the content of their definitions.
+
+    Pass the same cache to successive :func:`place_product` calls: an item whose spec or
+    placeholder is unchanged is reused, built geometry and card alike, and only changed
+    ones are built again. The key is the definition's content, not its id or identity, so
+    renaming or renumbering an item does not rebuild it. Placement and every check that
+    spans items run on each build.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, tuple[Any, Any, _Leaf]] = {}
+
+    def __len__(self) -> int:
+        return len(self._store)
+
+    def __repr__(self) -> str:
+        return f"BuildCache({len(self._store)} built items)"
+
+
 def place_product(
-    product: Product, *, library: Mapping[str, Product] | None = None
+    product: Product,
+    *,
+    library: Mapping[str, Product] | None = None,
+    cache: BuildCache | None = None,
 ) -> PlacedProduct:
     """Place every instance through its mates, then check interference and roll up mass.
 
@@ -960,8 +989,18 @@ def place_product(
     by the instance's name — must be placed by at least one mate onto an instance listed
     before it; the rest of a pattern follows its first member. A mate that leaves an
     instance free or contradicts another is refused by the combination's own rules.
+
+    With a ``cache``, an item built before from the same content is reused; the placed
+    product's ``rebuilt`` and ``reused`` count the distinct items each way.
     """
     from .combination import _IDENTITY, PlacedPart, _interference, _place
+
+    if cache is not None and not isinstance(cache, BuildCache):
+        raise _refuse(f"cache is a {type(cache).__name__}; pass a BuildCache or none",
+                      subject="cache")  # fmt: skip
+    store = cache._store if cache is not None else {}
+    rebuilt: set[str] = set()
+    reused: set[str] = set()
 
     shelf = dict(library or {})
     product_tree(product, library=shelf)  # the identity and containment refusals first
@@ -999,11 +1038,8 @@ def place_product(
                              None, _IDENTITY, datum.at_mm)
             for name, datum in datums.items()
         }  # fmt: skip
-        leaves: list[_Leaf] = []
-        ground_first = sorted(current.instances, key=lambda i: i.name != current.ground)
-        for instance in ground_first:
-            definition = definitions[instance.item]
-            path = f"{prefix}/{instance.name}"
+
+        def make(definition: Definition, path: str) -> tuple[Any, Any, _Leaf]:
             spec = None
             if definition.kind == "part":
                 try:
@@ -1014,39 +1050,57 @@ def place_product(
                                   subject="definitions[].spec") from failure  # fmt: skip
                 mass = _mass(spec, built)
                 centre = built.shape.center(CenterOf.MASS)
-                inner = [_Leaf(path, built.shape, False, mass, Vertex(centre.X, centre.Y, centre.Z),
-                               False, screen_spec(spec).entries)]  # fmt: skip
-            elif definition.kind == "placeholder":
-                holder = definition.placeholder
-                if holder is None:  # a placeholder definition holds one, by its validator
-                    raise _refuse(f"'{path}' has no placeholder", subject="definitions[]")
-                x, y, z = (q.to("mm").magnitude for q in holder.envelope)
-                holes = tuple(
-                    Feature(
-                        tag=h.tag, kind="blind_hole", diameter_mm=h.diameter.to("mm").magnitude,
-                        depth_mm=0.0,
-                        position_mm=(h.x.to("mm").magnitude, h.y.to("mm").magnitude,
-                                     h.z.to("mm").magnitude),
-                        axis=_OUTWARD[h.face],
-                    )
-                    for h in holder.holes
-                )  # fmt: skip
-                built = BuiltGeometry(name=instance.name, pattern="placeholder", shape=Box(x, y, z),
-                                      faces={}, dimensions_mm={}, features=holes)  # fmt: skip
-                declared = holder.center_of_mass
-                com = (0.0, 0.0, 0.0) if declared is None else tuple(
-                    q.to("mm").magnitude for q in declared
-                )  # fmt: skip
-                stands_in = ScorecardEntry(
-                    name="placeholder",
-                    status=CheckStatus.NOT_EVALUATED,
-                    detail=f"a placeholder stands in for an undetailed item ({holder.reason}); "
-                    "every result resting on it is provisional",
-                    underived=_STANDS_IN,
-                    needs=(_NEEDS_A_DETAIL,),
+                return built, spec, _Leaf(path, built.shape, False, mass,
+                                          Vertex(centre.X, centre.Y, centre.Z), False,
+                                          screen_spec(spec).entries)  # fmt: skip
+            holder = definition.placeholder
+            if holder is None:  # a placeholder definition holds one, by its validator
+                raise _refuse(f"'{path}' has no placeholder", subject="definitions[]")
+            x, y, z = (q.to("mm").magnitude for q in holder.envelope)
+            holes = tuple(
+                Feature(
+                    tag=h.tag, kind="blind_hole", diameter_mm=h.diameter.to("mm").magnitude,
+                    depth_mm=0.0,
+                    position_mm=(h.x.to("mm").magnitude, h.y.to("mm").magnitude,
+                                 h.z.to("mm").magnitude),
+                    axis=_OUTWARD[h.face],
                 )
-                inner = [_Leaf(path, built.shape, True, float(holder.mass.to("kg").magnitude),
-                               Vertex(*com), declared is None, (stands_in,))]  # fmt: skip
+                for h in holder.holes
+            )  # fmt: skip
+            built = BuiltGeometry(name="placeholder", pattern="placeholder", shape=Box(x, y, z),
+                                  faces={}, dimensions_mm={}, features=holes)  # fmt: skip
+            declared = holder.center_of_mass
+            com = (0.0, 0.0, 0.0) if declared is None else tuple(
+                q.to("mm").magnitude for q in declared
+            )  # fmt: skip
+            stands_in = ScorecardEntry(
+                name="placeholder",
+                status=CheckStatus.NOT_EVALUATED,
+                detail=f"a placeholder stands in for an undetailed item ({holder.reason}); "
+                "every result resting on it is provisional",
+                underived=_STANDS_IN,
+                needs=(_NEEDS_A_DETAIL,),
+            )
+            return built, None, _Leaf(path, built.shape, True,
+                                      float(holder.mass.to("kg").magnitude), Vertex(*com),
+                                      declared is None, (stands_in,))  # fmt: skip
+
+        leaves: list[_Leaf] = []
+        ground_first = sorted(current.instances, key=lambda i: i.name != current.ground)
+        for instance in ground_first:
+            definition = definitions[instance.item]
+            path = f"{prefix}/{instance.name}"
+            spec = None
+            if definition.kind in ("part", "placeholder"):
+                key = _content(definition, shelf)
+                if key not in store:
+                    store[key] = make(definition, path)
+                    rebuilt.add(key)
+                elif key not in rebuilt:
+                    reused.add(key)
+                built, spec, leaf = store[key]
+                inner = [_Leaf(path, leaf.shape, leaf.placeholder, leaf.mass, leaf.com,
+                               leaf.assumed, leaf.entries)]  # fmt: skip
             else:
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
@@ -1109,6 +1163,8 @@ def place_product(
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
         unused_parameters=product.layout.unused if product.layout is not None else (),
         card=_card(product.name, leaves),
+        rebuilt=len(rebuilt),
+        reused=len(reused),
     )
 
 

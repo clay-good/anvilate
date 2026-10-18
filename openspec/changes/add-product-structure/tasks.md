@@ -23,7 +23,7 @@ Depends on `add-part-combinations` (mates, hardware, combination card).
 
 - [x] 3.1 Card per node with roll-up; finding stated once at its owner, referenced above
 - [x] 3.2 Placeholder dependence carried on every affected entry
-- [ ] 3.3 Content-keyed rebuild; reuse count in the summary; equality with a cold build
+- [x] 3.3 Content-keyed rebuild; reuse count in the summary; equality with a cold build
       gated in CI
 
 ## 4. Agent surface

@@ -525,6 +525,7 @@ product.parts_list
 product.PlacedBody
 product.NodeCard
 product.PlacedProduct
+product.BuildCache
 product.place_product
 profile.Applicability
 profile.SuppliedValue
