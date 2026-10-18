@@ -144,8 +144,9 @@ class Interface(StatableModel):
                               f"{dimension}", subject="parameters")  # fmt: skip
         unread = sorted(set(self.parameters) - set(wanted))
         if unread:
+            takes = ", ".join(wanted) or "none"
             raise _refuse(f"interface '{self.name}' states {unread}, which a {self.kind} does "
-                          f"not take ({', '.join(wanted) or 'none'})", subject="parameters")  # fmt: skip
+                          f"not take ({takes})", subject="parameters")  # fmt: skip
         return self
 
 

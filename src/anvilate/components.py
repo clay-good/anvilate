@@ -442,7 +442,7 @@ def _rating_entries(
                 needs=(_demand_need("required_life", "[time]"),),
             )  # fmt: skip
             derivation = Derivation(
-                symbolic="L10h = (10^6 / (60 n)) (C / P)^p",
+                symbolic="L10h = 10^6 / (60 · n) · (C / P)^p",
                 inputs=(
                     SymbolValue(symbol="C", description=f"dynamic load rating ({rating.source})",
                                 value=rating.value, unit="N"),

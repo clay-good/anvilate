@@ -831,7 +831,7 @@ _a_kind: interface '{self.name}' is a {self.kind}, located by the axis it runs a
 _a_kind: interface '{self.name}' is a {self.kind}; a pattern lists the holes it is made of | only a pattern lists holes
 _a_kind: interface '{self.name}' is a {self.kind} and states no {name}; a {self.kind} needs {name} as a {dimension}, such as mm
 _a_kind: interface '{self.name}' {name} is {value}; it is a positive {dimension}
-_a_kind: interface '{self.name}' states {unread}, which a {self.kind} does not take ({', '.join(wanted) or 'none'})
+_a_kind: interface '{self.name}' states {unread}, which a {self.kind} does not take ({takes})
 check_interfaces: {owner} offers interfaces {doubled} twice; a name is unique within its item
 check_interfaces: {owner} interface '{interface.name}' names holes {missing}, which it does not have ({', '.join(sorted(holes)) or 'none'})
 

@@ -180,7 +180,9 @@ def test_every_build_writes_an_interface_control_table():
     table = place_product(parse_product(document)).interfaces
     connection, opened = table.rows
     assert (connection.node, connection.on, connection.place) == (
-        "drive", "bracket.motor_mount", "motor.flange"
+        "drive",
+        "bracket.motor_mount",
+        "motor.flange",
     )
     assert connection.on_values == "4 holes on top" and connection.on_owner == "make, bracket"
     assert connection.place_owner == "buy, motor" and connection.checks == ("hole pattern: pass",)
