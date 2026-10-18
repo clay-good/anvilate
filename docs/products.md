@@ -57,6 +57,29 @@ between all of them, the mass and the centre of mass. The mass names each placeh
 rests on, and each part whose material gives no density, so the roll-up never reads as
 more complete than it is.
 
+## Layout
+
+A layout holds the product's driving parameters. Any value in an item's spec or
+placeholder can read one by name, so changing the layout changes every item that reads it,
+and no part document is edited.
+
+```yaml
+layout:
+  parameters:
+    - {name: shaft_dia, value: {magnitude: 20, unit: mm}, source: bearing catalogue bore}
+definitions:
+  - id: collar
+    placeholder:
+      holes: [{tag: bore, ..., diameter: {layout: shaft_dia}}]
+```
+
+`parse_product` puts the value in place and records each reader in the parameter's
+`read_by` (`collar:placeholder.holes.0.diameter`). A stored product is checked against
+those records, so it cannot claim a reader that no longer holds the value. A name the
+layout does not declare is refused. A parameter nothing reads is listed under `unused` and
+named by the placed product. The layout is in no parts list and no mass roll-up. A
+provisional part number follows the values its item reads.
+
 ## Placeholders
 
 A placeholder stands in for an item nobody here details yet, such as a bought motor before
@@ -71,5 +94,5 @@ it is chosen. It is a box, centred on its own origin.
 A hole or a centre of mass outside the envelope is refused. Any interference result that
 involves a placeholder says it is provisional and names the placeholders it rests on.
 
-Not yet built: layout datums, variants, a card per node with roll-up, and rebuilds keyed
+Not yet built: layout datums (points, axes and planes to mate to), variants, a card per node with roll-up, and rebuilds keyed
 on content.

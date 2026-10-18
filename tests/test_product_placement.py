@@ -210,3 +210,19 @@ def test_a_placeholder_refuses_what_lies_outside_its_envelope(change, message):
     change(document["definitions"][1]["placeholder"])
     with pytest.raises(Exception, match=message):
         parse_product(document)
+
+
+def test_the_placed_product_names_a_layout_parameter_no_item_reads():
+    document = _motor_on_plate()
+    document["layout"] = {"parameters": [
+        {"name": "bolt", "value": {"magnitude": 5, "unit": "mm"}, "source": "M5 clearance"},
+        {"name": "stroke", "value": {"magnitude": 300, "unit": "mm"}, "source": "requirement"},
+    ]}  # fmt: skip
+    for holder in (document["definitions"][0], document["definitions"][1]):
+        for hole in holder["placeholder"]["holes"]:
+            hole["diameter"] = {"layout": "bolt"}
+    placed = place_product(parse_product(document))
+    assert placed.unused_parameters == ("stroke",)
+    assert "layout parameters no item reads: ['stroke']" in str(placed)
+    # the layout is in no mass roll-up and no body
+    assert placed.mass_kg == pytest.approx(1.5) and len(placed.bodies) == 2

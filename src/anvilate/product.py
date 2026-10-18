@@ -42,7 +42,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import FrozenMap, Named, Provenance, StatableModel, _refusal_line
+from ._models import FrozenMap, ItemCollection, Named, Provenance, StatableModel, _refusal_line
 from .combination import Mate
 from .refusal import RefusalError, Remedy
 from .scorecard import ScorecardEntry
@@ -58,6 +58,8 @@ __all__ = [
     "LinearPattern",
     "CircularPattern",
     "Instance",
+    "LayoutParameter",
+    "Layout",
     "Product",
     "ProductNode",
     "PartsListLine",
@@ -252,8 +254,42 @@ class Instance(StatableModel):
         return self
 
 
+class LayoutParameter(StatableModel):
+    """A driving parameter: a name, a value, where it comes from, and what reads it.
+
+    An item reads it by writing ``{layout: <name>}`` where a value goes in its spec or its
+    placeholder; :func:`parse_product` puts the value there and records the place in
+    ``read_by`` as ``<definition>:<dotted path>``. The product checks every recorded place
+    still holds the value, so a stored product cannot claim a reader it does not have.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    value: Quantity
+    source: Provenance
+    read_by: tuple[str, ...] = Field(default=(), max_length=1024)
+
+
+class Layout(ItemCollection, StatableModel):
+    """The product's driving parameters, read by name and never itself a part."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    parameters: tuple[LayoutParameter, ...] = Field(min_length=1, max_length=256)
+
+    @property
+    def unused(self) -> tuple[str, ...]:
+        """The parameters no item reads."""
+        return tuple(p.name for p in self.parameters if not p.read_by)
+
+
 class Product(StatableModel):
-    """A product document: its definitions, the instances that place them, and the ground."""
+    """A product document: its definitions, the instances that place them, and the ground.
+
+    ``layout`` holds the driving parameters its items read by name; it is in no parts list
+    and no mass roll-up.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -265,6 +301,7 @@ class Product(StatableModel):
     instances: tuple[Instance, ...] = Field(min_length=1, max_length=256)
     ground: Named
     mates: tuple[Mate, ...] = Field(default=(), max_length=512)
+    layout: Layout | None = None
 
     @model_validator(mode="after")
     def _refers_to_its_own(self) -> Product:
@@ -285,17 +322,94 @@ class Product(StatableModel):
         if self.ground not in names:
             raise _refuse(f"the ground '{self.ground}' is not an instance ({', '.join(names)})",
                           subject="ground")  # fmt: skip
+        if self.layout is not None:
+            declared = [p.name for p in self.layout.parameters]
+            repeated = sorted({n for n in declared if declared.count(n) > 1})
+            if repeated:
+                raise _refuse(f"layout parameters {repeated} are declared twice",
+                              subject="layout.parameters[].name")  # fmt: skip
+            dumped = {d.id: d.model_dump(mode="json") for d in self.definitions}
+            for parameter in self.layout.parameters:
+                want = parameter.value.model_dump(mode="json")
+                for place in parameter.read_by:
+                    owner, _, path = place.partition(":")
+                    if _at(dumped.get(owner), path) != want:
+                        raise _refuse(f"layout parameter '{parameter.name}' lists '{place}' as "
+                                      f"a reader, which does not hold {parameter.value}",
+                                      subject="layout.parameters[].read_by")  # fmt: skip
         return self
 
 
+_MISSING = object()
+
+
+def _at(node: Any, path: str) -> Any:
+    """The value at a dotted path through mappings and lists, or a sentinel."""
+    for step in path.split(".") if path else ():
+        if isinstance(node, Mapping) and step in node:
+            node = node[step]
+        elif isinstance(node, list) and step.isdigit() and int(step) < len(node):
+            node = node[int(step)]
+        else:
+            return _MISSING
+    return _MISSING if node is None else node
+
+
+def _resolve(document: Mapping[str, Any]) -> dict[str, Any]:
+    """The document with every ``{layout: name}`` replaced by that parameter's value."""
+    layout = document.get("layout")
+    if not isinstance(layout, Mapping) or not isinstance(layout.get("parameters"), list):
+        return dict(document)
+    values: dict[str, Any] = {}
+    for parameter in layout["parameters"]:
+        if isinstance(parameter, Mapping) and isinstance(parameter.get("name"), str):
+            values[parameter["name"]] = parameter.get("value")
+    readers: dict[str, list[str]] = {name: [] for name in values}
+
+    def walk(node: Any, owner: str, path: str) -> Any:
+        if isinstance(node, Mapping):
+            if set(node) == {"layout"}:
+                name = node["layout"]
+                if not isinstance(name, str) or name not in values:
+                    raise _refuse(f"'{owner}' reads layout parameter {name!r} at {path}, which "
+                                  f"the layout does not declare ({', '.join(values) or 'none'})",
+                                  subject="document")  # fmt: skip
+                readers[name].append(f"{owner}:{path}")
+                return values[name]
+            return {k: walk(v, owner, f"{path}.{k}" if path else str(k)) for k, v in node.items()}
+        if isinstance(node, list):
+            return [walk(v, owner, f"{path}.{i}") for i, v in enumerate(node)]
+        return node
+
+    definitions = []
+    for definition in document.get("definitions") or ():
+        if isinstance(definition, Mapping):
+            owner = str(definition.get("id"))
+            definition = {k: walk(v, owner, k) if k in ("spec", "placeholder") else v
+                          for k, v in definition.items()}  # fmt: skip
+        definitions.append(definition)
+    parameters = [
+        {**p, "read_by": readers[p["name"]]}
+        if isinstance(p, Mapping) and p.get("name") in readers and "read_by" not in p
+        else p
+        for p in layout["parameters"]
+    ]
+    return {**document, "definitions": definitions, "layout": {**layout, "parameters": parameters}}
+
+
 def parse_product(document: Mapping[str, Any]) -> Product:
-    """A product document as its typed model, refusing what cannot be read."""
+    """A product document as its typed model, refusing what cannot be read.
+
+    Every ``{layout: <name>}`` in a definition's spec or placeholder is replaced by that
+    layout parameter's value first, and recorded as one of its readers; a name the layout
+    does not declare is refused.
+    """
     from pydantic import ValidationError
 
     if not isinstance(document, Mapping):
         raise _refuse("a product document is a mapping", subject="document")
     try:
-        return Product.model_validate(dict(document))
+        return Product.model_validate(_resolve(document))
     except ValidationError as failure:
         first = failure.errors()[0]
         where = ".".join(str(p) for p in first["loc"]) or "the document"
@@ -496,7 +610,8 @@ class PlacedProduct(StatableModel):
     ``center_of_mass_mm`` their mass-weighted centre; ``mass_rests_on`` names each
     placeholder in them, ``center_assumed`` each placeholder whose centre of mass is its
     envelope's centre, and ``mass_unknown`` each leaf whose material gives no density, so
-    the roll-up never reads as more complete than it is.
+    the roll-up never reads as more complete than it is. ``unused_parameters`` names each
+    layout parameter no item reads.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -509,6 +624,7 @@ class PlacedProduct(StatableModel):
     mass_unknown: tuple[str, ...]
     center_of_mass_mm: tuple[float, float, float] | None
     center_assumed: tuple[str, ...] = ()
+    unused_parameters: tuple[str, ...] = ()
 
     def __str__(self) -> str:
         rests = f"; rests on placeholders {list(self.mass_rests_on)}" if self.mass_rests_on else ""
@@ -519,6 +635,8 @@ class PlacedProduct(StatableModel):
             assumed = (f", assuming envelope centres for {list(self.center_assumed)}"
                        if self.center_assumed else "")  # fmt: skip
             centre = f"; centre of mass ({x:.4g}, {y:.4g}, {z:.4g}) mm{assumed}"
+        if self.unused_parameters:
+            centre += f"; layout parameters no item reads: {list(self.unused_parameters)}"
         return (
             f"{self.name}: {len(self.bodies)} bodies, {self.mass_kg:.4g} kg{rests}{unknown}"
             f"{centre}; "
@@ -692,6 +810,7 @@ def place_product(
         mass_unknown=tuple(leaf.path for leaf in leaves if leaf.mass is None),
         center_of_mass_mm=centre,
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
+        unused_parameters=product.layout.unused if product.layout is not None else (),
     )
 
 

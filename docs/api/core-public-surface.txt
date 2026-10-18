@@ -510,6 +510,8 @@ product.Definition
 product.LinearPattern
 product.CircularPattern
 product.Instance
+product.Layout
+product.LayoutParameter
 product.Product
 product.ProductNode
 product.PartsListLine
