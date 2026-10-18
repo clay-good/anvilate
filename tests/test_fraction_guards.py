@@ -1759,7 +1759,9 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # and tests/test_sandwich.py refuses a NaN cell size and a zero facing thickness.
     # 99 -> 100: modal_separation takes (name, frequency) pairs and bands, and
     # tests/test_durability.py refuses a separation ratio below 1 and a backwards band.
-    assert len(unbuildable) <= 100, (
+    # 100 -> 101: rainflow_count takes a history, and tests/test_rainflow.py refuses a NaN
+    # inside it.
+    assert len(unbuildable) <= 101, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

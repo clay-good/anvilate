@@ -1059,6 +1059,9 @@ modules:
 - :mod:`~anvilate.analysis.durability` — estimated modes held clear of declared
   excitation bands, and a drop onto a declared contact as a half-sine pulse with the load
   each mounted item feels
+- :mod:`~anvilate.analysis.rainflow` — rainflow cycle counting of a load history, as a
+  repeating block (NASA CR-181942) or applied once with its residual half cycles (ASTM
+  E1049 §5.4.4)
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -2900,6 +2903,11 @@ from .radioactivity import (
     specific_activity,
     time_for_activity_decay,
 )
+from .rainflow import (
+    RainflowCount,
+    RainflowCycle,
+    rainflow_count,
+)
 from .random_vibration import (
     LoadCombinationRule,
     RandomVibrationLoad,
@@ -3642,6 +3650,9 @@ __all__ = [
     "MountedItemLoad",
     "DropScreen",
     "drop_screen",
+    "RainflowCycle",
+    "RainflowCount",
+    "rainflow_count",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

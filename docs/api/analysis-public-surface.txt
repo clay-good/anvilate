@@ -184,6 +184,9 @@ durability.MountedItem
 durability.MountedItemLoad
 durability.DropScreen
 durability.drop_screen
+rainflow.RainflowCycle
+rainflow.RainflowCount
+rainflow.rainflow_count
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors

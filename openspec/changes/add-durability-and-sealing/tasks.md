@@ -3,7 +3,7 @@
 ## 1. Duty cycles
 
 - [ ] 1.1 Duty-cycle declaration: life, events, histories or blocks, counts, sources
-- [ ] 1.2 Rainflow counting per ASTM E1049, anchored to the standard's worked example;
+- [x] 1.2 Rainflow counting per ASTM E1049, anchored to the standard's worked example;
       residual reporting
 - [ ] 1.3 Miner damage over counted cycles with declared mean-stress correction; damage
       per event

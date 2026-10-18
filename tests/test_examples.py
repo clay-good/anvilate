@@ -9573,3 +9573,15 @@ def test_handheld_drop_example():
     assert d["board_load_n"] == pytest.approx(0.05 * d["board_g"] * 9.80665, rel=1e-12)
     assert 1 < d["stiff_amplification"] < d["amplification"]
     _assert_narrates_computed("handheld_drop.py", namespace)
+
+
+def test_rainflow_block_damage_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "rainflow_block_damage.py"))
+    d = namespace["rainflow_block_damage"]()
+    assert d["cycles"] == 4 and d["largest_range_mpa"] == 600
+    assert d["naive_largest_mpa"] == 500
+    # Basquin: N = (σa/900)^(1/−0.09); the 600 MPa range alone, σa 300: (1/3)^(−11.11)
+    largest_life = (300 / 900) ** (1 / -0.09)
+    assert d["largest_share"] == pytest.approx((1 / largest_life) / d["damage_per_block"])
+    assert d["blocks_to_failure"] == pytest.approx(197_869, abs=1)
+    _assert_narrates_computed("rainflow_block_damage.py", namespace)
