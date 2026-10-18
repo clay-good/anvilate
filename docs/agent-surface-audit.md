@@ -37,7 +37,7 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `run_fea_validation` | pipeline | `spec`, `convergence_tol` (optional) | `scorecard` | yes | 470 characters | a task | none |
 | `read_scorecard` | pipeline | `subject` | `scorecard` | no | 195 characters | 1 s | none |
 | `export_artifact` | pipeline | `subject`, `format` | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 676 characters | 2 s | export, combination |
-| `build_combination` | combination | `combination` | `combination`, `scorecard`, `subject` | yes | 663 characters | 15 s | combination |
+| `build_combination` | combination | `combination`, `library` (optional), `node` (optional) | `combination`, `scorecard`, `subject`, `product`, `node` | yes | 939 characters | 15 s | combination |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
 | `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 791 characters | 10 s | context |
 | `describe_part` | catalog lookup | `element_type` (optional) | `catalog` | no | 378 characters | 1 s | check, draw, export |

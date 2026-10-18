@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "CheckStatus": {
+      "description": "A check's outcome.\n\n``NOT_EVALUATED`` is never silently treated as a pass — a check that could\nnot run is reported as such. ``OVER_MARGIN`` is a passing check whose margin\nran past a declared upper band: acceptable, never blocking, but flagged so an\nover-engineered candidate is as visible as a failing one.\n\n``OUT_OF_DEPTH`` is a check the document *deliberately deferred*: the spec declared a\nscreening depth this check sits below. It is not blocking — the engineer asked for a\nconcept screen and got one — and it is not ``NOT_EVALUATED`` either, because \"I chose\nnot to screen that yet\" and \"I could not screen that\" are different facts about a\ndesign that a reader acts on differently. Every surface states both counts.\n\n``WARNING`` is a check that met its hard limit and entered a caution band its document\ndeclared: material inside a keepout's clearance margin that does not reach the protected\ncore. It is not a pass, so a card holding one does not pass, and it is not a failure,\nso it neither blocks as one nor reads as one.",
+      "enum": [
+        "pass",
+        "fail",
+        "warning",
+        "over_margin",
+        "out_of_depth",
+        "not_evaluated"
+      ],
+      "title": "CheckStatus",
+      "type": "string"
+    },
+    "SummaryNode": {
+      "additionalProperties": false,
+      "description": "One node of a product summary: where it is, what it is, its verdict and why.\n\n``findings`` counts the entries this node itself holds that did not pass. ``governing``\nis the worst of them at a node that did not pass, or the paths below it that it fails\nby reference to.",
+      "properties": {
+        "findings": {
+          "minimum": 0,
+          "title": "Findings",
+          "type": "integer"
+        },
+        "governing": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Governing"
+        },
+        "part_number": {
+          "title": "Part Number",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "provisional": {
+          "title": "Provisional",
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "path",
+        "part_number",
+        "provisional",
+        "status",
+        "findings"
+      ],
+      "title": "SummaryNode",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:product-summary:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate product summary: a product placed through its mates, one line per node of its tree with the node's path, part number, verdict, finding count and governing finding, the nodes left out to keep it bounded, and how to ask for one node's full card. Generated from anvilate.product.ProductSummary.",
+  "properties": {
+    "mass_kg": {
+      "title": "Mass Kg",
+      "type": "number"
+    },
+    "more": {
+      "title": "More",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/SummaryNode"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "omitted": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Omitted",
+      "type": "integer"
+    },
+    "rebuilt": {
+      "minimum": 0,
+      "title": "Rebuilt",
+      "type": "integer"
+    },
+    "reused": {
+      "minimum": 0,
+      "title": "Reused",
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/CheckStatus"
+    }
+  },
+  "required": [
+    "name",
+    "status",
+    "nodes",
+    "more",
+    "mass_kg",
+    "rebuilt",
+    "reused"
+  ],
+  "title": "ProductSummary",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

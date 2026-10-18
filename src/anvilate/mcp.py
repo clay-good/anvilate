@@ -222,6 +222,8 @@ _PART_CATALOG_REF = "urn:anvilate:schema:part-catalog:1.0.0"
 _CONTEXT_INVENTORY_REF = "urn:anvilate:schema:context-inventory:1.0.0"
 _CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.2.0"
 _COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
+_PRODUCT_SUMMARY_REF = "urn:anvilate:schema:product-summary:1.0.0"
+_NODE_CARD_REF = "urn:anvilate:schema:node-card:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -799,7 +801,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "scorecard: each part's own status, whether mated holes line up, bolt "
                 "clearance and length, and interference between every pair. The subject "
                 "goes to render_viewport for the picture and to export_artifact "
-                "with format step for a STEP assembly."
+                "with format step for a STEP assembly. combination may instead be a product "
+                "(definitions placed as instances, nesting the products in library "
+                "by name): it returns product, a bounded summary tree with one line per "
+                "node, and node names one path, such as stage/drive[2]/motor, to return that "
+                "node's full card instead."
             ),
             input_schema=_object_schema(
                 {
@@ -816,8 +822,21 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                             '"hole_pattern", "place": {"part": "bracket", '
                             '"face": "bottom", "holes": ["b1", "b2"]}, '
                             '"on": {"part": "plate", "face": "top", '
-                            '"holes": ["a1", "a2"]}}'
+                            '"holes": ["a1", "a2"]}}. A product is {name, '
+                            "definitions: [{id, identity, spec | product | placeholder}], "
+                            "instances: [{name, item, pattern}], ground, mates, layout, "
+                            "variants}"
                         ),
+                    },
+                    "library": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "for a product: the products it places, by name",
+                    },
+                    "node": {
+                        "type": "string",
+                        "description": "for a product: the path of one node whose full card "
+                        "to return, such as stage/drive[2]/motor",
                     },
                 },
                 required=["combination"],
@@ -827,8 +846,10 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "combination": {"$ref": _COMBINATION_REF},
                     "scorecard": {"$ref": _SCORECARD_REF},
                     "subject": _SUBJECT_SCHEMA,
+                    "product": {"$ref": _PRODUCT_SUMMARY_REF},
+                    "node": {"$ref": _NODE_CARD_REF},
                 },
-                required=["combination", "scorecard", "subject"],
+                required=[],
             ),
             writes=True,
             cost=Cost.BOUNDED,
@@ -1043,6 +1064,8 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _CONTEXT_INVENTORY_REF,
             _CAD_FACTS_REF,
             _COMBINATION_REF,
+            _PRODUCT_SUMMARY_REF,
+            _NODE_CARD_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -2127,6 +2150,14 @@ def _build_combination(arguments: Mapping[str, Any]) -> dict[str, Any]:
     from .combination import CombinationError, build_combination, parse_combination
     from .geometry import GeometryUnavailable
 
+    document = arguments["combination"]
+    if isinstance(document, Mapping) and "definitions" in document:
+        return _build_product(arguments)
+    if "library" in arguments or "node" in arguments:
+        raise _InvalidArguments(
+            ["library and node are for a product, which states definitions"],
+            operation="build_combination",
+        )
     try:
         combination = parse_combination(arguments["combination"])
         built = build_combination(combination)
@@ -2144,6 +2175,35 @@ def _build_combination(arguments: Mapping[str, Any]) -> dict[str, Any]:
         "scorecard": built.card.model_dump(mode="json"),
         "subject": handle,
     }
+
+
+def _build_product(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``build_combination`` given a product: its summary tree, or one node's full card."""
+    from .geometry import GeometryUnavailable
+    from .product import (
+        ProductError,
+        parse_product,
+        place_product,
+        product_tree,
+        summarize_product,
+    )
+
+    try:
+        product = parse_product(arguments["combination"])
+        library = {}
+        for document in arguments.get("library", ()):
+            sub = parse_product(document)
+            library[sub.name] = sub
+        placed = place_product(product, library=library)
+        if "node" in arguments:
+            return {"node": placed.card.find(arguments["node"]).model_dump(mode="json")}
+        tree = product_tree(product, library=library)
+    except GeometryUnavailable as failure:
+        raise _Unavailable(str(failure)) from failure
+    except ProductError as refused:
+        raise _InvalidArguments([f"product: {refused}"], operation="build_combination") from refused
+    more = "any node's full card: build_combination with the same product and node PATH"
+    return {"product": summarize_product(placed, tree, more=more).model_dump(mode="json")}
 
 
 def _built_combination(handle: str) -> Any:

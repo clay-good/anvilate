@@ -28,7 +28,7 @@ Depends on `add-part-combinations` (mates, hardware, combination card).
 
 ## 4. Agent surface
 
-- [ ] 4.1 Bounded summary tree from the existing build tool; node detail by path
+- [x] 4.1 Bounded summary tree from the existing build tool; node detail by path
 - [ ] 4.2 CLI parity for `check`, `combine`/`build` on product documents
       (`check` is built, with `--node`; `combine`/`build` are not)
 - [ ] 4.3 Worked products: linear stage, gear reducer, enclosure, frame on casters — each

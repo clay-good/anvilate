@@ -35,7 +35,7 @@ is empty. The worked table is
 | `describe_part` | synchronous | — | `anvilate.patterns:describe_part` |
 
 All twelve run today: the eight pipeline operations; `build_combination`, which places
-several parts by the features they share; `describe_part`, which looks up what an agent
+several parts by the features they share, or a product document's tree; `describe_part`, which looks up what an agent
 can declare and draw; and `list_context` and `read_cad_file`, which read the user's own
 files inside the folders the server was started with. Each backed tool names a dotted path CI resolves against
 the live importable surface — so a rename fails the build instead of shipping as a promise.

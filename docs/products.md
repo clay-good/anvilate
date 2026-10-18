@@ -167,6 +167,11 @@ exit code is the product's verdict, as for a spec.
 `summarize_product(placed, product_tree(product), limit=60)` is the same summary in
 Python. Past its bound it keeps the worst nodes and counts the rest.
 
+An agent builds a product through the same `build_combination` tool a combination uses:
+the product document goes in `combination`, the sub-products in `library`. It returns the
+summary tree as `product`. One more call with `node: "stage/drive[2]"` returns that node's
+full card.
+
 ## Rebuilding what changed
 
 Pass one `BuildCache` to successive `place_product(..., cache=cache)` calls. Each item is

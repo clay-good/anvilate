@@ -74,6 +74,8 @@ __all__ = [
     "CONTEXT_INVENTORY_SCHEMA_VERSION",
     "CAD_FACTS_SCHEMA_VERSION",
     "COMBINATION_SUMMARY_SCHEMA_VERSION",
+    "PRODUCT_SUMMARY_SCHEMA_VERSION",
+    "NODE_CARD_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -91,6 +93,8 @@ __all__ = [
     "context_inventory_json_schema",
     "cad_facts_json_schema",
     "combination_summary_json_schema",
+    "product_summary_json_schema",
+    "node_card_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -186,6 +190,11 @@ CAD_FACTS_SCHEMA_VERSION = "1.2.0"
 # What ``build_combination`` returns beside the scorecard: where each part landed, and the
 # parts list.
 COMBINATION_SUMMARY_SCHEMA_VERSION = "1.0.0"
+
+# What ``build_combination`` returns for a product document: the bounded summary tree, and
+# one node's full card when the call names a node.
+PRODUCT_SUMMARY_SCHEMA_VERSION = "1.0.0"
+NODE_CARD_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -480,6 +489,39 @@ def combination_summary_json_schema() -> dict[str, Any]:
     )
 
 
+def product_summary_json_schema() -> dict[str, Any]:
+    """A placed product's bounded summary tree."""
+    from .product import ProductSummary
+
+    return _artifact(
+        ProductSummary,
+        name="product-summary",
+        version=PRODUCT_SUMMARY_SCHEMA_VERSION,
+        description=(
+            "Anvilate product summary: a product placed through its mates, one line per "
+            "node of its tree with the node's path, part number, verdict, finding count and "
+            "governing finding, the nodes left out to keep it bounded, and how to ask for "
+            "one node's full card. Generated from anvilate.product.ProductSummary."
+        ),
+    )
+
+
+def node_card_json_schema() -> dict[str, Any]:
+    """One node of a placed product, with the cards of every node below it."""
+    from .product import NodeCard
+
+    return _artifact(
+        NodeCard,
+        name="node-card",
+        version=NODE_CARD_SCHEMA_VERSION,
+        description=(
+            "Anvilate node card: one node of a placed product, the checks it owns and its "
+            "children's cards, with its status the worst of them; not evaluated is never a "
+            "pass. Generated from anvilate.product.NodeCard."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -687,6 +729,8 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "context-inventory.schema.json": context_inventory_json_schema(),
         "cad-file-facts.schema.json": cad_facts_json_schema(),
         "combination-summary.schema.json": combination_summary_json_schema(),
+        "product-summary.schema.json": product_summary_json_schema(),
+        "node-card.schema.json": node_card_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

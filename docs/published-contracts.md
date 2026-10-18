@@ -29,6 +29,8 @@ that has never heard of anvilate.
 | [`docs/api/schemas/context-inventory.schema.json`](api/schemas/context-inventory.schema.json) | a context folder's engineering files, and whose each is to read | `CONTEXT_INVENTORY_SCHEMA_VERSION` |
 | [`docs/api/schemas/cad-file-facts.schema.json`](api/schemas/cad-file-facts.schema.json) | one STEP, DXF, STL or 3MF file, measured: sizes, holes, profiles, never its contents | `CAD_FACTS_SCHEMA_VERSION` |
 | [`docs/api/schemas/combination-summary.schema.json`](api/schemas/combination-summary.schema.json) | several parts placed by the features they share: where each landed, and the parts list | `COMBINATION_SUMMARY_SCHEMA_VERSION` |
+| [`docs/api/schemas/product-summary.schema.json`](api/schemas/product-summary.schema.json) | a placed product as a bounded summary tree: each node's path, part number, verdict and governing finding | `PRODUCT_SUMMARY_SCHEMA_VERSION` |
+| [`docs/api/schemas/node-card.schema.json`](api/schemas/node-card.schema.json) | one node of a placed product: the checks it owns and its children's cards | `NODE_CARD_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and
@@ -117,6 +119,12 @@ pack still ships an element by existing; bumping one means adding its tag to
 to `bolted_connection/1.0.0` is not told its contract moved because a pump duty gained a
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
+
+### Product summary 1.0.0 and node card 1.0.0: products through `build_combination`
+
+`build_combination` takes a product document as its `combination`, with the sub-products
+it places in `library`. It answers with `product`, the summary tree, or, given `node`, with
+that node's full card as `node`. A combination's result is unchanged.
 
 ### CLI output 1.62.0: `check` reads a product document
 

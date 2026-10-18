@@ -1714,7 +1714,9 @@ def _released_registry():
         CONTEXT_INVENTORY_SCHEMA_VERSION,
         GEOMETRY_SCHEMA_VERSION,
         MEASUREMENT_SCHEMA_VERSION,
+        NODE_CARD_SCHEMA_VERSION,
         PART_CATALOG_SCHEMA_VERSION,
+        PRODUCT_SUMMARY_SCHEMA_VERSION,
         SCORECARD_SCHEMA_VERSION,
         SPEC_SCHEMA_VERSION,
         VIEWPORT_SCHEMA_VERSION,
@@ -1735,6 +1737,8 @@ def _released_registry():
                 _released(f"context-inventory-{CONTEXT_INVENTORY_SCHEMA_VERSION}.json"),
                 _released(f"cad-file-facts-{CAD_FACTS_SCHEMA_VERSION}.json"),
                 _released(f"combination-summary-{COMBINATION_SUMMARY_SCHEMA_VERSION}.json"),
+                _released(f"product-summary-{PRODUCT_SUMMARY_SCHEMA_VERSION}.json"),
+                _released(f"node-card-{NODE_CARD_SCHEMA_VERSION}.json"),
                 _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
                 _released(f"geometry-measurement-{MEASUREMENT_SCHEMA_VERSION}.json"),
             )
