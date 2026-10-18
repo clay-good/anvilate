@@ -107,6 +107,10 @@ callouts.plated_inner_dimension
 callouts.plated_thread_pitch_diameter_shift
 callouts.heat_treated_material_id
 callouts.callout_scorecard
+changes.ChangeError
+changes.ItemChange
+changes.ChangeRecord
+changes.compare_products
 cli.EXIT_CODES
 cli.main
 cli.run

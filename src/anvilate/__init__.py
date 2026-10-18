@@ -91,6 +91,8 @@ that already ran and does one more thing with them:
   each family's ratings checked against what the product asks, and unsourced ones marked.
 - :mod:`anvilate.interfaces` — what an item offers a product, typed: a closed kind
   vocabulary with required parameters, and the table of which kinds may meet.
+- :mod:`anvilate.changes` — two revisions of a product compared item by item: what changed,
+  classified as form, fit or function with its evidence, where it is used, and the record.
 - :mod:`anvilate.combination` — several catalog parts placed by the features they share,
   with fastener envelopes, checked where they meet, drawn numbered and written as a STEP
   assembly.
