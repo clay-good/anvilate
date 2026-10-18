@@ -92,6 +92,12 @@ __all__ = [
     "Thermal",
     "ChainLink",
     "ProductChain",
+    "Cited",
+    "Substance",
+    "MaterialDeclaration",
+    "UL94_CLASSES",
+    "Sterilization",
+    "MaterialNeeds",
     "Screening",
     "Product",
     "ProductNode",
@@ -115,7 +121,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.10.0"] = "1.10.0"
+PRODUCT_VERSION: Literal["1.11.0"] = "1.11.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -264,6 +270,9 @@ class Definition(StatableModel):
     demands: tuple[Demand, ...] = Field(default=(), max_length=32)
     # A catalog part's interfaces, bound to its tagged features and read from the built part.
     interfaces: tuple[PartInterface, ...] = Field(default=(), max_length=32)
+    # The material a placeholder or component is made of, by its id in the product's
+    # material declarations; a catalog part's is its spec's own material.
+    material: Named | None = None
 
     @model_validator(mode="after")
     def _exactly_one_kind(self) -> Definition:
@@ -717,6 +726,136 @@ class ProductChain(StatableModel):
         return self
 
 
+class Cited(StatableModel):
+    """A declared value and the source it was read from."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    value: Quantity | float | str
+    source: Provenance
+
+
+class Substance(StatableModel):
+    """One substance in a material: its CAS number, its name, its mass fraction."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    cas: str = Field(pattern=r"^\d{2,7}-\d{2}-\d$")
+    name: Named
+    fraction: float = Field(ge=0, le=1)
+
+
+class MaterialDeclaration(StatableModel):
+    """What a material is made of and what it withstands, each value with its source.
+
+    ``material`` is the id the product's items name. ``plastic`` counts it in the recycled
+    plastic roll-up. ``attributes`` are the material's own declared values, read by the
+    material needs: ``service_max_temperature``, ``total_mass_loss`` (a fraction),
+    ``flammability`` (a UL 94 class) and ``biocompatibility`` (a body-contact category).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    material: Named
+    plastic: bool = False
+    composition: tuple[Substance, ...] = Field(default=(), max_length=256)
+    composition_source: Provenance | None = None
+    recycled_fraction: Cited | None = None
+    attributes: FrozenMap[str, Cited] = Field(default_factory=lambda: EMPTY_MAP)
+
+    @model_validator(mode="after")
+    def _a_declaration(self) -> MaterialDeclaration:
+        if self.composition and self.composition_source is None:
+            raise _refuse(f"material {self.material}'s composition is not cited; state "
+                          "composition_source", subject="screening.materials")  # fmt: skip
+        if sum(s.fraction for s in self.composition) > 1 + 1e-6:
+            raise _refuse(f"material {self.material}'s composition adds up past 1",
+                          subject="screening.materials")  # fmt: skip
+        unknown = sorted(set(self.attributes) - set(_MATERIAL_ATTRIBUTES))
+        if unknown:
+            raise _refuse(f"material {self.material} declares {unknown}; the attributes "
+                          f"read are {', '.join(_MATERIAL_ATTRIBUTES)}",
+                          subject="screening.materials")  # fmt: skip
+        for attribute, stated in self.attributes.items():
+            problem = _cited_problem(_ATTRIBUTE_KINDS[attribute], stated.value)
+            if problem:
+                raise _refuse(f"material {self.material}'s {attribute} is {stated.value!r}; "
+                              f"it is {problem}", subject="screening.materials")  # fmt: skip
+        return self
+
+
+_MATERIAL_ATTRIBUTES = ("service_max_temperature", "total_mass_loss", "flammability",
+                        "biocompatibility")  # fmt: skip
+#: UL 94 classes, least to most flame-retardant, as the classes are named.
+UL94_CLASSES = ("HB", "V-2", "V-1", "V-0", "5VB", "5VA")
+
+_ATTRIBUTE_KINDS = {"service_max_temperature": "temperature", "total_mass_loss": "fraction",
+                    "flammability": "ul94", "biocompatibility": "category"}  # fmt: skip
+_NEED_KINDS = {"service_temperature": "temperature", "vacuum": "fraction",
+               "flammability": "ul94", "body_contact": "category"}  # fmt: skip
+
+
+def _cited_problem(kind: str, value: Any) -> str | None:
+    """What a cited value of ``kind`` must be, when ``value`` is not one; else None."""
+    if kind == "temperature":
+        if isinstance(value, Quantity) and value.has_dimension("[temperature]"):
+            return None
+        return "a temperature with its unit"
+    if kind == "fraction":
+        if isinstance(value, float) and 0 <= value <= 1:
+            return None
+        return "a fraction from 0 to 1"
+    if kind == "ul94":
+        return None if value in UL94_CLASSES else f"a UL 94 class ({', '.join(UL94_CLASSES)})"
+    return None if isinstance(value, str) and value.strip() else "a named category"
+
+
+class Sterilization(StatableModel):
+    """A sterilization the material must survive: the method, its temperature, the source."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    method: Named
+    temperature: Quantity
+    source: Provenance
+
+
+class MaterialNeeds(StatableModel):
+    """What the product's materials must withstand, each need with its limit and source.
+
+    ``items`` limits the needs to those items (all of them when empty). Each need is a
+    :class:`Cited` limit: ``service_temperature`` and ``sterilization`` a temperature the
+    material's service maximum must reach; ``vacuum`` the largest total mass loss allowed;
+    ``flammability`` the least UL 94 class; ``body_contact`` the category the material must
+    be declared for.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    items: tuple[Named, ...] = ()
+    service_temperature: Cited | None = None
+    sterilization: Sterilization | None = None
+    vacuum: Cited | None = None
+    flammability: Cited | None = None
+    body_contact: Cited | None = None
+
+    @model_validator(mode="after")
+    def _typed(self) -> MaterialNeeds:
+        for name, kind in _NEED_KINDS.items():
+            need = getattr(self, name)
+            problem = need is not None and _cited_problem(kind, need.value)
+            if problem:
+                raise _refuse(f"material need {name} is {need.value!r}; it is {problem}",
+                              subject=f"screening.needs.{name}")  # fmt: skip
+        if self.sterilization is not None and _cited_problem(
+            "temperature", self.sterilization.temperature
+        ):
+            raise _refuse(f"sterilization temperature is {self.sterilization.temperature}; it "
+                          "is a temperature with its unit",
+                          subject="screening.needs.sterilization")  # fmt: skip
+        return self
+
+
 class Screening(StatableModel):
     """What the product as a whole is held to.
 
@@ -738,6 +877,8 @@ class Screening(StatableModel):
     splits: tuple[Split, ...] = Field(default=(), max_length=256)
     thermal: Thermal | None = None
     chains: tuple[ProductChain, ...] = Field(default=(), max_length=64)
+    materials: tuple[MaterialDeclaration, ...] = Field(default=(), max_length=256)
+    needs: MaterialNeeds | None = None
     # Items separated for service, which assembly economy never proposes merging.
     serviced: tuple[Named, ...] = Field(default=(), max_length=256)
 
@@ -755,6 +896,11 @@ class Screening(StatableModel):
                 raise _refuse(f"screening {name} is {limit.value}; it is a non-negative "
                               f"{'angle' if dimension == '[]' else dimension}",
                               subject=f"screening.{name}")  # fmt: skip
+        ids = [m.material for m in self.materials]
+        repeated = sorted({i for i in ids if ids.count(i) > 1})
+        if repeated:
+            raise _refuse(f"materials {repeated} are declared twice; each is declared once",
+                          subject="screening.materials")  # fmt: skip
         return self
 
 
@@ -773,8 +919,8 @@ class Product(StatableModel):
     # part's interfaces bound to its features, 1.5.0 a joint on a connection, and 1.6.0 a
     # reference assembly, 1.7.0 what the product as a whole is screened against, and 1.8.0
     # the loads it carries and declared splits, and 1.9.0 its thermal range and the items
-    # separated for service, and 1.10.0 stack-up chains through its items; an older document
-    # reads unchanged.
+    # separated for service, and 1.10.0 stack-up chains through its items, and 1.11.0 its
+    # materials and what they must withstand; an older document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -787,6 +933,7 @@ class Product(StatableModel):
         "1.8.0",
         "1.9.0",
         "1.10.0",
+        "1.11.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
@@ -845,6 +992,11 @@ class Product(StatableModel):
         if self.ground not in names:
             raise _refuse(f"the ground '{self.ground}' is not an instance ({', '.join(names)})",
                           subject="ground")  # fmt: skip
+        needs = self.screening.needs if self.screening is not None else None
+        for item in needs.items if needs is not None else ():
+            if item not in names:
+                raise _refuse(f"material needs name '{item}', which is not an instance "
+                              f"({', '.join(names)})", subject="screening.needs")  # fmt: skip
         if self.layout is not None:
             declared = [p.name for p in self.layout.parameters]
             repeated = sorted({n for n in declared if declared.count(n) > 1})

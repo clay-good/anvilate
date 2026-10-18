@@ -248,6 +248,9 @@ def product_screening(
     entries += _rated_from_path(product, shelf, steps)
     entries += _thermal(product, placed)
     entries += _chains(product)
+    from .compliance import screen_material_needs
+
+    entries += screen_material_needs(product)
     approaches = _approaches(product, bodies)
     if declared is not None and declared.min_clearance is not None:
         entries.append(_clearance_entry(approaches, declared.min_clearance))

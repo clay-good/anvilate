@@ -136,6 +136,12 @@ combination.build_combination
 combination.parse_combination
 combination.render_combination
 combination.write_step_assembly
+compliance.CompositionLine
+compliance.RecycledRollup
+compliance.CompositionReport
+compliance.material_of
+compliance.composition_export
+compliance.screen_material_needs
 compilation.CONSTRAINT_TAX_CITATION
 compilation.COMPILATION_TASK_SET_VERSION
 compilation.CompilationAttempt
@@ -539,9 +545,9 @@ product.Definition
 product.LinearPattern
 product.CircularPattern
 product.Instance
-product.Layout
 product.LayoutParameter
 product.LayoutDatum
+product.Layout
 product.Variant
 product.Joint
 product.Connection
@@ -555,6 +561,12 @@ product.Expansion
 product.Thermal
 product.ChainLink
 product.ProductChain
+product.Cited
+product.Substance
+product.MaterialDeclaration
+product.UL94_CLASSES
+product.Sterilization
+product.MaterialNeeds
 product.Screening
 product.Product
 product.ProductNode

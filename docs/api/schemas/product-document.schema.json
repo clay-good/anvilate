@@ -125,6 +125,36 @@
       "title": "CircularPattern",
       "type": "object"
     },
+    "Cited": {
+      "additionalProperties": false,
+      "description": "A declared value and the source it was read from.",
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "title": "Cited",
+      "type": "object"
+    },
     "ComponentRecord": {
       "additionalProperties": false,
       "description": "A purchased component: identity, where to buy it, the space it takes, its ratings.\n\n``envelope`` is the box it occupies, centred on its own origin, and ``holes`` the\ninterfaces it offers a mate, as a placeholder's; ``envelope_source`` and ``mass_source``\nname where they were read. ``ratings`` must include every rating\n:data:`FAMILY_RATINGS` lists for ``family``, each with its source.",
@@ -336,6 +366,18 @@
           "maxItems": 32,
           "title": "Interfaces",
           "type": "array"
+        },
+        "material": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material"
         },
         "placeholder": {
           "anyOf": [
@@ -1023,6 +1065,134 @@
       "title": "MateEnd",
       "type": "object"
     },
+    "MaterialDeclaration": {
+      "additionalProperties": false,
+      "description": "What a material is made of and what it withstands, each value with its source.\n\n``material`` is the id the product's items name. ``plastic`` counts it in the recycled\nplastic roll-up. ``attributes`` are the material's own declared values, read by the\nmaterial needs: ``service_max_temperature``, ``total_mass_loss`` (a fraction),\n``flammability`` (a UL 94 class) and ``biocompatibility`` (a body-contact category).",
+      "properties": {
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "composition": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Substance"
+          },
+          "maxItems": 256,
+          "title": "Composition",
+          "type": "array"
+        },
+        "composition_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Composition Source"
+        },
+        "material": {
+          "title": "Material",
+          "type": "string"
+        },
+        "plastic": {
+          "default": false,
+          "title": "Plastic",
+          "type": "boolean"
+        },
+        "recycled_fraction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cited"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "material"
+      ],
+      "title": "MaterialDeclaration",
+      "type": "object"
+    },
+    "MaterialNeeds": {
+      "additionalProperties": false,
+      "description": "What the product's materials must withstand, each need with its limit and source.\n\n``items`` limits the needs to those items (all of them when empty). Each need is a\n:class:`Cited` limit: ``service_temperature`` and ``sterilization`` a temperature the\nmaterial's service maximum must reach; ``vacuum`` the largest total mass loss allowed;\n``flammability`` the least UL 94 class; ``body_contact`` the category the material must\nbe declared for.",
+      "properties": {
+        "body_contact": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cited"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "flammability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cited"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "items": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "service_temperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cited"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sterilization": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sterilization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "vacuum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cited"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "MaterialNeeds",
+      "type": "object"
+    },
     "OpenInterface": {
       "additionalProperties": false,
       "description": "An interface left unconnected on purpose, as ``item.interface``, and why.",
@@ -1419,6 +1589,15 @@
           ],
           "default": null
         },
+        "materials": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MaterialDeclaration"
+          },
+          "maxItems": 256,
+          "title": "Materials",
+          "type": "array"
+        },
         "max_mass": {
           "anyOf": [
             {
@@ -1445,6 +1624,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Limit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "needs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialNeeds"
             },
             {
               "type": "null"
@@ -1509,6 +1699,58 @@
         "basis"
       ],
       "title": "Split",
+      "type": "object"
+    },
+    "Sterilization": {
+      "additionalProperties": false,
+      "description": "A sterilization the material must survive: the method, its temperature, the source.",
+      "properties": {
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "temperature": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "method",
+        "temperature",
+        "source"
+      ],
+      "title": "Sterilization",
+      "type": "object"
+    },
+    "Substance": {
+      "additionalProperties": false,
+      "description": "One substance in a material: its CAS number, its name, its mass fraction.",
+      "properties": {
+        "cas": {
+          "pattern": "^\\d{2,7}-\\d{2}-\\d$",
+          "title": "Cas",
+          "type": "string"
+        },
+        "fraction": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fraction",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cas",
+        "name",
+        "fraction"
+      ],
+      "title": "Substance",
       "type": "object"
     },
     "SupplierNumber": {
@@ -1615,13 +1857,13 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.10.0",
+  "$id": "urn:anvilate:schema:product-document:1.11.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.10.0",
+      "default": "1.11.0",
       "enum": [
         "1.0.0",
         "1.1.0",
@@ -1633,7 +1875,8 @@
         "1.7.0",
         "1.8.0",
         "1.9.0",
-        "1.10.0"
+        "1.10.0",
+        "1.11.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -1754,5 +1997,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.10.0"
+  "x-anvilate-version": "1.11.0"
 }

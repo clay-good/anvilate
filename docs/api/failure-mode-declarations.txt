@@ -42,6 +42,7 @@ optomechanics.obscuration_scorecard
 aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
 callouts.callout_scorecard
+compliance.screen_material_needs
 cold_formed_steel.dsm_scorecard
 dynamics.frequency_scorecard
 dynamics.half_sine_shock_scorecard

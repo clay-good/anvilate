@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Seventy-four pages, arranged by what you are trying to do. The [README](../README.md) is the
+Seventy-five pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -15,6 +15,7 @@ You have a part and you want a verdict.
 | [Interfaces](interfaces.md) | What each item offers a product, typed: the vocabulary, which kinds meet, and how a connection is checked. |
 | [Release package](release-package.md) | A product handed over: the release gate, the indented BOM, the buy list, part and assembly STEP, parameter tables, and the hashed manifest. |
 | [Product screening](product-screening.md) | Checks only a whole product has: mass properties per node, growth by maturity, tip-over, clearance between items, and mobility. |
+| [Material compliance](material-compliance.md) | What a product's materials are made of and withstand: composition by CAS number, recycled content by mass, and each material need against a cited attribute. |
 | [Purchased components](components.md) | A bought part as a record with sourced ratings, placed by its holes and checked against what the product asks of it. |
 | [Combinations](combinations.md) | Several parts placed by the features they share: the four mates, what is checked where parts meet, and five worked examples with pictures. |
 | [Parts you can ask for](parts-catalog.md) | Every part Anvilate draws, with a picture of each and the fields it takes. Generated from the pattern registry. |

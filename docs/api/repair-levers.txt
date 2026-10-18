@@ -128,6 +128,7 @@ assembly.screen_swing_arc -> handle_length (directional)
 aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
 callouts.callout_scorecard
+compliance.screen_material_needs
 cold_formed_steel.dsm_scorecard
 dfm.screen_dfm
 dynamics.frequency_scorecard

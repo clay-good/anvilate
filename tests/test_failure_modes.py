@@ -618,8 +618,11 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
     # applicability key can say "a part declaring a keepout" or "a part a beam passes".
     # Declaring a mode for either would be one the catalogue invented to shrink this.
     # It rose once, from 57, with the fourteen everyday parts: drawn and not checked, so
-    # each screen declares no mode by construction. The enclosure lid made it 72.
-    assert len(none) <= 72, f"the declares-none list grew to {len(none)}"
+    # each screen declares no mode by construction. The enclosure lid made it 72, and
+    # material needs 73: it holds a declared attribute against a declared limit, and the
+    # mechanism behind each (softening, outgassing, burning) is the material's, not one the
+    # catalogue carries for a part.
+    assert len(none) <= 73, f"the declares-none list grew to {len(none)}"
     # The page quotes both counts, and it said "five" while fourteen screens declared one.
     page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
     stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"

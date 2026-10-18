@@ -23,6 +23,7 @@ screening:
 | caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` |
 | thermal mismatch | for each connection between two catalog parts of different materials, \|α₁ − α₂\| · ΔT · span, the span between the outermost mated holes or across where they meet, against the declared slip, citing both coefficients | `thermal` |
 | stack-up chains | a 1D chain through items and connections, worst-case and root-sum-square, and a seeded Monte Carlo run when declared; judged on the worst case, with each link's share and the governing link | `chains` |
+| material needs | each declared need against the attribute each item's material declares, citing both; see [material compliance](material-compliance.md) | `materials`, `needs` |
 | mobility | Grübler–Kutzbach, M = 6(n − 1 − j) + Σf, over bodies joined rigidly into links | declared joints |
 
 A body rests on the bodies whose tops meet its bottom over a shared plan area, and the

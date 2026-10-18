@@ -121,6 +121,15 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.11.0: materials and what they must withstand
+
+`screening` gains `materials` (each by the id its items name: its composition by CAS number
+and mass fraction with its source, whether it is plastic, its recycled fraction, and its
+attributes, each cited) and `needs` (service temperature, sterilization, vacuum outgassing,
+flammability class and body contact, each a limit with its source, optionally limited to
+some `items`). Placeholder and component definitions gain `material`. An older product
+document reads unchanged.
+
 ### Product document 1.10.0: stack-up chains through a product
 
 `screening` gains `chains`: each a name, its `links` (a part's dimension by item and tag,
