@@ -290,7 +290,8 @@
             "part",
             "product",
             "placeholder",
-            "component"
+            "component",
+            "reference"
           ],
           "title": "Kind",
           "type": "string"
@@ -687,10 +688,10 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:node-card:1.1.0",
+  "$id": "urn:anvilate:schema:node-card:1.2.0",
   "$ref": "#/$defs/NodeCard",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate node card: one node of a placed product, the checks it owns and its children's cards, with its status the worst of them; not evaluated is never a pass. Generated from anvilate.product.NodeCard.",
   "title": "node-card",
-  "x-anvilate-version": "1.1.0"
+  "x-anvilate-version": "1.2.0"
 }

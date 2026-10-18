@@ -121,6 +121,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.6.0: a reference assembly
+
+A definition may be a `reference`: an existing STEP assembly by `file`, with the least
+`clearance` the product must keep to it, under an identity whose source is `reference`.
+Product summary 1.2.0, node card 1.2.0 and CLI output 1.66.0 move with it: a node's kind
+may be `reference`. An older product document reads unchanged.
+
 ### CLI output 1.65.0: `verify` reads a release package
 
 `anvilate verify <folder>` on a folder holding a `manifest.json` checks every listed file

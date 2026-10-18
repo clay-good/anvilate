@@ -170,6 +170,7 @@ components.Demand
 components.VendorModel
 components.ComponentRecord
 components.draft_component
+context.AssemblyComponent
 context.AssemblyOccurrence
 context.CadFacts
 context.ContextError
@@ -185,10 +186,12 @@ context.ProfileHole
 context.ReadingComparison
 context.ReadingReport
 context.SolidFacts
+context.StepAssembly
 context.compare_readings
 context.context_roots
 context.inventory
 context.read_cad_file
+context.read_step_assembly
 context.resolve_in_context
 context.seed_part
 context.set_context_roots
@@ -531,6 +534,7 @@ product.ItemSource
 product.ItemIdentity
 product.Placeholder
 product.PlaceholderHole
+product.Reference
 product.Definition
 product.LinearPattern
 product.CircularPattern

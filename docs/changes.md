@@ -66,4 +66,26 @@ released revision, naming it and what changed:
 `plate (100-1) changed under revision B: element_params.holes[0].x.magnitude 0.0 → 5.0`.
 Exporting unchanged content again writes byte-identical files, which CI holds.
 
-Not yet built: cost deltas, and reading an existing STEP assembly as a reference item.
+## Designing against an existing machine
+
+`read_step_assembly(path)` reads a STEP assembly's tree: each solid at its path from the
+root, its product name, and its placed envelope in millimetres, with the unit the file was
+written in. Two components of one parent under one name are both reported, the second as
+`name[2]`, and the duplication is named.
+
+A product can place such an assembly as a `reference` item, read from its folder:
+
+```yaml
+definitions:
+  - id: machine
+    identity: {description: existing cart, source: reference}
+    reference: {file: machine.step, clearance: {magnitude: 5, unit: mm}}
+```
+
+It is placed and mated by its envelope's faces like any item, and every solid in it takes
+part in interference. Its card's `clearance` entry names the nearest approach of any of the
+product's own items to any of its solids, judged against the declared `clearance`; with
+none declared the entry is not evaluated. It is never made: it is left out of the release's
+STEP, is a reference line on the BOM, and adds nothing to the mass.
+
+Not yet built: cost deltas.

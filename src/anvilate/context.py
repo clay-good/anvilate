@@ -38,6 +38,7 @@ from ._models import FrozenMap, Named, Provenance, StatableModel
 from .refusal import RefusalError, Remedy
 
 __all__ = [
+    "AssemblyComponent",
     "AssemblyOccurrence",
     "CadFacts",
     "ContextError",
@@ -53,10 +54,12 @@ __all__ = [
     "ReadingComparison",
     "ReadingReport",
     "SolidFacts",
+    "StepAssembly",
     "compare_readings",
     "context_roots",
     "inventory",
     "read_cad_file",
+    "read_step_assembly",
     "resolve_in_context",
     "seed_part",
     "set_context_roots",
@@ -2043,3 +2046,136 @@ def compare_readings(spec: Any, facts: CadFacts) -> ReadingReport:
             )
         )
     return ReadingReport(**common, compared=tuple(compared), not_measured=tuple(unmeasured))
+
+
+class AssemblyComponent(StatableModel):
+    """One solid of a STEP assembly, where the assembly puts it.
+
+    ``path`` is the chain of component names from the root, unique: a second child of one
+    parent with the same name is ``name[2]``. ``product`` is the product the file names it
+    after. The box is the placed solid's, in millimetres.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path: Provenance
+    product: str
+    box_min_mm: tuple[float, float, float]
+    box_max_mm: tuple[float, float, float]
+
+
+class StepAssembly(StatableModel):
+    """A STEP assembly's tree, measured: every solid at its path, and any duplicated names."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    file: Provenance
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    unit_written: str | None
+    components: tuple[AssemblyComponent, ...] = Field(max_length=4096)
+    duplicates: tuple[str, ...] = ()
+
+
+def read_step_assembly(path: str | Path) -> StepAssembly:
+    """Read a STEP assembly's tree: each solid's path, product name and placed envelope.
+
+    Two components of one parent under one name are both reported, the second as
+    ``name[2]``, and the duplication is named in ``duplicates``.
+    """
+    source = Path(path)
+    solids, duplicates = _assembly_solids(source)
+    sha256, _counted = _digest(source)
+    text = source.read_bytes().decode("utf-8", errors="replace")  # a unit name, nothing more
+    unit = _step_length_unit(text)
+    components = []
+    for component_path, product, shape in solids:
+        box = shape.bounding_box()
+        components.append(AssemblyComponent(
+            path=component_path, product=product,
+            box_min_mm=tuple(round(float(v), 6) + 0.0 for v in (box.min.X, box.min.Y, box.min.Z)),  # type: ignore[arg-type]
+            box_max_mm=tuple(round(float(v), 6) + 0.0 for v in (box.max.X, box.max.Y, box.max.Z)),  # type: ignore[arg-type]
+        ))  # fmt: skip
+    return StepAssembly(file=source.name, sha256=sha256,
+                        unit_written=unit[0] if unit is not None else None,
+                        components=tuple(components), duplicates=tuple(duplicates))  # fmt: skip
+
+
+def _assembly_solids(source: Path) -> tuple[list[tuple[str, str, Any]], list[str]]:
+    """Every solid of the STEP assembly at ``source``: its unique path, product, placed shape."""
+    from build123d import Shape
+    from OCP.IFSelect import IFSelect_ReturnStatus  # type: ignore[import-untyped]
+    from OCP.STEPCAFControl import STEPCAFControl_Reader  # type: ignore[import-untyped]
+    from OCP.TCollection import TCollection_ExtendedString  # type: ignore[import-untyped]
+    from OCP.TDataStd import TDataStd_Name  # type: ignore[import-untyped]
+    from OCP.TDF import TDF_Label, TDF_LabelSequence  # type: ignore[import-untyped]
+    from OCP.TDocStd import TDocStd_Document  # type: ignore[import-untyped]
+    from OCP.TopLoc import TopLoc_Location  # type: ignore[import-untyped]
+    from OCP.XCAFApp import XCAFApp_Application  # type: ignore[import-untyped]
+    from OCP.XCAFDoc import XCAFDoc_DocumentTool  # type: ignore[import-untyped]
+
+    from . import geometry
+
+    if not source.is_file():
+        raise _refuse(f"{str(source)!r} is not a file", action="replace", subject="path",
+                      source="a STEP assembly file")  # fmt: skip
+    if _kind_of(source) != "step":
+        raise _refuse(f"{source.name} is not a STEP file", action="replace", subject="path",
+                      source="a STEP assembly file")  # fmt: skip
+    size = source.stat().st_size
+    if size > MAX_BYTES["step"]:
+        raise _refuse(f"{source.name} is {size / 1e6:.0f} MB, past the "
+                      f"{MAX_BYTES['step'] / 1e6:.0f} MB a STEP read accepts", action="replace",
+                      subject="path", source="a smaller export of the assembly")  # fmt: skip
+    with geometry._STEP_IO_LOCK:
+        document = TDocStd_Document(TCollection_ExtendedString("XmlOcaf"))
+        application = XCAFApp_Application.GetApplication_s()
+        application.NewDocument(TCollection_ExtendedString("MDTV-XCAF"), document)
+        application.InitDocument(document)
+        reader = STEPCAFControl_Reader()
+        reader.SetNameMode(True)
+        if reader.ReadFile(str(source)) != IFSelect_ReturnStatus.IFSelect_RetDone or not (
+            reader.Transfer(document)
+        ):
+            raise _refuse(f"{source.name} does not read as a STEP file", action="replace",
+                          subject="path", source="a STEP assembly file")  # fmt: skip
+        tool = XCAFDoc_DocumentTool.ShapeTool_s(document.Main())
+
+        def name(label: Any) -> str:
+            attribute = TDataStd_Name()
+            if label.FindAttribute(TDataStd_Name.GetID_s(), attribute):
+                return str(attribute.Get().ToExtString()).strip() or "unnamed"
+            return "unnamed"
+
+        found: list[tuple[str, str, Any]] = []
+        duplicates: list[str] = []
+
+        def walk(label: Any, where: Any, path: str) -> None:
+            if len(found) > 4096:
+                raise _refuse(
+                    f"{source.name} holds more than 4096 solids", action="replace",
+                    subject="path", source="a smaller export of the assembly",
+                )  # fmt: skip
+            if not tool.IsAssembly_s(label):
+                shape: Any = Shape(tool.GetShape_s(label).Moved(where))
+                found.append((path, name(label), shape))
+                return
+            children = TDF_LabelSequence()
+            tool.GetComponents_s(label, children, False)
+            seen: dict[str, int] = {}
+            for index in range(1, children.Length() + 1):
+                child = children.Value(index)
+                referred = TDF_Label()
+                tool.GetReferredShape_s(child, referred)
+                own = name(child) if name(child) != "unnamed" else name(referred)
+                seen[own] = seen.get(own, 0) + 1
+                unique = own if seen[own] == 1 else f"{own}[{seen[own]}]"
+                if seen[own] == 2:
+                    duplicates.append(f"{path}/{own} names {seen[own]} or more components")
+                walk(referred, where.Multiplied(tool.GetLocation_s(child)), f"{path}/{unique}")
+
+        roots = TDF_LabelSequence()
+        tool.GetFreeShapes(roots)
+        for index in range(1, roots.Length() + 1):
+            root = roots.Value(index)
+            walk(root, TopLoc_Location(), name(root))
+    return found, duplicates

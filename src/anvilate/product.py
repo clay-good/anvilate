@@ -71,6 +71,7 @@ __all__ = [
     "ItemIdentity",
     "Placeholder",
     "PlaceholderHole",
+    "Reference",
     "Definition",
     "LinearPattern",
     "CircularPattern",
@@ -105,7 +106,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.5.0"] = "1.5.0"
+PRODUCT_VERSION: Literal["1.6.0"] = "1.6.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -208,6 +209,31 @@ class Placeholder(StatableModel):
 from .components import ComponentRecord, Demand  # noqa: E402
 
 
+class Reference(StatableModel):
+    """An existing assembly the product is designed against, read from a STEP file.
+
+    ``file`` is the STEP assembly's path relative to the product's folder. It is placed and
+    mated by its envelope's faces like any item, every solid in it is checked for
+    interference, and its ``clearance`` is the least gap the product's own items must keep
+    to it. It is never made: it is out of the release's STEP and is a reference line on the
+    BOM.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    file: Named
+    clearance: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _a_gap(self) -> Reference:
+        if self.clearance is not None and not (
+            self.clearance.has_dimension("[length]") and self.clearance.magnitude >= 0
+        ):
+            raise _refuse(f"reference clearance is {self.clearance}; it is a length, not "
+                          "negative", subject="reference.clearance")  # fmt: skip
+        return self
+
+
 class Definition(StatableModel):
     """One item defined once: a catalog part's spec, a sub-product, a placeholder, or a
     purchased component.
@@ -225,18 +251,19 @@ class Definition(StatableModel):
     product: Named | None = None
     placeholder: Placeholder | None = None
     component: ComponentRecord | None = None
+    reference: Reference | None = None
     demands: tuple[Demand, ...] = Field(default=(), max_length=32)
     # A catalog part's interfaces, bound to its tagged features and read from the built part.
     interfaces: tuple[PartInterface, ...] = Field(default=(), max_length=32)
 
     @model_validator(mode="after")
     def _exactly_one_kind(self) -> Definition:
-        kinds = [k for k in ("spec", "product", "placeholder", "component")
+        kinds = [k for k in ("spec", "product", "placeholder", "component", "reference")
                  if getattr(self, k) is not None]  # fmt: skip
         if len(kinds) != 1:
             raise _refuse(
                 f"definition '{self.id}' states {kinds or 'none'} of spec, product, "
-                "placeholder and component; a definition is exactly one of them",
+                "placeholder, component and reference; a definition is exactly one of them",
                 subject="definitions[].spec",
             )
         if self.interfaces and self.spec is None:
@@ -251,6 +278,10 @@ class Definition(StatableModel):
             raise _refuse(f"definition '{self.id}' states demands and is not a component; "
                           "demands are what a product asks of a bought component",
                           subject="definitions[].demands")  # fmt: skip
+        if self.reference is not None and self.identity.source is not ItemSource.REFERENCE:
+            raise _refuse(f"definition '{self.id}' is a reference assembly and its identity "
+                          f"says {self.identity.source.value}; a reference is neither made "
+                          "nor bought", subject="definitions[].identity.source")  # fmt: skip
         if self.component is not None:
             if self.identity.source is not ItemSource.BUY:
                 raise _refuse(f"definition '{self.id}' is a purchased component and its "
@@ -270,6 +301,8 @@ class Definition(StatableModel):
             return "part"
         if self.product is not None:
             return "product"
+        if self.reference is not None:
+            return "reference"
         return "component" if self.component is not None else "placeholder"
 
 
@@ -517,9 +550,9 @@ class Product(StatableModel):
 
     # 1.1.0 adds a definition's component and demands, 1.2.0 a component's vendor model and
     # drafted state, 1.3.0 interfaces, connections and open interfaces, and 1.4.0 a catalog
-    # part's interfaces bound to its features, and 1.5.0 a joint on a connection; an older
-    # document reads unchanged.
-    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"] = (
+    # part's interfaces bound to its features, 1.5.0 a joint on a connection, and 1.6.0 a
+    # reference assembly; an older document reads unchanged.
+    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"] = (
         PRODUCT_VERSION
     )
     name: Named
@@ -915,7 +948,7 @@ class ProductNode(StatableModel):
 
     path: Named
     definition: Named
-    kind: Literal["part", "product", "placeholder", "component"]
+    kind: Literal["part", "product", "placeholder", "component", "reference"]
     part_number: Named
     provisional: bool
     revision: str | None
@@ -940,6 +973,8 @@ def _content(definition: Definition, library: Mapping[str, Product]) -> str:
         payload: Any = {"spec": dict(definition.spec)}
     elif definition.placeholder is not None:
         payload = {"placeholder": definition.placeholder.model_dump(mode="json")}
+    elif definition.reference is not None:
+        payload = {"reference": definition.reference.model_dump(mode="json")}
     elif definition.component is not None:
         payload = {
             "component": definition.component.model_dump(mode="json"),
@@ -1047,7 +1082,7 @@ class PartsListLine(StatableModel):
     revision: str | None
     description: Named
     source: ItemSource
-    kind: Literal["part", "product", "placeholder", "component"]
+    kind: Literal["part", "product", "placeholder", "component", "reference"]
     quantity: int
 
     def __str__(self) -> str:
@@ -1116,7 +1151,7 @@ class NodeCard(StatableModel):
     model_config = ConfigDict(frozen=True)
 
     path: Named
-    kind: Literal["part", "product", "placeholder", "component"]
+    kind: Literal["part", "product", "placeholder", "component", "reference"]
     entries: tuple[ScorecardEntry, ...]
     children: tuple[NodeCard, ...] = ()
 
@@ -1429,6 +1464,7 @@ class _Leaf:
         built: Any = None,
         where: Any = None,
         kind: str = "",
+        parts: tuple[tuple[str, Any], ...] = (),
     ) -> None:
         self.path, self.shape, self.placeholder, self.mass = path, shape, placeholder, mass
         # The centre of mass as a vertex, moved with the shape; ``assumed`` when it is a
@@ -1438,11 +1474,14 @@ class _Leaf:
         # applied to it since, so a repeated item is one STEP product placed many times.
         self.key, self.built, self.where = key, built if built is not None else shape, where
         self.kind = kind or ("placeholder" if placeholder else "part")
+        # A reference's solids, each at its path in the file, moved with the leaf.
+        self.parts = parts
 
     def moved(self, path: str, where: Any) -> _Leaf:
         return _Leaf(path, self.shape.moved(where), self.placeholder, self.mass,
                      self.com.moved(where), self.assumed, self.entries, self.key, self.built,
-                     where if self.where is None else where * self.where, self.kind)  # fmt: skip
+                     where if self.where is None else where * self.where, self.kind,
+                     tuple((name, part.moved(where)) for name, part in self.parts))  # fmt: skip
 
 
 class _Assembly:
@@ -1560,6 +1599,8 @@ def _placed_leaves(
                 return built, spec, _Leaf(path, built.shape, False, mass,
                                           Vertex(centre.X, centre.Y, centre.Z), False,
                                           screen_spec(spec).entries)  # fmt: skip
+            if definition.reference is not None:
+                return _reference_built(definition.reference, folder, path)
             if definition.component is not None:
                 from .components import _rating_entries
 
@@ -1606,8 +1647,13 @@ def _placed_leaves(
             below: dict[str, tuple[ScorecardEntry, ...]] = {}
             below_rows: dict[str, tuple[InterfaceRow, ...]] = {}
             below_joints: dict[str, tuple[PlacedJoint, ...]] = {}
-            if definition.kind in ("part", "placeholder", "component"):
+            if definition.kind in ("part", "placeholder", "component", "reference"):
                 key = _content(definition, shelf)
+                if definition.reference is not None and folder is not None:
+                    # The reference is read from its file: the file's state is in the key.
+                    held_file = folder / definition.reference.file
+                    key += ":" + (hashlib.sha256(held_file.read_bytes()).hexdigest()
+                                  if held_file.is_file() else "missing")  # fmt: skip
                 model = definition.component.model if definition.component is not None else None
                 if model is not None and folder is not None:
                     # The vendor file is read on every build: its state is part of the key.
@@ -1621,7 +1667,8 @@ def _placed_leaves(
                     reused.add(key)
                 built, spec, leaf = store[key]
                 inner = [_Leaf(path, leaf.shape, leaf.placeholder, leaf.mass, leaf.com,
-                               leaf.assumed, leaf.entries, key, kind=leaf.kind)]  # fmt: skip
+                               leaf.assumed, leaf.entries, key, kind=leaf.kind,
+                               parts=leaf.parts)]  # fmt: skip
             else:
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
@@ -1668,7 +1715,8 @@ def _placed_leaves(
                                for key, held in below_joints.items()})  # fmt: skip
         in_order = [derived[i] for i in range(len(current.connections))]
         joints[prefix], sweeps = _joints(current, placed, resolved, leaves, prefix)
-        extra[prefix] = (*_connection_entries(current, in_order, placed, resolved), *sweeps)
+        gaps = _clearances(current, leaves, prefix)
+        extra[prefix] = (*_connection_entries(current, in_order, placed, resolved), *sweeps, *gaps)
         tables[prefix] = _interface_rows(current, extra[prefix], resolved)
         shape = Compound([leaf.shape for leaf in leaves])
         return _Assembly(shape, leaves, extra, tables, joints)
@@ -1722,7 +1770,9 @@ def place_product(
         interference=interference,
         mass_kg=total,
         mass_rests_on=tuple(holders),
-        mass_unknown=tuple(leaf.path for leaf in leaves if leaf.mass is None),
+        mass_unknown=tuple(
+            leaf.path for leaf in leaves if leaf.mass is None and leaf.kind != "reference"
+        ),
         center_of_mass_mm=centre,
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
         unused_parameters=product.layout.unused if product.layout is not None else (),
@@ -1857,6 +1907,92 @@ def _interface_rows(
         rows.append(InterfaceRow(on=left.at, on_kind=interface.kind, on_values=values(interface),
                                  on_owner=owners[item], reason=left.reason))  # fmt: skip
     return tuple(rows)
+
+
+_READ_FROM_FILE = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="the existing assembly as its file states it, read rather than computed",
+)
+_NEEDS_A_CLEARANCE = Need(
+    declaration="definitions[].reference.clearance",
+    takes="the least gap the product's own items must keep to the existing assembly",
+    dimension="[length]",
+    units=("mm", "in"),
+    sources=(ValueSource.USER, ValueSource.STANDARD),
+)
+
+
+def _reference_built(reference: Reference, folder: Any, path: str) -> tuple[Any, Any, _Leaf]:
+    """An existing assembly read from its STEP file: one body of all its solids, placed."""
+    from build123d import Compound, Vertex
+
+    from .context import ContextError, _assembly_solids
+    from .geometry import BuiltGeometry
+
+    if folder is None:
+        raise _refuse(
+            f"'{path}' is a reference read from {reference.file}, and no folder was given to "
+            "read it from; place the product with root", subject="root",
+        )  # fmt: skip
+    try:
+        solids, duplicates = _assembly_solids(folder / reference.file)
+    except ContextError as refused:
+        raise _refuse(f"'{path}' cannot read {reference.file}: {refused}",
+                      subject="definitions[].reference.file") from refused  # fmt: skip
+    if not solids:
+        raise _refuse(f"'{path}': {reference.file} holds no solid",
+                      subject="definitions[].reference.file")  # fmt: skip
+    shape = Compound([shape for _p, _n, shape in solids])
+    built = BuiltGeometry(name="reference", pattern="reference", shape=shape, faces={},
+                          dimensions_mm={}, features=())  # fmt: skip
+    note = f"; its file repeats names: {'; '.join(duplicates)}" if duplicates else ""
+    entry = ScorecardEntry(
+        name="reference",
+        status=CheckStatus.PASS,
+        detail=f"the existing assembly in {reference.file}, {len(solids)} solid"
+        f"{'s' if len(solids) != 1 else ''}, read to check against and not itself made{note}",
+        underived=_READ_FROM_FILE,
+    )
+    return built, None, _Leaf(path, shape, False, None, Vertex(0, 0, 0), False, (entry,),
+                              kind="reference",
+                              parts=tuple((name, part) for name, _n, part in solids))  # fmt: skip
+
+
+def _clearances(current: Product, leaves: list[_Leaf], prefix: str) -> tuple[ScorecardEntry, ...]:
+    """For each reference placed here, the nearest approach of every other item to its solids."""
+    definitions = {d.id: d for d in current.definitions}
+    entries = []
+    for instance in current.instances:
+        reference = definitions[instance.item].reference
+        if reference is None:
+            continue
+        base = f"{prefix}/{instance.name}"
+        mine = [leaf for leaf in leaves if leaf.path == base or leaf.path.startswith(base + "[")]
+        others = [leaf for leaf in leaves if leaf.kind != "reference"]
+        nearest: tuple[float, str, str] | None = None
+        for held in mine:
+            for name, part in held.parts:
+                for other in others:
+                    gap = float(part.distance_to(other.shape))
+                    if nearest is None or gap < nearest[0]:
+                        nearest = (gap, f"{held.path}/{name}", other.path)
+        if nearest is None:
+            continue
+        said = f"{nearest[2]} comes within {nearest[0]:.4g} mm of {nearest[1]}"
+        if reference.clearance is None:
+            entries.append(ScorecardEntry(
+                name=f"{instance.name} clearance", status=CheckStatus.NOT_EVALUATED,
+                detail=f"{said}; no least clearance is declared to judge it by",
+                needs=(_NEEDS_A_CLEARANCE,),
+            ))  # fmt: skip
+            continue
+        least = reference.clearance.to("mm").magnitude
+        entries.append(ScorecardEntry(
+            name=f"{instance.name} clearance",
+            status=CheckStatus.PASS if nearest[0] >= least else CheckStatus.FAIL,
+            detail=f"{said}, against the {least:g} mm it must keep", underived=_SWEPT,
+        ))  # fmt: skip
+    return tuple(entries)
 
 
 _SWEEP_STEP_DEG = 15.0
@@ -2079,6 +2215,7 @@ def write_product_step(
     authorization: Any,
     library: Mapping[str, Product] | None = None,
     cache: BuildCache | None = None,
+    root: Any = None,
 ) -> Any:
     """Write the placed product as one STEP AP242 assembly, each item one named product.
 
@@ -2086,7 +2223,9 @@ def write_product_step(
     used twice is one product placed twice. Each product is named by its part number and
     description, provisional numbers included. ``authorization`` is the export gate's
     verdict on the product's card (:meth:`NodeCard.flattened`); a product resting on
-    placeholders is not evaluated, so it is written only watermarked unvalidated.
+    placeholders is not evaluated, so it is written only watermarked unvalidated. A
+    reference item is never written: it is what the product is checked against. ``root`` is
+    the folder the product's files (a reference, a vendor model) are read from.
     """
     from build123d import Location
 
@@ -2094,9 +2233,13 @@ def write_product_step(
 
     tree = product_tree(product, library=library)
     nodes = {node.path: node for node in tree.walk()}
-    leaves, _rebuilt, _reused, _extra, _tables, _joints = _placed_leaves(product, library, cache)
+    leaves, _rebuilt, _reused, _extra, _tables, _joints = _placed_leaves(
+        product, library, cache, root
+    )
     bodies = []
     for leaf in leaves:
+        if leaf.kind == "reference":
+            continue  # an existing assembly the product is checked against, never made
         node = nodes[leaf.path]
         bodies.append((leaf.key, f"{node.part_number} {node.description}", leaf.built,
                        leaf.where if leaf.where is not None else Location()))  # fmt: skip

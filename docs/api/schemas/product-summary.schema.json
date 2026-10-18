@@ -61,7 +61,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-summary:1.1.0",
+  "$id": "urn:anvilate:schema:product-summary:1.2.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product summary: a product placed through its mates, one line per node of its tree with the node's path, part number, verdict, finding count and governing finding, the nodes left out to keep it bounded, and how to ask for one node's full card. Generated from anvilate.product.ProductSummary.",
@@ -116,5 +116,5 @@
   ],
   "title": "ProductSummary",
   "type": "object",
-  "x-anvilate-version": "1.1.0"
+  "x-anvilate-version": "1.2.0"
 }

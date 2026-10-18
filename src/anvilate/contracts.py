@@ -195,10 +195,10 @@ COMBINATION_SUMMARY_SCHEMA_VERSION = "1.0.0"
 
 # What ``build_combination`` returns for a product document: the bounded summary tree, and
 # one node's full card when the call names a node.
-PRODUCT_SUMMARY_SCHEMA_VERSION = "1.1.0"
+PRODUCT_SUMMARY_SCHEMA_VERSION = "1.2.0"
 # The product document itself: its version is the one ``anvilate_product`` states.
-PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.5.0"
-NODE_CARD_SCHEMA_VERSION = "1.1.0"
+PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.6.0"
+NODE_CARD_SCHEMA_VERSION = "1.2.0"
 
 
 def _artifact(

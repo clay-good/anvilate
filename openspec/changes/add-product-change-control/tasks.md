@@ -24,7 +24,7 @@ the STEP reader from `add-agent-context-intake`.
 
 ## 4. Existing assemblies
 
-- [ ] 4.1 STEP assembly tree reader: names, placements, envelopes, duplicate names
-- [ ] 4.2 Reference items: mates, interference and clearance; excluded from made outputs
-- [ ] 4.3 A docs page for changes: comparing revisions, reading the record, designing against
+- [x] 4.1 STEP assembly tree reader: names, placements, envelopes, duplicate names
+- [x] 4.2 Reference items: mates, interference and clearance; excluded from made outputs
+- [x] 4.3 A docs page for changes: comparing revisions, reading the record, designing against
       an existing machine

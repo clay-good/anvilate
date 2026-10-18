@@ -3759,7 +3759,8 @@ def _combine_product(args: argparse.Namespace, *, out, err) -> int:
         except ValueError as failure:
             print(f"anvilate combine: {failure}. Remove --unvalidated.", file=err)
             return EXIT_BAD_REQUEST
-        write_product_step(product, args.output, authorization=authorization, library=library)
+        write_product_step(product, args.output, authorization=authorization, library=library,
+                           root=args.combination.parent)  # fmt: skip
         print(f"wrote {args.output} ({authorization.status})", file=out)
     return EXIT_CODES[summary.status]
 

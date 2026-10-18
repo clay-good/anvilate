@@ -135,8 +135,11 @@ def release_blockers(product: Product, placed: Any, tree: ProductNode) -> tuple[
     for path, entry in placed.card.findings():
         if entry.name == "sourcing":
             blockers.append(f"{path} is unsourced")
-    blockers += [f"{node.path} has the provisional part number {node.part_number}"
-                 for node in tree.walk() if node.provisional]  # fmt: skip
+    blockers += [
+        f"{node.path} has the provisional part number {node.part_number}"
+        for node in tree.walk()
+        if node.provisional and node.kind != "reference"
+    ]
     return tuple(blockers)
 
 
@@ -196,7 +199,7 @@ def export_package(
         _write(out, f"parameters/{number}.csv", table, files, "parameters")
     assembly = out / "step" / f"{_safe(product.name)}.step"
     assembly.parent.mkdir(parents=True, exist_ok=True)
-    write_product_step(product, assembly, authorization=authorization, library=shelf)
+    write_product_step(product, assembly, authorization=authorization, library=shelf, root=root)
     files.append((assembly.relative_to(out).as_posix(), "assembly step"))
     manifest = Manifest(
         product=product.name,

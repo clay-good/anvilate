@@ -150,6 +150,12 @@ read layout parameters too, and gets the variant's values. A substitute that doe
 the holes or feature a mate uses is refused, naming the mate. A variant that overrides an
 undeclared parameter or substitutes an undefined item is refused.
 
+## Reference items
+
+A definition can be a `reference`: an existing STEP assembly the product is designed
+against, mated to and checked for clearance, and never made. See
+[Changes](changes.md#designing-against-an-existing-machine).
+
 ## Interfaces and connections
 
 Items can offer typed interfaces, and a product can connect them by name instead of naming
