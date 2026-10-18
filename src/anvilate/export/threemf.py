@@ -28,6 +28,7 @@ import io
 import zipfile
 from collections.abc import Sequence
 from math import isfinite
+from typing import Any
 from xml.sax.saxutils import escape, quoteattr
 
 from .. import __version__
@@ -50,7 +51,7 @@ def _threemf_refusal(message: str, *, subject: str, source: str) -> _ThreemfInpu
     )
 
 
-__all__ = ["THREEMF_STANDARD", "render_mesh_3mf"]
+__all__ = ["render_plate_3mf", "THREEMF_STANDARD", "render_mesh_3mf"]
 
 #: The standard a 3MF file from this module claims, as 3mf.io and ISO's catalogue name it.
 THREEMF_STANDARD = "ISO/IEC 25422:2025"
@@ -139,6 +140,14 @@ def render_mesh_3mf(
             subject="name",
             source=_PART_MARK_SOURCE,
         )
+    points, faces = _checked_mesh(vertices, triangles)
+    return _package([(name.strip(), points, faces, 1)], authorization=authorization)
+
+
+def _checked_mesh(
+    vertices: Sequence[tuple[float, float, float]], triangles: Sequence[tuple[int, int, int]]
+) -> tuple[list[Any], list[Any]]:
+    """The mesh as lists, refused with the first fault that would stop a printer."""
     points = [tuple(vertex) for vertex in vertices]
     faces = [tuple(triangle) for triangle in triangles]
     if len(points) < 4 or len(faces) < 4:
@@ -173,7 +182,50 @@ def render_mesh_3mf(
                 source=_MESH_SOURCE,
             )
     _closed_and_oriented(faces)  # type: ignore[arg-type]
+    return points, faces
 
+
+def render_plate_3mf(
+    *,
+    objects: Sequence[tuple[str, Sequence[Any], Sequence[Any], int]],
+    authorization: ExportAuthorization,
+    gap_mm: float = 5.0,
+) -> bytes:
+    """Several parts on one 3MF plate: one object per part, placed as many times as its count.
+
+    ``objects`` are (name, vertices, triangles, quantity), each mesh held to the same rules
+    as :func:`render_mesh_3mf`. The copies are set out side by side along x, ``gap_mm``
+    apart, so a slicer opens the plate with nothing overlapping.
+    """
+    if not isinstance(authorization, ExportAuthorization):
+        raise _threemf_refusal(
+            f"authorization must be an ExportAuthorization; got {authorization!r}",
+            subject="authorization",
+            source=_EXPORT_GATE_SOURCE,
+        )
+    if not objects:
+        raise _threemf_refusal("a plate holds at least one part", subject="objects",
+                               source=_MESH_SOURCE)  # fmt: skip
+    meshes = []
+    for name, vertices, triangles, quantity in objects:
+        if not isinstance(name, str) or not name.strip():
+            raise _threemf_refusal("each object's name must label it", subject="objects",
+                                   source=_PART_MARK_SOURCE)  # fmt: skip
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
+            raise _threemf_refusal(f"{name} is placed {quantity!r} times; a part on a plate is "
+                                   "placed at least once", subject="objects",
+                                   source=_PART_MARK_SOURCE)  # fmt: skip
+        points, faces = _checked_mesh(vertices, triangles)
+        meshes.append((name.strip(), points, faces, quantity))
+    return _package(meshes, authorization=authorization, gap_mm=gap_mm)
+
+
+def _package(
+    meshes: Sequence[tuple[str, list[Any], list[Any], int]],
+    *,
+    authorization: ExportAuthorization,
+    gap_mm: float = 5.0,
+) -> bytes:
     writer = f"anvilate {__version__} (anvilate.export.threemf)"
     metadata = [
         ("Application", writer),
@@ -186,23 +238,34 @@ def render_mesh_3mf(
         f'<model unit="millimeter" xml:lang="en-US" xmlns="{_CORE}" xmlns:anvilate="{_ANVILATE}">',
         *(f"<metadata name={quoteattr(key)}>{escape(value)}</metadata>" for key, value in metadata),
         "<resources>",
-        f'<object id="1" type="model" name={quoteattr(name.strip())}>',
-        "<mesh>",
-        "<vertices>",
-        *(
-            f'<vertex x="{_number(x)}" y="{_number(y)}" z="{_number(z)}"/>'
-            for x, y, z in points  # type: ignore[misc]
-        ),
-        "</vertices>",
-        "<triangles>",
-        *(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in faces),  # type: ignore[misc]
-        "</triangles>",
-        "</mesh>",
-        "</object>",
-        "</resources>",
-        '<build><item objectid="1"/></build>',
-        "</model>",
     ]
+    items: list[str] = []
+    cursor = 0.0
+    for index, (name, points, faces, quantity) in enumerate(meshes, start=1):
+        lines += [
+            f'<object id="{index}" type="model" name={quoteattr(name)}>',
+            "<mesh>",
+            "<vertices>",
+            *(f'<vertex x="{_number(x)}" y="{_number(y)}" z="{_number(z)}"/>'
+              for x, y, z in points),
+            "</vertices>",
+            "<triangles>",
+            *(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in faces),
+            "</triangles>",
+            "</mesh>",
+            "</object>",
+        ]  # fmt: skip
+        if len(meshes) == 1 and quantity == 1:
+            items.append(f'<item objectid="{index}"/>')
+            continue
+        low = min(x for x, _y, _z in points)
+        width = max(x for x, _y, _z in points) - low
+        for _copy in range(quantity):
+            shift = cursor - low
+            items.append(f'<item objectid="{index}" transform="1 0 0 0 1 0 0 0 1 '
+                         f'{_number(shift)} 0 0"/>')  # fmt: skip
+            cursor += width + gap_mm
+    lines += ["</resources>", "<build>", *items, "</build>", "</model>"]
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as package:
         for part, text in (

@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("build123d")
 
 from anvilate._models import parse_yaml  # noqa: E402
-from anvilate.product import parse_product  # noqa: E402
+from anvilate.product import Product, parse_product  # noqa: E402
 from anvilate.release import ReleaseRefused, export_package, verify_package  # noqa: E402
 from test_components import _record  # noqa: E402
 from test_product_cards import _box, _definition, _seat  # noqa: E402
@@ -55,7 +55,7 @@ def test_the_indented_bom_carries_level_parent_and_quantity(tmp_path):
     assert rail["make/buy"] == "buy" and rail["parent part number"].startswith("PROV-")
     plate = next(r for r in rows if r["description"] == "carriage plate")
     assert plate["material"] == "ASTM-A36" and plate["process"] == "cnc_milling"
-    assert plate["files"].startswith("step/PROV-") and plate["files"].endswith("_-.step")
+    assert plate["files"].startswith("machined/PROV-") and plate["files"].endswith("_-.step")
     assert (tmp_path / "bom.xlsx").read_bytes()[:2] == b"PK"
 
 
@@ -115,8 +115,10 @@ def test_a_released_product_is_marked_validated_and_each_part_is_named_by_number
     manifest = export_package(product, tmp_path, release=True)
     assert manifest.kind == "release" and manifest.blockers == () and manifest.revision == "A"
     paths = {f.path for f in manifest.files}
-    assert {"step/100-1_B.step", "step/100-2_B.step", "step/pair.step"} <= paths
-    assert "ANVILATE_EXPORT_STATUS=VALIDATED" in (tmp_path / "step" / "100-1_B.step").read_text()
+    assert {"machined/100-1_B.step", "machined/100-2_B.step", "step/pair.step"} <= paths
+    assert (
+        "ANVILATE_EXPORT_STATUS=VALIDATED" in (tmp_path / "machined" / "100-1_B.step").read_text()
+    )
 
 
 def test_a_file_edited_after_export_is_reported_by_path_and_both_hashes(tmp_path):
@@ -154,7 +156,9 @@ def test_the_docs_page_names_every_file_the_package_writes(tmp_path):
     page = (_ROOT / "docs" / "release-package.md").read_text()
     first_cells = re.findall(r"^\| (`[^|]+`) \|", page, re.M)
     named = {name for cell in first_cells for name in re.findall(r"`([^`]+)`", cell)}
-    shapes = {"bom.csv", "bom.xlsx", "buy.csv", "manifest.json",
+    shapes = {"bom.csv", "bom.xlsx", "buy.csv", "manifest.json", "bom-<profile>.csv",
+              "machined/<part number>_<revision>.step", ".html",
+              "laser/<part number>_<revision>.dxf", "laser/cut-list.csv", "print/plate.3mf",
               "step/<part number>_<revision>.step", "step/<product>.step",
               "parameters/<part number>.csv"}  # fmt: skip
     assert named == shapes
@@ -187,7 +191,7 @@ def _pair(hole_x: float = 0.0, revision: str = "B"):
 def test_a_silent_change_cannot_be_released_under_its_old_revision(tmp_path):
     baseline = export_package(_pair(), tmp_path / "rev-a", release=True)
     plate = next(item for item in baseline.items if item.item == "plate")
-    assert plate.revision == "B" and "step/100-1_B.step" in plate.files
+    assert plate.revision == "B" and "machined/100-1_B.step" in plate.files
     with pytest.raises(ReleaseRefused) as refused:
         export_package(_pair(hole_x=5.0), tmp_path / "rev-b", release=True, baseline=baseline)
     (blocker,) = refused.value.blockers
@@ -195,7 +199,7 @@ def test_a_silent_change_cannot_be_released_under_its_old_revision(tmp_path):
                        "element_params.holes[0].x.magnitude 0.0 → 5.0")  # fmt: skip
     revised = export_package(_pair(hole_x=5.0, revision="C"), tmp_path / "rev-c", release=True,
                              baseline=baseline)  # fmt: skip
-    assert revised.kind == "release" and "step/100-1_C.step" in {f.path for f in revised.files}
+    assert revised.kind == "release" and "machined/100-1_C.step" in {f.path for f in revised.files}
 
 
 def test_unchanged_content_regenerates_identical_files(tmp_path):
@@ -216,8 +220,93 @@ def test_a_product_is_compared_with_its_last_release(tmp_path):
     plate = items["plate"]
     assert plate.status == "changed" and plate.changes[0].startswith("element_params.holes[0].x")
     assert plate.evidence == ("content changed under part number 100-1 revision B, as released",)
-    assert "step/100-1_B.step" in plate.affected_files and "bom.csv" in plate.affected_files
+    assert "machined/100-1_B.step" in plate.affected_files and "bom.csv" in plate.affected_files
     assert items["top"].status == "unchanged" and record.mass_before_kg is None
     assert "the release records none to compare" in record.to_markdown()
     classified = compare_products(_pair(), _pair(hole_x=5.0), baseline=baseline)
-    assert "step/100-1_B.step" in {i.item: i for i in classified.items}["plate"].affected_files
+    assert "machined/100-1_B.step" in {i.item: i for i in classified.items}["plate"].affected_files
+
+
+def _routed_product() -> Product:
+    def spec(path: str, process: str) -> dict:
+        document = parse_yaml((_ROOT / path).read_text())
+        document["manufacturing"] = {"process": process}
+        return document
+
+    def part(id_: str, document: dict, number: str) -> dict:
+        return {"id": id_, "spec": document,
+                "identity": {"description": id_, "source": "make", "part_number": number,
+                             "revision": "A"}}  # fmt: skip
+
+    return parse_product({
+        "name": "routed",
+        "definitions": [part("base", spec("examples/base_plate.spec.yaml", "sheet_metal"), "300-1"),
+                        part("spacer", spec("examples/parts/spacer.spec.yaml", "fdm"), "300-2"),
+                        part("bracket", spec("examples/parts/sheet_metal_bracket.spec.yaml",
+                                             "sheet_metal"), "300-3")],
+        "instances": [{"name": "base", "item": "base"},
+                      {"name": "spacer", "item": "spacer",
+                       "pattern": {"kind": "linear", "count": 2, "direction": "x",
+                                   "spacing": {"magnitude": 40, "unit": "mm"}}},
+                      {"name": "bracket", "item": "bracket"}],
+        "ground": "base",
+        "mates": [*_seat("spacer", "base"), *_seat("bracket", "base")],
+    })  # fmt: skip
+
+
+def test_made_parts_are_routed_by_their_process(tmp_path):
+    import zipfile
+
+    manifest = export_package(_routed_product(), tmp_path, release=False)
+    roles = {f.path: f.role for f in manifest.files}
+    assert roles["laser/300-1_A.dxf"] == "profile dxf"
+    assert roles["laser/cut-list.csv"] == "cut list"
+    assert roles["print/plate.3mf"] == "print plate"
+    cut = {row["part number"]: row for row in _rows(tmp_path / "laser" / "cut-list.csv")}
+    assert (cut["300-1"]["quantity"], cut["300-1"]["file"]) == ("1", "laser/300-1_A.dxf")
+    assert cut["300-1"]["thickness mm"] == "25" and cut["300-3"]["thickness mm"] == "2"
+    with zipfile.ZipFile(tmp_path / "print" / "plate.3mf") as plate:
+        model = plate.read("3D/3dmodel.model").decode()
+    assert model.count("<object ") == 1 and model.count('<item objectid="1"') == 2
+    assert roles["laser/300-3_A.dxf"] == "profile dxf" and manifest.unrouted == ()
+
+
+def test_a_part_its_process_format_cannot_express_is_named_not_dropped(tmp_path):
+    product = _routed_product()
+    # an angle bracket declared laser-cut has no flat profile: its STEP goes out, and it is named
+    angle = parse_yaml((_ROOT / "examples" / "parts" / "angle_bracket.spec.yaml").read_text())
+    angle["manufacturing"] = {"process": "sheet_metal"}
+    document = product.model_dump(mode="json")
+    document["definitions"][2]["spec"] = angle
+    manifest = export_package(parse_product(document), tmp_path, release=False)
+    assert {f.path: f.role for f in manifest.files}["step/300-3_A.step"] == "part step"
+    assert manifest.unrouted[0].startswith("300-3: no profile DXF for its angle_bracket/1 pattern")
+
+
+def test_a_column_profile_writes_dotted_levels_and_its_own_spellings(tmp_path):
+    from anvilate.release import ColumnProfile
+
+    profile = ColumnProfile.model_validate({
+        "name": "erp", "level": "dotted", "make_buy": {"make": "M", "buy": "B"},
+        "columns": [{"field": "level", "header": "LVL"},
+                    {"field": "part number", "header": "ITEM"},
+                    {"field": "make/buy", "header": "SRC"},
+                    {"field": "quantity per parent", "header": "QTY"}],
+    })  # fmt: skip
+    export_package(_STAGE, tmp_path, release=False, profiles=[profile])
+    profiled = _rows(tmp_path / "bom-erp.csv")
+    assert list(profiled[0]) == ["LVL", "ITEM", "SRC", "QTY"]
+    assert [(r["LVL"], r["SRC"]) for r in profiled] == [
+        ("1", "M"),
+        ("2", "B"),
+        ("3", "M"),
+        ("4", "B"),
+    ]
+    assert _rows(tmp_path / "bom.csv")[1]["make/buy"] == "buy"  # the default BOM is unchanged
+
+
+def test_a_profile_naming_a_field_the_bom_does_not_carry_is_refused():
+    from anvilate.release import ColumnProfile
+
+    with pytest.raises(ValueError, match="asks for 'colour', which the BOM does not carry"):
+        ColumnProfile.model_validate({"name": "x", "columns": [{"field": "colour", "header": "C"}]})

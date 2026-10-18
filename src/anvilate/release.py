@@ -28,13 +28,13 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
-from ._models import EMPTY_MAP, FrozenMap, Named, StatableModel
+from ._models import EMPTY_MAP, FrozenMap, Named, StatableModel, each_one
 from .product import (
     Product,
     ProductNode,
@@ -49,6 +49,8 @@ from .scorecard import CheckStatus
 
 __all__ = [
     "ReleaseRefused",
+    "ProfileColumn",
+    "ColumnProfile",
     "ManifestFile",
     "ManifestItem",
     "Manifest",
@@ -78,6 +80,62 @@ class ReleaseRefused(RefusalError, ValueError):
             + ". Export a draft instead, or clear each blocker",
             remedies=(Remedy(action="clear", subject="each blocking path", source=_SOURCE),),
         )  # fmt: skip
+
+
+class ProfileColumn(StatableModel):
+    """One column of a profiled BOM: the BOM field it holds, under the template's header."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    field: Named
+    header: Named
+
+
+class ColumnProfile(StatableModel):
+    """A BOM in the user's template: its columns in order, its level form, its spellings.
+
+    ``level`` is ``integer`` (1, 2, 3) or ``dotted`` (``1.2.1``, the find numbers down the
+    tree). ``make_buy`` respells ``make``, ``buy`` and ``reference`` (``{make: M, buy: B}``).
+    A column naming a field the BOM does not carry is refused, naming it.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    columns: tuple[ProfileColumn, ...] = Field(min_length=1, max_length=len(BOM_COLUMNS))
+    level: Literal["integer", "dotted"] = "integer"
+    make_buy: FrozenMap[str, str] = Field(default_factory=lambda: EMPTY_MAP)
+
+    @model_validator(mode="after")
+    def _a_profile(self) -> ColumnProfile:
+        for column in self.columns:
+            if column.field not in BOM_COLUMNS:
+                raise _refuse(f"profile '{self.name}' asks for '{column.field}', which the BOM "
+                              f"does not carry; it carries {', '.join(BOM_COLUMNS)}",
+                              subject="columns")  # fmt: skip
+        unknown = sorted(set(self.make_buy) - {"make", "buy", "reference"})
+        if unknown:
+            raise _refuse(f"profile '{self.name}' respells {unknown}; make_buy respells make, "
+                          "buy and reference", subject="make_buy")  # fmt: skip
+        return self
+
+    def apply(
+        self, rows: Sequence[tuple[str, ...]], dotted: Sequence[str]
+    ) -> tuple[tuple[str, ...], list[tuple[str, ...]]]:
+        """The BOM's rows in this profile's headers, order and value forms."""
+        index = {field: i for i, field in enumerate(BOM_COLUMNS)}
+        cells = []
+        for row, path in zip(rows, dotted, strict=True):
+            out = []
+            for column in self.columns:
+                value = row[index[column.field]]
+                if column.field == "level" and self.level == "dotted":
+                    value = path
+                elif column.field == "make/buy":
+                    value = self.make_buy.get(value, value)
+                out.append(value)
+            cells.append(tuple(out))
+        return tuple(column.header for column in self.columns), cells
 
 
 class ManifestFile(StatableModel):
@@ -119,6 +177,8 @@ class Manifest(StatableModel):
     kind: Literal["release", "draft"]
     verdict: CheckStatus
     blockers: tuple[str, ...] = ()
+    # Parts whose process's format cannot express them, each with the reason.
+    unrouted: tuple[str, ...] = ()
     variants: tuple[str, ...] = ()
     files: tuple[ManifestFile, ...] = Field(max_length=4096)
     items: tuple[ManifestItem, ...] = Field(default=(), max_length=1024)
@@ -151,6 +211,7 @@ def export_package(
     library: Mapping[str, Product] | None = None,
     variants: bool = True,
     baseline: Manifest | None = None,
+    profiles: Sequence[ColumnProfile] = (),
 ) -> Manifest:
     """Write ``source`` (a Product, or a product document's path) into ``folder``.
 
@@ -158,7 +219,8 @@ def export_package(
     otherwise a draft is written. ``variants`` exports each declared variant's buy list
     and parameter columns with the base product's. ``baseline`` is the manifest of the last
     release: an item whose content changed while its part number and revision did not is a
-    blocker, named with what changed.
+    blocker, named with what changed. Each of ``profiles`` writes one more BOM,
+    ``bom-<name>.csv``, in that profile's columns and value forms.
     """
     from .export.gate import ExportAuthorization
 
@@ -172,6 +234,7 @@ def export_package(
     tree = product_tree(product, library=shelf)
     items = _items(product, shelf, tree)
     blockers = release_blockers(product, placed, tree)
+    profiles = tuple(each_one(profiles, ColumnProfile, named="profiles"))
     if baseline is not None:
         if not isinstance(baseline, Manifest):
             raise _refuse("baseline must be the Manifest of the last release", subject="baseline")
@@ -189,10 +252,13 @@ def export_package(
     if variants:
         chosen += [(f"{product.name}-{v.name}", resolve_variant(product, v.name))
                    for v in product.variants]  # fmt: skip
-    step_files = _part_steps(product, shelf, tree, out, authorization, files)
-    rows = _bom_rows(product, shelf, tree, placed, step_files)
+    step_files, unrouted = _route_parts(product, shelf, tree, out, authorization, files)
+    rows, dotted = _bom_rows(product, shelf, tree, placed, step_files)
     _write(out, "bom.csv", _csv(BOM_COLUMNS, rows), files, "bom")
     _write(out, "bom.xlsx", _xlsx(rows), files, "bom")
+    for profile in profiles:
+        columns, cells = profile.apply(rows, dotted)
+        _write(out, f"bom-{_safe(profile.name)}.csv", _csv(columns, cells), files, "bom")
     _write(out, "buy.csv", _csv(_BUY_COLUMNS, _buy_rows(chosen, shelf)), files, "buy list")
     for definition_id, table in _parameter_tables(chosen).items():
         number = _safe(_number(tree, definition_id))
@@ -207,8 +273,9 @@ def export_package(
         kind="release" if release else "draft",
         verdict=placed.card.status,
         blockers=blockers,
+        unrouted=tuple(unrouted),
         variants=tuple(name for name, _p in chosen[1:]),
-        items=tuple(_with_files(item, files, product.name) for item in items),
+        items=tuple(_with_files(item, files, product.name, step_files) for item in items),
         files=tuple(
             ManifestFile(path=p, role=role, sha256=_digest(out / p)) for p, role in sorted(files)
         ),  # fmt: skip
@@ -239,12 +306,17 @@ def _items(
     return tuple(items)
 
 
-def _with_files(item: ManifestItem, files: list[tuple[str, str]], product: str) -> ManifestItem:
+def _with_files(
+    item: ManifestItem, files: list[tuple[str, str]], product: str, routed: Mapping[str, str]
+) -> ManifestItem:
     """``item`` with every file of the package that contains or references it."""
     number = _safe(item.part_number)
+    own = routed.get(item.item.rpartition("/")[2])
+    shared = {"print/plate.3mf": "print/plate.3mf", "laser": "laser/cut-list.csv"}
     mine = [p for p, role in files
             if role in ("bom", "buy list") or p == f"step/{_safe(product)}.step"
-            or p.startswith(f"step/{number}_") or p == f"parameters/{number}.csv"]  # fmt: skip
+            or Path(p).name.startswith(f"{number}_") or p == f"parameters/{number}.csv"
+            or (own is not None and (p == own or p == shared.get(own.split("/")[0])))]  # fmt: skip
     return item.model_copy(update={"files": tuple(sorted(mine))})
 
 
@@ -343,33 +415,85 @@ def _xlsx(rows: list[tuple[str, ...]]) -> bytes:
     return _workbook((("BOM", [BOM_COLUMNS, *rows], numeric),))
 
 
-def _part_steps(
+_PRINTED = ("fdm", "sls")
+_PROFILE_CUT = ("sheet_metal",)
+_MACHINED = ("cnc_milling", "cnc_turning", "grinding", "wire_edm", "reaming")
+_CUT_COLUMNS = ("part number", "material", "thickness mm", "quantity", "file")
+
+
+def _route_parts(
     product: Product,
     shelf: Mapping[str, Product],
     tree: ProductNode,
     out: Path,
     authorization: Any,
     files: list[tuple[str, str]],
-) -> dict[str, str]:
-    """One STEP per catalog part definition, named by part number and revision."""
-    from .geometry import build_spec, write_step
+) -> tuple[dict[str, str], list[str]]:
+    """Each catalog part's files, in a folder for its declared process.
+
+    Printed parts go on one ``print/plate.3mf``, each placed as many times as the product
+    uses it; profile-cut parts get one DXF each in ``laser/`` with a cut list; machined parts
+    their STEP and drawing in ``machined/``; any other process its STEP in ``step/``. A part
+    the process's format cannot express is named in the second list with the reason.
+    """
+    from .changes import _definitions, _occurrences
+    from .export.dxf import render_geometry_dxf
+    from .export.threemf import render_plate_3mf
+    from .geometry import GeometryError, _mesh_for_3mf, build_spec, write_step
+    from .screening import screen_spec
+    from .sheet import part_sheet
     from .spec import parse_spec
 
     written: dict[str, str] = {}
-    for current in (product, *shelf.values()):
-        for definition in current.definitions:
-            if definition.spec is None or definition.id in written:
+    unrouted: list[str] = []
+    used = _occurrences(product, shelf)
+    plate: list[tuple[str, Any, Any, int]] = []
+    cut: list[tuple[str, ...]] = []
+    for key, definition in _definitions(product, shelf).items():
+        if definition.spec is None or key not in used or definition.id in written:
+            continue
+        number = _number(tree, definition.id)
+        stem = f"{_safe(number)}_{_safe(definition.identity.revision or '-')}"
+        spec = parse_spec(dict(definition.spec))
+        built = build_spec(spec)
+        process = str(spec.manufacturing.process)
+        count = len(used[key])
+        if process in _PRINTED:
+            vertices, triangles = _mesh_for_3mf(built)
+            plate.append((number, vertices, triangles, count))
+            written[definition.id] = "print/plate.3mf"
+            continue
+        if process in _PROFILE_CUT:
+            try:
+                drawing = render_geometry_dxf(geometry=built, authorization=authorization)
+            except (GeometryError, ValueError) as refused:
+                unrouted.append(f"{number}: no profile DXF for its {built.pattern} pattern "
+                                f"({refused})")  # fmt: skip
+            else:
+                name = f"laser/{stem}.dxf"
+                _write(out, name, drawing, files, "profile dxf")
+                written[definition.id] = name
+                dims = dict(built.dimensions_mm)
+                thickness = dims.get("thickness", dims.get("plate_thickness"))
+                cut.append((number, str(spec.material.ref),
+                            f"{thickness:g}" if thickness is not None else "",
+                            str(count), name))  # fmt: skip
                 continue
-            number = _number(tree, definition.id)
-            revision = definition.identity.revision or "-"
-            path = out / "step" / f"{_safe(number)}_{_safe(revision)}.step"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            spec = parse_spec(dict(definition.spec))
-            write_step(build_spec(spec), path, authorization=authorization,
-                       tolerances=spec.geometric_tolerances)  # fmt: skip
-            written[definition.id] = path.relative_to(out).as_posix()
-            files.append((written[definition.id], "part step"))
-    return written
+        folder = "machined" if process in _MACHINED else "step"
+        path = out / folder / f"{stem}.step"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_step(built, path, authorization=authorization, tolerances=spec.geometric_tolerances)
+        written[definition.id] = path.relative_to(out).as_posix()
+        files.append((written[definition.id], "part step"))
+        if folder == "machined":
+            sheet = part_sheet(spec, screen_spec(spec)).html
+            _write(out, f"machined/{stem}.html", sheet, files, "part drawing")
+    if plate:
+        _write(out, "print/plate.3mf", render_plate_3mf(objects=plate, authorization=authorization),
+               files, "print plate")  # fmt: skip
+    if cut:
+        _write(out, "laser/cut-list.csv", _csv(_CUT_COLUMNS, cut), files, "cut list")
+    return written, unrouted
 
 
 def _bom_rows(
@@ -378,16 +502,18 @@ def _bom_rows(
     tree: ProductNode,
     placed: Any,
     step_files: Mapping[str, str],
-) -> list[tuple[str, ...]]:
-    """The indented BOM: each distinct item under its parent once, with its quantity."""
+) -> tuple[list[tuple[str, ...]], list[str]]:
+    """The indented BOM, each distinct item under its parent once with its quantity, and each
+    line's level as a dotted path of find numbers (``1.2.1``)."""
     masses = {body.path: body.mass_kg for body in placed.bodies}
     owners: dict[str, Any] = {}
     for current in (product, *shelf.values()):
         for definition in current.definitions:
             owners.setdefault(definition.id, definition)
     rows: list[tuple[str, ...]] = []
+    dotted: list[str] = []
 
-    def walk(node: ProductNode, level: int) -> None:
+    def walk(node: ProductNode, level: int, prefix: str) -> None:
         grouped: dict[str, list[ProductNode]] = {}
         for child in node.children:
             grouped.setdefault(child.definition, []).append(child)
@@ -410,10 +536,11 @@ def _bom_rows(
                 f"{mass:.6g}" if mass is not None else "",
                 step_files.get(definition_id, ""),
             ))  # fmt: skip
-            walk(first, level + 1)
+            dotted.append(f"{prefix}.{find}" if prefix else str(find))
+            walk(first, level + 1, dotted[-1])
 
-    walk(tree, 1)
-    return rows
+    walk(tree, 1, "")
+    return rows, dotted
 
 
 def _buy_rows(

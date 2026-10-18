@@ -597,6 +597,8 @@ keepouts.screen_keepouts
 keepouts.keepout_label
 keepouts.write_keepout_step
 release.ReleaseRefused
+release.ProfileColumn
+release.ColumnProfile
 release.ManifestFile
 release.ManifestItem
 release.Manifest

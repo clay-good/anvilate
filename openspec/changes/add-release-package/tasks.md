@@ -19,14 +19,14 @@ Depends on `add-product-structure`, `add-purchased-components`, `add-product-scr
 
 - [x] 3.1 Indented BOM CSV and XLSX with the field list; find numbers shared with
       drawings
-- [ ] 3.2 Column profiles; profile schema; refusal of unknown fields
+- [x] 3.2 Column profiles; profile schema; refusal of unknown fields
 - [x] 3.3 Buy list summed across instances and exported variants
 
 ## 4. Routed outputs
 
-- [ ] 4.1 Profile-cut DXFs to shop conventions with cut list
-- [ ] 4.2 3MF print plate with quantities
-- [ ] 4.3 Machined parts: STEP and part drawing
+- [x] 4.1 Profile-cut DXFs to shop conventions with cut list
+- [x] 4.2 3MF print plate with quantities
+- [x] 4.3 Machined parts: STEP and part drawing
 - [x] 4.4 Driving-parameter CSVs, one column per variant
 
 ## 5. Drawings and manifest

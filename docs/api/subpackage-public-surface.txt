@@ -49,6 +49,7 @@ export.qif.qif_characteristic_mapping
 export.qif.qif_schema_issues
 export.threemf.THREEMF_STANDARD
 export.threemf.render_mesh_3mf
+export.threemf.render_plate_3mf
 packs._guarded.DESIGN_BASIS
 packs._guarded.DesignAllowable
 packs._guarded.GuardedInputs

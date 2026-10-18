@@ -3350,6 +3350,16 @@ def render_3mf(
     """
     from .export.threemf import render_mesh_3mf
 
+    vertices, triangles = _mesh_for_3mf(built, tolerance_mm)
+    return render_mesh_3mf(
+        vertices=vertices, triangles=triangles, name=built.name, authorization=authorization
+    )
+
+
+def _mesh_for_3mf(
+    built: BuiltGeometry, tolerance_mm: float = 0.01
+) -> tuple[list[tuple[float, float, float]], list[tuple[int, int, int]]]:
+    """``built`` tessellated, welded, and held to its own volume, for a 3MF object."""
     if not built.is_valid:
         raise _ExchangeGeometryError(
             "refusing to write invalid geometry",
@@ -3394,6 +3404,4 @@ def render_3mf(
             subject=f"the tessellated mesh for {built.name}",
             source="the closed, outward-facing 3MF mesh and 1% solid-volume agreement checks",
         )
-    return render_mesh_3mf(
-        vertices=vertices, triangles=triangles, name=built.name, authorization=authorization
-    )
+    return vertices, triangles

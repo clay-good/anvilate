@@ -424,12 +424,25 @@ def _export_entry_points() -> dict[str, object]:
 
 
 def _writes_a_file_or_document(function) -> bool:
-    """Whether the function's source contains a write or a serialize of an artifact.
+    """Whether the function's source, or a private helper of its module it calls, contains a
+    write or a serialize of an artifact.
 
     Source reading rather than a hand-kept list: the question is whether *this* function
-    emits something, and the answer is in its body.
+    emits something, and the answer is in its body. Its body alone missed a writer that hands
+    the write to a private helper (the 3MF writers share one packager), so a refactor that
+    moves the write out of the public function would have taken it off the gate's list.
     """
-    return _emits(inspect.getsource(function))
+    import re
+
+    source = inspect.getsource(function)
+    if _emits(source):
+        return True
+    module = inspect.getmodule(function)
+    for name in set(re.findall(r"\b(_[a-z]\w*)\(", source)):
+        helper = getattr(module, name, None)
+        if inspect.isfunction(helper) and _emits(inspect.getsource(helper)):
+            return True
+    return False
 
 
 def _emits(source: str) -> bool:
@@ -446,7 +459,7 @@ def test_every_export_entry_point_that_emits_an_artifact_takes_an_authorization(
         for name, fn in entry_points.items()
         if name.rsplit(".", 1)[-1] not in _NOT_AN_ARTIFACT_WRITER and _writes_a_file_or_document(fn)
     }
-    assert len(emitters) == 6, f"expected the six artifact writers, found {sorted(emitters)}"
+    assert len(emitters) == 7, f"expected the seven artifact writers, found {sorted(emitters)}"
     for name, function in sorted(emitters.items()):
         parameters = inspect.signature(function).parameters
         assert "authorization" in parameters, (
