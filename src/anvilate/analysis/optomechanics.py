@@ -37,6 +37,7 @@ from .o_ring import o_ring_gland_fill_fraction, o_ring_squeeze_fraction, o_ring_
 from .plate import simply_supported_circular_plate_uniform_load
 from .power_screw import power_screw_is_self_locking
 from .psychrometrics import dew_point_temperature, saturation_vapor_pressure
+from .random_vibration import miles_response_grms
 from .thermal import temperature_rise
 
 _OPTICAL_SOURCE = "the optical prescription and the glass catalog datasheet"
@@ -654,7 +655,9 @@ def miles_random_vibration_grms(
             subject="input_asd",
             source=_ENVIRONMENT_SOURCE,
         )
-    return sqrt(pi / 2 * fn * quality * asd)
+    # One implementation of Miles' equation, in random_vibration; this keeps its own
+    # refusals because its callers read them.
+    return miles_response_grms(natural_frequency=fn, quality_factor=quality, asd=asd)
 
 
 def retention_preload(*, mass: Quantity, acceleration: float) -> Quantity:

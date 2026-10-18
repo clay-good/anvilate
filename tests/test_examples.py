@@ -9436,3 +9436,16 @@ def test_laminate_first_ply_failure_example():
     assert d["fibre_ratio"] == pytest.approx(7.73, abs=0.005)
     assert d["first_ply_ratio"] < d["fibre_ratio"] / 2
     _assert_narrates_computed("laminate_first_ply_failure.py", namespace)
+
+
+def test_random_vibration_box_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "random_vibration_box.py"))
+    d = namespace["random_vibration_box"]()
+    # GEVS Table 2.4-3 qualification: 14.1 Grms; 100 Hz, Q 10 on the 0.16 g²/Hz plateau.
+    assert d["input_grms"] == pytest.approx(14.14, abs=0.005)
+    assert d["response_grms"] == pytest.approx(15.85, abs=0.005)
+    assert d["peak_3_sigma"] == pytest.approx(47.56, abs=0.005)
+    assert d["combined_rss"] == pytest.approx(47.94, abs=0.005)
+    assert d["combined_absolute"] == pytest.approx(53.56, abs=0.005)
+    assert d["peak_3_sigma_q25"] == pytest.approx(d["peak_3_sigma"] * (25 / 10) ** 0.5, rel=1e-12)
+    _assert_narrates_computed("random_vibration_box.py", namespace)

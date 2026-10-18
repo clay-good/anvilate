@@ -24,7 +24,7 @@ anchored to a worked example from a public-domain source, with a runnable exampl
 
 ## 4. Dynamics and fracture
 
-- [ ] 4.1 Random vibration: PSD integration, Miles response, 3σ, quasi-static combination
+- [x] 4.1 Random vibration: PSD integration, Miles response, 3σ, quasi-static combination
       (consolidating the copy inside opto-mechanics)
 - [ ] 4.2 Fracture-control classification helper with engineer acceptance
 

@@ -1035,6 +1035,9 @@ modules:
 - :mod:`~anvilate.analysis.laminate` — classical lamination theory: the ABD matrix of
   a ply stack, mid-plane strains and curvatures under running loads, each ply's stresses,
   and first-ply failure by maximum stress, maximum strain and Tsai-Wu
+- :mod:`~anvilate.analysis.random_vibration` — a declared breakpoint spectrum integrated
+  to Grms on log-log segments, Miles' response at a mount's natural frequency, the 3σ
+  peak, and its combination with a quasi-static load by a declared rule
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -2837,6 +2840,14 @@ from .radioactivity import (
     specific_activity,
     time_for_activity_decay,
 )
+from .random_vibration import (
+    LoadCombinationRule,
+    RandomVibrationLoad,
+    miles_response_grms,
+    psd_level,
+    psd_overall_grms,
+    random_vibration_load,
+)
 from .reaction_kinetics import (
     first_order_concentration,
     first_order_half_life,
@@ -3516,6 +3527,12 @@ __all__ = [
     "laminate_stiffness",
     "laminate_response",
     "first_ply_failure",
+    "LoadCombinationRule",
+    "RandomVibrationLoad",
+    "psd_overall_grms",
+    "psd_level",
+    "miles_response_grms",
+    "random_vibration_load",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

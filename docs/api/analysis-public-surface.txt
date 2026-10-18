@@ -141,6 +141,12 @@ laminate.transformed_reduced_stiffness
 laminate.laminate_stiffness
 laminate.laminate_response
 laminate.first_ply_failure
+random_vibration.LoadCombinationRule
+random_vibration.RandomVibrationLoad
+random_vibration.psd_overall_grms
+random_vibration.psd_level
+random_vibration.miles_response_grms
+random_vibration.random_vibration_load
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors
