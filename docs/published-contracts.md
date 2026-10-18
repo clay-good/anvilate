@@ -121,6 +121,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.12.0: unit prices
+
+A made part's or placeholder's definition, and a component record, gain `price`: an
+`amount` above zero, a three-letter `currency`, its `source` and its `date`. A price on a
+product, a reference or a component's definition (rather than its record) is refused. An
+older product document reads unchanged.
+
 ### Product document 1.11.0: materials and what they must withstand
 
 `screening` gains `materials` (each by the id its items name: its composition by CAS number

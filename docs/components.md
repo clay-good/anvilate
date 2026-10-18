@@ -52,6 +52,10 @@ not read is refused, so a misspelt one cannot leave its check unrun.
 A record with no supplier part number is unsourced. Its card carries a not-evaluated
 `sourcing` entry, so a product holding it never exports as validated.
 
+A record's `price` is its unit price, with its source and date. The product cost roll-up
+reads it; a record with no price leaves every node above it incomplete, naming it. See
+[product screening](product-screening.md).
+
 ## Using a vendor model
 
 A record names the vendor's STEP file by `model: {file, sha256}`, a path relative to the

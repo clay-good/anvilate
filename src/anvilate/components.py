@@ -24,6 +24,7 @@ of it:
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 from typing import Literal
 
@@ -43,6 +44,7 @@ __all__ = [
     "Rating",
     "Demand",
     "VendorModel",
+    "Price",
     "ComponentRecord",
     "draft_component",
 ]
@@ -128,6 +130,21 @@ class VendorModel(StatableModel):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class Price(StatableModel):
+    """A unit price for screening cost: the amount, its currency, its source and its date.
+
+    It is the user's figure, a quote or a catalog price as of ``date``; a cost roll-up
+    sums prices in one currency and converts none.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    amount: float = Field(gt=0, allow_inf_nan=False)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    source: Provenance
+    date: date
+
+
 class ComponentRecord(StatableModel):
     """A purchased component: identity, where to buy it, the space it takes, its ratings.
 
@@ -157,6 +174,8 @@ class ComponentRecord(StatableModel):
     # once a person has checked it: until ``confirmed_by`` names them, its card says so.
     drafted: bool = False
     confirmed_by: Named | None = None
+    # The unit price, cited and dated, which the product cost roll-up reads.
+    price: Price | None = None
 
     @model_validator(mode="after")
     def _a_record(self) -> ComponentRecord:

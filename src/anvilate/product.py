@@ -121,7 +121,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.11.0"] = "1.11.0"
+PRODUCT_VERSION: Literal["1.12.0"] = "1.12.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -221,7 +221,7 @@ class Placeholder(StatableModel):
 
 # A component record offers holes as a placeholder does, so components imports this module
 # at its end; importing it here, after PlaceholderHole, keeps either import order working.
-from .components import ComponentRecord, Demand  # noqa: E402
+from .components import ComponentRecord, Demand, Price  # noqa: E402
 
 
 class Reference(StatableModel):
@@ -273,6 +273,9 @@ class Definition(StatableModel):
     # The material a placeholder or component is made of, by its id in the product's
     # material declarations; a catalog part's is its spec's own material.
     material: Named | None = None
+    # A made part's or placeholder's unit cost, cited and dated; a component's price is on
+    # its record, and a product's cost is what its items roll up to.
+    price: Price | None = None
 
     @model_validator(mode="after")
     def _exactly_one_kind(self) -> Definition:
@@ -296,6 +299,11 @@ class Definition(StatableModel):
             raise _refuse(f"definition '{self.id}' states demands and is not a component; "
                           "demands are what a product asks of a bought component",
                           subject="definitions[].demands")  # fmt: skip
+        if self.price is not None and self.spec is None and self.placeholder is None:
+            raise _refuse(f"definition '{self.id}' states a price and is a {self.kind}; a "
+                          "component's price is on its record, a product's is rolled up, "
+                          "and a reference is not costed",
+                          subject="definitions[].price")  # fmt: skip
         if self.reference is not None and self.identity.source is not ItemSource.REFERENCE:
             raise _refuse(f"definition '{self.id}' is a reference assembly and its identity "
                           f"says {self.identity.source.value}; a reference is neither made "
@@ -920,7 +928,8 @@ class Product(StatableModel):
     # reference assembly, 1.7.0 what the product as a whole is screened against, and 1.8.0
     # the loads it carries and declared splits, and 1.9.0 its thermal range and the items
     # separated for service, and 1.10.0 stack-up chains through its items, and 1.11.0 its
-    # materials and what they must withstand; an older document reads unchanged.
+    # materials and what they must withstand, and 1.12.0 a unit price on a part or a
+    # component record; an older document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -934,6 +943,7 @@ class Product(StatableModel):
         "1.9.0",
         "1.10.0",
         "1.11.0",
+        "1.12.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

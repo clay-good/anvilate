@@ -56,7 +56,7 @@ parts-catalog.md | Start here | README, agent-mcp-integration, combinations, hea
 performance-budgets.md | Deciding what the answer is worth | example-highlights, margin-ledger, optomechanics, published-contracts, spec-screening | -
 pressure-equipment.md | Screening by discipline | example-highlights, industrial-covers | -
 process-piping.md | Screening by discipline | example-highlights | -
-product-screening.md | Start here | material-compliance | -
+product-screening.md | Start here | components, material-compliance | -
 products.md | Start here | nothing | -
 published-contracts.md | Driving it from an agent | evidence-bundle, mcp-tool-contracts | -
 quality-interchange.md | Getting the answer out | example-highlights, export-targets, headless-cli | -

@@ -24,11 +24,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from datetime import date
 from typing import Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
-from ._models import Named, StatableModel
+from ._models import Named, Provenance, StatableModel
 from .derivation import DerivationAbsence, Underived
 from .product import Product, _placed_leaves, _refuse, place_product
 from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
@@ -44,6 +45,8 @@ __all__ = [
     "Mobility",
     "ClosestApproach",
     "Economy",
+    "CostLine",
+    "NodeCost",
     "ProductScreening",
     "product_screening",
 ]
@@ -145,6 +148,8 @@ class ProductScreening(StatableModel):
     mobility: Mobility
     load_path: tuple[LoadStep, ...] = ()
     economy: Economy | None = None
+    cost_lines: tuple[CostLine, ...] = ()
+    costs: tuple[NodeCost, ...] = ()
     entries: tuple[ScorecardEntry, ...] = ()
 
 
@@ -251,6 +256,7 @@ def product_screening(
     from .compliance import screen_material_needs
 
     entries += screen_material_needs(product)
+    cost_lines, costs = _costs(product, shelf)
     approaches = _approaches(product, bodies)
     if declared is not None and declared.min_clearance is not None:
         entries.append(_clearance_entry(approaches, declared.min_clearance))
@@ -259,6 +265,7 @@ def product_screening(
         rollup=rollup, approaches=approaches, mobility=_mobility(product, placed),
         load_path=tuple(steps),
         economy=_economy(product, shelf, bodies),
+        cost_lines=tuple(cost_lines), costs=tuple(costs),
         entries=tuple(entries),
     )  # fmt: skip
 
@@ -691,6 +698,96 @@ class Economy(StatableModel):
     purchased: tuple[tuple[str, int], ...] = ()
     merge_candidates: tuple[str, ...] = ()
     note: str = ""
+
+
+class CostLine(StatableModel):
+    """One made part, placeholder or component, and the unit price it is costed at."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path: Named
+    amount: float | None
+    currency: str | None = None
+    source: Provenance | None = None
+    as_of: date | None = None
+
+
+class NodeCost(StatableModel):
+    """A product node's screening cost, rolled up from the items under it.
+
+    ``priced_total`` sums the priced items when they share one currency. ``complete`` is
+    true only when every item under the node is priced, in one currency; otherwise
+    ``unpriced`` names the items with no price, ``currencies`` lists more than one, and
+    the total is a partial sum, never the node's cost.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path: Named
+    complete: bool
+    priced_total: float | None
+    currency: str | None
+    items: int = Field(ge=0)
+    unpriced: tuple[str, ...] = ()
+    currencies: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _labeled(self) -> NodeCost:
+        whole = not self.unpriced and len(self.currencies) <= 1 and self.items > 0
+        if self.complete != whole:
+            raise _refuse(f"node {self.path} is labeled complete={self.complete} with "
+                          f"{len(self.unpriced)} unpriced items in {len(self.currencies)} "
+                          "currencies", subject="product")  # fmt: skip
+        return self
+
+    def __str__(self) -> str:
+        if self.priced_total is None:
+            return f"{self.path}: no total, priced in {', '.join(self.currencies) or 'nothing'}"
+        total = f"{self.priced_total:,.2f} {self.currency}"
+        if self.complete:
+            return f"{self.path}: {total} over {self.items} items"
+        return (f"{self.path}: incomplete, {total} for the priced items; no price for "
+                f"{', '.join(self.unpriced)}")  # fmt: skip
+
+
+def _costs(product: Product, shelf: Mapping[str, Product]) -> tuple[list[CostLine], list[NodeCost]]:
+    """Each costed item's unit price, and each product node's total of the items under it."""
+    from .product import product_tree
+
+    lines: list[CostLine] = []
+    nodes: list[NodeCost] = []
+
+    def visit(node: Any, owner: Product) -> list[CostLine]:
+        definitions = {d.id: d for d in owner.definitions}
+        at = len(nodes)
+        under: list[CostLine] = []
+        for child in node.children:
+            definition = definitions[child.definition]
+            if child.kind == "product":
+                under += visit(child, shelf[definition.product or ""])
+                continue
+            if child.kind == "reference":
+                continue
+            record = definition.component
+            price = record.price if record is not None else definition.price
+            line = (CostLine(path=child.path, amount=None) if price is None else
+                    CostLine(path=child.path, amount=price.amount, currency=price.currency,
+                             source=price.source, as_of=price.date))  # fmt: skip
+            lines.append(line)
+            under.append(line)
+        currencies = tuple(sorted({line.currency for line in under if line.currency}))
+        unpriced = tuple(line.path for line in under if line.amount is None)
+        one = currencies[0] if len(currencies) == 1 else None
+        total = sum(line.amount or 0.0 for line in under) if one is not None else None
+        nodes.insert(at, NodeCost(
+            path=node.path, complete=not unpriced and len(currencies) <= 1 and bool(under),
+            priced_total=total, currency=one, items=len(under), unpriced=unpriced,
+            currencies=currencies,
+        ))  # fmt: skip
+        return under
+
+    visit(product_tree(product, library=shelf), product)
+    return lines, nodes
 
 
 def _pairs(product: Product) -> dict[frozenset[str], list[Any]]:

@@ -20,7 +20,7 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 - [ ] 2.2 Mass and CG limits through the budget mechanism; tip-over angle entry
       (a mass limit on predicted mass and the tip-over entry are built; the budget
       mechanism is not used yet)
-- [ ] 2.3 Cost roll-up; incomplete totals labeled
+- [x] 2.3 Cost roll-up; incomplete totals labeled
 
 ## 3. Geometry across items
 

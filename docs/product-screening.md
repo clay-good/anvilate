@@ -50,6 +50,23 @@ tolerance of its process on the nominal the link states, and the entry says so.
 designation with how many are used, and merge candidates, pairs of made parts joined without
 relative motion, of one material, neither listed in `serviced`.
 
+`report.costs` is a screening cost for each product node, rolled up from the unit prices of
+the items under it: a made part's or placeholder's `price`, and a component record's. A
+price is the user's, with its source and date:
+
+```yaml
+price: {amount: 8.5, currency: USD, source: quote Q-118, date: 2026-09-01}
+```
+
+A node is `complete` only when every item under it is priced in one currency. An item with
+no price is named in `unpriced`, and the node's `priced_total` is then the sum of the priced
+items, labeled incomplete, never the node's cost. Prices in more than one currency are not
+summed, since nothing here converts them; the currencies are listed and there is no total.
+A cart whose frame costs 120.00, whose plate costs 15.00, and whose three casters cost 8.50
+each totals 160.50 over 5 items. Without the casters' price it is incomplete, at 135.00 for
+the priced items, naming all three. A reference is not costed. `report.cost_lines` gives
+each costed item's price, source and date.
+
 Each body's mass states its basis and maturity:
 
 | Body | Basis | Maturity |
@@ -67,6 +84,6 @@ coaxial hinges counts −9 and moves. Mates between two items that a declared jo
 read as part of that joint, not as welding them.
 
 Not yet built: accelerations and loads on interfaces, side connections in the load path,
-part screens other than a caster's fed their loads, cost roll-up, swept clearance over joint
+part screens other than a caster's fed their loads, swept clearance over joint
 ranges, the budget mechanism for mass and CG limits, and
 fastener and tool counts.
