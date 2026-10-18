@@ -41,6 +41,7 @@ pattern.
 | `motor`, `coupling` | `rated_torque` | `torque` | rated torque against the torque it must deliver |
 | `linear_guide` | `stroke`, `dynamic_load_rating` | `stroke`, `load` | stroke, and load against the rating |
 | `gas_spring` | `force` | `force` | force against the force it must hold |
+| `caster` | `load_rating` | `load` | load rating against the load it carries, which product screening's load path supplies |
 
 A record missing one of its family's ratings is refused. A demand the product does not
 state leaves its check not evaluated, naming the demand to declare. A demand the family does

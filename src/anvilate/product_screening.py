@@ -32,8 +32,11 @@ from ._models import Named, StatableModel
 from .derivation import DerivationAbsence, Underived
 from .product import Product, _placed_leaves, _refuse, place_product
 from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+from .units import Quantity
 
 __all__ = [
+    "Reaction",
+    "LoadStep",
     "MassContribution",
     "NodeMass",
     "MaturityLine",
@@ -139,6 +142,7 @@ class ProductScreening(StatableModel):
     rollup: MassRollup | None = None
     approaches: tuple[ClosestApproach, ...] = Field(default=(), max_length=4096)
     mobility: Mobility
+    load_path: tuple[LoadStep, ...] = ()
     entries: tuple[ScorecardEntry, ...] = ()
 
 
@@ -237,12 +241,16 @@ def product_screening(
         entries.append(_mass_entry(top, rollup, declared.max_mass))
     if declared is not None and declared.min_tilt is not None:
         entries.append(_tip_entry(top, placed, declared.min_tilt))
+    steps, path_entries = _load_path(product, placed)
+    entries += path_entries
+    entries += _rated_from_path(product, shelf, steps)
     approaches = _approaches(product, bodies)
     if declared is not None and declared.min_clearance is not None:
         entries.append(_clearance_entry(approaches, declared.min_clearance))
     return ProductScreening(
         name=product.name, contributions=tuple(contributions), nodes=tuple(nodes),
         rollup=rollup, approaches=approaches, mobility=_mobility(product, placed),
+        load_path=tuple(steps),
         entries=tuple(entries),
     )  # fmt: skip
 
@@ -431,3 +439,230 @@ def _mobility(product: Product, placed: Any) -> Mobility:
                     joints=tuple(f"{name}: {kind}, {_FREEDOMS[kind]} freedom"
                                  f"{'s' if _FREEDOMS[kind] != 1 else ''}" for name, kind in joints),
                     caveats=tuple(caveats))  # fmt: skip
+
+
+_G = 9.80665
+_TOUCH_MM = 1e-3
+
+
+class Reaction(StatableModel):
+    """A force one body passes down to a support, and where it acts."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    support: Named
+    force_n: float
+    at_mm: tuple[float, float]
+
+
+class LoadStep(StatableModel):
+    """One body on the load path: what it carries, and how its supports carry it on."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    body: Named
+    carries_n: float
+    at_mm: tuple[float, float]
+    reactions: tuple[Reaction, ...] = ()
+    status: CheckStatus
+    note: str = ""
+
+
+def _overlap(a: Any, b: Any) -> tuple[float, float, float] | None:
+    """The plan overlap of two bodies' boxes: its area and centre, or None."""
+    x0, x1 = max(a.box_min_mm[0], b.box_min_mm[0]), min(a.box_max_mm[0], b.box_max_mm[0])
+    y0, y1 = max(a.box_min_mm[1], b.box_min_mm[1]), min(a.box_max_mm[1], b.box_max_mm[1])
+    if x1 - x0 <= 1e-9 or y1 - y0 <= 1e-9:
+        return None
+    return (x1 - x0) * (y1 - y0), (x0 + x1) / 2, (y0 + y1) / 2
+
+
+def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[ScorecardEntry]]:
+    """Each body's load, carried down to the bodies it rests on and from the lowest to the floor.
+
+    Vertical equilibrium (ΣFz, ΣMx, ΣMy) at each body: one support, or two with the load
+    over the line between them, or three not in a line, determine the reactions. More than
+    three are reported indeterminate, naming them, unless ``screening.splits`` divides the
+    load with its basis; nothing below such a body is evaluated from a guessed share.
+    """
+    declared = product.screening
+    bodies = list(placed.bodies)
+    floor = min(b.box_min_mm[2] for b in bodies)
+    incoming: dict[str, list[tuple[float, float, float, str]]] = {b.path: [] for b in bodies}
+    for body in bodies:
+        if body.mass_kg is not None and body.mass_kg > 0:
+            x, y, _z = body.center_of_mass_mm
+            incoming[body.path].append((body.mass_kg * _G, x, y, "its own weight"))
+    for load in declared.loads if declared is not None else ():
+        base = f"{product.name}/{load.item}"
+        held = [b for b in bodies if b.path == base or b.path.startswith((base + "/", base + "["))]
+        if not held:
+            raise _refuse(f"a load is on '{load.item}', which is not an item of "
+                          f"'{product.name}'", subject="product")  # fmt: skip
+        target = held[0]
+        force = (load.force.to("N").magnitude if load.force is not None
+                 else load.mass.to("kg").magnitude * _G)  # type: ignore[union-attr]  # fmt: skip
+        cx = (target.box_min_mm[0] + target.box_max_mm[0]) / 2
+        cy = (target.box_min_mm[1] + target.box_max_mm[1]) / 2
+        incoming[target.path].append((force, cx, cy, f"the load on {load.item} ({load.source})"))
+    splits = {split.body: split for split in (declared.splits if declared is not None else ())}
+    unknown: set[str] = set()
+    steps: list[LoadStep] = []
+    entries: list[ScorecardEntry] = []
+    for body in sorted(bodies, key=lambda b: -b.box_max_mm[2]):
+        inputs = incoming[body.path]
+        total = sum(f for f, _x, _y, _s in inputs)
+        if total <= 0:
+            continue
+        xw = sum(f * x for f, x, _y, _s in inputs) / total
+        yw = sum(f * y for f, _x, y, _s in inputs) / total
+        supports: list[tuple[str, float, float, Any]] = []
+        for other in bodies:
+            if other is body or abs(body.box_min_mm[2] - other.box_max_mm[2]) > _TOUCH_MM:
+                continue
+            patch = _overlap(body, other)
+            if patch is not None:
+                supports.append((other.path, patch[1], patch[2], other))
+        if abs(body.box_min_mm[2] - floor) <= _TOUCH_MM:
+            supports.append(("the floor", (body.box_min_mm[0] + body.box_max_mm[0]) / 2,
+                             (body.box_min_mm[1] + body.box_max_mm[1]) / 2, body))  # fmt: skip
+        upstream = sorted({s for _f, _x, _y, s in inputs if s in unknown})
+        status, note, forces = _solve(body, supports, total, xw, yw, splits.get(body.path))
+        if upstream:
+            status, note, forces = (CheckStatus.NOT_EVALUATED,
+                                    f"it carries the load of {', '.join(upstream)}, whose path "
+                                    "is not determined", None)  # fmt: skip
+        if forces is None:
+            unknown.add(body.path)
+            # What rests on an undetermined body still loads its supports, by an unknown
+            # share: mark them, so nothing below reads its own weight as the whole story.
+            for path, _x, _y, _other in supports:
+                if path != "the floor":
+                    incoming[path].append((0.0, 0.0, 0.0, body.path))
+        reactions = tuple(
+            Reaction(support=path, force_n=round(f, 6), at_mm=(round(x, 3), round(y, 3)))
+            for (path, x, y, _o), f in zip(supports, forces or [0.0] * len(supports), strict=True)
+        ) if forces is not None else ()  # fmt: skip
+        for reaction in reactions:
+            if reaction.support != "the floor":
+                incoming[reaction.support].append(
+                    (reaction.force_n, reaction.at_mm[0], reaction.at_mm[1], body.path)
+                )
+        steps.append(LoadStep(body=body.path, carries_n=round(total, 6),
+                              at_mm=(round(xw, 3), round(yw, 3)), reactions=reactions,
+                              status=status, note=note))  # fmt: skip
+        carried = "; ".join(f"{r.force_n:.4g} N to {r.support} at ({r.at_mm[0]:g}, "
+                            f"{r.at_mm[1]:g})" for r in reactions)  # fmt: skip
+        detail = (f"{body.path} carries {total:.4g} N acting at ({xw:.4g}, {yw:.4g}) mm"
+                  + (f": {carried}; ΣFz, ΣMx and ΣMy balance" if reactions else "")
+                  + (f"; {note}" if note else ""))  # fmt: skip
+        entries.append(ScorecardEntry(
+            name=f"load path {body.path}", status=status, detail=detail,
+            underived=_SUMMED if status is not CheckStatus.NOT_EVALUATED else None,
+            needs=(_need("screening.splits", "how this body's load divides among its supports, "
+                         "with the basis", "[]", ()),) if status is CheckStatus.NOT_EVALUATED
+            else (),
+        ))  # fmt: skip
+    return steps, entries
+
+
+def _solve(
+    body: Any,
+    supports: list[tuple[str, float, float, Any]],
+    total: float,
+    xw: float,
+    yw: float,
+    split: Any,
+) -> tuple[CheckStatus, str, list[float] | None]:
+    """The reactions at ``supports`` that hold ``total`` acting at (xw, yw), and the verdict."""
+    n = len(supports)
+    names = [s[0] for s in supports]
+    if n == 0:
+        return (CheckStatus.NOT_EVALUATED, "nothing beneath it carries it; a path through a "
+                "side connection is not followed", None)  # fmt: skip
+    if split is not None:
+        missing = sorted(set(names) - set(split.shares))
+        if missing:
+            return (CheckStatus.NOT_EVALUATED, f"its declared split names no share for "
+                    f"{', '.join(missing)}", None)  # fmt: skip
+        return (CheckStatus.PASS, f"divided as declared ({split.basis}), not by equilibrium",
+                [total * split.shares[name] for name in names])  # fmt: skip
+    if n > 3:
+        listed = ", ".join(names)
+        return (CheckStatus.NOT_EVALUATED,
+                f"its {n} supports ({listed}) hold it where three would: the path is "
+                f"indeterminate, with {n - 3} redundant, and no share is guessed",
+                None)  # fmt: skip
+    if n == 1:
+        _name, x, y, other = supports[0]
+        inside = (min(body.box_max_mm[0], other.box_max_mm[0]) + 1e-6 >= xw >=
+                  max(body.box_min_mm[0], other.box_min_mm[0]) - 1e-6 and
+                  min(body.box_max_mm[1], other.box_max_mm[1]) + 1e-6 >= yw >=
+                  max(body.box_min_mm[1], other.box_min_mm[1]) - 1e-6)  # fmt: skip
+        if not inside:
+            return (CheckStatus.FAIL, f"its load acts outside where it rests on {names[0]}, so "
+                    "it would tip", [total])  # fmt: skip
+        return CheckStatus.PASS, "", [total]
+    if n == 3:
+        (_a, x1, y1, _o1), (_b, x2, y2, _o2), (_c, x3, y3, _o3) = supports
+        det = (x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)
+        if abs(det) > 1e-9:
+            # Barycentric weights of the load's point in the support triangle.
+            w2 = ((xw - x1) * (y3 - y1) - (x3 - x1) * (yw - y1)) / det
+            w3 = ((x2 - x1) * (yw - y1) - (xw - x1) * (y2 - y1)) / det
+            forces = [total * (1 - w2 - w3), total * w2, total * w3]
+            lifting = [names[i] for i, f in enumerate(forces) if f < -1e-9]
+            if lifting:
+                pulled = ", ".join(lifting)
+                return (CheckStatus.FAIL, f"its load acts outside its supports: {pulled} would "
+                        "have to pull, and lifts off", forces)  # fmt: skip
+            return CheckStatus.PASS, "", forces
+        supports = [
+            supports[0],
+            max(supports[1:], key=lambda s: (s[1] - x1) ** 2 + (s[2] - y1) ** 2),
+        ]
+    (_a, x1, y1, _o1), (_b, x2, y2, _o2) = supports[0], supports[-1]
+    span = (x2 - x1) ** 2 + (y2 - y1) ** 2
+    t = ((xw - x1) * (x2 - x1) + (yw - y1) * (y2 - y1)) / span if span > 0 else 0.5
+    off = abs((x2 - x1) * (yw - y1) - (y2 - y1) * (xw - x1)) / math.sqrt(span) if span else 0.0
+    forces = [total * (1 - t), total * t] + [0.0] * (n - 2)
+    if off > 1e-6 or not -1e-9 <= t <= 1 + 1e-9:
+        return (CheckStatus.FAIL, "its load acts off the line between its supports, so it would "
+                "tip", forces)  # fmt: skip
+    return CheckStatus.PASS, "", forces
+
+
+def _rated_from_path(
+    product: Product, shelf: Mapping[str, Product], steps: list[LoadStep]
+) -> list[ScorecardEntry]:
+    """Each purchased component on the load path, checked with the load it carries."""
+    from .changes import _definitions, _occurrences
+    from .components import Demand, _rating_entries
+
+    used = _occurrences(product, shelf)
+    definitions = _definitions(product, shelf)
+    by_path = {path: definitions[key] for key, paths in used.items() for path in paths}
+    entries = []
+    for step in steps:
+        definition = by_path.get(step.body)
+        record = definition.component if definition is not None else None
+        if record is None or record.family != "caster":
+            continue
+        name = f"load path {step.body}"
+        if step.status is CheckStatus.NOT_EVALUATED:
+            entries.append(ScorecardEntry(
+                name=f"{step.body} caster load", status=CheckStatus.NOT_EVALUATED,
+                detail=f"reads '{name}', which is not evaluated: {step.note}",
+                needs=(_need("screening.splits", "the share of the load this caster carries",
+                             "[]", ()),),
+            ))  # fmt: skip
+            continue
+        demand = Demand(name="load", value=Quantity(magnitude=step.carries_n, unit="N"),
+                        source=f"'{name}'")  # fmt: skip
+        for entry in _rating_entries(record, (demand,)):
+            if entry.name == "caster load":
+                entries.append(entry.model_copy(update={
+                    "name": f"{step.body} caster load",
+                    "detail": f"{entry.detail}; reads '{name}'",
+                }))  # fmt: skip
+    return entries

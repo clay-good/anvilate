@@ -92,6 +92,7 @@
             "coupling",
             "linear_guide",
             "gas_spring",
+            "caster",
             "other"
           ],
           "title": "Family",
@@ -1104,6 +1105,48 @@
       "title": "PlaceholderHole",
       "type": "object"
     },
+    "ProductLoad": {
+      "additionalProperties": false,
+      "description": "A load the product carries: on an item, as a force down or a mass under gravity.",
+      "properties": {
+        "force": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "mass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item",
+        "source"
+      ],
+      "title": "ProductLoad",
+      "type": "object"
+    },
     "Quantity": {
       "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
       "properties": {
@@ -1175,8 +1218,17 @@
     },
     "Screening": {
       "additionalProperties": false,
-      "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection.",
+      "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection. ``loads`` are what the product carries, which travel down\nthrough the bodies they rest on to the floor; ``splits`` divide a body's load among\nmore supports than determine it, each with its basis.",
       "properties": {
+        "loads": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProductLoad"
+          },
+          "maxItems": 256,
+          "title": "Loads",
+          "type": "array"
+        },
         "mass_growth": {
           "anyOf": [
             {
@@ -1220,9 +1272,44 @@
             }
           ],
           "default": null
+        },
+        "splits": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Split"
+          },
+          "maxItems": 256,
+          "title": "Splits",
+          "type": "array"
         }
       },
       "title": "Screening",
+      "type": "object"
+    },
+    "Split": {
+      "additionalProperties": false,
+      "description": "How a body's load divides among more supports than determine it, and on what basis.",
+      "properties": {
+        "basis": {
+          "title": "Basis",
+          "type": "string"
+        },
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "shares": {
+          "additionalProperties": true,
+          "title": "Shares",
+          "type": "object"
+        }
+      },
+      "required": [
+        "body",
+        "shares",
+        "basis"
+      ],
+      "title": "Split",
       "type": "object"
     },
     "SupplierNumber": {
@@ -1296,13 +1383,13 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.7.0",
+  "$id": "urn:anvilate:schema:product-document:1.8.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.7.0",
+      "default": "1.8.0",
       "enum": [
         "1.0.0",
         "1.1.0",
@@ -1311,7 +1398,8 @@
         "1.4.0",
         "1.5.0",
         "1.6.0",
-        "1.7.0"
+        "1.7.0",
+        "1.8.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -1432,5 +1520,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.7.0"
+  "x-anvilate-version": "1.8.0"
 }

@@ -549,6 +549,8 @@ product.PlacedJoint
 product.OpenInterface
 product.MassGrowth
 product.Limit
+product.ProductLoad
+product.Split
 product.Screening
 product.Product
 product.ProductNode
@@ -570,6 +572,8 @@ product.ProductSummary
 product.summarize_product
 product.place_product
 product.write_product_step
+product_screening.Reaction
+product_screening.LoadStep
 product_screening.MassContribution
 product_screening.NodeMass
 product_screening.MaturityLine

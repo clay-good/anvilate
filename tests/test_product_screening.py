@@ -27,6 +27,11 @@ from test_product_cards import _box, _definition, _seat  # noqa: E402
 _ROOT = Path(__file__).resolve().parents[1]
 
 
+def _named(report, name: str):
+    (entry,) = [e for e in report.entries if e.name == name]
+    return entry
+
+
 def _q(v: float, unit: str) -> dict:
     return {"magnitude": v, "unit": unit}
 
@@ -77,7 +82,7 @@ def test_growth_by_maturity_and_a_mass_limit_on_the_predicted_mass():
     assert lines["estimated"].growth_kg == pytest.approx(0.36)
     assert lines["calculated"].growth_kg == pytest.approx(0.05 * plate_kg)
     assert report.rollup.predicted_kg == pytest.approx(2.4 * 1.15 + plate_kg * 1.05)
-    (entry,) = report.entries
+    entry = _named(report, "product mass")
     assert entry.status is CheckStatus.PASS and "predicted" in entry.detail
     assert "provisional on cart/base" in entry.detail
 
@@ -90,7 +95,7 @@ def test_the_tilt_at_which_the_centre_of_mass_leaves_the_footprint():
     for required, status in ((20, CheckStatus.PASS), (30, CheckStatus.FAIL)):
         column["screening"] = {"min_tilt": {"value": _q(required, "degree"),
                                             "source": "transport spec"}}  # fmt: skip
-        (entry,) = product_screening(parse_product(column)).entries
+        entry = _named(product_screening(parse_product(column)), "tip-over")
         assert entry.status is status
         assert f"leaves it at {expected:.3g} degrees" in entry.detail
 
@@ -102,7 +107,7 @@ def test_clearance_between_items_that_share_no_connection():
     pair = {"cart/block", "cart/other"}
     (closest,) = [a for a in report.approaches if {a.first, a.second} == pair]
     assert closest.gap_mm == pytest.approx(120) and closest.at_mm[0] == pytest.approx(0)
-    (entry,) = report.entries
+    entry = _named(report, "clearance")
     assert entry.status is CheckStatus.FAIL
     assert "cart/block and cart/other come within 120 mm" in entry.detail
 
@@ -132,7 +137,7 @@ def test_a_body_with_no_mass_leaves_its_parents_unweighed_and_named():
     report = product_screening(parse_product(document))
     (top,) = [n for n in report.nodes if n.path == "cart"]
     assert top.mass_kg is None and top.missing == ("cart/block",)
-    (entry,) = report.entries
+    entry = _named(report, "product mass")
     assert (
         entry.status is CheckStatus.NOT_EVALUATED and "cart/block carries no mass" in entry.detail
     )
@@ -146,3 +151,86 @@ def test_the_docs_page_states_the_basis_and_maturity_the_code_assigns():
                       page, re.M)  # fmt: skip
     assert dict(rows) == {"catalog part": "calculated", "purchased component": "measured",
                           "placeholder": "estimated"}  # fmt: skip
+
+
+def _caster() -> dict:
+    from anvilate.units import Quantity
+    from test_components import _record
+
+    record = _record("caster", {"load_rating": _q(400, "N")})
+    sizes = tuple(Quantity(magnitude=v, unit="mm") for v in (60, 60, 100))
+    record = record.model_copy(
+        update={"envelope": sizes, "mass": Quantity(magnitude=0.6, unit="kg")}
+    )
+    identity = {"description": "caster", "source": "buy", "part_number": "C-1"}
+    return {"id": "caster", "identity": identity, "component": record.model_dump(mode="json")}
+
+
+def _under(name: str, faces: tuple[str, str]) -> list[dict]:
+    return [{"id": f"{name}-under", "kind": "face_to_face", "place": {"part": name, "face": "top"},
+             "on": {"part": "frame", "face": "bottom"}}] + [
+        {"id": f"{name}-{f}", "kind": "edge_flush", "place": {"part": name, "face": f},
+         "on": {"part": "frame", "face": f}} for f in faces]  # fmt: skip
+
+
+def _carted(corners: tuple[tuple[str, str], ...], plate_at: tuple[str, str], split=None) -> dict:
+    """A 600 × 400 × 40 frame (12 kg) on casters at the named corners, with a 200 × 200 × 10
+    plate (1 kg) carrying a 50 kg payload seated at the frame's ``plate_at`` corner."""
+    definitions = [_definition("frame", placeholder=_box(600, 400, 40, 12.0)), _caster(),
+                   _definition("plate", placeholder=_box(200, 200, 10, 1.0))]  # fmt: skip
+    instances = [{"name": "frame", "item": "frame"}, {"name": "plate", "item": "plate"}]
+    sit = {"id": "plate-sit", "kind": "face_to_face", "place": {"part": "plate", "face": "bottom"}}
+    mates = [{**sit, "on": {"part": "frame", "face": "top"}}] + [
+        {"id": f"plate-{f}", "kind": "edge_flush", "place": {"part": "plate", "face": f},
+         "on": {"part": "frame", "face": f}} for f in plate_at]  # fmt: skip
+    for k, faces in enumerate(corners, start=1):
+        instances.append({"name": f"caster{k}", "item": "caster"})
+        mates += _under(f"caster{k}", faces)
+    screening = {"loads": [{"item": "plate", "mass": _q(50, "kg"), "source": "payload spec"}]}
+    if split is not None:
+        screening["splits"] = [split]
+    return {"name": "cart", "definitions": definitions, "instances": instances,
+            "ground": "frame", "mates": mates, "screening": screening}  # fmt: skip
+
+
+_THREE = (("left", "front"), ("right", "front"), ("right", "back"))
+
+
+def test_a_payload_reaches_the_casters_through_a_determinate_path():
+    report = product_screening(parse_product(_carted(_THREE, ("right", "back"))))
+    steps = {s.body: s for s in report.load_path}
+    g = 9.80665
+    assert steps["cart/plate"].carries_n == pytest.approx(51 * g)
+    frame = steps["cart/frame"]
+    assert frame.carries_n == pytest.approx(63 * g)
+    # resultant at (161.90, 80.95) mm over casters at (−270, −170), (270, −170), (270, 170)
+    shares = {r.support: r.force_n / frame.carries_n for r in frame.reactions}
+    assert shares["cart/caster3"] == pytest.approx((1 + (51 * 100 / 63) / 170) / 2)
+    assert shares["cart/caster1"] == pytest.approx(1 - (1 + (51 * 200 / 63) / 270) / 2)
+    assert sum(shares.values()) == pytest.approx(1)
+    rated = {e.name: e for e in report.entries if e.name.endswith("caster load")}
+    assert rated["cart/caster3 caster load"].status is CheckStatus.FAIL  # 456 N + its own 5.9 N
+    assert rated["cart/caster1 caster load"].status is CheckStatus.PASS
+    assert "reads 'load path cart/caster3'" in rated["cart/caster3 caster load"].detail
+
+
+def test_a_load_outside_the_supports_lifts_one_off():
+    report = product_screening(parse_product(_carted(_THREE, ("left", "front"))))
+    frame = _named(report, "load path cart/frame")
+    assert frame.status is CheckStatus.FAIL and "cart/caster2 would have to pull" in frame.detail
+
+
+def test_four_casters_are_indeterminate_until_a_split_is_declared():
+    four = _THREE + (("left", "back"),)
+    report = product_screening(parse_product(_carted(four, ("right", "back"))))
+    frame = _named(report, "load path cart/frame")
+    assert frame.status is CheckStatus.NOT_EVALUATED
+    assert "indeterminate, with 1 redundant, and no share is guessed" in frame.detail
+    rated = _named(report, "cart/caster1 caster load")
+    assert rated.status is CheckStatus.NOT_EVALUATED and "not evaluated" in rated.detail
+    split = {"body": "cart/frame", "basis": "measured at the four wheels, run 3",
+             "shares": {f"cart/caster{k}": 0.25 for k in range(1, 5)}}  # fmt: skip
+    declared = product_screening(parse_product(_carted(four, ("right", "back"), split)))
+    frame = _named(declared, "load path cart/frame")
+    assert frame.status is CheckStatus.PASS and "divided as declared" in frame.detail
+    assert _named(declared, "cart/caster1 caster load").status is CheckStatus.PASS

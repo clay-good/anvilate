@@ -6,11 +6,13 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 ## 1. Load path
 
 - [ ] 1.1 Product loads and accelerations on items and interfaces
-- [ ] 1.2 Rigid-body equilibrium over determinate paths; connection forces with their
+      (loads on items are built; accelerations and loads on interfaces are not)
+- [x] 1.2 Rigid-body equilibrium over determinate paths; connection forces with their
       equilibrium
-- [ ] 1.3 Indeterminacy named with redundant connections; downstream not evaluated;
+- [x] 1.3 Indeterminacy named with redundant connections; downstream not evaluated;
       declared splits accepted with basis
 - [ ] 1.4 Part screens fed interface loads as dependent entries
+      (a caster's rating reads its load-path entry; other part screens do not yet)
 
 ## 2. Roll-ups
 

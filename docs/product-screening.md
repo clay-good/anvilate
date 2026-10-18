@@ -19,7 +19,21 @@ screening:
 | product mass | predicted mass against the limit | `max_mass` |
 | tip-over | the tilt at which the centre of mass leaves the footprint (the plan rectangle of the bodies resting lowest), atan(inside ÷ height), about its nearest edge | `min_tilt` |
 | clearance | the least gap between every two items that share no mate or connection, and where it is | `min_clearance` |
+| load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits` |
+| caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` |
 | mobility | Grübler–Kutzbach, M = 6(n − 1 − j) + Σf, over bodies joined rigidly into links | declared joints |
+
+A body rests on the bodies whose tops meet its bottom over a shared plan area, and the
+lowest rest on the floor. One support, two with the load over the line between them, or
+three not in a line determine the reactions. A support that would have to pull fails, as
+lifting off. More than three supports leave the path indeterminate: the entry names them
+and how many are redundant, nothing below is evaluated from a guessed share, and a declared
+split, with its basis, divides it instead:
+
+```yaml
+splits:
+  - {body: cart/frame, basis: measured at the four wheels, shares: {cart/caster1: 0.25, ...}}
+```
 
 Each body's mass states its basis and maturity:
 
@@ -37,6 +51,7 @@ zero or negative, and for any two joint axes that are parallel or coincident: a 
 coaxial hinges counts −9 and moves. Mates between two items that a declared joint joins are
 read as part of that joint, not as welding them.
 
-Not yet built: the load path to ground and part screens fed interface loads, cost roll-up,
+Not yet built: accelerations and loads on interfaces, side connections in the load path,
+part screens other than a caster's fed their loads, cost roll-up,
 cross-item tolerance chains, thermal mismatch, swept clearance over joint ranges, the
 budget mechanism for mass and CG limits, and assembly economy.

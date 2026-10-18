@@ -50,7 +50,7 @@ __all__ = [
 _RECORD_SOURCE = "the component record: its datasheet, page by page"
 
 Family = Literal["ball_bearing", "roller_bearing", "motor", "coupling", "linear_guide",
-                 "gas_spring", "other"]  # fmt: skip
+                 "gas_spring", "caster", "other"]  # fmt: skip
 
 #: Each family's ratings (name → dimension) and the demands its checks read
 #: (name → dimension). A record must state its family's ratings; a product states the
@@ -71,6 +71,7 @@ FAMILY_RATINGS: dict[str, tuple[dict[str, str], dict[str, str]]] = {
         {"stroke": "[length]", "load": "[force]"},
     ),
     "gas_spring": ({"force": "[force]"}, {"force": "[force]"}),
+    "caster": ({"load_rating": "[force]"}, {"load": "[force]"}),
     "other": ({}, {}),
 }
 
@@ -480,6 +481,12 @@ def _rating_entries(
                                   stated["load"], unit="N"))  # fmt: skip
         else:
             entries.append(_missing("guide load", ["load"], family))
+    elif family == "caster":
+        if "load" in stated:
+            entries.append(_ratio("caster load", record.rating("load_rating"), stated["load"],
+                                  unit="N"))  # fmt: skip
+        else:
+            entries.append(_missing("caster load", ["load"], family))
     elif family == "gas_spring":
         if "force" in stated:
             entries.append(_ratio("gas spring force", record.rating("force"), stated["force"],

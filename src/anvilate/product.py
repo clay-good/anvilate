@@ -86,6 +86,8 @@ __all__ = [
     "OpenInterface",
     "MassGrowth",
     "Limit",
+    "ProductLoad",
+    "Split",
     "Screening",
     "Product",
     "ProductNode",
@@ -109,7 +111,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.7.0"] = "1.7.0"
+PRODUCT_VERSION: Literal["1.8.0"] = "1.8.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -561,13 +563,60 @@ class Limit(StatableModel):
     source: Provenance
 
 
+class ProductLoad(StatableModel):
+    """A load the product carries: on an item, as a force down or a mass under gravity."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    item: Named
+    force: Quantity | None = None
+    mass: Quantity | None = None
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _one(self) -> ProductLoad:
+        if (self.force is None) == (self.mass is None):
+            stated = "both" if self.force else "neither"
+            raise _refuse(f"load on '{self.item}' states {stated} of force and mass; a load "
+                          "states one", subject="screening.loads")  # fmt: skip
+        value, dimension = ((self.force, "[force]") if self.force is not None
+                            else (self.mass, "[mass]"))  # fmt: skip
+        assert value is not None
+        if not (value.has_dimension(dimension) and value.magnitude > 0):
+            raise _refuse(f"load on '{self.item}' is {value}; it is a positive "
+                          f"{dimension.strip('[]')}", subject="screening.loads")  # fmt: skip
+        return self
+
+
+class Split(StatableModel):
+    """How a body's load divides among more supports than determine it, and on what basis."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    body: Named
+    shares: FrozenMap[str, float]
+    basis: Provenance
+
+    @model_validator(mode="after")
+    def _whole(self) -> Split:
+        if any(not (0 <= v <= 1) for v in self.shares.values()) or (
+            abs(sum(self.shares.values()) - 1) > 1e-6
+        ):
+            raise _refuse(f"the split of '{self.body}' gives shares {dict(self.shares)}; each "
+                          "is a fraction and they add up to 1",
+                          subject="screening.splits")  # fmt: skip
+        return self
+
+
 class Screening(StatableModel):
     """What the product as a whole is held to.
 
     ``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on
     the predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must
     stay inside the footprint up to; ``min_clearance`` the least gap between any two items
-    that share no connection.
+    that share no connection. ``loads`` are what the product carries, which travel down
+    through the bodies they rest on to the floor; ``splits`` divide a body's load among
+    more supports than determine it, each with its basis.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -576,6 +625,8 @@ class Screening(StatableModel):
     max_mass: Limit | None = None
     min_tilt: Limit | None = None
     min_clearance: Limit | None = None
+    loads: tuple[ProductLoad, ...] = Field(default=(), max_length=256)
+    splits: tuple[Split, ...] = Field(default=(), max_length=256)
 
     @model_validator(mode="after")
     def _dimensions(self) -> Screening:
@@ -607,10 +658,10 @@ class Product(StatableModel):
     # 1.1.0 adds a definition's component and demands, 1.2.0 a component's vendor model and
     # drafted state, 1.3.0 interfaces, connections and open interfaces, and 1.4.0 a catalog
     # part's interfaces bound to its features, 1.5.0 a joint on a connection, and 1.6.0 a
-    # reference assembly, and 1.7.0 what the product as a whole is screened against; an
-    # older document reads unchanged.
+    # reference assembly, 1.7.0 what the product as a whole is screened against, and 1.8.0
+    # the loads it carries and declared splits; an older document reads unchanged.
     anvilate_product: Literal[
-        "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"
+        "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0"
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
