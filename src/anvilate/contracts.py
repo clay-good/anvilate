@@ -75,6 +75,7 @@ __all__ = [
     "CAD_FACTS_SCHEMA_VERSION",
     "COMBINATION_SUMMARY_SCHEMA_VERSION",
     "PRODUCT_SUMMARY_SCHEMA_VERSION",
+    "PRODUCT_DOCUMENT_SCHEMA_VERSION",
     "NODE_CARD_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
@@ -94,6 +95,7 @@ __all__ = [
     "cad_facts_json_schema",
     "combination_summary_json_schema",
     "product_summary_json_schema",
+    "product_document_json_schema",
     "node_card_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
@@ -194,6 +196,8 @@ COMBINATION_SUMMARY_SCHEMA_VERSION = "1.0.0"
 # What ``build_combination`` returns for a product document: the bounded summary tree, and
 # one node's full card when the call names a node.
 PRODUCT_SUMMARY_SCHEMA_VERSION = "1.0.0"
+# The product document itself: its version is the one ``anvilate_product`` states.
+PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.0.0"
 NODE_CARD_SCHEMA_VERSION = "1.0.0"
 
 
@@ -506,6 +510,24 @@ def product_summary_json_schema() -> dict[str, Any]:
     )
 
 
+def product_document_json_schema() -> dict[str, Any]:
+    """The product document: items, instances and patterns, mates, layout and variants."""
+    from .product import Product
+
+    return _artifact(
+        Product,
+        name="product-document",
+        version=PRODUCT_DOCUMENT_SCHEMA_VERSION,
+        description=(
+            "Anvilate product document: items defined once (a catalog part's Design Spec, a "
+            "sub-product or a placeholder) with their identity, placed as instances singly "
+            "or in patterns, located by mates onto the ground and the layout's datums, with "
+            "the layout's driving parameters and named variants. Generated from "
+            "anvilate.product.Product."
+        ),
+    )
+
+
 def node_card_json_schema() -> dict[str, Any]:
     """One node of a placed product, with the cards of every node below it."""
     from .product import NodeCard
@@ -730,6 +752,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "cad-file-facts.schema.json": cad_facts_json_schema(),
         "combination-summary.schema.json": combination_summary_json_schema(),
         "product-summary.schema.json": product_summary_json_schema(),
+        "product-document.schema.json": product_document_json_schema(),
         "node-card.schema.json": node_card_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{

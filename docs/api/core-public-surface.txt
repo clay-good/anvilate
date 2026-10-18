@@ -182,6 +182,7 @@ context.set_context_roots
 contracts.CAD_FACTS_SCHEMA_VERSION
 contracts.COMBINATION_SUMMARY_SCHEMA_VERSION
 contracts.PRODUCT_SUMMARY_SCHEMA_VERSION
+contracts.PRODUCT_DOCUMENT_SCHEMA_VERSION
 contracts.NODE_CARD_SCHEMA_VERSION
 contracts.CONTEXT_INVENTORY_SCHEMA_VERSION
 contracts.JSON_SCHEMA_DIALECT
@@ -190,6 +191,7 @@ contracts.RELEASED_DIRECTORY
 contracts.cad_facts_json_schema
 contracts.combination_summary_json_schema
 contracts.product_summary_json_schema
+contracts.product_document_json_schema
 contracts.node_card_json_schema
 contracts.context_inventory_json_schema
 contracts.freeze_release
@@ -523,6 +525,7 @@ product.ProductNode
 product.PartsListLine
 product.ProductError
 product.parse_product
+product.load_product
 product.resolve_variant
 product.product_tree
 product.parts_list

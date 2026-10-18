@@ -1143,7 +1143,7 @@ def _combine(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate combine: {args.combination}: not a combination document", file=err)
         return EXIT_BAD_REQUEST
     if "anvilate_product" in document:
-        return _combine_product(document, args, out=out, err=err)
+        return _combine_product(args, out=out, err=err)
     try:
         built = build_combination(parse_combination(document))
     except GeometryUnavailable as failure:
@@ -3674,23 +3674,19 @@ def _product_document(paths: list[Path]) -> tuple[Path, dict[str, Any]] | None:
 
 
 def _product_library(path: Path) -> dict[str, Any]:
-    """The products beside ``path``, the ``*.product.yaml`` files, by name."""
-    from .product import parse_product
+    """The products beside ``path``, the ``*.product.yaml`` files, by name, with theirs."""
+    from .product import load_product
 
-    library = {}
+    library: dict[str, Any] = {}
     for sibling in sorted(path.parent.glob("*.product.y*ml")):
         if sibling.resolve() != path.resolve():
-            try:
-                text = sibling.read_text(encoding="utf-8")
-            except UnicodeDecodeError as failure:
-                # Read as a failed read, which every caller reports naming the file.
-                raise OSError(f"{sibling} is not UTF-8 text") from failure
-            sub = parse_product(parse_yaml(text))
+            sub, below = load_product(sibling)
+            library.update(below)
             library[sub.name] = sub
     return library
 
 
-def _combine_product(document: dict[str, Any], args: argparse.Namespace, *, out, err) -> int:
+def _combine_product(args: argparse.Namespace, *, out, err) -> int:
     """``combine`` on a product document: place it, print its summary, write its assembly."""
     import yaml
 
@@ -3698,7 +3694,7 @@ def _combine_product(document: dict[str, Any], args: argparse.Namespace, *, out,
     from .geometry import GeometryUnavailable
     from .product import (
         ProductError,
-        parse_product,
+        load_product,
         place_product,
         product_tree,
         summarize_product,
@@ -3710,8 +3706,8 @@ def _combine_product(document: dict[str, Any], args: argparse.Namespace, *, out,
               file=err)  # fmt: skip
         return EXIT_BAD_REQUEST
     try:
-        product = parse_product(document)
-        library = _product_library(args.combination)
+        product, library = load_product(args.combination)
+        library = {**_product_library(args.combination), **library}
         placed = place_product(product, library=library)
         summary = summarize_product(
             placed,
@@ -3751,16 +3747,16 @@ def _check_product(
 
     from .product import (
         ProductError,
-        parse_product,
+        load_product,
         place_product,
         product_tree,
         summarize_product,
     )
 
-    path, document = found
+    path, _document = found
     try:
-        product = parse_product(document)
-        library = _product_library(path)
+        product, library = load_product(path)
+        library = {**_product_library(path), **library}
         placed = place_product(product, library=library)
         tree = product_tree(product, library=library)
     except (ProductError, yaml.YAMLError, OSError, UnicodeDecodeError) as refused:

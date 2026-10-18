@@ -4,7 +4,7 @@ Depends on `add-part-combinations` (mates, hardware, combination card).
 
 ## 1. Document
 
-- [ ] 1.1 Product document schema (URN-identified): items, instances, patterns, mates,
+- [x] 1.1 Product document schema (URN-identified): items, instances, patterns, mates,
       ground, layout, variants; references by relative path or embedded
 - [x] 1.2 Item identity: part number, revision, description, make/buy/reference;
       provisional numbers derived from path and content, marked provisional

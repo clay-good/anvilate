@@ -75,6 +75,7 @@ __all__ = [
     "PartsListLine",
     "ProductError",
     "parse_product",
+    "load_product",
     "resolve_variant",
     "product_tree",
     "parts_list",
@@ -89,7 +90,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION = "1.0.0"
+PRODUCT_VERSION: Literal["1.0.0"] = "1.0.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -367,7 +368,7 @@ class Product(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    anvilate_product: str = PRODUCT_VERSION
+    anvilate_product: Literal["1.0.0"] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
     identity: ItemIdentity | None = None
@@ -546,6 +547,64 @@ def parse_product(document: Mapping[str, Any]) -> Product:
         where = ".".join(str(p) for p in first["loc"]) or "the document"
         raise _refuse(f"the product document is not valid at {where}: "
                       f"{_refusal_line('', first['msg'])}", subject=where) from failure  # fmt: skip
+
+
+def load_product(path: Any) -> tuple[Product, dict[str, Product]]:
+    """The product document at ``path`` and the library of every product it places.
+
+    A definition's ``product`` is a name the library holds, a sub-product embedded whole,
+    or ``{file: <path>}`` relative to the document that names it, read the same way at any
+    depth. A file that is missing or will not read is refused naming the path and the
+    definition that references it; a chain of files that comes back to itself is refused
+    naming the chain. Two different sub-products under one name are refused.
+    """
+    from pathlib import Path
+
+    from ._models import parse_yaml
+
+    if not isinstance(path, (str, Path)):
+        raise _refuse(f"path is a {type(path).__name__}; give a file path", subject="path")
+    library: dict[str, Product] = {}
+
+    def read(file: Path, referrer: str, chain: tuple[Path, ...]) -> Product:
+        file = file.resolve()
+        if file in chain:
+            names = " → ".join(str(p) for p in (*chain, file))
+            raise _refuse(f"the product files contain themselves: {names}", subject="path")
+        try:
+            document = parse_yaml(file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError) as failure:
+            raise _refuse(f"{referrer} references {file}, which cannot be read: {failure}",
+                          subject="path") from failure  # fmt: skip
+        if not isinstance(document, Mapping):
+            raise _refuse(f"{referrer} references {file}, which is not a product document",
+                          subject="path")  # fmt: skip
+        return gather(document, file.parent, (*chain, file))
+
+    def keep(sub: Product) -> str:
+        held = library.get(sub.name)
+        if held is not None and held != sub:
+            raise _refuse(f"two different sub-products are named '{sub.name}'; a library "
+                          "holds one product per name", subject="path")  # fmt: skip
+        library[sub.name] = sub
+        return sub.name
+
+    def gather(document: Mapping[str, Any], folder: Path, chain: tuple[Path, ...]) -> Product:
+        definitions = []
+        for definition in document.get("definitions") or ():
+            target = definition.get("product") if isinstance(definition, Mapping) else None
+            if isinstance(target, Mapping):
+                where = f"definition '{definition.get('id')}' in {chain[-1]}"
+                if set(target) == {"file"} and isinstance(target["file"], str):
+                    sub = read(folder / target["file"], where, chain)
+                else:
+                    sub = gather(target, folder, chain)
+                definition = {**definition, "product": keep(sub)}
+            definitions.append(definition)
+        return parse_product({**document, "definitions": definitions})
+
+    top = Path(path)
+    return read(top, "the call", ()), library
 
 
 def resolve_variant(product: Product, name: str) -> Product:

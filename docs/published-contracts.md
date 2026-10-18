@@ -29,6 +29,7 @@ that has never heard of anvilate.
 | [`docs/api/schemas/context-inventory.schema.json`](api/schemas/context-inventory.schema.json) | a context folder's engineering files, and whose each is to read | `CONTEXT_INVENTORY_SCHEMA_VERSION` |
 | [`docs/api/schemas/cad-file-facts.schema.json`](api/schemas/cad-file-facts.schema.json) | one STEP, DXF, STL or 3MF file, measured: sizes, holes, profiles, never its contents | `CAD_FACTS_SCHEMA_VERSION` |
 | [`docs/api/schemas/combination-summary.schema.json`](api/schemas/combination-summary.schema.json) | several parts placed by the features they share: where each landed, and the parts list | `COMBINATION_SUMMARY_SCHEMA_VERSION` |
+| [`docs/api/schemas/product-document.schema.json`](api/schemas/product-document.schema.json) | a product document: items with their identity, instances and patterns, mates, layout and variants | `PRODUCT_DOCUMENT_SCHEMA_VERSION` |
 | [`docs/api/schemas/product-summary.schema.json`](api/schemas/product-summary.schema.json) | a placed product as a bounded summary tree: each node's path, part number, verdict and governing finding | `PRODUCT_SUMMARY_SCHEMA_VERSION` |
 | [`docs/api/schemas/node-card.schema.json`](api/schemas/node-card.schema.json) | one node of a placed product: the checks it owns and its children's cards | `NODE_CARD_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
@@ -119,6 +120,12 @@ pack still ships an element by existing; bumping one means adding its tag to
 to `bolted_connection/1.0.0` is not told its contract moved because a pump duty gained a
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
+
+### Product document 1.0.0: the product is a published document kind
+
+`anvilate_product: 1.0.0` names this schema; another version is refused. A definition's
+`product` is a library name, a sub-product embedded whole, or `{file: drive/drive.product.yaml}`
+relative to the document naming it, which `load_product` reads.
 
 ### Product summary 1.0.0 and node card 1.0.0: products through `build_combination`
 

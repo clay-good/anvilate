@@ -28,7 +28,16 @@ instances:
 ground: base
 ```
 
-`parse_product` reads the document. `product_tree(product, library=...)` expands it, with
+The document's schema is published as
+[`product-document`](api/schemas/product-document.schema.json), and `anvilate_product: 1.0.0`
+names its version. A definition's `product` is the name of a product in the library, a
+sub-product embedded whole, or `{file: drive/drive.product.yaml}`, a path relative to the
+document that names it. `load_product(path)` reads a document and every file it references,
+at any depth, and returns the product and its library. A missing or unreadable file is
+refused, naming the path and the definition that references it. So are files that come back
+to themselves, and two different sub-products under one name.
+
+`parse_product` reads one document already in memory. `product_tree(product, library=...)` expands it, with
 sub-products taken from the library by name. `parts_list(tree)` counts every item through
 patterns and nesting.
 
