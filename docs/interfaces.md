@@ -104,7 +104,11 @@ joint's range is in angles and a linear one's travel in lengths; a ball or rigid
 states none. `placed.joints` lists each with its axis in the product's frame and its range,
 for a swept keepout or a robotics export to read. The connection's `joint sweep` entry turns
 or slides the moving item through its range, in steps of at most 15 degrees or ten steps of
-travel, and fails naming the body it first meets.
+travel. It fails naming the body it overlaps most and the step where it does. When it
+clears, it reports its least gap over the sweep, where, and between which bodies, to the
+items it shares no mate or connection with (those it does touch it by design). A product's
+`min_clearance` holds that gap too: a hinged arm that clears a stop 5 mm away at rest comes
+within 3.219 mm when it is turned 5 degrees, and fails a 4 mm clearance.
 
 ## The interface control table
 

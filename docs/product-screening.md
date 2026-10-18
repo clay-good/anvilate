@@ -18,7 +18,7 @@ screening:
 | mass growth | basic mass by maturity, plus the declared allowance for each: predicted mass | `mass_growth` |
 | product mass | predicted mass against the limit | `max_mass` |
 | tip-over | the tilt at which the centre of mass leaves the footprint (the plan rectangle of the bodies resting lowest), atan(inside ÷ height), about its nearest edge | `min_tilt` |
-| clearance | the least gap between every two items that share no mate or connection, and where it is | `min_clearance` |
+| clearance | the least gap between every two items that share no mate or connection, and where it is; and over each joint's range, the least gap its moving item comes to ([interfaces](interfaces.md#joints)) | `min_clearance` |
 | load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits` |
 | caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` |
 | thermal mismatch | for each connection between two catalog parts of different materials, \|α₁ − α₂\| · ΔT · span, the span between the outermost mated holes or across where they meet, against the declared slip, citing both coefficients | `thermal` |
@@ -84,6 +84,5 @@ coaxial hinges counts −9 and moves. Mates between two items that a declared jo
 read as part of that joint, not as welding them.
 
 Not yet built: accelerations and loads on interfaces, side connections in the load path,
-part screens other than a caster's fed their loads, swept clearance over joint
-ranges, the budget mechanism for mass and CG limits, and
+part screens other than a caster's fed their loads, the budget mechanism for mass and CG limits, and
 fastener and tool counts.

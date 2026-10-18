@@ -2416,14 +2416,26 @@ def _joints(
     The axis is the ``on`` interface's: through its bound feature on a catalog part, or
     the item's own axis through its origin. The moving item (the ``place`` side) is turned
     or slid through the range in steps of at most 15 degrees, or ten steps of travel, and
-    must clear every other body at each.
+    must clear every other body at each. The least gap it comes to over the sweep, to the
+    items it shares no mate or connection with, is reported, and held to the product's
+    ``min_clearance`` when it declares one.
     """
     from build123d import Axis, Location
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape  # type: ignore[import-untyped]
 
     from .combination import _AXES, _tidy, _unit
 
     placed_joints: list[PlacedJoint] = []
     entries: list[ScorecardEntry] = []
+    joined = {frozenset((m.place.part, m.on.part)) for m in current.mates} | {
+        frozenset((c.on.rpartition(".")[0], c.place.rpartition(".")[0]))
+        for c in current.connections
+    }
+    limit = current.screening.min_clearance if current.screening is not None else None
+
+    def item_of(path: str) -> str:
+        return path[len(prefix) + 1 :].split("/")[0].split("[")[0]
+
     for connection in current.connections:
         joint = connection.joint
         if joint is None:
@@ -2458,6 +2470,8 @@ def _joints(
         samples = [low + (high - low) * i / (steps - 1) for i in range(steps)]
         axis = Axis(point, direction)
         clash: tuple[float, str, str, float] | None = None
+        gauged = [o for o in others if frozenset((place_item, item_of(o.path))) not in joined]
+        least: tuple[float, float, str, str] | None = None
         for value in samples:
             for leaf in moving:
                 if angular:
@@ -2469,21 +2483,37 @@ def _joints(
                     volume = float(common.volume) if common is not None else 0.0
                     if volume > 1e-6 and (clash is None or volume > clash[3]):
                         clash = (value, leaf.path, other.path, volume)
+                for other in gauged:
+                    gauge = BRepExtrema_DistShapeShape(shape.wrapped, other.shape.wrapped)
+                    gauge.Perform()
+                    if gauge.IsDone() and (least is None or gauge.Value() < least[0]):
+                        least = (float(gauge.Value()), value, leaf.path, other.path)
         word = "degrees" if angular else "mm"
         swept = f"{joint.kind} joint swept from {low:g} to {high:g} {word} in {steps} steps"
         detail = (f"{swept}: the moving item clears every other body" if clash is None else
                   f"{swept}: at {clash[0]:g} {word} {clash[1]} meets {clash[2]} by "
                   f"{clash[3]:.4g} mm^3")  # fmt: skip
+        short = False
+        if clash is None and least is not None:
+            detail += (f"; its least gap is {least[0]:.4g} mm, at {least[1]:g} {word}, between "
+                       f"{least[2]} and {least[3]}")  # fmt: skip
+            if limit is not None:
+                need = float(limit.value.to("mm").magnitude)
+                short = least[0] < need
+                detail += f", against {need:g} mm ({limit.source})"
+        elif clash is None:
+            detail += "; every other body shares a mate or connection with it, so none is gauged"
         entries.append(ScorecardEntry(
             name=f"{pair} joint sweep", detail=detail, underived=_SWEPT,
-            status=CheckStatus.PASS if clash is None else CheckStatus.FAIL,
+            status=CheckStatus.PASS if clash is None and not short else CheckStatus.FAIL,
         ))  # fmt: skip
     return tuple(placed_joints), tuple(entries)
 
 
 _SWEPT = Underived(
     kind=DerivationAbsence.NUMERIC_RESULT,
-    reason="the moving item's solids are intersected with the others at each step of the range",
+    reason="the moving item's solids are intersected with, and gauged against, the others at "
+    "each step of the range",
 )
 
 

@@ -388,3 +388,50 @@ def test_a_revolute_joint_on_two_mounting_faces_is_refused_naming_the_connection
                        r"revolute joint, and its interfaces \(mounting_face, mounting_face\) "
                        "define no axis"):  # fmt: skip
         parse_product(document)
+
+
+def _swung(high: float, clearance: float | None = None) -> str:
+    document = _hinge({"kind": "revolute", "range": [{"magnitude": 0, "unit": "degree"},
+                                                     {"magnitude": high, "unit": "degree"}]},
+                      stop=True)  # fmt: skip
+    if clearance is not None:
+        document["screening"] = {"min_clearance": {"value": _mm(clearance), "source": "finger gap"}}
+    return _entries(place_product(parse_product(document)))["base.pivot ~ arm.pivot joint sweep"]
+
+
+def test_a_swing_reports_its_least_gap_to_what_it_is_not_joined_to():
+    import math
+
+    sweep = _swung(5)
+    # the stop's top corner (x 10, z 20) from the arm's face (x 5) turned 5 degrees about y
+    turned = math.radians(5)
+    gap = 10 * math.cos(turned) - 20 * math.sin(turned) - 5
+    assert sweep.status is CheckStatus.PASS
+    assert f"its least gap is {gap:.4g} mm, at 5 degrees, between hinge/arm and hinge/stop" in (
+        sweep.detail
+    )
+
+
+@pytest.mark.parametrize(("high", "status"), [(0.01, CheckStatus.PASS), (3, CheckStatus.FAIL)])
+def test_a_swept_gap_is_held_to_the_products_clearance(high, status):
+    sweep = _swung(high, clearance=4)
+    assert sweep.status is status and "against 4 mm (finger gap)" in sweep.detail
+
+
+def test_a_swing_with_nothing_unjoined_says_none_is_gauged():
+    sweep = _entries(place_product(parse_product(_hinge(_SWING))))[
+        "base.pivot ~ arm.pivot joint sweep"
+    ]
+    assert "every other body shares a mate or connection with it, so none is gauged" in (
+        sweep.detail
+    )
+
+
+def test_the_docs_page_states_the_swept_gap_the_code_finds():
+    from pathlib import Path
+
+    page = (Path(__file__).parents[1] / "docs" / "interfaces.md").read_text()
+    sweep, rest = _swung(5), _swung(0.01)
+    assert "its least gap is 3.219 mm" in sweep.detail and "within 3.219 mm" in page
+    assert "its least gap is 4.997 mm" in rest.detail and "a stop 5 mm away at rest" in page
+    assert _swung(5, clearance=4).status is CheckStatus.FAIL and "fails a 4 mm" in page

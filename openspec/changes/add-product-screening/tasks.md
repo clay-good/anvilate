@@ -24,8 +24,7 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 
 ## 3. Geometry across items
 
-- [ ] 3.1 Pairwise minimum clearance with location; swept clearance over joint ranges
-      (pairwise clearance is built; joint sweeps report collision, not swept clearance)
+- [x] 3.1 Pairwise minimum clearance with location; swept clearance over joint ranges
 - [x] 3.2 Cross-item 1D tolerance chains (worst-case, RSS, seeded Monte Carlo)
 - [x] 3.3 Thermal mismatch across dissimilar connections
 

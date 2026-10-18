@@ -41,7 +41,7 @@ headless-cli.md | Start here | README, mcp-tool-contracts, quality-interchange, 
 hot-rolled-steel.md | Screening by discipline | example-highlights | -
 hydraulics-screening.md | Screening by discipline | nothing | -
 industrial-covers.md | Screening by discipline | nothing | -
-interfaces.md | Start here | products | -
+interfaces.md | Start here | product-screening, products | -
 lifting-devices.md | Screening by discipline | example-highlights | -
 load-combinations.md | Deciding what the answer is worth | example-highlights | -
 machinery-screening.md | Screening by discipline | combinations | -
