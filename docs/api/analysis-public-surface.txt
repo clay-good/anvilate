@@ -177,6 +177,13 @@ sandwich.SandwichPanel
 sandwich.SandwichMode
 sandwich.SandwichScreen
 sandwich.sandwich_local_modes
+durability.ExcitationBand
+durability.ModeSeparation
+durability.modal_separation
+durability.MountedItem
+durability.MountedItemLoad
+durability.DropScreen
+durability.drop_screen
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors

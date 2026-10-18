@@ -1757,7 +1757,9 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # sequence of fasteners, and tests/test_fastener_group.py refuses a NaN and an
     # infinite load and a NaN allowable. 98 -> 99: sandwich_local_modes takes a panel,
     # and tests/test_sandwich.py refuses a NaN cell size and a zero facing thickness.
-    assert len(unbuildable) <= 99, (
+    # 99 -> 100: modal_separation takes (name, frequency) pairs and bands, and
+    # tests/test_durability.py refuses a separation ratio below 1 and a backwards band.
+    assert len(unbuildable) <= 100, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

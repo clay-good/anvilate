@@ -1056,6 +1056,9 @@ modules:
 - :mod:`~anvilate.analysis.sandwich` — a sandwich panel's local modes by NASA CR-1457:
   intracell dimpling, face wrinkling, shear crimping, core shear and insert pull-out, each
   with how conservative its coefficient is, and not evaluated where an input is missing
+- :mod:`~anvilate.analysis.durability` — estimated modes held clear of declared
+  excitation bands, and a drop onto a declared contact as a half-sine pulse with the load
+  each mounted item feels
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -1751,6 +1754,15 @@ from .drilling import (
     drilling_feed_for_torque_limit,
     drilling_material_removal_rate,
     drilling_torque,
+)
+from .durability import (
+    DropScreen,
+    ExcitationBand,
+    ModeSeparation,
+    MountedItem,
+    MountedItemLoad,
+    drop_screen,
+    modal_separation,
 )
 from .dynamics import (
     STANDARD_GRAVITY,
@@ -3623,6 +3635,13 @@ __all__ = [
     "SandwichMode",
     "SandwichScreen",
     "sandwich_local_modes",
+    "ExcitationBand",
+    "ModeSeparation",
+    "modal_separation",
+    "MountedItem",
+    "MountedItemLoad",
+    "DropScreen",
+    "drop_screen",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

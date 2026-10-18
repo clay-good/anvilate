@@ -9559,3 +9559,17 @@ def test_honeycomb_panel_local_modes_example():
     assert d["dimpling_fine_mpa"] / d["dimpling_mpa"] == pytest.approx((9.5 / 4.8) ** 2, rel=1e-12)
     assert d["governing_fine"] == "face wrinkling"
     _assert_narrates_computed("honeycomb_panel_local_modes.py", namespace)
+
+
+def test_handheld_drop_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "handheld_drop.py"))
+    d = namespace["handheld_drop"]()
+    # mgh = 0.4 × 9.80665 × 1.2 = 4.707 J; τ = π√(0.4/5e5) = 2.810 ms
+    assert d["energy_j"] == pytest.approx(4.7072, abs=1e-4)
+    assert d["pulse_ms"] == pytest.approx(2.810, abs=1e-3)
+    assert d["peak_g"] == pytest.approx(553.1, abs=0.05)
+    # τ·f_n = 0.843, near the half-sine spectrum's 1.77 peak at ρ ≈ 0.8
+    assert d["amplification"] == pytest.approx(1.77, abs=0.005)
+    assert d["board_load_n"] == pytest.approx(0.05 * d["board_g"] * 9.80665, rel=1e-12)
+    assert 1 < d["stiff_amplification"] < d["amplification"]
+    _assert_narrates_computed("handheld_drop.py", namespace)

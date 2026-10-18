@@ -30,5 +30,5 @@ anchored to a worked example from a public-domain source, with a runnable exampl
 
 ## 5. Sources
 
-- [ ] 5.1 Each bundled constant or curve verified against its primary public document and
+- [x] 5.1 Each bundled constant or curve verified against its primary public document and
       recorded with how it was checked; textbook curves never digitized
