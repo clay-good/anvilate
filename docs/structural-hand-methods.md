@@ -58,4 +58,20 @@ Every source below was read on 2026-10-17 from the document itself.
 | Plasticity correction | [NASA TM X-73306](https://ntrs.nasa.gov/citations/19760071126) §C2, Eq. 2 and Figs. C2-10, C2-11 | The manual prints its Ramberg-Osgood equation without the 3/7 its own definitions need: printed as is, the secant modulus at F_0.7 is 0.5E, not 0.7E. The curve here passes through both secant points exactly. The tangent modulus is checked against a numerical derivative, and each buckling stress against the equation it solves. |
 | Thin-cylinder knockdown | [NASA SP-8007](https://ntrs.nasa.gov/citations/19690013955) (1968) Eqs. 4–6 and 9, retained in [NASA/SP-8007-2020/REV 2](https://ntrs.nasa.gov/citations/20205011530) as its Empirical Approach | Neither edition works an example. The printed equations are evaluated by hand, and checked against Rev 2's Figure 4-2 restatement. |
 
-Not yet built from this change: lugs, sandwich panels, and the fracture-control helper.
+## Fracture-control candidates
+
+`anvilate.fracture_control` checks a part against the two non-fracture-critical routes of
+[NASA-STD-5019A](https://standards.nasa.gov/standard/NASA/NASA-STD-5019) w/Change 4
+(revalidated 2025-09-05) that rest on numbers. These are the low-risk metallic part
+(§6.2.5.a) and the sealed container (§6.1.4). Each condition comes back met, not met, or
+not evaluated, with its clause.
+
+A part meeting every condition is a **candidate**. The standard gives every classification
+to the Responsible Fracture Control Board, so `classification` stays empty until
+`accept(...)` records who accepted it, when, and in which record.
+
+The other routes, low-released mass, contained, fail-safe and documented non-hazardous
+failure, rest on hazard findings. The standard gives them no mass or energy threshold, so
+this module does not invent one.
+
+Not yet built from this change: lugs and sandwich panels.

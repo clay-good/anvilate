@@ -396,6 +396,13 @@ limit_states.ScreenCheck
 limit_states.LimitState
 limit_states.LimitStateRegistry
 limit_states.DEFAULT_LIMIT_STATES
+fracture_control.ConditionState
+fracture_control.FractureCondition
+fracture_control.FractureAcceptance
+fracture_control.FractureCandidate
+fracture_control.LifeMethod
+fracture_control.low_risk_metallic_candidate
+fracture_control.sealed_container_candidate
 margin.MarginKind
 margin.MarginAction
 margin.MarginEntry

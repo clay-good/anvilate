@@ -129,7 +129,7 @@ class GroupFastener(RevalidatedModel):
         return pi * d * d / 4
 
 
-class FastenerLoad(BaseModel):
+class FastenerLoad(RevalidatedModel):
     """One fastener's share and its NASA-STD-5020B interaction index (≤ 1 passes).
 
     Forces in N. ``pull_through_ratio`` is tension over the pull-through allowable, or

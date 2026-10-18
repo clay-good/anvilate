@@ -104,6 +104,9 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.loads` — typed load combinations and the governing one, named.
 - :mod:`anvilate.limit_states` — limit states by identity: which module check evaluates
   what, and the one implementation every screen evaluating it composes.
+- :mod:`anvilate.fracture_control` — a part's candidacy for a NASA-STD-5019A
+  non-fracture-critical route, condition by condition, shown as a classification only once
+  the Responsible Fracture Control Board's acceptance is recorded.
 - :mod:`anvilate.margin` — the margin ledger: every conservatism applied to a
   result, attributed, multiplied out, and its duplicates named.
 - :mod:`anvilate.margin_of_safety` — margins of safety as a regulated program reviews
