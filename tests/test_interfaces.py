@@ -193,3 +193,91 @@ def test_every_build_writes_an_interface_control_table():
     section = table.section()
     assert "| drive | bracket.motor_mount | bolt_pattern | 4 holes on top |" in section
     assert "- drive motor.mount (mounting_face): =held by the grille" in section
+
+
+def _plate_with_motor(pitch_x: float = 100.0, binding=("m6_1_1", "m6_2_1", "m6_2_2", "m6_1_2")):
+    """The catalog mounting plate (its m6 pattern 100 × 60 on its top face, z = 6) and a
+    motor placeholder whose four bottom holes are on the same 100 × 60 rectangle."""
+    import copy
+    from pathlib import Path
+
+    from anvilate._models import parse_yaml
+
+    plate = parse_yaml((Path(__file__).resolve().parents[1] / "examples" / "parts"
+                        / "mounting_plate.spec.yaml").read_text())  # fmt: skip
+    plate = copy.deepcopy(plate)
+    plate["element_params"]["hole_patterns"][0]["pitch_x"] = _mm(pitch_x)
+    corners = [(-50, -30), (50, -30), (50, 30), (-50, 30)]
+    motor_holes = [{"tag": f"m{i}", "x": _mm(x), "y": _mm(y), "z": _mm(-20), "face": "bottom",
+                    "diameter": _mm(5.5)} for i, (x, y) in enumerate(corners, start=1)]  # fmt: skip
+    return {
+        "name": "drive",
+        "definitions": [
+            {"id": "plate", "identity": {"description": "plate", "source": "make"}, "spec": plate,
+             "interfaces": [{"name": "motor_mount", "kind": "bolt_pattern",
+                             "features": list(binding)},
+                            {"name": "pilot", "kind": "bore", "features": ["cb"]}]},
+            {"id": "motor", "identity": {"description": "motor", "source": "buy"},
+             "placeholder": _holder((110, 70, 40), 1.0, motor_holes,
+                                    [_pattern("flange", "m", "bottom")])},
+        ],
+        "instances": [{"name": "plate", "item": "plate"}, {"name": "motor", "item": "motor"}],
+        "ground": "plate",
+        "connections": [{"on": "plate.motor_mount", "place": "motor.flange"}],
+        "open_interfaces": [{"at": "plate.pilot", "reason": "no pilot on this motor"}],
+    }  # fmt: skip
+
+
+def test_a_parts_interface_is_read_from_the_built_part():
+    placed = place_product(parse_product(_plate_with_motor()))
+    motor = next(b for b in placed.bodies if b.path == "drive/motor")
+    assert motor.box_min_mm[2] == pytest.approx(6)  # on the plate's top, where its holes open
+    assert _entries(placed)["plate.motor_mount ~ motor.flange hole pattern"].status is (
+        CheckStatus.PASS
+    )
+    (row,) = [r for r in placed.interfaces.rows if r.place is not None]
+    assert row.on_values == "4 holes on top"
+    (pilot,) = [r for r in placed.interfaces.rows if r.place is None]
+    assert pilot.on_kind == "bore" and pilot.on_values == "diameter 6.6 mm"
+
+
+def test_a_change_to_the_holes_changes_the_interface():
+    placed = place_product(parse_product(_plate_with_motor(pitch_x=110.0)))
+    pattern = _entries(placed)["plate.motor_mount ~ motor.flange hole pattern"]
+    assert pattern.status is CheckStatus.FAIL and "do not line up" in pattern.detail
+
+
+def test_an_interface_bound_to_nothing_is_refused_naming_it_and_the_tag():
+    document = _plate_with_motor(binding=("m6_1_1", "m6_9_9"))
+    document["definitions"][1]["placeholder"]["interfaces"][0]["holes"] = ["m1", "m2"]
+    with pytest.raises(ProductError, match=r"interface 'motor_mount' is bound to \['m6_9_9'\], "
+                       "which the built part does not have"):  # fmt: skip
+        place_product(parse_product(document))
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (
+            lambda d: d["definitions"][0]["interfaces"].append(
+                {"name": "track", "kind": "rail", "features": ["adj"]}
+            ),
+            "offer it on a placeholder or component",
+        ),
+        (
+            lambda d: d["definitions"][1].update(
+                interfaces=[{"name": "x", "kind": "mounting_face", "face": "top"}]
+            ),
+            "is not a catalog part",
+        ),
+        (
+            lambda d: d.update(connections=[{"on": "motor.flange", "place": "plate.motor_mount"}]),
+            "places the ground 'plate'",
+        ),
+    ],
+)
+def test_a_part_interface_the_document_cannot_hold_is_refused(change, message):
+    document = _plate_with_motor()
+    change(document)
+    with pytest.raises((ProductError, ValueError), match=message):
+        parse_product(document)

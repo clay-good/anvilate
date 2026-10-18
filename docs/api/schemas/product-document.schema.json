@@ -229,6 +229,15 @@
         "identity": {
           "$ref": "#/$defs/ItemIdentity"
         },
+        "interfaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PartInterface"
+          },
+          "maxItems": 32,
+          "title": "Interfaces",
+          "type": "array"
+        },
         "placeholder": {
           "anyOf": [
             {
@@ -789,6 +798,55 @@
       "title": "OpenInterface",
       "type": "object"
     },
+    "PartInterface": {
+      "additionalProperties": false,
+      "description": "An interface on a catalog part, bound to the part's tagged features.\n\nIts frame and parameters are read from the built features, never restated: a pattern's\nholes and the face they open on, an axial kind's axis and diameter. A ``mounting_face``\nnames its ``face`` and no feature. ``face`` may also name the far face of a pattern of\nthrough holes, along the same axis.",
+      "properties": {
+        "face": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right",
+                "front",
+                "back"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Face"
+        },
+        "features": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Features",
+          "type": "array"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "title": "PartInterface",
+      "type": "object"
+    },
     "Placeholder": {
       "additionalProperties": false,
       "description": "An item not yet detailed: an envelope, a mass, and why it is still a placeholder.\n\n``holes`` are the interfaces it offers, so a bought motor's bolt pattern can take a\nhole-pattern mate before the motor is chosen. ``center_of_mass`` is measured from the\nenvelope's centre; left out, the centre is used and the placed product says so.",
@@ -1027,18 +1085,19 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.3.0",
+  "$id": "urn:anvilate:schema:product-document:1.4.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.3.0",
+      "default": "1.4.0",
       "enum": [
         "1.0.0",
         "1.1.0",
         "1.2.0",
-        "1.3.0"
+        "1.3.0",
+        "1.4.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -1148,5 +1207,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.3.0"
+  "x-anvilate-version": "1.4.0"
 }

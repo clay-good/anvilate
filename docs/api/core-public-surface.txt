@@ -388,6 +388,7 @@ interfaces.KINDS
 interfaces.COMPATIBLE
 interfaces.InterfaceError
 interfaces.Interface
+interfaces.PartInterface
 interfaces.partners_of
 interop.ForceComponent
 interop.AxisMapping

@@ -53,7 +53,14 @@ from ._models import (
 )
 from .combination import Mate
 from .derivation import DerivationAbsence, Underived
-from .interfaces import COMPATIBLE, KINDS, Interface, check_interfaces, partners_of
+from .interfaces import (
+    COMPATIBLE,
+    KINDS,
+    Interface,
+    PartInterface,
+    check_interfaces,
+    partners_of,
+)
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .units import Quantity
@@ -96,7 +103,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.3.0"] = "1.3.0"
+PRODUCT_VERSION: Literal["1.4.0"] = "1.4.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -217,6 +224,8 @@ class Definition(StatableModel):
     placeholder: Placeholder | None = None
     component: ComponentRecord | None = None
     demands: tuple[Demand, ...] = Field(default=(), max_length=32)
+    # A catalog part's interfaces, bound to its tagged features and read from the built part.
+    interfaces: tuple[PartInterface, ...] = Field(default=(), max_length=32)
 
     @model_validator(mode="after")
     def _exactly_one_kind(self) -> Definition:
@@ -228,6 +237,14 @@ class Definition(StatableModel):
                 "placeholder and component; a definition is exactly one of them",
                 subject="definitions[].spec",
             )
+        if self.interfaces and self.spec is None:
+            raise _refuse(f"definition '{self.id}' states interfaces and is not a catalog part; "
+                          "a placeholder or component states its interfaces inside it",
+                          subject="definitions[].interfaces")  # fmt: skip
+        names = [i.name for i in self.interfaces]
+        if len(set(names)) != len(names):
+            raise _refuse(f"definition '{self.id}' offers interfaces {names} with a name twice",
+                          subject="definitions[].interfaces")  # fmt: skip
         if self.demands and self.component is None:
             raise _refuse(f"definition '{self.id}' states demands and is not a component; "
                           "demands are what a product asks of a bought component",
@@ -437,9 +454,9 @@ class Product(StatableModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     # 1.1.0 adds a definition's component and demands, 1.2.0 a component's vendor model and
-    # drafted state, and 1.3.0 interfaces, connections and open interfaces; an older
-    # document reads unchanged.
-    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0"] = PRODUCT_VERSION
+    # drafted state, 1.3.0 interfaces, connections and open interfaces, and 1.4.0 a catalog
+    # part's interfaces bound to its features; an older document reads unchanged.
+    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
     identity: ItemIdentity | None = None
@@ -452,17 +469,19 @@ class Product(StatableModel):
     connections: tuple[Connection, ...] = Field(default=(), max_length=512)
     open_interfaces: tuple[OpenInterface, ...] = Field(default=(), max_length=512)
 
-    def offers(self) -> dict[str, dict[str, Interface]]:
-        """Each instance's interfaces by name, from its placeholder or component."""
+    def offers(self) -> dict[str, dict[str, Interface | PartInterface]]:
+        """Each instance's interfaces by name: its placeholder's or component's, or a
+        catalog part's bindings, which are read from the part once it is built."""
         definitions = {d.id: d for d in self.definitions}
-        offered: dict[str, dict[str, Interface]] = {}
+        offered: dict[str, dict[str, Interface | PartInterface]] = {}
         for instance in self.instances:
             definition = definitions[instance.item]
             held = definition.placeholder or definition.component
-            offered[instance.name] = {i.name: i for i in held.interfaces} if held else {}
+            stated = held.interfaces if held is not None else definition.interfaces
+            offered[instance.name] = {i.name: i for i in stated}
         return offered
 
-    def interface_at(self, reference: str, subject: str) -> tuple[str, Interface]:
+    def interface_at(self, reference: str, subject: str) -> tuple[str, Interface | PartInterface]:
         """The instance and interface ``item.interface`` names, or a refusal naming it."""
         item, name = _split(reference, subject)
         offered = self.offers()
@@ -525,6 +544,10 @@ class Product(StatableModel):
                 raise _refuse(f"{connection.on} is a {first.kind} and {connection.place} a "
                               f"{second.kind}, which do not meet; a {first.kind} meets "
                               f"{' or '.join(partners_of(first.kind))}",
+                              subject="connections[].place")  # fmt: skip
+            if _place_item == self.ground:
+                raise _refuse(f"connection {connection.on} ~ {connection.place} places the ground "
+                              f"'{self.ground}', which stays where it is; put it on the on side",
                               subject="connections[].place")  # fmt: skip
             connected |= {connection.on, connection.place}
         for left_open in self.open_interfaces:
@@ -1418,9 +1441,7 @@ def _placed_leaves(
         definitions = {d.id: d for d in current.definitions}
         order = [i.name for i in current.instances]
         datums = {d.name: d for d in current.layout.datums} if current.layout is not None else {}
-        derived = _connection_mates(current)
-        all_mates = (*current.mates, *derived)
-        for mate in all_mates:
+        for mate in current.mates:
             if mate.place.part in datums:
                 raise _refuse(f"mate '{mate.id}' places the datum '{mate.place.part}', which is "
                               "fixed; a datum is a mate's 'on' end",
@@ -1489,6 +1510,10 @@ def _placed_leaves(
         leaves: list[_Leaf] = []
         extra: dict[str, tuple[ScorecardEntry, ...]] = {}
         tables: dict[str, tuple[InterfaceRow, ...]] = {}
+        # Each placed instance's interfaces, as its built geometry states them, and the mate
+        # each connection was placed by, in the order the connections are declared.
+        resolved: dict[str, dict[str, Interface]] = {}
+        derived: dict[int, Mate] = {}
         ground_first = sorted(current.instances, key=lambda i: i.name != current.ground)
         for instance in ground_first:
             definition = definitions[instance.item]
@@ -1517,10 +1542,21 @@ def _placed_leaves(
                 built = assemble(sub, path)
                 inner = built.leaves
                 below, below_rows = built.extra, built.tables
+            resolved[instance.name] = _resolved_offers(definition, built, path)
             if instance.name == current.ground:
                 rotation, translation = _IDENTITY, (0.0, 0.0, 0.0)
             else:
-                mates = [m for m in all_mates if m.place.part == instance.name]
+                mates = [m for m in current.mates if m.place.part == instance.name]
+                for index, connection in enumerate(current.connections):
+                    on_item, _on = _split(connection.on, "connections[].on")
+                    if _split(connection.place, "connections[].place")[0] != instance.name:
+                        continue
+                    if on_item not in resolved:
+                        raise _refuse(f"connection {connection.on} ~ {connection.place} places "
+                                      f"'{instance.name}' on '{on_item}', which is not placed "
+                                      "yet; list it first", subject="instances")  # fmt: skip
+                    derived[index] = _connection_mate(connection, resolved)
+                    mates.append(derived[index])
                 if not mates:
                     raise _refuse(
                         f"'{path}' has no mate; every instance but the ground is placed through "
@@ -1543,8 +1579,9 @@ def _placed_leaves(
                 leaves.extend(leaf.moved(label + leaf.path[len(path) :], where) for leaf in inner)
                 extra.update({label + key[len(path) :]: held for key, held in below.items()})
                 tables.update({label + key[len(path) :]: rows for key, rows in below_rows.items()})
-        extra[prefix] = _connection_entries(current, derived, placed)
-        tables[prefix] = _interface_rows(current, extra[prefix])
+        in_order = [derived[i] for i in range(len(current.connections))]
+        extra[prefix] = _connection_entries(current, in_order, placed, resolved)
+        tables[prefix] = _interface_rows(current, extra[prefix], resolved)
         shape = Compound([leaf.shape for leaf in leaves])
         return _Assembly(shape, leaves, extra, tables)
 
@@ -1667,8 +1704,34 @@ _COMPARED = Underived(
 )
 
 
+def _resolved_offers(definition: Definition, built: Any, path: str) -> dict[str, Interface]:
+    """An instance's interfaces as built: stated by a placeholder or component, or a catalog
+    part's bindings read from its built features."""
+    held = definition.placeholder or definition.component
+    if held is not None:
+        return {i.name: i for i in held.interfaces}
+    if not definition.interfaces:
+        return {}
+    from .interfaces import InterfaceError
+
+    features = {feature.tag: feature for feature in getattr(built, "features", ())}
+    try:
+        return {i.name: i.resolve(features, f"'{path}'") for i in definition.interfaces}
+    except InterfaceError as refused:  # the CLI and the build tool answer a ProductError
+        raise _refuse(str(refused), subject="definitions[].interfaces") from refused
+
+
+def _resolved_at(
+    resolved: Mapping[str, Mapping[str, Interface]], reference: str
+) -> tuple[str, Interface]:
+    item, name = _split(reference, "connections")
+    return item, resolved[item][name]
+
+
 def _interface_rows(
-    current: Product, entries: tuple[ScorecardEntry, ...]
+    current: Product,
+    entries: tuple[ScorecardEntry, ...],
+    resolved: Mapping[str, Mapping[str, Interface]],
 ) -> tuple[InterfaceRow, ...]:
     """One row per connection, with its checks as named on the card, then one per open one."""
     definitions = {d.id: d for d in current.definitions}
@@ -1686,8 +1749,8 @@ def _interface_rows(
 
     rows = []
     for connection in current.connections:
-        on_item, on = current.interface_at(connection.on, "connections[].on")
-        place_item, place = current.interface_at(connection.place, "connections[].place")
+        on_item, on = _resolved_at(resolved, connection.on)
+        place_item, place = _resolved_at(resolved, connection.place)
         pair = f"{connection.on} ~ {connection.place} "
         checks = tuple(f"{e.name[len(pair):]}: {e.status.value}" for e in entries
                        if e.name.startswith(pair))  # fmt: skip
@@ -1697,34 +1760,36 @@ def _interface_rows(
             place_owner=owners[place_item], checks=checks,
         ))  # fmt: skip
     for left in current.open_interfaces:
-        item, interface = current.interface_at(left.at, "open_interfaces[].at")
+        item, interface = _resolved_at(resolved, left.at)
         rows.append(InterfaceRow(on=left.at, on_kind=interface.kind, on_values=values(interface),
                                  on_owner=owners[item], reason=left.reason))  # fmt: skip
     return tuple(rows)
 
 
-def _connection_mates(current: Product) -> list[Mate]:
-    """The mate each connection stands for: pattern to pattern, face to face, or on an axis."""
-    mates = []
-    for connection in current.connections:
-        on_item, on = current.interface_at(connection.on, "connections[].on")
-        place_item, place = current.interface_at(connection.place, "connections[].place")
-        ends: dict[str, Any] = {}
-        if KINDS[on.kind][0] == "face":
-            kind = "hole_pattern" if on.kind in _PATTERNS else "face_to_face"
-            ends = {"place": {"part": place_item, "face": place.face, "holes": place.holes},
-                    "on": {"part": on_item, "face": on.face, "holes": on.holes}}  # fmt: skip
-        else:
-            kind = "shaft_in_bore"
-            ends = {"place": {"part": place_item, "axis": place.axis},
-                    "on": {"part": on_item, "axis": on.axis}}  # fmt: skip
-        mates.append(Mate.model_validate({"id": f"{connection.on}~{connection.place}",
-                                          "kind": kind, **ends}))  # fmt: skip
-    return mates
+def _connection_mate(
+    connection: Connection, resolved: Mapping[str, Mapping[str, Interface]]
+) -> Mate:
+    """The mate a connection stands for: pattern to pattern, face to face, or on an axis."""
+    on_item, on = _resolved_at(resolved, connection.on)
+    place_item, place = _resolved_at(resolved, connection.place)
+    ends: dict[str, Any] = {}
+    if KINDS[on.kind][0] == "face":
+        kind = "hole_pattern" if on.kind in _PATTERNS else "face_to_face"
+        ends = {"place": {"part": place_item, "face": place.face, "holes": place.holes},
+                "on": {"part": on_item, "face": on.face, "holes": on.holes}}  # fmt: skip
+    else:
+        kind = "shaft_in_bore"
+        ends = {"place": {"part": place_item, "axis": place.axis},
+                "on": {"part": on_item, "axis": on.axis}}  # fmt: skip
+    return Mate.model_validate({"id": f"{connection.on}~{connection.place}",
+                                "kind": kind, **ends})  # fmt: skip
 
 
 def _connection_entries(
-    current: Product, derived: list[Mate], placed: Mapping[str, Any]
+    current: Product,
+    derived: list[Mate],
+    placed: Mapping[str, Any],
+    resolved: Mapping[str, Mapping[str, Interface]],
 ) -> tuple[ScorecardEntry, ...]:
     """Each connection's checks, then every interface accounted for and its partners counted."""
     from collections import Counter
@@ -1733,8 +1798,8 @@ def _connection_entries(
 
     entries: list[ScorecardEntry] = []
     for connection, mate in zip(current.connections, derived, strict=True):
-        on_item, on = current.interface_at(connection.on, "connections[].on")
-        place_item, place = current.interface_at(connection.place, "connections[].place")
+        on_item, on = _resolved_at(resolved, connection.on)
+        place_item, place = _resolved_at(resolved, connection.place)
         pair = f"{connection.on} ~ {connection.place}"
         _agree, checks = COMPATIBLE.get((on.kind, place.kind)) or COMPATIBLE[(place.kind, on.kind)]
         for check in checks:
@@ -1763,7 +1828,7 @@ def _connection_entries(
     for connection in current.connections:
         partners.update((connection.on, connection.place))
     opened = {declared.at for declared in current.open_interfaces}
-    offered = current.offers()
+    offered = resolved
     loose = [f"{item}.{name}" for item, held in offered.items() for name in held
              if f"{item}.{name}" not in partners and f"{item}.{name}" not in opened]  # fmt: skip
     if loose:

@@ -5,7 +5,7 @@ joint checks).
 
 ## 1. Declarations
 
-- [ ] 1.1 Interface record: name, kind, frame, kind parameters; bound to a tagged feature
+- [x] 1.1 Interface record: name, kind, frame, kind parameters; bound to a tagged feature
       on parts, declared on placeholders and components
 - [x] 1.2 Closed kind vocabulary with required parameters and units, published in the
       schema and in the MCP `initialize` instructions

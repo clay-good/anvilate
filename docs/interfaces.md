@@ -19,6 +19,26 @@ open_interfaces:
   - {at: fan.mount, reason: held by the grille}
 ```
 
+## Interfaces on catalog parts
+
+A catalog part's interfaces are bound to its tagged features and read from the built part,
+never restated:
+
+```yaml
+  - id: plate
+    spec: {...}                    # a mounting plate with its m6 hole pattern
+    interfaces:
+      - {name: motor_mount, kind: bolt_pattern, features: [m6_1_1, m6_2_1, m6_2_2, m6_1_2]}
+      - {name: pilot, kind: bore, features: [cb]}
+```
+
+A pattern's holes and the face they open on come from the built holes, and a shaft's,
+bore's, pin's or hole's axis and diameter from its one round feature, so a change to the
+holes changes the interface. `face` may name the far face of through holes. A part offers
+the kinds its features state fully (mounting face, patterns, shaft, bore, pin, hole); a
+rail, carriage, keyed shaft or connector is offered by a placeholder or component. A
+binding to a tag the built part lacks is refused, naming the interface and the tag.
+
 ## The vocabulary
 
 Each kind is located by the face it is on or the axis it runs along, and states the
@@ -78,5 +98,4 @@ would run as a formula quoted, and `section()` as a report section.
 The same vocabulary is in the MCP server's `initialize` instructions. The published
 schema is the [product document](api/schemas/product-document.schema.json).
 
-Not yet built: interfaces bound to a catalog part's tagged features, and joints on
-connections.
+Not yet built: joints on connections.

@@ -36,6 +36,7 @@ __all__ = [
     "COMPATIBLE",
     "InterfaceError",
     "Interface",
+    "PartInterface",
     "partners_of",
 ]
 
@@ -163,3 +164,85 @@ def check_interfaces(interfaces: tuple[Interface, ...], holes: set[str], owner: 
             raise _refuse(f"{owner} interface '{interface.name}' names holes {missing}, which "
                           f"it does not have ({', '.join(sorted(holes)) or 'none'})",
                           subject="holes")  # fmt: skip
+
+
+_FROM_AXIS = {(0, 1): "right", (0, -1): "left", (1, 1): "back", (1, -1): "front",
+              (2, 1): "top", (2, -1): "bottom"}  # fmt: skip
+_ALONG = {"top": 2, "bottom": 2, "right": 0, "left": 0, "back": 1, "front": 1}
+#: The kinds a catalog part can offer: the ones its built features fully state.
+PART_KINDS = ("mounting_face", "bolt_pattern", "tapped_pattern", "shaft", "bore", "pin", "hole")
+
+
+class PartInterface(StatableModel):
+    """An interface on a catalog part, bound to the part's tagged features.
+
+    Its frame and parameters are read from the built features, never restated: a pattern's
+    holes and the face they open on, an axial kind's axis and diameter. A ``mounting_face``
+    names its ``face`` and no feature. ``face`` may also name the far face of a pattern of
+    through holes, along the same axis.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    kind: str
+    features: tuple[Named, ...] = Field(default=(), max_length=64)
+    face: Literal["top", "bottom", "left", "right", "front", "back"] | None = None
+
+    @model_validator(mode="after")
+    def _a_binding(self) -> PartInterface:
+        if self.kind not in PART_KINDS:
+            near = difflib.get_close_matches(self.kind, KINDS, n=3, cutoff=0.4)
+            nearest = ", ".join(near) or ", ".join(KINDS)
+            where = ("a part's features do not state its parameters; offer it on a "
+                     "placeholder or component" if self.kind in KINDS
+                     else f"it is not a kind; nearest: {nearest}")  # fmt: skip
+            raise _refuse(f"interface '{self.name}' is a {self.kind} on a part: {where}",
+                          subject="kind")  # fmt: skip
+        if self.kind == "mounting_face":
+            if self.face is None or self.features:
+                raise _refuse(f"interface '{self.name}' is a mounting_face: it names its face "
+                              "and no feature", subject="face")  # fmt: skip
+        elif self.kind in ("bolt_pattern", "tapped_pattern") and len(self.features) < 2:
+            raise _refuse(f"interface '{self.name}' is a {self.kind}: it names the two or more "
+                          "holes it is made of", subject="features")  # fmt: skip
+        elif KINDS[self.kind][0] == "axis" and (len(self.features) != 1 or self.face):
+            raise _refuse(f"interface '{self.name}' is a {self.kind}: it names the one round "
+                          "feature it runs along, and no face", subject="features")  # fmt: skip
+        return self
+
+    def resolve(self, features: dict[str, object], owner: str) -> Interface:
+        """This interface as the built part states it, from its features by tag."""
+        missing = [tag for tag in self.features if tag not in features]
+        if missing:
+            raise _refuse(f"{owner} interface '{self.name}' is bound to {missing}, which the "
+                          f"built part does not have ({', '.join(sorted(features)) or 'none'})",
+                          subject="features")  # fmt: skip
+        if self.kind == "mounting_face":
+            return Interface(name=self.name, kind=self.kind, face=self.face)
+        bound = [features[tag] for tag in self.features]
+        axes = []
+        for feature in bound:
+            axis = tuple(float(v) for v in feature.axis)  # type: ignore[attr-defined]
+            index = max(range(3), key=lambda i: abs(axis[i]))
+            if abs(abs(axis[index]) - 1) > 1e-6:
+                raise _refuse(f"{owner} interface '{self.name}' is bound to "
+                              f"'{feature.tag}', whose axis {axis} is not along x, y or z",  # type: ignore[attr-defined]
+                              subject="features")  # fmt: skip
+            axes.append((index, 1 if axis[index] > 0 else -1))
+        if len({index for index, _sign in axes}) != 1:
+            raise _refuse(f"{owner} interface '{self.name}' binds holes on different axes",
+                          subject="features")  # fmt: skip
+        index, sign = axes[0]
+        if KINDS[self.kind][0] == "axis":
+            diameter = Quantity(magnitude=bound[0].diameter_mm, unit="mm")  # type: ignore[attr-defined]
+            return Interface.model_validate({"name": self.name, "kind": self.kind,
+                                             "axis": "xyz"[index],
+                                             "parameters": {"diameter": diameter}})  # fmt: skip
+        face = self.face or _FROM_AXIS[(index, sign)]
+        along = "xyz"[index]
+        if _ALONG[face] != index:
+            raise _refuse(f"{owner} interface '{self.name}' names the {face} face, which its "
+                          f"holes along {along} do not open on", subject="face")  # fmt: skip
+        return Interface.model_validate({"name": self.name, "kind": self.kind, "face": face,
+                                         "holes": self.features})  # fmt: skip
