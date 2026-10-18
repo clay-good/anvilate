@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Sixty-eight pages, arranged by what you are trying to do. The [README](../README.md) is the
+Sixty-nine pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -10,6 +10,7 @@ You have a part and you want a verdict.
 | | |
 | --- | --- |
 | [Quickstart](quickstart.md) | Install, screen a lifting lug, read the verdict. Ten minutes, no network, no CAD. |
+| [Products](products.md) | A product as a tree of definitions placed as instances: part numbers, provisional numbers, paths and a parts list. |
 | [Combinations](combinations.md) | Several parts placed by the features they share: the four mates, what is checked where parts meet, and five worked examples with pictures. |
 | [Parts you can ask for](parts-catalog.md) | Every part Anvilate draws, with a picture of each and the fields it takes. Generated from the pattern registry. |
 | [Example highlights](example-highlights.md) | Worked examples where the governing check is not the obvious one, each with the figures it prints. |

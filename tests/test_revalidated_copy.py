@@ -501,6 +501,7 @@ def _any_field_probes():
     from anvilate.context import PartSeed
     from anvilate.mcp import tool_catalog
     from anvilate.patterns import describe_part
+    from anvilate.product import Definition
     from anvilate.screening import StructureMember
     from anvilate.spec import (
         AcceptanceCriteria,
@@ -568,6 +569,11 @@ def _any_field_probes():
             missing=("name",),
         ),
         ("anvilate.patterns", "PartDescription", "example"): describe_part("spacer").parts[0],
+        ("anvilate.product", "Definition", "spec"): Definition(
+            id="lug",
+            identity={"part_number": "100-0001", "description": "lug", "source": "make"},
+            spec=spec.model_dump(mode="json"),
+        ),
         ("anvilate.mcp", "ToolDefinition", "input_schema"): tool,
         ("anvilate.mcp", "ToolDefinition", "output_schema"): tool,
         ("anvilate.screening", "StructureMember", "element_params"): member,

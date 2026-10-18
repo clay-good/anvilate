@@ -137,6 +137,9 @@ that already ran and does one more thing with them:
   report ordered by how many screens each would unblock — leverage, never severity.
 - :mod:`anvilate.optical_tolerances` — optical element tolerances declared once and
   rendered as ISO 10110 indications, a scratch-dig kept in its own named convention.
+- :mod:`anvilate.product` — a product as a tree of definitions placed as instances: item
+  identity with provisional part numbers marked as such, stable instance paths, a parts
+  list, and the containment, numbering and mirroring refusals, before any geometry.
 - :mod:`anvilate.profile` — a cited, versioned bundle of declarations bound in one
   action, refused outside its own applicability and attributed wherever a value appears.
 - :mod:`anvilate.refusal` — raised refusals with structured action, subject, and source
