@@ -7,6 +7,7 @@ what excites them, and the load a drop puts on what is inside.**
 | --- | --- |
 | `rainflow_count(history, repeating=...)` | The history's cycles by rainflow, with range, mean and count, a range histogram, and the residual of an open count |
 | `modal_separation(...)` | Every estimated mode below a ceiling against every declared excitation band, with the separation ratio and the verdict against the program's target |
+| `duty_cycle_damage(events, ...)` | Miner damage per pass, per life and in total over named events, each counted by rainflow, with a declared mean-stress correction, naming the event that drives it |
 | `drop_screen(...)` | A drop's energy, landing speed and half-sine pulse, and the peak load on each mounted item |
 
 ## Rainflow, open or repeating
@@ -28,6 +29,19 @@ Damage over the counted cycles is the library's existing `miner_cumulative_damag
 [worked example](../examples/rainflow_block_damage.py) shows the largest cycle of a block
 doing 0.99 of the damage. It is the cycle a count of neighbouring swings never sees.
 
+## Damage by event
+
+A duty cycle is named events, each with its stress history, how often it occurs per life,
+and its source. Each event is counted by rainflow. Each cycle is turned into a fully
+reversed amplitude by the declared correction (none, Goodman, or Smith-Watson-Topper) and
+read on the declared Basquin curve. Miner's rule then sums it per pass and per life. The
+result gives each event's share and names the one with the largest. A history of fewer than
+three reversals has no closed cycle, and it is refused naming its event.
+
+The [bracket example](../examples/bracket_duty_cycle.py) shows why the share matters. A
+pothole occurring 4,000 times does 0.97 of the damage, against cornering 300,000 times.
+Without the mean-stress correction, the same bracket would appear to pass.
+
 ## Modes and drops
 
 A mode inside an excitation band has no separation. Outside it, the separation is
@@ -39,5 +53,5 @@ mounted item feels the pulse times the half-sine shock amplification at its own 
 frequency, so an item tuned near the worst ratio sees about 1.77 times the peak. The
 contact stiffness is the weakest number, and every drop result is labelled an estimate.
 
-Not yet built: duty-cycle declarations with damage by event, joint embedding loss, seals
-across temperature, and plastic retention.
+Not yet built: declaring a duty cycle in a Design Spec (the analysis takes events directly
+today), joint embedding loss, seals across temperature, and plastic retention.

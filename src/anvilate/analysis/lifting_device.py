@@ -280,6 +280,14 @@ def bth1_allowable_stresses(
             subject="yield_strength and ultimate_strength",
             source=_MATERIAL_SOURCE,
         )
+    # A NaN or a string here reached `.design_factor` and raised AttributeError, which no
+    # surface catches; the category is a declaration, refused by name like the rest.
+    if not isinstance(category, DesignCategory):
+        raise _lifting_device_refusal(
+            f"category must be a DesignCategory (A or B); got {category!r}",
+            subject="category",
+            source=_lifting_device_input_source("category"),
+        )
     nd = category.design_factor
     return BTH1Allowables(
         category=category,
@@ -333,6 +341,12 @@ def bth1_member_scorecard(
                 subject=label,
                 source=_lifting_device_input_source(label),
             )
+    if not isinstance(category, DesignCategory):
+        raise _lifting_device_refusal(
+            f"category must be a DesignCategory (A or B); got {category!r}",
+            subject="category",
+            source=_lifting_device_input_source("category"),
+        )
     applied = abs(stress.to("MPa").magnitude)
     limit = allowable.to("MPa").magnitude
     if limit <= 0:

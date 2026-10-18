@@ -9585,3 +9585,13 @@ def test_rainflow_block_damage_example():
     assert d["largest_share"] == pytest.approx((1 / largest_life) / d["damage_per_block"])
     assert d["blocks_to_failure"] == pytest.approx(197_869, abs=1)
     _assert_narrates_computed("rainflow_block_damage.py", namespace)
+
+
+def test_bracket_duty_cycle_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "bracket_duty_cycle.py"))
+    d = namespace["bracket_duty_cycle"]()
+    assert d["governing"] == "pothole"
+    assert d["damage"] == pytest.approx(4.054, abs=5e-4)
+    assert d["lives"] < 1 < d["lives_uncorrected"]  # the correction decides pass or fail
+    assert d["pothole_share"] + d["cornering_share"] < 1  # braking takes the rest
+    _assert_narrates_computed("bracket_duty_cycle.py", namespace)

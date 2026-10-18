@@ -208,3 +208,17 @@ def test_every_limit_state_the_enum_names_is_one_a_case_above_produces():
         "these limit states are named by AluminumLimitState and no case above produces "
         f"one: {sorted(state.name for state in set(AluminumLimitState) - produced)}"
     )
+
+
+@pytest.mark.parametrize("support", [None, "both_edges", ["one_edge"]])
+def test_an_edge_support_that_is_not_one_is_refused_not_read_as_one_edge_free(support):
+    """Three functions dispatched `BOTH_EDGES else ONE_EDGE`; anything else took the else."""
+    from anvilate.analysis import aluminum_elastic_local_buckling_stress
+
+    with pytest.raises(ValueError, match="edge_support"):
+        aluminum_elastic_local_buckling_stress(
+            flat_width=Quantity(magnitude=40.0, unit="mm"),
+            thickness=Quantity(magnitude=2.0, unit="mm"),
+            elastic_modulus=Quantity(magnitude=69_600.0, unit="MPa"),
+            edge_support=support,  # type: ignore[arg-type]
+        )

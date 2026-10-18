@@ -69,7 +69,8 @@ class RainflowCount(BaseModel):
 
     ``residual`` is the reversal sequence left at the end of an open count, whose ranges
     are the half cycles at the end of ``cycles``; a repeating count closes on itself and
-    leaves only its starting extreme. ``unit`` is the unit every value is in.
+    leaves only its starting extreme. ``unit`` is the unit every value is in, and
+    ``reversals`` how many peaks and valleys the history reduced to.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -78,6 +79,7 @@ class RainflowCount(BaseModel):
     residual: tuple[float, ...]
     repeating: bool
     unit: str
+    reversals: int
 
     @property
     def total_cycles(self) -> float:
@@ -174,4 +176,4 @@ def rainflow_count(history: Sequence[Quantity], *, repeating: bool) -> RainflowC
     else:
         cycles, residual = _count(reversals, open_history=True)
     return RainflowCount(cycles=tuple(cycles), residual=tuple(residual), repeating=repeating,
-                         unit=unit)  # fmt: skip
+                         unit=unit, reversals=len(reversals))  # fmt: skip

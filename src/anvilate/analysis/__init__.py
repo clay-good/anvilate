@@ -1062,6 +1062,9 @@ modules:
 - :mod:`~anvilate.analysis.rainflow` — rainflow cycle counting of a load history, as a
   repeating block (NASA CR-181942) or applied once with its residual half cycles (ASTM
   E1049 §5.4.4)
+- :mod:`~anvilate.analysis.duty_cycle` — fatigue over a duty cycle: named events counted
+  by rainflow, a declared mean-stress correction, Basquin lives, and Miner's rule per pass,
+  per life and in total, naming the event that drives it
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -1766,6 +1769,14 @@ from .durability import (
     MountedItemLoad,
     drop_screen,
     modal_separation,
+)
+from .duty_cycle import (
+    BasquinCurve,
+    DutyCycleDamage,
+    DutyEvent,
+    EventDamage,
+    MeanStressCorrection,
+    duty_cycle_damage,
 )
 from .dynamics import (
     STANDARD_GRAVITY,
@@ -3653,6 +3664,12 @@ __all__ = [
     "RainflowCycle",
     "RainflowCount",
     "rainflow_count",
+    "MeanStressCorrection",
+    "BasquinCurve",
+    "DutyEvent",
+    "EventDamage",
+    "DutyCycleDamage",
+    "duty_cycle_damage",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

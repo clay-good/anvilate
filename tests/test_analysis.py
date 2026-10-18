@@ -18966,7 +18966,7 @@ def test_every_aluminum_refusal_site_is_structured():
         if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
             unstructured.append(node.exc)
 
-    assert len(structured) == 55
+    assert len(structured) == 56  # 56th: the edge-support check, 2026-10-17
     assert unstructured == []
     for call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
@@ -48575,3 +48575,16 @@ def test_the_bth1_allowables_render_every_allowable_they_carry():
     assert f"F_t {allowables.tension_gross} gross" in rendered
     assert f"{allowables.tension_net} net" in rendered
     assert "Category B" in rendered and "N_d = 3.00" in rendered
+
+
+@pytest.mark.parametrize("category", [float("nan"), "A", None])
+def test_a_bth1_category_that_is_not_one_is_refused_by_name(category):
+    """A NaN category reached `.design_factor` and raised AttributeError before 2026-10-17."""
+    from anvilate.analysis import bth1_allowable_stresses
+
+    with pytest.raises(ValueError, match="category"):
+        bth1_allowable_stresses(
+            yield_strength=Quantity(magnitude=250.0, unit="MPa"),
+            ultimate_strength=Quantity(magnitude=400.0, unit="MPa"),
+            category=category,  # type: ignore[arg-type]
+        )

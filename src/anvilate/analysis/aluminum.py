@@ -260,6 +260,24 @@ _OUT_OF_STRAIGHTNESS = 0.85
 _K_BOTH_EDGES = 1.6
 _K_ONE_EDGE = 5.0
 
+
+def _edge_coefficient(edge_support: object) -> float:
+    """The §B.5.4 coefficient k for an element's edge support, refusing anything else.
+
+    Three functions dispatched on `edge_support is BOTH_EDGES else ONE_EDGE`, so `None`, a
+    list or a misspelt string took the one-edge coefficient and returned an answer. Only
+    the two members are edge supports.
+    """
+    if not isinstance(edge_support, EdgeSupport):
+        raise _aluminum_refusal(
+            f"edge_support must be an EdgeSupport ({', '.join(m.value for m in EdgeSupport)}); "
+            f"got {edge_support!r}",
+            subject="edge_support",
+            source=_ALUMINUM_MEMBER_SOURCE,
+        )
+    return _K_BOTH_EDGES if edge_support is EdgeSupport.BOTH_EDGES else _K_ONE_EDGE
+
+
 _CLAUSE_ADM = "Aluminum Design Manual 2020 Part I §B.4/§B.5.4/§E.3/§F.4.2"
 
 
@@ -672,7 +690,7 @@ def aluminum_local_buckling_stress(
         )
     bp = constants.intercept_plate.to("MPa").magnitude
     dp = constants.slope_plate.to("MPa").magnitude
-    k = _K_BOTH_EDGES if edge_support is EdgeSupport.BOTH_EDGES else _K_ONE_EDGE
+    k = _edge_coefficient(edge_support)
     ratio = b / t
     lambda_1 = (bp - fcy) / (k * dp)
     lambda_2 = _K1_AGED * bp / (k * dp)
@@ -756,7 +774,7 @@ def aluminum_elastic_local_buckling_stress(
             subject="flat_width, thickness, and elastic_modulus",
             source=_ALUMINUM_MEMBER_SOURCE,
         )
-    k = _K_BOTH_EDGES if edge_support is EdgeSupport.BOTH_EDGES else _K_ONE_EDGE
+    k = _edge_coefficient(edge_support)
     return Quantity(magnitude=pi**2 * e / (k * b / t) ** 2, unit="MPa")
 
 
@@ -1018,7 +1036,7 @@ def _local_buckling_work(
     fcy = properties.compressive_yield.to("MPa").magnitude
     bp = constants.intercept_plate.to("MPa").magnitude
     dp = constants.slope_plate.to("MPa").magnitude
-    k = _K_BOTH_EDGES if edge_support is EdgeSupport.BOTH_EDGES else _K_ONE_EDGE
+    k = _edge_coefficient(edge_support)
     ratio = flat_width.to("mm").magnitude / thickness.to("mm").magnitude
     lambda_1 = (bp - fcy) / (k * dp)
     lambda_2 = _K1_AGED * bp / (k * dp)

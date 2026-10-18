@@ -1320,6 +1320,14 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                         value = "probe"
                     elif (record := _probe_record(module, spelled)) is not None:
                         value = record
+                    elif isinstance(member := getattr(module, spelled, None), type) and issubclass(
+                        member, Enum
+                    ):
+                        # A required choice is a declaration too; its first member is the one
+                        # a user meets first. Unbound, every function taking an enum — a
+                        # loading case, a tightening method, a section family — stood outside
+                        # every probe.
+                        value = next(iter(member))
                     else:
                         # A required flag is a declared fact, and False is the one a user
                         # states first; leaving it unbound kept its function out.
@@ -1741,27 +1749,16 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
         "has to show in its own tests that a NaN or an infinity inside the text is refused, "
         "and then raise this with that test named"
     )
-    # 80 -> 85 on 2026-10-17: the five laminate functions take ply models and a response,
-    # and tests/test_laminate.py refuses NaN and infinity in every modulus, strength,
-    # thickness and running load itself. 85 -> 88: psd_overall_grms, psd_level and
-    # random_vibration_load take breakpoint sequences, and tests/test_random_vibration.py
-    # refuses a NaN and an infinity in them. 88 -> 90: the two shell_buckling functions
-    # take a CylinderLoading, and tests/test_shell_buckling.py refuses a NaN and an
-    # infinite r/t. 90 -> 94: the four preloaded_joint functions take a tightening method,
-    # a test sample or preload bounds, and tests/test_preloaded_joint.py refuses a NaN, an
-    # infinite and a negative measured preload and a NaN stiffness factor. Raise this only
-    # with such a test named. 94 -> 95: gerard_crippling_stress takes a CripplingSection,
-    # and tests/test_crippling.py refuses a NaN area and a zero thickness. 95 -> 97: the
-    # two plasticity functions take a RambergOsgood curve, and tests/test_plasticity.py
-    # refuses a NaN and an infinite slenderness. 97 -> 98: fastener_group_loads takes a
-    # sequence of fasteners, and tests/test_fastener_group.py refuses a NaN and an
-    # infinite load and a NaN allowable. 98 -> 99: sandwich_local_modes takes a panel,
-    # and tests/test_sandwich.py refuses a NaN cell size and a zero facing thickness.
-    # 99 -> 100: modal_separation takes (name, frequency) pairs and bands, and
-    # tests/test_durability.py refuses a separation ratio below 1 and a backwards band.
-    # 100 -> 101: rainflow_count takes a history, and tests/test_rainflow.py refuses a NaN
-    # inside it.
-    assert len(unbuildable) <= 101, (
+    # 80 -> 97 on 2026-10-17. The structural hand methods added functions that take ply
+    # models, preload bounds, fastener patterns, panels, curves and load histories; each
+    # module's own tests refuse NaN and infinity inside those (tests/test_laminate.py,
+    # test_preloaded_joint.py, test_fastener_group.py, test_sandwich.py, test_plasticity.py,
+    # test_random_vibration.py, test_rainflow.py, test_duty_cycle.py). The same day the
+    # binder learned to bind an enum parameter to its first member, which brought seven
+    # functions back inside the probes and found two real defects (an AttributeError on a
+    # NaN BTH-1 category, and an aluminium edge support whose `else` accepted `None`).
+    # Raise this only with the test that refuses the new function's non-finite input named.
+    assert len(unbuildable) <= 97, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )
