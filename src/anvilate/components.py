@@ -24,12 +24,13 @@ of it:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
-from .derivation import Derivation, SymbolValue
+from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from .units import Quantity
@@ -40,7 +41,9 @@ __all__ = [
     "SupplierNumber",
     "Rating",
     "Demand",
+    "VendorModel",
     "ComponentRecord",
+    "draft_component",
 ]
 
 _RECORD_SOURCE = "the component record: its datasheet, page by page"
@@ -110,6 +113,19 @@ class Demand(StatableModel):
     source: Provenance
 
 
+class VendorModel(StatableModel):
+    """The vendor's STEP file for the component: a path in the user's folder, and its hash.
+
+    The file is used where it is, never copied. ``sha256`` is the file's digest when the
+    record was written, so a file changed since reads as changed rather than as the model.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    file: Named
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class ComponentRecord(StatableModel):
     """A purchased component: identity, where to buy it, the space it takes, its ratings.
 
@@ -133,6 +149,11 @@ class ComponentRecord(StatableModel):
     mass_source: Provenance
     ratings: tuple[Rating, ...] = Field(default=(), max_length=32)
     holes: tuple[PlaceholderHole, ...] = Field(default=(), max_length=64)
+    model: VendorModel | None = None
+    # A record drafted from a measured vendor STEP (:func:`draft_component`) is used only
+    # once a person has checked it: until ``confirmed_by`` names them, its card says so.
+    drafted: bool = False
+    confirmed_by: Named | None = None
 
     @model_validator(mode="after")
     def _a_record(self) -> ComponentRecord:
@@ -191,6 +212,17 @@ _NEEDS_A_SUPPLIER = Need(
     takes="a supplier and that supplier's part number to buy the component by",
     sources=(ValueSource.USER, ValueSource.DATABASE),
 )
+_NEEDS_A_CONFIRMATION = Need(
+    declaration="definitions[].component.confirmed_by",
+    takes="the person who checked the drafted record against the vendor's datasheet",
+    sources=(ValueSource.USER,),
+)
+_NEEDS_THE_MODEL = Need(
+    declaration="definitions[].component.model",
+    takes="the vendor's STEP file in the folder the product is read from, unchanged",
+    sources=(ValueSource.USER,),
+)
+_ENVELOPE_TOLERANCE_MM = 0.5
 _BEARING_REFERENCE = "Shigley, rolling-bearing rating life L10 = (C/P)^p"
 _RATING_REFERENCE = "the component's datasheet rating against the product's demand"
 
@@ -245,8 +277,115 @@ def _missing(name: str, wanted: list[str], family: str) -> ScorecardEntry:
     )
 
 
+def _model_entry(record: ComponentRecord, model: VendorModel, root: Path | None) -> ScorecardEntry:
+    """Whether the vendor's file is there, unchanged, and fits the record's envelope."""
+    from .context import read_cad_file
+
+    def not_evaluated(why: str) -> ScorecardEntry:
+        return ScorecardEntry(name="vendor model", status=CheckStatus.NOT_EVALUATED,
+                              detail=f"{model.file}: {why}; its geometry is not evaluated",
+                              reference=_RATING_REFERENCE, needs=(_NEEDS_THE_MODEL,))  # fmt: skip
+
+    if root is None:
+        return not_evaluated("no folder was given to read it from")
+    path = root / model.file
+    if not path.is_file():
+        return not_evaluated(f"not found in {root}")
+    facts = read_cad_file(path)
+    if facts.sha256 != model.sha256:
+        found, recorded = facts.sha256[:12], model.sha256[:12]
+        return not_evaluated(
+            f"its SHA-256 is {found}…, not the recorded {recorded}…, so it has changed "
+            "since the record"
+        )
+    stated = [q.to("mm").magnitude for q in record.envelope]
+    worst = max(abs(a - b) for a, b in zip(facts.size_mm, stated, strict=True))
+    fits = worst <= _ENVELOPE_TOLERANCE_MM
+    return ScorecardEntry(
+        name="vendor model",
+        status=CheckStatus.PASS if fits else CheckStatus.FAIL,
+        detail=f"{model.file} matches its recorded hash and measures "
+        f"{' × '.join(f'{v:g}' for v in facts.size_mm)} mm against the record's "
+        f"{' × '.join(f'{v:g}' for v in stated)} mm "
+        f"({'within' if fits else 'off by'} {worst:.3g} mm"
+        f"{'' if fits else f', past {_ENVELOPE_TOLERANCE_MM} mm'})",
+        reference=_RATING_REFERENCE,
+        underived=Underived(kind=DerivationAbsence.LOOKUP,
+                            reason="the measured box against the stated one, axis by axis"),
+    )  # fmt: skip
+
+
+def draft_component(
+    path: str | Path,
+    *,
+    manufacturer: str,
+    part_number: str,
+    description: str,
+    family: str,
+    mass: Quantity,
+    mass_source: str,
+    ratings: tuple[Rating, ...] = (),
+    suppliers: tuple[SupplierNumber, ...] = (),
+) -> ComponentRecord:
+    """A draft record measured from the vendor's STEP at ``path``: envelope, holes, model.
+
+    The envelope is the file's measured box, and each through or blind hole whose axis
+    runs along x, y or z becomes a hole on the face it opens on, tagged ``h1``, ``h2``…
+    in the order the file lists them. Ratings and mass are the datasheet's and are the
+    caller's to state. The record is ``drafted``: a product holding it says so until
+    ``confirmed_by`` names who checked it.
+    """
+    from .context import read_cad_file
+
+    ratings = tuple(each_one(ratings, Rating, named="ratings"))
+    suppliers = tuple(each_one(suppliers, SupplierNumber, named="suppliers"))
+    facts = read_cad_file(path)
+    if facts.kind != "step" or len(facts.solids) != 1:
+        raise _refuse(f"{facts.file} is not a STEP file of one solid; draft a record from the "
+                      "vendor's model of the one component", subject="path")  # fmt: skip
+    from build123d import import_step
+
+    solid = facts.solids[0]
+    box = import_step(str(path)).bounding_box()
+    low = [box.min.X, box.min.Y, box.min.Z]
+    high = [box.max.X, box.max.Y, box.max.Z]
+    centre = [(lo + hi) / 2 for lo, hi in zip(low, high, strict=True)]
+    holes: list[dict[str, object]] = []
+    for cylinder in solid.cylinders:
+        axis = [abs(a) for a in cylinder.axis]
+        along = axis.index(max(axis))
+        if cylinder.kind != "hole" or max(axis) < 1 - 1e-6:
+            continue
+        ends = [cylinder.position_mm[along] + sign * cylinder.depth_mm / 2 for sign in (-1, 1)]
+        gaps = [(abs(end - high[along]), end, 1) for end in ends] + [
+            (abs(end - low[along]), end, -1) for end in ends
+        ]
+        _gap, entry, sign = min(gaps)
+        point = list(cylinder.position_mm)
+        point[along] = entry
+        centred = [p - c for p, c in zip(point, centre, strict=True)]
+        face = {(0, 1): "right", (0, -1): "left", (1, 1): "back", (1, -1): "front",
+                (2, 1): "top", (2, -1): "bottom"}[(along, sign)]  # fmt: skip
+        holes.append({"tag": f"h{len(holes) + 1}", "x": _mm(centred[0]), "y": _mm(centred[1]),
+                      "z": _mm(centred[2]), "diameter": _mm(cylinder.diameter_mm),
+                      "face": face})  # fmt: skip
+    where = f"measured from {facts.file} (sha256 {facts.sha256[:12]}…)"
+    return ComponentRecord.model_validate({
+        "manufacturer": manufacturer, "part_number": part_number, "description": description,
+        "family": family, "suppliers": [s.model_dump(mode="json") for s in suppliers],
+        "envelope": [_mm(v) for v in solid.size_mm], "envelope_source": where,
+        "mass": mass.model_dump(mode="json"), "mass_source": mass_source,
+        "ratings": [r.model_dump(mode="json") for r in ratings], "holes": holes,
+        "model": {"file": Path(path).name, "sha256": facts.sha256}, "drafted": True,
+    })  # fmt: skip
+
+
+def _mm(value: float) -> dict[str, float | str]:
+    return {"magnitude": round(value, 6) + 0.0, "unit": "mm"}
+
+
 def _rating_entries(
-    record: ComponentRecord, demands: tuple[Demand, ...] = ()
+    record: ComponentRecord, demands: tuple[Demand, ...] = (), root: Path | None = None
 ) -> tuple[ScorecardEntry, ...]:
     """Each of ``record``'s family checks against ``demands``, and its sourcing.
 
@@ -343,6 +482,15 @@ def _rating_entries(
                                   unit="N"))  # fmt: skip
         else:
             entries.append(_missing("gas spring force", ["force"], family))
+    if record.model is not None:
+        entries.append(_model_entry(record, record.model, root))
+    if record.drafted and record.confirmed_by is None:
+        entries.append(ScorecardEntry(
+            name="drafted record", status=CheckStatus.NOT_EVALUATED, reference=_RATING_REFERENCE,
+            detail=f"{record.manufacturer} {record.part_number} was drafted from a measured "
+            "vendor model and nobody has confirmed it against the datasheet",
+            needs=(_NEEDS_A_CONFIRMATION,),
+        ))  # fmt: skip
     if not record.sourced:
         entries.append(ScorecardEntry(
             name="sourcing", status=CheckStatus.NOT_EVALUATED, reference=_RATING_REFERENCE,

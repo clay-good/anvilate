@@ -3708,7 +3708,7 @@ def _combine_product(args: argparse.Namespace, *, out, err) -> int:
     try:
         product, library = load_product(args.combination)
         library = {**_product_library(args.combination), **library}
-        placed = place_product(product, library=library)
+        placed = place_product(product, library=library, root=args.combination.parent)
         summary = summarize_product(
             placed,
             product_tree(product, library=library),
@@ -3757,7 +3757,7 @@ def _check_product(
     try:
         product, library = load_product(path)
         library = {**_product_library(path), **library}
-        placed = place_product(product, library=library)
+        placed = place_product(product, library=library, root=path.parent)
         tree = product_tree(product, library=library)
     except (ProductError, yaml.YAMLError, OSError, UnicodeDecodeError) as refused:
         print(f"anvilate check: {path}: {refused}", file=err)

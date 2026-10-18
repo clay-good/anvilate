@@ -7,8 +7,8 @@ Depends on `add-product-structure`, `add-interface-contracts`, and the STEP read
 
 - [x] 1.1 Component record schema: identity, supplier numbers, envelope, interfaces,
       ratings, provenance per value
-- [ ] 1.2 Vendor STEP by path and SHA-256; hash mismatch makes geometry not evaluated
-- [ ] 1.3 Draft records from a measured vendor STEP; confirmation before use
+- [x] 1.2 Vendor STEP by path and SHA-256; hash mismatch makes geometry not evaluated
+- [x] 1.3 Draft records from a measured vendor STEP; confirmation before use
 
 ## 2. Families
 

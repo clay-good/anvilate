@@ -42,9 +42,26 @@
       "additionalProperties": false,
       "description": "A purchased component: identity, where to buy it, the space it takes, its ratings.\n\n``envelope`` is the box it occupies, centred on its own origin, and ``holes`` the\ninterfaces it offers a mate, as a placeholder's; ``envelope_source`` and ``mass_source``\nname where they were read. ``ratings`` must include every rating\n:data:`FAMILY_RATINGS` lists for ``family``, each with its source.",
       "properties": {
+        "confirmed_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmed By"
+        },
         "description": {
           "title": "Description",
           "type": "string"
+        },
+        "drafted": {
+          "default": false,
+          "title": "Drafted",
+          "type": "boolean"
         },
         "envelope": {
           "maxItems": 3,
@@ -99,6 +116,17 @@
         "mass_source": {
           "title": "Mass Source",
           "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VendorModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "part_number": {
           "title": "Part Number",
@@ -847,18 +875,40 @@
       ],
       "title": "Variant",
       "type": "object"
+    },
+    "VendorModel": {
+      "additionalProperties": false,
+      "description": "The vendor's STEP file for the component: a path in the user's folder, and its hash.\n\nThe file is used where it is, never copied. ``sha256`` is the file's digest when the\nrecord was written, so a file changed since reads as changed rather than as the model.",
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "title": "VendorModel",
+      "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.1.0",
+  "$id": "urn:anvilate:schema:product-document:1.2.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.1.0",
+      "default": "1.2.0",
       "enum": [
         "1.0.0",
-        "1.1.0"
+        "1.1.0",
+        "1.2.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -950,5 +1000,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.1.0"
+  "x-anvilate-version": "1.2.0"
 }

@@ -162,7 +162,9 @@ components.ComponentError
 components.SupplierNumber
 components.Rating
 components.Demand
+components.VendorModel
 components.ComponentRecord
+components.draft_component
 context.AssemblyOccurrence
 context.CadFacts
 context.ContextError

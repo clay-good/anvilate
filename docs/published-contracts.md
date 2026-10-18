@@ -121,6 +121,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.2.0: a component names its vendor model, and a draft says so
+
+A component record gains `model`, the vendor's STEP by relative path and SHA-256;
+`drafted`, set on a record measured from that file by `draft_component`; and
+`confirmed_by`, who checked a draft against the datasheet. A 1.0.0 or 1.1.0 product
+document reads unchanged.
+
 ### Product document 1.1.0: a definition may be a purchased component
 
 A definition gains `component`, a purchased component's record, and `demands`, what the

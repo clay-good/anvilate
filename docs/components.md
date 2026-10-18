@@ -51,5 +51,26 @@ not read is refused, so a misspelt one cannot leave its check unrun.
 A record with no supplier part number is unsourced. Its card carries a not-evaluated
 `sourcing` entry, so a product holding it never exports as validated.
 
-Not yet built: bundled dimension tables for common families, vendor STEP files referenced by
-path and hash, and drafting a record from a measured vendor STEP.
+## Using a vendor model
+
+A record names the vendor's STEP file by `model: {file, sha256}`, a path relative to the
+product's folder. The file is used where it is and never copied. `anvilate check` and
+`combine` read it from the document's folder (`place_product(..., root=folder)` in Python),
+and the card's `vendor model` entry says:
+
+| What it finds | Entry |
+| --- | --- |
+| The file, unchanged, measuring within 0.5 mm of the record's envelope on every axis | pass |
+| The file, unchanged, outside that | fail, naming the difference |
+| No folder, no file, or a file whose SHA-256 is not the recorded one | not evaluated: the geometry is not checked |
+
+## Drafting a record from a vendor model
+
+`draft_component(path, manufacturer=..., part_number=..., description=..., family=...,
+mass=..., mass_source=..., ratings=...)` measures the vendor's STEP: its envelope, and each
+hole along x, y or z as a hole on the face it opens on (`h1`, `h2`…), with the model's path
+and hash. Ratings and mass come from the datasheet and are yours to state. The record is
+`drafted`, and a product holding it carries a not-evaluated `drafted record` entry until
+`confirmed_by` names who checked it against the datasheet.
+
+Not yet built: bundled dimension tables for common families.

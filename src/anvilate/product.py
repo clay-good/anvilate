@@ -90,7 +90,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.1.0"] = "1.1.0"
+PRODUCT_VERSION: Literal["1.2.0"] = "1.2.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -398,8 +398,9 @@ class Product(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    # 1.1.0 adds a definition's component and demands; a 1.0.0 document reads unchanged.
-    anvilate_product: Literal["1.0.0", "1.1.0"] = PRODUCT_VERSION
+    # 1.1.0 adds a definition's component and demands, and 1.2.0 a component's vendor model
+    # and drafted state; an older document reads unchanged.
+    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0"] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
     identity: ItemIdentity | None = None
@@ -1211,7 +1212,10 @@ class BuildCache:
 
 
 def _placed_leaves(
-    product: Product, library: Mapping[str, Product] | None, cache: BuildCache | None
+    product: Product,
+    library: Mapping[str, Product] | None,
+    cache: BuildCache | None,
+    root: Any = None,
 ) -> tuple[list[_Leaf], int, int]:
     """Every leaf body placed where its mates put it, and the items rebuilt and reused."""
     from .combination import _IDENTITY, PlacedPart, _place
@@ -1220,6 +1224,9 @@ def _placed_leaves(
         raise _refuse(f"cache is a {type(cache).__name__}; pass a BuildCache or none",
                       subject="cache")  # fmt: skip
     store = cache._store if cache is not None else {}
+    from pathlib import Path
+
+    folder = Path(root) if root is not None else None
     rebuilt: set[str] = set()
     reused: set[str] = set()
 
@@ -1280,7 +1287,8 @@ def _placed_leaves(
                 built = _boxed(record.envelope, record.holes, "component")
                 return built, None, _Leaf(path, built.shape, False,
                                           float(record.mass.to("kg").magnitude), Vertex(0, 0, 0),
-                                          True, _rating_entries(record, definition.demands),
+                                          True,
+                                          _rating_entries(record, definition.demands, folder),
                                           kind="component")  # fmt: skip
             holder = definition.placeholder
             if holder is None:  # a placeholder definition holds one, by its validator
@@ -1310,6 +1318,12 @@ def _placed_leaves(
             spec = None
             if definition.kind in ("part", "placeholder", "component"):
                 key = _content(definition, shelf)
+                model = definition.component.model if definition.component is not None else None
+                if model is not None and folder is not None:
+                    # The vendor file is read on every build: its state is part of the key.
+                    vendor = folder / model.file
+                    key += ":" + (hashlib.sha256(vendor.read_bytes()).hexdigest()
+                                  if vendor.is_file() else "missing")  # fmt: skip
                 if key not in store:
                     store[key] = make(definition, path)
                     rebuilt.add(key)
@@ -1357,6 +1371,7 @@ def place_product(
     *,
     library: Mapping[str, Product] | None = None,
     cache: BuildCache | None = None,
+    root: Any = None,
 ) -> PlacedProduct:
     """Place every instance through its mates, then check interference and roll up mass.
 
@@ -1366,11 +1381,12 @@ def place_product(
     instance free or contradicts another is refused by the combination's own rules.
 
     With a ``cache``, an item built before from the same content is reused; the placed
-    product's ``rebuilt`` and ``reused`` count the distinct items each way.
+    product's ``rebuilt`` and ``reused`` count the distinct items each way. ``root`` is the
+    folder a purchased component's vendor model is read from, by its relative path.
     """
     from .combination import _interference
 
-    leaves, rebuilt, reused = _placed_leaves(product, library, cache)
+    leaves, rebuilt, reused = _placed_leaves(product, library, cache, root)
     interference = _provisional(_interference([(leaf.path, leaf.shape) for leaf in leaves]), leaves)
     holders = [leaf.path for leaf in leaves if leaf.placeholder]
     weighed = [(leaf.mass, _corner(leaf.com.center())) for leaf in leaves if leaf.mass is not None]

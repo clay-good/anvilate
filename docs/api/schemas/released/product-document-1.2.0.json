@@ -1,0 +1,1004 @@
+{
+  "$defs": {
+    "CircularPattern": {
+      "additionalProperties": false,
+      "description": "``count`` instances spread ``angle_deg`` apart about one of the parent's axes.",
+      "properties": {
+        "angle_deg": {
+          "title": "Angle Deg",
+          "type": "number"
+        },
+        "axis": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "count": {
+          "maximum": 256,
+          "minimum": 2,
+          "title": "Count",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "circular",
+          "default": "circular",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "count",
+        "angle_deg",
+        "axis"
+      ],
+      "title": "CircularPattern",
+      "type": "object"
+    },
+    "ComponentRecord": {
+      "additionalProperties": false,
+      "description": "A purchased component: identity, where to buy it, the space it takes, its ratings.\n\n``envelope`` is the box it occupies, centred on its own origin, and ``holes`` the\ninterfaces it offers a mate, as a placeholder's; ``envelope_source`` and ``mass_source``\nname where they were read. ``ratings`` must include every rating\n:data:`FAMILY_RATINGS` lists for ``family``, each with its source.",
+      "properties": {
+        "confirmed_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmed By"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "drafted": {
+          "default": false,
+          "title": "Drafted",
+          "type": "boolean"
+        },
+        "envelope": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            }
+          ],
+          "title": "Envelope",
+          "type": "array"
+        },
+        "envelope_source": {
+          "title": "Envelope Source",
+          "type": "string"
+        },
+        "family": {
+          "enum": [
+            "ball_bearing",
+            "roller_bearing",
+            "motor",
+            "coupling",
+            "linear_guide",
+            "gas_spring",
+            "other"
+          ],
+          "title": "Family",
+          "type": "string"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlaceholderHole"
+          },
+          "maxItems": 64,
+          "title": "Holes",
+          "type": "array"
+        },
+        "manufacturer": {
+          "title": "Manufacturer",
+          "type": "string"
+        },
+        "mass": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "mass_source": {
+          "title": "Mass Source",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VendorModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "part_number": {
+          "title": "Part Number",
+          "type": "string"
+        },
+        "ratings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Rating"
+          },
+          "maxItems": 32,
+          "title": "Ratings",
+          "type": "array"
+        },
+        "suppliers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SupplierNumber"
+          },
+          "maxItems": 16,
+          "title": "Suppliers",
+          "type": "array"
+        },
+        "unit_of_measure": {
+          "default": "each",
+          "title": "Unit Of Measure",
+          "type": "string"
+        }
+      },
+      "required": [
+        "manufacturer",
+        "part_number",
+        "description",
+        "family",
+        "envelope",
+        "envelope_source",
+        "mass",
+        "mass_source"
+      ],
+      "title": "ComponentRecord",
+      "type": "object"
+    },
+    "Definition": {
+      "additionalProperties": false,
+      "description": "One item defined once: a catalog part's spec, a sub-product, a placeholder, or a\npurchased component.\n\n``component`` is a :class:`~anvilate.components.ComponentRecord`: placed as its envelope\nwith its holes, and checked by its ratings against ``demands``, what the product asks\nof it. Only a component states demands, and a component is bought.",
+      "properties": {
+        "component": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "demands": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Demand"
+          },
+          "maxItems": 32,
+          "title": "Demands",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "identity": {
+          "$ref": "#/$defs/ItemIdentity"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Placeholder"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "product": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Product"
+        },
+        "spec": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spec"
+        }
+      },
+      "required": [
+        "id",
+        "identity"
+      ],
+      "title": "Definition",
+      "type": "object"
+    },
+    "Demand": {
+      "additionalProperties": false,
+      "description": "What the product asks of a component, and where that requirement came from.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "source"
+      ],
+      "title": "Demand",
+      "type": "object"
+    },
+    "Instance": {
+      "additionalProperties": false,
+      "description": "A definition placed in its parent, once or as a pattern, under a name.\n\n``mirrored`` is refused: an opposite-hand part is a different part to make and to buy,\nso it is its own definition with its own number, never a negatively scaled instance.",
+      "properties": {
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "mirrored": {
+          "default": false,
+          "title": "Mirrored",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinearPattern"
+            },
+            {
+              "$ref": "#/$defs/CircularPattern"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pattern"
+        }
+      },
+      "required": [
+        "name",
+        "item"
+      ],
+      "title": "Instance",
+      "type": "object"
+    },
+    "ItemIdentity": {
+      "additionalProperties": false,
+      "description": "The identity a PDM, PLM or ERP carries: part number, revision, description, source.\n\n``part_number`` may be left out; the tree then gives the definition a provisional\nnumber derived from its content, marked provisional wherever it is shown.",
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "part_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Part Number"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "source": {
+          "$ref": "#/$defs/ItemSource"
+        }
+      },
+      "required": [
+        "description",
+        "source"
+      ],
+      "title": "ItemIdentity",
+      "type": "object"
+    },
+    "ItemSource": {
+      "description": "Whether a definition is made, bought, or carried for reference only.",
+      "enum": [
+        "make",
+        "buy",
+        "reference"
+      ],
+      "title": "ItemSource",
+      "type": "string"
+    },
+    "Layout": {
+      "additionalProperties": false,
+      "description": "The product's driving parameters and datums, read by name and never itself a part.",
+      "properties": {
+        "datums": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LayoutDatum"
+          },
+          "maxItems": 256,
+          "title": "Datums",
+          "type": "array"
+        },
+        "parameters": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LayoutParameter"
+          },
+          "maxItems": 256,
+          "title": "Parameters",
+          "type": "array"
+        }
+      },
+      "title": "Layout",
+      "type": "object"
+    },
+    "LayoutDatum": {
+      "additionalProperties": false,
+      "description": "A named datum items mate to: a point, an axis or a plane, fixed in the product's frame.\n\n``at`` is where it is. An ``axis`` runs along ``direction`` through it, and a ``plane``\nis normal to ``direction`` through it. A mate names the datum as its ``on`` part: a\nplane offers the two faces normal to it (``top`` and ``bottom`` for a ``z`` plane), an\naxis offers itself to a ``shaft_in_bore`` mate, and a point offers any face or axis\nthrough it. Its coordinates may read layout parameters like any other value.",
+      "properties": {
+        "at": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            }
+          ],
+          "title": "At",
+          "type": "array"
+        },
+        "direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "x",
+                "y",
+                "z"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Direction"
+        },
+        "kind": {
+          "enum": [
+            "point",
+            "axis",
+            "plane"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "at"
+      ],
+      "title": "LayoutDatum",
+      "type": "object"
+    },
+    "LayoutParameter": {
+      "additionalProperties": false,
+      "description": "A driving parameter: a name, a value, where it comes from, and what reads it.\n\nAn item reads it by writing ``{layout: <name>}`` where a value goes in its spec or its\nplaceholder; :func:`parse_product` puts the value there and records the place in\n``read_by`` as ``<definition>:<dotted path>``. The product checks every recorded place\nstill holds the value, so a stored product cannot claim a reader it does not have.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "read_by": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1024,
+          "title": "Read By",
+          "type": "array"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "source"
+      ],
+      "title": "LayoutParameter",
+      "type": "object"
+    },
+    "LinearPattern": {
+      "additionalProperties": false,
+      "description": "``count`` instances ``spacing`` apart along one of the parent's axes.",
+      "properties": {
+        "count": {
+          "maximum": 256,
+          "minimum": 2,
+          "title": "Count",
+          "type": "integer"
+        },
+        "direction": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "kind": {
+          "const": "linear",
+          "default": "linear",
+          "title": "Kind",
+          "type": "string"
+        },
+        "spacing": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "count",
+        "spacing",
+        "direction"
+      ],
+      "title": "LinearPattern",
+      "type": "object"
+    },
+    "Mate": {
+      "additionalProperties": false,
+      "description": "How one part meets a part already placed.\n\n``place`` is the part being placed and ``on`` a part that already is. ``face_to_face``\nputs two faces in contact. ``edge_flush`` lines two faces up in one plane. ``hole_pattern``\nputs ``place.face`` on ``on.face`` with the listed holes coaxial, pair by pair.\n``shaft_in_bore`` makes two axes one. ``offset`` opens a gap between mated faces, and\n``rotation_deg`` turns the part about a shared axis that nothing else fixes.\n\n``fit`` is the ISO 286 fit a ``shaft_in_bore`` mate is made to, hole zone then shaft\nzone, such as ``H7/g6``. The bore and the shaft are drawn at one nominal size; the fit\nsays how much room, or how much interference, their tolerances leave between them.",
+      "properties": {
+        "fit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fit"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "face_to_face",
+            "edge_flush",
+            "hole_pattern",
+            "shaft_in_bore"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "on": {
+          "$ref": "#/$defs/MateEnd"
+        },
+        "place": {
+          "$ref": "#/$defs/MateEnd"
+        },
+        "position_tolerance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotation_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation Deg"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "place",
+        "on"
+      ],
+      "title": "Mate",
+      "type": "object"
+    },
+    "MateEnd": {
+      "additionalProperties": false,
+      "description": "One side of a mate: a part, and the feature on it that meets the other part.\n\n``face`` is one of the part's six outermost faces by direction: ``top``, ``bottom``,\n``left``, ``right``, ``front`` or ``back``. ``holes`` are hole tags, as the part's\nfeatures carry them, in the order they pair with the other side's. ``axis`` is one of\nthe part's own axes (``x``, ``y`` or ``z``) through its origin, which is the axis of a\nround part; ``feature`` names a hole or bore instead, by its tag.",
+      "properties": {
+        "axis": {
+          "anyOf": [
+            {
+              "enum": [
+                "x",
+                "y",
+                "z"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axis"
+        },
+        "face": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right",
+                "front",
+                "back"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Face"
+        },
+        "feature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feature"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Holes",
+          "type": "array"
+        },
+        "part": {
+          "title": "Part",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part"
+      ],
+      "title": "MateEnd",
+      "type": "object"
+    },
+    "Placeholder": {
+      "additionalProperties": false,
+      "description": "An item not yet detailed: an envelope, a mass, and why it is still a placeholder.\n\n``holes`` are the interfaces it offers, so a bought motor's bolt pattern can take a\nhole-pattern mate before the motor is chosen. ``center_of_mass`` is measured from the\nenvelope's centre; left out, the centre is used and the placed product says so.",
+      "properties": {
+        "center_of_mass": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/Quantity"
+                },
+                {
+                  "$ref": "#/$defs/Quantity"
+                },
+                {
+                  "$ref": "#/$defs/Quantity"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Center Of Mass"
+        },
+        "envelope": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "$ref": "#/$defs/Quantity"
+            }
+          ],
+          "title": "Envelope",
+          "type": "array"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlaceholderHole"
+          },
+          "maxItems": 64,
+          "title": "Holes",
+          "type": "array"
+        },
+        "mass": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "envelope",
+        "mass",
+        "reason"
+      ],
+      "title": "Placeholder",
+      "type": "object"
+    },
+    "PlaceholderHole": {
+      "additionalProperties": false,
+      "description": "A hole a placeholder offers to a mate: its tag, where it is, its size, the face it is in.\n\n``x``, ``y`` and ``z`` are the hole's entry point in the placeholder's frame, whose origin\nis the envelope's centre; ``face`` is the envelope face it opens on, which sets its axis.",
+      "properties": {
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "face": {
+          "enum": [
+            "top",
+            "bottom",
+            "left",
+            "right",
+            "front",
+            "back"
+          ],
+          "title": "Face",
+          "type": "string"
+        },
+        "tag": {
+          "title": "Tag",
+          "type": "string"
+        },
+        "x": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "y": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "z": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "tag",
+        "x",
+        "y",
+        "z",
+        "diameter",
+        "face"
+      ],
+      "title": "PlaceholderHole",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Rating": {
+      "additionalProperties": false,
+      "description": "One rating the component is sold with, and the datasheet line it was read from.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "source"
+      ],
+      "title": "Rating",
+      "type": "object"
+    },
+    "SupplierNumber": {
+      "additionalProperties": false,
+      "description": "Where to buy it: a supplier and that supplier's part number.",
+      "properties": {
+        "number": {
+          "title": "Number",
+          "type": "string"
+        },
+        "supplier": {
+          "title": "Supplier",
+          "type": "string"
+        }
+      },
+      "required": [
+        "supplier",
+        "number"
+      ],
+      "title": "SupplierNumber",
+      "type": "object"
+    },
+    "Variant": {
+      "additionalProperties": false,
+      "description": "A named variant: layout parameters overridden and definitions substituted.\n\n``parameters`` gives new values to layout parameters by name. ``substitutions`` are\ndefinitions that replace the base definitions with the same ``id``. A variant is resolved\nto a complete product of its own by :func:`resolve_variant`.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        },
+        "substitutions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Definition"
+          },
+          "maxItems": 256,
+          "title": "Substitutions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Variant",
+      "type": "object"
+    },
+    "VendorModel": {
+      "additionalProperties": false,
+      "description": "The vendor's STEP file for the component: a path in the user's folder, and its hash.\n\nThe file is used where it is, never copied. ``sha256`` is the file's digest when the\nrecord was written, so a file changed since reads as changed rather than as the model.",
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "title": "VendorModel",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:product-document:1.2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
+  "properties": {
+    "anvilate_product": {
+      "default": "1.2.0",
+      "enum": [
+        "1.0.0",
+        "1.1.0",
+        "1.2.0"
+      ],
+      "title": "Anvilate Product",
+      "type": "string"
+    },
+    "definitions": {
+      "items": {
+        "$ref": "#/$defs/Definition"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "title": "Definitions",
+      "type": "array"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "ground": {
+      "title": "Ground",
+      "type": "string"
+    },
+    "identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ItemIdentity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "instances": {
+      "items": {
+        "$ref": "#/$defs/Instance"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "title": "Instances",
+      "type": "array"
+    },
+    "layout": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Layout"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "mates": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Mate"
+      },
+      "maxItems": 512,
+      "title": "Mates",
+      "type": "array"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "variants": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Variant"
+      },
+      "maxItems": 64,
+      "title": "Variants",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "definitions",
+    "instances",
+    "ground"
+  ],
+  "title": "Product",
+  "type": "object",
+  "x-anvilate-version": "1.2.0"
+}

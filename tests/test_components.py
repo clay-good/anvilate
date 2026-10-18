@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from anvilate.components import ComponentError, ComponentRecord, Demand, _rating_entries
+from anvilate.components import ComponentError, ComponentRecord, Demand, Rating, _rating_entries
 from anvilate.scorecard import CheckStatus
+from anvilate.units import Quantity
 
 
 def _q(v: float, unit: str) -> dict:
@@ -180,3 +181,77 @@ def test_the_docs_table_names_every_familys_ratings_and_demands():
             )
     checked = {f: (set(r), set(d)) for f, (r, d) in FAMILY_RATINGS.items() if r}
     assert rows == checked
+
+
+def _vendor_step(folder):
+    """A 57 × 57 × 76 motor body with four 5 mm blind holes, 10 deep, in its bottom face."""
+    build123d = pytest.importorskip("build123d")
+    from build123d import Align, Box, Cylinder, Location, export_step
+
+    body = Box(57, 57, 76)
+    for x in (-23.5, 23.5):
+        for y in (-23.5, 23.5):
+            hole = Cylinder(2.5, 10, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            body = body - hole.moved(Location((x, y, -38)))
+    path = folder / "motor.step"
+    export_step(body, str(path))
+    del build123d
+    return path
+
+
+def _drafted(path):
+    from anvilate.components import draft_component
+    from anvilate.units import Quantity
+
+    return draft_component(
+        path, manufacturer="Acme", part_number="23HS", description="stepper", family="motor",
+        mass=Quantity(magnitude=1.0, unit="kg"), mass_source="datasheet p.1",
+        ratings=(Rating(name="rated_torque", value=Quantity(magnitude=1.26, unit="N*m"),
+                        source="datasheet p.2"),),
+    )  # fmt: skip
+
+
+def test_a_record_is_drafted_from_a_measured_vendor_model(tmp_path):
+    record = _drafted(_vendor_step(tmp_path))
+    assert [q.to("mm").magnitude for q in record.envelope] == pytest.approx([57, 57, 76])
+    assert record.drafted and record.confirmed_by is None
+    assert record.model.file == "motor.step" and len(record.model.sha256) == 64
+    assert len(record.holes) == 4 and {h.face for h in record.holes} == {"bottom"}
+    corners = sorted((h.x.magnitude, h.y.magnitude) for h in record.holes)
+    assert corners == pytest.approx([(-23.5, -23.5), (-23.5, 23.5), (23.5, -23.5), (23.5, 23.5)])
+    assert [h.z.magnitude for h in record.holes] == pytest.approx([-38.0] * 4)
+
+
+def test_a_drafted_record_says_so_until_someone_confirms_it(tmp_path):
+    record = _drafted(_vendor_step(tmp_path))
+    names = {e.name: e.status for e in _rating_entries(record, root=tmp_path)}
+    assert names["drafted record"] is CheckStatus.NOT_EVALUATED
+    assert names["vendor model"] is CheckStatus.PASS
+    confirmed = record.model_copy(update={"confirmed_by": "J. Engineer"})
+    assert "drafted record" not in {e.name for e in _rating_entries(confirmed, root=tmp_path)}
+
+
+def test_a_vendor_model_that_changed_or_is_absent_leaves_geometry_not_evaluated(tmp_path):
+    path = _vendor_step(tmp_path)
+    record = _drafted(path)
+
+    def model_entry(root):
+        return next(e for e in _rating_entries(record, root=root) if e.name == "vendor model")
+
+    assert "no folder was given" in model_entry(None).detail
+    path.write_text(path.read_text() + "\n", encoding="utf-8")
+    changed = model_entry(tmp_path)
+    assert (
+        changed.status is CheckStatus.NOT_EVALUATED
+        and "has changed since the record" in changed.detail
+    )
+    path.unlink()
+    assert "not found in" in model_entry(tmp_path).detail
+
+
+def test_a_vendor_model_that_does_not_fit_its_record_fails(tmp_path):
+    record = _drafted(_vendor_step(tmp_path))
+    wrong = record.model_copy(update={"envelope": (record.envelope[0], record.envelope[1],
+                                                   Quantity(magnitude=82, unit="mm"))})  # fmt: skip
+    entry = next(e for e in _rating_entries(wrong, root=tmp_path) if e.name == "vendor model")
+    assert entry.status is CheckStatus.FAIL and "off by 6 mm" in entry.detail
