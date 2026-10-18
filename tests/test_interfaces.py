@@ -281,3 +281,110 @@ def test_a_part_interface_the_document_cannot_hold_is_refused(change, message):
     change(document)
     with pytest.raises((ProductError, ValueError), match=message):
         parse_product(document)
+
+
+def _face_mate(id_: str, kind: str, part: str, face: str, on: str, on_face: str) -> dict:
+    return {"id": id_, "kind": kind, "place": {"part": part, "face": face},
+            "on": {"part": on, "face": on_face}}  # fmt: skip
+
+
+def _hinge(joint: dict | None, stop: bool = False) -> dict:
+    """A 40 mm base cube with a hole along y through its centre; a 10 × 10 × 200 arm with a
+    pin along y, its front face on the base's back (y 20 to 30), swinging about the pin.
+    With ``stop``, a 10 × 10 × 40 block sits beside the hinge at x 10 to 20, y 20 to 30."""
+    axial = {"diameter": _mm(10)}
+    definitions = [
+        {"id": "base", "identity": {"description": "base", "source": "make"},
+         "placeholder": _holder((40, 40, 40), 1.0, (), [
+             {"name": "pivot", "kind": "hole", "axis": "y", "parameters": axial}])},
+        {"id": "arm", "identity": {"description": "arm", "source": "make"},
+         "placeholder": _holder((10, 10, 200), 0.3, (), [
+             {"name": "pivot", "kind": "pin", "axis": "y", "parameters": axial}])},
+    ]  # fmt: skip
+    connection = {"on": "base.pivot", "place": "arm.pivot"}
+    if joint is not None:
+        connection["joint"] = joint
+    document = {
+        "name": "hinge", "definitions": definitions,
+        "instances": [{"name": "base", "item": "base"}, {"name": "arm", "item": "arm"}],
+        "ground": "base", "connections": [connection],
+        "mates": [_face_mate("beside", "face_to_face", "arm", "front", "base", "back")],
+    }  # fmt: skip
+    if stop:
+        document["definitions"].append({"id": "stop", "identity": {"description": "stop",
+                                         "source": "make"},
+                                         "placeholder": _holder((10, 10, 40), 0.1)})  # fmt: skip
+        document["instances"].append({"name": "stop", "item": "stop"})
+        document["mates"] += [
+            _face_mate("stop-beside", "face_to_face", "stop", "front", "base", "back"),
+            _face_mate("stop-right", "edge_flush", "stop", "right", "base", "right"),
+            _face_mate("stop-bottom", "edge_flush", "stop", "bottom", "base", "bottom"),
+        ]  # fmt: skip
+    return document
+
+
+_SWING = {"kind": "revolute", "range": [{"magnitude": 0, "unit": "degree"},
+                                       {"magnitude": 90, "unit": "degree"}]}  # fmt: skip
+
+
+def test_a_pivot_on_a_pin_and_hole_takes_its_axis_and_carries_its_range():
+    placed = place_product(parse_product(_hinge(_SWING)))
+    (joint,) = placed.joints
+    assert joint.kind == "revolute" and joint.connection == "base.pivot ~ arm.pivot"
+    assert joint.point_mm == pytest.approx((0, 0, 0)) and joint.direction == pytest.approx(
+        (0, 1, 0)
+    )
+    assert (joint.range_low, joint.range_high, joint.range_unit) == (0, 90, "degree")
+    sweep = _entries(placed)["base.pivot ~ arm.pivot joint sweep"]
+    assert sweep.status is CheckStatus.PASS and "in 7 steps" in sweep.detail
+    (row,) = placed.interfaces.rows
+    assert "joint sweep: pass" in row.checks and "diameter: pass" in row.checks
+
+
+def test_a_swing_that_meets_another_item_fails_naming_it():
+    placed = place_product(parse_product(_hinge(_SWING, stop=True)))
+    assert placed.interference.status is CheckStatus.PASS  # clear where it was placed
+    sweep = _entries(placed)["base.pivot ~ arm.pivot joint sweep"]
+    assert sweep.status is CheckStatus.FAIL and "hinge/arm meets hinge/stop" in sweep.detail
+
+
+def test_a_slide_along_the_pin_is_swept_by_its_travel():
+    slide = {"kind": "linear", "range": [_mm(0), _mm(50)]}
+    sweep = _entries(place_product(parse_product(_hinge(slide))))[
+        "base.pivot ~ arm.pivot joint sweep"
+    ]
+    assert sweep.status is CheckStatus.PASS and "0 to 50 mm in 11 steps" in sweep.detail
+
+
+@pytest.mark.parametrize(
+    ("joint", "message"),
+    [
+        ({"kind": "revolute", "range": [_mm(0), _mm(5)]}, "it is an angle"),
+        (
+            {
+                "kind": "revolute",
+                "range": [{"magnitude": 90, "unit": "degree"}, {"magnitude": 0, "unit": "degree"}],
+            },
+            "runs from the lower",
+        ),
+        ({"kind": "ball", "range": [_mm(0), _mm(5)]}, "a ball joint states no range"),
+    ],
+)
+def test_a_joint_range_that_cannot_be_one_is_refused(joint, message):
+    with pytest.raises((ProductError, ValueError), match=message):
+        parse_product(_hinge(joint))
+
+
+def test_a_revolute_joint_on_two_mounting_faces_is_refused_naming_the_connection():
+    document = _document()
+    document["definitions"][0]["placeholder"]["interfaces"].append(
+        {"name": "seat", "kind": "mounting_face", "face": "top"}
+    )
+    document["definitions"][1]["placeholder"]["interfaces"].append(
+        {"name": "base", "kind": "mounting_face", "face": "bottom"}
+    )
+    document["connections"].append({"on": "bracket.seat", "place": "motor.base", "joint": _SWING})
+    with pytest.raises(ProductError, match="connection bracket.seat ~ motor.base declares a "
+                       r"revolute joint, and its interfaces \(mounting_face, mounting_face\) "
+                       "define no axis"):  # fmt: skip
+        parse_product(document)

@@ -121,6 +121,12 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.5.0: a joint on a connection
+
+A connection gains `joint`: its `kind` (rigid, revolute, linear, cylindrical, ball) and,
+for a turning or sliding one, its `range`. An interface gains `feature`, the round feature a
+catalog part's axial interface runs through. An older product document reads unchanged.
+
 ### Product document 1.4.0: a catalog part's interfaces, bound to its features
 
 A part definition gains `interfaces`, each a name, a kind, the tagged `features` it is bound

@@ -534,7 +534,9 @@ product.Layout
 product.LayoutParameter
 product.LayoutDatum
 product.Variant
+product.Joint
 product.Connection
+product.PlacedJoint
 product.OpenInterface
 product.Product
 product.ProductNode

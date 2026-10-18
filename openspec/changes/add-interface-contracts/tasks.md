@@ -17,7 +17,7 @@ joint checks).
 - [x] 2.2 Refusal of incompatible kinds before geometry
 - [x] 2.3 Pairing checks routed to existing combination checks; new kind-specific checks
       only where none exists
-- [ ] 2.4 Joints declared on connections; axis from interface frames
+- [x] 2.4 Joints declared on connections; axis from interface frames
 
 ## 3. Product rule check
 

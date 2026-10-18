@@ -114,6 +114,9 @@ class Interface(StatableModel):
     axis: Literal["x", "y", "z"] | None = None
     holes: tuple[Named, ...] = Field(default=(), max_length=64)
     parameters: FrozenMap[str, Quantity] = Field(default_factory=lambda: EMPTY_MAP)
+    # A catalog part's axial interface is the round feature it is bound to: its axis runs
+    # through that feature, not through the part's origin.
+    feature: Named | None = None
 
     @model_validator(mode="after")
     def _a_kind(self) -> Interface:
@@ -237,7 +240,7 @@ class PartInterface(StatableModel):
         if KINDS[self.kind][0] == "axis":
             diameter = Quantity(magnitude=bound[0].diameter_mm, unit="mm")  # type: ignore[attr-defined]
             return Interface.model_validate({"name": self.name, "kind": self.kind,
-                                             "axis": "xyz"[index],
+                                             "axis": "xyz"[index], "feature": self.features[0],
                                              "parameters": {"diameter": diameter}})  # fmt: skip
         face = self.face or _FROM_AXIS[(index, sign)]
         along = "xyz"[index]

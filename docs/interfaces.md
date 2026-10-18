@@ -86,6 +86,26 @@ offer that is neither connected nor declared open with a reason, as `unconnected
 interfaces`, not evaluated. A kind that takes one partner and meets two is reported as a
 failure naming all three interfaces.
 
+## Joints
+
+A connection may declare how the placed item moves:
+
+```yaml
+connections:
+  - on: base.pivot          # a hole along y
+    place: arm.pivot        # a pin along y
+    joint: {kind: revolute, range: [{magnitude: 0, unit: degree}, {magnitude: 90, unit: degree}]}
+```
+
+The axis is the `on` interface's, through its bound feature on a catalog part or the item's
+own axis. Any joint but a rigid one needs two interfaces that define an axis, so a revolute
+joint on two mounting faces is refused, naming the connection. A revolute or cylindrical
+joint's range is in angles and a linear one's travel in lengths; a ball or rigid joint
+states none. `placed.joints` lists each with its axis in the product's frame and its range,
+for a swept keepout or a robotics export to read. The connection's `joint sweep` entry turns
+or slides the moving item through its range, in steps of at most 15 degrees or ten steps of
+travel, and fails naming the body it first meets.
+
 ## The interface control table
 
 Every placed product carries `placed.interfaces`: one row per connection, with the product
@@ -97,5 +117,3 @@ would run as a formula quoted, and `section()` as a report section.
 
 The same vocabulary is in the MCP server's `initialize` instructions. The published
 schema is the [product document](api/schemas/product-document.schema.json).
-
-Not yet built: joints on connections.

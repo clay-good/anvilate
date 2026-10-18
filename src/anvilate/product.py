@@ -79,7 +79,9 @@ __all__ = [
     "LayoutDatum",
     "Layout",
     "Variant",
+    "Joint",
     "Connection",
+    "PlacedJoint",
     "OpenInterface",
     "Product",
     "ProductNode",
@@ -103,7 +105,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.4.0"] = "1.4.0"
+PRODUCT_VERSION: Literal["1.5.0"] = "1.5.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -413,18 +415,78 @@ class Variant(StatableModel):
     substitutions: tuple[Definition, ...] = Field(default=(), max_length=256)
 
 
+_ANGULAR = ("revolute", "cylindrical")
+
+
+class Joint(StatableModel):
+    """How a connection moves: rigid, or about or along the axis its interfaces share.
+
+    A ``revolute`` joint turns and a ``linear`` one slides along the axis; a ``cylindrical``
+    one does both and a ``ball`` turns about its point. ``range`` is a revolute or
+    cylindrical joint's turn, as angles, or a linear joint's travel, as lengths, from the
+    placed position; the placed product sweeps the moving item through it.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["rigid", "revolute", "linear", "cylindrical", "ball"]
+    range: tuple[Quantity, Quantity] | None = None
+
+    @model_validator(mode="after")
+    def _a_range(self) -> Joint:
+        if self.range is None:
+            return self
+        if self.kind in ("rigid", "ball"):
+            raise _refuse(f"a {self.kind} joint states no range", subject="joint.range")
+        unit = "degree" if self.kind in _ANGULAR else "mm"
+        low, high = self.range
+        try:
+            values = [q.to(unit).magnitude for q in (low, high)]
+        except ValueError as failure:
+            raise _refuse(f"a {self.kind} joint's range is {low} to {high}; it is "
+                          f"{'an angle' if unit == 'degree' else 'a length'}",
+                          subject="joint.range") from failure  # fmt: skip
+        if not (math.isfinite(values[0]) and math.isfinite(values[1]) and values[0] < values[1]):
+            raise _refuse(f"a {self.kind} joint's range is {low} to {high}; it runs from the "
+                          "lower to the higher, both finite", subject="joint.range")  # fmt: skip
+        return self
+
+
 class Connection(StatableModel):
     """Two interfaces that meet, each as ``item.interface``: ``place`` is placed on ``on``.
 
     The item is an instance of the product that declares the connection. The mate is
     derived from the pair: a pattern meets a pattern hole by hole, a face meets a face, a
-    shaft runs in its bore. The pairing's checks go on that product's card.
+    shaft runs in its bore. The pairing's checks go on that product's card. ``joint``
+    declares how the placed item moves; any joint but a rigid one needs two interfaces that
+    define an axis.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     on: Named
     place: Named
+    joint: Joint | None = None
+
+
+class PlacedJoint(StatableModel):
+    """A declared joint where the product put it: its axis in the product's frame, its range.
+
+    ``node`` is the product that declares it; ``point_mm`` and ``direction`` are its axis in
+    the frame of the product it was placed in (the top product's, for a joint in a
+    sub-product). ``range_low`` and ``range_high`` are in ``range_unit``, degrees or mm.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    node: str = ""
+    connection: Named
+    kind: Named
+    point_mm: tuple[float, float, float]
+    direction: tuple[float, float, float]
+    range_low: float | None = None
+    range_high: float | None = None
+    range_unit: str | None = None
 
 
 class OpenInterface(StatableModel):
@@ -455,8 +517,11 @@ class Product(StatableModel):
 
     # 1.1.0 adds a definition's component and demands, 1.2.0 a component's vendor model and
     # drafted state, 1.3.0 interfaces, connections and open interfaces, and 1.4.0 a catalog
-    # part's interfaces bound to its features; an older document reads unchanged.
-    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"] = PRODUCT_VERSION
+    # part's interfaces bound to its features, and 1.5.0 a joint on a connection; an older
+    # document reads unchanged.
+    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"] = (
+        PRODUCT_VERSION
+    )
     name: Named
     description: Provenance | None = None
     identity: ItemIdentity | None = None
@@ -545,6 +610,20 @@ class Product(StatableModel):
                               f"{second.kind}, which do not meet; a {first.kind} meets "
                               f"{' or '.join(partners_of(first.kind))}",
                               subject="connections[].place")  # fmt: skip
+            joint = connection.joint
+            if joint is not None and joint.kind != "rigid":
+                kinds = (first.kind, second.kind)
+                if any(KINDS[k][0] != "axis" for k in kinds):
+                    raise _refuse(f"connection {connection.on} ~ {connection.place} declares a "
+                                  f"{joint.kind} joint, and its interfaces ({kinds[0]}, "
+                                  f"{kinds[1]}) define no axis to move about",
+                                  subject="connections[].joint")  # fmt: skip
+                patterned = {i.name for i in self.instances if i.pattern is not None}
+                if _place_item in patterned:
+                    raise _refuse(f"connection {connection.on} ~ {connection.place} declares a "
+                                  f"{joint.kind} joint on a pattern, whose members each move "
+                                  "about their own axis; give the moving item one instance",
+                                  subject="connections[].joint")  # fmt: skip
             if _place_item == self.ground:
                 raise _refuse(f"connection {connection.on} ~ {connection.place} places the ground "
                               f"'{self.ground}', which stays where it is; put it on the on side",
@@ -1195,6 +1274,7 @@ class PlacedProduct(StatableModel):
     unused_parameters: tuple[str, ...] = ()
     card: NodeCard
     interfaces: InterfaceTable = Field(default_factory=lambda: InterfaceTable(rows=()))
+    joints: tuple[PlacedJoint, ...] = ()
     rebuilt: int = Field(default=0, ge=0)
     reused: int = Field(default=0, ge=0)
 
@@ -1374,8 +1454,10 @@ class _Assembly:
         leaves: list[_Leaf],
         extra: dict[str, tuple[ScorecardEntry, ...]],
         tables: dict[str, tuple[InterfaceRow, ...]],
+        joints: dict[str, tuple[PlacedJoint, ...]],
     ) -> None:
         self.shape, self.leaves, self.features = shape, leaves, ()
+        self.joints = joints
         # The entries each product node owns beyond its interference: its connections'; and
         # the interface-table rows for them, by the same node path.
         self.extra, self.tables = extra, tables
@@ -1412,6 +1494,7 @@ def _placed_leaves(
     int,
     dict[str, tuple[ScorecardEntry, ...]],
     dict[str, tuple[InterfaceRow, ...]],
+    dict[str, tuple[PlacedJoint, ...]],
 ]:
     """Every leaf body placed where its mates put it, the items rebuilt and reused, and the
     connection entries each product node owns."""
@@ -1510,6 +1593,7 @@ def _placed_leaves(
         leaves: list[_Leaf] = []
         extra: dict[str, tuple[ScorecardEntry, ...]] = {}
         tables: dict[str, tuple[InterfaceRow, ...]] = {}
+        joints: dict[str, tuple[PlacedJoint, ...]] = {}
         # Each placed instance's interfaces, as its built geometry states them, and the mate
         # each connection was placed by, in the order the connections are declared.
         resolved: dict[str, dict[str, Interface]] = {}
@@ -1521,6 +1605,7 @@ def _placed_leaves(
             spec = None
             below: dict[str, tuple[ScorecardEntry, ...]] = {}
             below_rows: dict[str, tuple[InterfaceRow, ...]] = {}
+            below_joints: dict[str, tuple[PlacedJoint, ...]] = {}
             if definition.kind in ("part", "placeholder", "component"):
                 key = _content(definition, shelf)
                 model = definition.component.model if definition.component is not None else None
@@ -1541,7 +1626,7 @@ def _placed_leaves(
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
                 inner = built.leaves
-                below, below_rows = built.extra, built.tables
+                below, below_rows, below_joints = built.extra, built.tables, built.joints
             resolved[instance.name] = _resolved_offers(definition, built, path)
             if instance.name == current.ground:
                 rotation, translation = _IDENTITY, (0.0, 0.0, 0.0)
@@ -1579,14 +1664,17 @@ def _placed_leaves(
                 leaves.extend(leaf.moved(label + leaf.path[len(path) :], where) for leaf in inner)
                 extra.update({label + key[len(path) :]: held for key, held in below.items()})
                 tables.update({label + key[len(path) :]: rows for key, rows in below_rows.items()})
+                joints.update({label + key[len(path) :]: tuple(_moved_joint(j, r, t) for j in held)
+                               for key, held in below_joints.items()})  # fmt: skip
         in_order = [derived[i] for i in range(len(current.connections))]
-        extra[prefix] = _connection_entries(current, in_order, placed, resolved)
+        joints[prefix], sweeps = _joints(current, placed, resolved, leaves, prefix)
+        extra[prefix] = (*_connection_entries(current, in_order, placed, resolved), *sweeps)
         tables[prefix] = _interface_rows(current, extra[prefix], resolved)
         shape = Compound([leaf.shape for leaf in leaves])
-        return _Assembly(shape, leaves, extra, tables)
+        return _Assembly(shape, leaves, extra, tables, joints)
 
     top = assemble(product, product.name)
-    return top.leaves, len(rebuilt), len(reused), top.extra, top.tables
+    return top.leaves, len(rebuilt), len(reused), top.extra, top.tables, top.joints
 
 
 def place_product(
@@ -1609,7 +1697,7 @@ def place_product(
     """
     from .combination import _interference
 
-    leaves, rebuilt, reused, extra, tables = _placed_leaves(product, library, cache, root)
+    leaves, rebuilt, reused, extra, tables, joints = _placed_leaves(product, library, cache, root)
     interference = _provisional(_interference([(leaf.path, leaf.shape) for leaf in leaves]), leaves)
     holders = [leaf.path for leaf in leaves if leaf.placeholder]
     weighed = [(leaf.mass, _corner(leaf.com.center())) for leaf in leaves if leaf.mass is not None]
@@ -1639,6 +1727,11 @@ def place_product(
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
         unused_parameters=product.layout.unused if product.layout is not None else (),
         card=_card(product.name, leaves, extra),
+        joints=tuple(
+            joint.model_copy(update={"node": node})
+            for node, held in joints.items()
+            for joint in held
+        ),
         interfaces=InterfaceTable(
             rows=tuple(
                 row.model_copy(update={"node": node})
@@ -1766,6 +1859,102 @@ def _interface_rows(
     return tuple(rows)
 
 
+_SWEEP_STEP_DEG = 15.0
+_SWEEP_STEPS_LINEAR = 10
+
+
+def _moved_joint(joint: PlacedJoint, rotation: Any, translation: Any) -> PlacedJoint:
+    """A sub-product's joint, carried into the frame its placement puts it in."""
+    from .combination import _add, _apply, _tidy
+
+    point = _tidy(_add(_apply(rotation, joint.point_mm), translation))
+    direction = _tidy(_apply(rotation, joint.direction))
+    return joint.model_copy(update={"point_mm": point, "direction": direction})
+
+
+def _joints(
+    current: Product,
+    placed: Mapping[str, Any],
+    resolved: Mapping[str, Mapping[str, Interface]],
+    leaves: list[_Leaf],
+    prefix: str,
+) -> tuple[tuple[PlacedJoint, ...], tuple[ScorecardEntry, ...]]:
+    """Each declared joint's axis as placed, and the sweep of its moving item through its range.
+
+    The axis is the ``on`` interface's: through its bound feature on a catalog part, or
+    the item's own axis through its origin. The moving item (the ``place`` side) is turned
+    or slid through the range in steps of at most 15 degrees, or ten steps of travel, and
+    must clear every other body at each.
+    """
+    from build123d import Axis, Location
+
+    from .combination import _AXES, _tidy, _unit
+
+    placed_joints: list[PlacedJoint] = []
+    entries: list[ScorecardEntry] = []
+    for connection in current.connections:
+        joint = connection.joint
+        if joint is None:
+            continue
+        on_item, on = _resolved_at(resolved, connection.on)
+        place_item, _place = _resolved_at(resolved, connection.place)
+        fixed = placed[on_item]
+        local_point: Any = (0.0, 0.0, 0.0)
+        local_direction: Any = _AXES[on.axis] if on.axis is not None else (0.0, 0.0, 1.0)
+        if on.feature is not None:
+            feature = next(f for f in fixed.built.features if f.tag == on.feature)
+            local_point, local_direction = tuple(feature.position_mm), tuple(feature.axis)
+        point = _tidy(fixed.point(local_point))
+        direction = _tidy(_unit(fixed.direction(local_direction)))
+        pair = f"{connection.on} ~ {connection.place}"
+        unit = "degree" if joint.kind in _ANGULAR else "mm"
+        low = high = None
+        if joint.range is not None:
+            low, high = (float(q.to(unit).magnitude) for q in joint.range)
+        placed_joints.append(PlacedJoint(
+            connection=pair, kind=joint.kind, point_mm=point, direction=direction,
+            range_low=low, range_high=high, range_unit=None if low is None else unit,
+        ))  # fmt: skip
+        if low is None or high is None:
+            continue
+        base = f"{prefix}/{place_item}"
+        moving = [leaf for leaf in leaves if leaf.path == base or leaf.path.startswith(base + "/")]
+        others = [leaf for leaf in leaves if leaf not in moving]
+        angular = unit == "degree"
+        steps = (max(2, math.ceil((high - low) / _SWEEP_STEP_DEG) + 1) if angular
+                 else _SWEEP_STEPS_LINEAR + 1)  # fmt: skip
+        samples = [low + (high - low) * i / (steps - 1) for i in range(steps)]
+        axis = Axis(point, direction)
+        clash: tuple[float, str, str, float] | None = None
+        for value in samples:
+            for leaf in moving:
+                if angular:
+                    shape = leaf.shape.rotate(axis, value)
+                else:
+                    shape = leaf.shape.moved(Location(tuple(d * value for d in direction)))
+                for other in others:
+                    common = shape & other.shape
+                    volume = float(common.volume) if common is not None else 0.0
+                    if volume > 1e-6 and (clash is None or volume > clash[3]):
+                        clash = (value, leaf.path, other.path, volume)
+        word = "degrees" if angular else "mm"
+        swept = f"{joint.kind} joint swept from {low:g} to {high:g} {word} in {steps} steps"
+        detail = (f"{swept}: the moving item clears every other body" if clash is None else
+                  f"{swept}: at {clash[0]:g} {word} {clash[1]} meets {clash[2]} by "
+                  f"{clash[3]:.4g} mm^3")  # fmt: skip
+        entries.append(ScorecardEntry(
+            name=f"{pair} joint sweep", detail=detail, underived=_SWEPT,
+            status=CheckStatus.PASS if clash is None else CheckStatus.FAIL,
+        ))  # fmt: skip
+    return tuple(placed_joints), tuple(entries)
+
+
+_SWEPT = Underived(
+    kind=DerivationAbsence.NUMERIC_RESULT,
+    reason="the moving item's solids are intersected with the others at each step of the range",
+)
+
+
 def _connection_mate(
     connection: Connection, resolved: Mapping[str, Mapping[str, Interface]]
 ) -> Mate:
@@ -1779,8 +1968,12 @@ def _connection_mate(
                 "on": {"part": on_item, "face": on.face, "holes": on.holes}}  # fmt: skip
     else:
         kind = "shaft_in_bore"
-        ends = {"place": {"part": place_item, "axis": place.axis},
-                "on": {"part": on_item, "axis": on.axis}}  # fmt: skip
+        ends = {
+            side: {"part": item, "feature": offer.feature}
+            if offer.feature is not None
+            else {"part": item, "axis": offer.axis}
+            for side, item, offer in (("place", place_item, place), ("on", on_item, on))
+        }
     return Mate.model_validate({"id": f"{connection.on}~{connection.place}",
                                 "kind": kind, **ends})  # fmt: skip
 
@@ -1901,7 +2094,7 @@ def write_product_step(
 
     tree = product_tree(product, library=library)
     nodes = {node.path: node for node in tree.walk()}
-    leaves, _rebuilt, _reused, _extra, _tables = _placed_leaves(product, library, cache)
+    leaves, _rebuilt, _reused, _extra, _tables, _joints = _placed_leaves(product, library, cache)
     bodies = []
     for leaf in leaves:
         node = nodes[leaf.path]
