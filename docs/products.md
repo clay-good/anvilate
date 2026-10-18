@@ -57,6 +57,23 @@ between all of them, the mass and the centre of mass. The mass names each placeh
 rests on, and each part whose material gives no density, so the roll-up never reads as
 more complete than it is.
 
+## Cards
+
+`placed.card` is a card for every node of the tree, in tree order.
+
+| Node | What it owns |
+| --- | --- |
+| A catalog part | Its own card, the checks `anvilate check` runs on its spec |
+| A placeholder | One not-evaluated entry with its reason: a placeholder is never a pass |
+| A product, or a sub-product occurrence | The interference between its own children |
+
+A node's status is the worst of its own entries and its children's statuses. Not
+evaluated never counts as a pass. A finding is held once, by the node that owns it: a
+clash inside `stage/drive[2]` belongs to that drive, and the stage fails by reference to
+it. `card.findings()` lists every finding with its owner's path, `card.find(path)` returns
+one node, and `str(card)` prints the tree. Every interference entry over a placeholder
+says it is provisional and names the placeholders under that node.
+
 ## Layout
 
 A layout holds the product's driving parameters. Any value in an item's spec or
@@ -113,5 +130,5 @@ it is chosen. It is a box, centred on its own origin.
 A hole or a centre of mass outside the envelope is refused. Any interference result that
 involves a placeholder says it is provisional and names the placeholders it rests on.
 
-Not yet built: layout datums (points, axes and planes to mate to), a card per node with roll-up, and rebuilds keyed
+Not yet built: layout datums (points, axes and planes to mate to) and rebuilds keyed
 on content.

@@ -498,6 +498,12 @@ _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
         "and the part, and nothing is computed from them"
     ),
     "cli.py:_view<-screen_spec": "the view command renders the card it ran onto the sheet",
+    "product.py:assemble<-screen_spec": (
+        "a part's node in the product card holds the part's own card entries unchanged"
+    ),
+    "product.py:place_product<-screen_spec": (
+        "the same read as its nested assemble, which the scan also sees from the outer function"
+    ),
     "mcp.py:_run_fea_validation_task<-screen_spec": "the MCP task reports the card it ran",
     "mcp.py:_title_block<-screen_spec": "the overview image's title block prints the verdict",
     "needs.py:deepening<-screen_spec": "the needs report reads which checks could not run",

@@ -40,7 +40,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, computed_field, model_validator
 
 from ._models import (
     EMPTY_MAP,
@@ -52,8 +52,9 @@ from ._models import (
     _refusal_line,
 )
 from .combination import Mate
+from .derivation import DerivationAbsence, Underived
 from .refusal import RefusalError, Remedy
-from .scorecard import ScorecardEntry
+from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .units import Quantity
 
 __all__ = [
@@ -78,6 +79,7 @@ __all__ = [
     "product_tree",
     "parts_list",
     "PlacedBody",
+    "NodeCard",
     "PlacedProduct",
     "place_product",
 ]
@@ -747,6 +749,77 @@ class PlacedBody(StatableModel):
     center_of_mass_mm: tuple[float, float, float]
 
 
+_WORST_FIRST = (
+    CheckStatus.FAIL,
+    CheckStatus.NOT_EVALUATED,
+    CheckStatus.WARNING,
+    CheckStatus.OVER_MARGIN,
+    CheckStatus.OUT_OF_DEPTH,
+    CheckStatus.PASS,
+)
+
+
+class NodeCard(StatableModel):
+    """One node's card: the checks it owns, and its children's cards.
+
+    A part owns its own card's checks, a placeholder owns one not-evaluated entry saying it
+    stands in for an undetailed item, and a product owns the interference between its
+    children. ``status`` is the worst of its own card and its children's verdicts, with
+    not evaluated never counted as a pass. A finding is held once, by the node that owns
+    it; an ancestor fails by reference to it (:meth:`findings` lists them with their
+    owners).
+    """
+
+    # As Scorecard: ``status`` is dump-only, so a card read back from its dump is unchanged.
+    model_config = ConfigDict(frozen=True)
+
+    path: Named
+    kind: Literal["part", "product", "placeholder"]
+    entries: tuple[ScorecardEntry, ...]
+    children: tuple[NodeCard, ...] = ()
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def status(self) -> CheckStatus:
+        present = {Scorecard(entries=self.entries).status, *(c.status for c in self.children)}
+        return next(status for status in _WORST_FIRST if status in present)
+
+    def findings(self) -> tuple[tuple[str, ScorecardEntry], ...]:
+        """Every entry at or below this node that did not pass, with the path that owns it."""
+        own = tuple((self.path, e) for e in self.entries if e.status is not CheckStatus.PASS)
+        return own + tuple(f for child in self.children for f in child.findings())
+
+    def find(self, path: str) -> NodeCard:
+        """The card of the node at ``path``, at or below this one."""
+        if path == self.path:
+            return self
+        for child in self.children:
+            if path == child.path or path.startswith(child.path + "/"):
+                return child.find(path)
+        raise _refuse(f"no node '{path}' under '{self.path}'", subject="path")
+
+    def __str__(self) -> str:
+        lines: list[str] = []
+
+        def walk(card: NodeCard, depth: int) -> None:
+            own = [e for e in card.entries if e.status is not CheckStatus.PASS]
+            line = f"{'  ' * depth}{card.path}: {card.status.value}"
+            below = [path for path, _ in card.findings() if path != card.path]
+            if below and not own:
+                owners = list(dict.fromkeys(below))
+                line += (
+                    f" by reference to {', '.join(owners[:4])}{', …' if len(owners) > 4 else ''}"
+                )
+            lines.append(line)
+            for entry in own:
+                lines.append(f"{'  ' * depth}  - {entry.name} {entry.status.value}: {entry.detail}")
+            for child in card.children:
+                walk(child, depth + 1)
+
+        walk(self, 0)
+        return "\n".join(lines)
+
+
 class PlacedProduct(StatableModel):
     """A product placed through its mates: its leaves, interference and mass roll-up.
 
@@ -756,7 +829,8 @@ class PlacedProduct(StatableModel):
     placeholder in them, ``center_assumed`` each placeholder whose centre of mass is its
     envelope's centre, and ``mass_unknown`` each leaf whose material gives no density, so
     the roll-up never reads as more complete than it is. ``unused_parameters`` names each
-    layout parameter no item reads.
+    layout parameter no item reads. ``card`` is the tree of cards, one per node, each
+    product node owning the interference between its own children.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -770,6 +844,7 @@ class PlacedProduct(StatableModel):
     center_of_mass_mm: tuple[float, float, float] | None
     center_assumed: tuple[str, ...] = ()
     unused_parameters: tuple[str, ...] = ()
+    card: NodeCard
 
     def __str__(self) -> str:
         rests = f"; rests on placeholders {list(self.mass_rests_on)}" if self.mass_rests_on else ""
@@ -785,18 +860,29 @@ class PlacedProduct(StatableModel):
         return (
             f"{self.name}: {len(self.bodies)} bodies, {self.mass_kg:.4g} kg{rests}{unknown}"
             f"{centre}; "
-            f"interference {self.interference.status.value}"
+            f"interference {self.interference.status.value}; card {self.card.status.value}"
         )
 
 
 class _Leaf:
     def __init__(
-        self, path: str, shape: Any, placeholder: bool, mass: float | None, com: Any, assumed: bool
+        self,
+        path: str,
+        shape: Any,
+        placeholder: bool,
+        mass: float | None,
+        com: Any,
+        assumed: bool,
+        entries: tuple[ScorecardEntry, ...],
     ) -> None:
         self.path, self.shape, self.placeholder, self.mass = path, shape, placeholder, mass
         # The centre of mass as a vertex, moved with the shape; ``assumed`` when it is a
         # placeholder's envelope centre rather than a declared centre of mass.
-        self.com, self.assumed = com, assumed
+        self.com, self.assumed, self.entries = com, assumed, entries
+
+    def moved(self, path: str, where: Any) -> _Leaf:
+        return _Leaf(path, self.shape.moved(where), self.placeholder, self.mass,
+                     self.com.moved(where), self.assumed, self.entries)  # fmt: skip
 
 
 class _Assembly:
@@ -827,6 +913,7 @@ def place_product(
         from .combination import _mass
         from .features import Feature
         from .geometry import BuiltGeometry, GeometryError, build_spec
+        from .screening import screen_spec
         from .spec import SpecValidationError, parse_spec
 
         definitions = {d.id: d for d in current.definitions}
@@ -856,8 +943,8 @@ def place_product(
                                   subject="definitions[].spec") from failure  # fmt: skip
                 mass = _mass(spec, built)
                 centre = built.shape.center(CenterOf.MASS)
-                inner = [(path, built.shape, False, mass, Vertex(centre.X, centre.Y, centre.Z),
-                          False)]  # fmt: skip
+                inner = [_Leaf(path, built.shape, False, mass, Vertex(centre.X, centre.Y, centre.Z),
+                               False, screen_spec(spec).entries)]  # fmt: skip
             elif definition.kind == "placeholder":
                 holder = definition.placeholder
                 if holder is None:  # a placeholder definition holds one, by its validator
@@ -879,15 +966,20 @@ def place_product(
                 com = (0.0, 0.0, 0.0) if declared is None else tuple(
                     q.to("mm").magnitude for q in declared
                 )  # fmt: skip
-                inner = [(path, built.shape, True, float(holder.mass.to("kg").magnitude),
-                          Vertex(*com), declared is None)]  # fmt: skip
+                stands_in = ScorecardEntry(
+                    name="placeholder",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=f"a placeholder stands in for an undetailed item ({holder.reason}); "
+                    "every result resting on it is provisional",
+                    underived=_STANDS_IN,
+                    needs=(_NEEDS_A_DETAIL,),
+                )
+                inner = [_Leaf(path, built.shape, True, float(holder.mass.to("kg").magnitude),
+                               Vertex(*com), declared is None, (stands_in,))]  # fmt: skip
             else:
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
-                inner = [
-                    (leaf.path, leaf.shape, leaf.placeholder, leaf.mass, leaf.com, leaf.assumed)
-                    for leaf in built.leaves
-                ]
+                inner = built.leaves
             if instance.name == current.ground:
                 rotation, translation = _IDENTITY, (0.0, 0.0, 0.0)
             else:
@@ -910,26 +1002,15 @@ def place_product(
             for k in range(members):
                 r, t = _member(instance, k, rotation, translation)
                 label = path if members == 1 else f"{path}[{k + 1}]"
-                for leaf_path, shape, holder_flag, leaf_mass, com, assumed in inner:
-                    where = _location(r, t)
-                    leaf_label = label + leaf_path[len(path) :]
-                    leaves.append(_Leaf(leaf_label, shape.moved(where), holder_flag, leaf_mass,
-                                        com.moved(where), assumed))  # fmt: skip
+                where = _location(r, t)
+                leaves.extend(leaf.moved(label + leaf.path[len(path) :], where) for leaf in inner)
         shape = Compound([leaf.shape for leaf in leaves])
         return _Assembly(shape, leaves)
 
     assembly = assemble(product, product.name)
     leaves = assembly.leaves
-    interference = _interference([(leaf.path, leaf.shape) for leaf in leaves])
+    interference = _provisional(_interference([(leaf.path, leaf.shape) for leaf in leaves]), leaves)
     holders = [leaf.path for leaf in leaves if leaf.placeholder]
-    if holders:
-        interference = interference.model_copy(
-            update={
-                "detail": f"{interference.detail}; provisional: {len(holders)} placeholder"
-                f"{'s' if len(holders) != 1 else ''} ({', '.join(holders[:6])}"
-                f"{', …' if len(holders) > 6 else ''}) stand in for undetailed items"
-            }
-        )
     weighed = [(leaf.mass, _corner(leaf.com.center())) for leaf in leaves if leaf.mass is not None]
     total = sum(mass for mass, _ in weighed)
     centre: tuple[float, float, float] | None = None
@@ -956,6 +1037,57 @@ def place_product(
         center_of_mass_mm=centre,
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
         unused_parameters=product.layout.unused if product.layout is not None else (),
+        card=_card(product.name, leaves),
+    )
+
+
+_NEEDS_A_DETAIL = Need(
+    declaration="definitions[].spec",
+    takes="the item's Design Spec in place of its placeholder, once it is detailed or chosen",
+    sources=(ValueSource.USER, ValueSource.DATABASE),
+)
+_STANDS_IN = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="a placeholder is declared, not analysed: its card is its reason",
+)
+
+
+def _provisional(entry: ScorecardEntry, leaves: list[_Leaf]) -> ScorecardEntry:
+    """``entry``, saying it is provisional when any of ``leaves`` is a placeholder."""
+    holders = [leaf.path for leaf in leaves if leaf.placeholder]
+    if not holders:
+        return entry
+    shown = ", ".join(holders[:6]) + (", …" if len(holders) > 6 else "")
+    plural = "s" if len(holders) != 1 else ""
+    return entry.model_copy(update={"detail": f"{entry.detail}; provisional: {len(holders)} "
+                                    f"placeholder{plural} ({shown}) stand in for undetailed "
+                                    "items"})  # fmt: skip
+
+
+def _card(path: str, leaves: list[_Leaf]) -> NodeCard:
+    """The card of the node at ``path``, from the leaves under it, each child in order."""
+    from build123d import Compound
+
+    from .combination import _interference
+
+    if len(leaves) == 1 and leaves[0].path == path:
+        leaf = leaves[0]
+        return NodeCard(path=path, kind="placeholder" if leaf.placeholder else "part",
+                        entries=leaf.entries)  # fmt: skip
+    groups: dict[str, list[_Leaf]] = {}
+    for leaf in leaves:
+        child = leaf.path[len(path) + 1 :].split("/")[0]
+        groups.setdefault(f"{path}/{child}", []).append(leaf)
+    bodies = [
+        (child, group[0].shape if len(group) == 1 else Compound([g.shape for g in group]))
+        for child, group in groups.items()
+    ]
+    interference = _provisional(_interference(bodies), leaves)
+    return NodeCard(
+        path=path,
+        kind="product",
+        entries=(interference,),
+        children=tuple(_card(child, group) for child, group in groups.items()),
     )
 
 

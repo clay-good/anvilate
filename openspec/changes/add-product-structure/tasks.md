@@ -22,8 +22,8 @@ Depends on `add-part-combinations` (mates, hardware, combination card).
 
 ## 3. Cards and builds
 
-- [ ] 3.1 Card per node with roll-up; finding stated once at its owner, referenced above
-- [ ] 3.2 Placeholder dependence carried on every affected entry
+- [x] 3.1 Card per node with roll-up; finding stated once at its owner, referenced above
+- [x] 3.2 Placeholder dependence carried on every affected entry
 - [ ] 3.3 Content-keyed rebuild; reuse count in the summary; equality with a cold build
       gated in CI
 

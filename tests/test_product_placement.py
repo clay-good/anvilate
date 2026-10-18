@@ -119,6 +119,12 @@ def test_a_catalog_part_brings_its_own_mass():
     # 120 × 80 × 6 steel with rounded corners and holes: well under 120 × 80 × 6 × 7.85e-6
     assert plate.placeholder is False and 0.3 < plate.mass_kg < 0.4521
     assert placed.mass_rests_on == ("cart/base",)
+    # its node carries the part's own card, the one `anvilate check` gives its spec
+    from anvilate.screening import screen_spec
+    from anvilate.spec import parse_spec
+
+    node = placed.card.find("cart/block")
+    assert node.kind == "part" and node.entries == screen_spec(parse_spec(plate_spec)).entries
 
 
 def test_every_instance_but_the_ground_needs_a_mate():
