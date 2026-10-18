@@ -1050,6 +1050,9 @@ modules:
 - :mod:`~anvilate.analysis.plasticity` — a Ramberg-Osgood curve fitted at F_0.7 and
   F_0.85, and the tangent-modulus column and plasticity-reduced plate buckling stresses of
   the Astronautic Structures Manual §C2
+- :mod:`~anvilate.analysis.fastener_group` — in-plane load shared over a bolt pattern by
+  stiffness or shank area, eccentricity included, and each fastener's NASA-STD-5020B
+  shear-tension interaction and pull-through
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -1951,6 +1954,13 @@ from .fastener import (
     thread_stripping_shear_area,
     thread_stripping_stress,
     torque_for_preload,
+)
+from .fastener_group import (
+    FastenerGroupResult,
+    FastenerLoad,
+    GroupFastener,
+    ShearPlane,
+    fastener_group_loads,
 )
 from .fatigue import (
     CyclicStress,
@@ -3593,6 +3603,11 @@ __all__ = [
     "PlasticBuckling",
     "plastic_column_buckling_stress",
     "plastic_plate_buckling_stress",
+    "ShearPlane",
+    "GroupFastener",
+    "FastenerLoad",
+    "FastenerGroupResult",
+    "fastener_group_loads",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

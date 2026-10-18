@@ -167,6 +167,11 @@ plasticity.PlateEdge
 plasticity.PlasticBuckling
 plasticity.plastic_column_buckling_stress
 plasticity.plastic_plate_buckling_stress
+fastener_group.ShearPlane
+fastener_group.GroupFastener
+fastener_group.FastenerLoad
+fastener_group.FastenerGroupResult
+fastener_group.fastener_group_loads
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors

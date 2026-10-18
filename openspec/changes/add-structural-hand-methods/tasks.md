@@ -9,7 +9,7 @@ anchored to a worked example from a public-domain source, with a runnable exampl
       factor, separation before rupture
 - [ ] 1.2 Lugs: axial, transverse, oblique interaction, bushing bearing; curve ranges
       enforced; curves only from public-domain sources
-- [ ] 1.3 Fastener groups: stiffness distribution, shear-tension interaction, pull-through
+- [x] 1.3 Fastener groups: stiffness distribution, shear-tension interaction, pull-through
 
 ## 2. Thin-walled structure
 

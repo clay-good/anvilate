@@ -9534,3 +9534,16 @@ def test_short_stiffener_plasticity_example():
     assert d["overstatement"] == pytest.approx(2.27, abs=0.005)
     assert d["crippling_thin_mpa"] == pytest.approx(243.6, abs=0.05)
     _assert_narrates_computed("short_stiffener_plasticity.py", namespace)
+
+
+def test_eccentric_bolt_pattern_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "eccentric_bolt_pattern.py"))
+    d = namespace["eccentric_bolt_pattern"]()
+    # direct 1,500 down; torsion 600,000 × 35.36/5,000 = 4,243 on each bolt; on B at
+    # (+25, −25) the two add to (−3,000, −4,500)... |F| = √(3,000² + 4,500²) = 5,408 N
+    assert d["governing"] in {"B", "C"}
+    assert d["shear_n"] == pytest.approx((3_000**2 + 4_500**2) ** 0.5, rel=1e-9)
+    assert d["body_index"] == pytest.approx((5_408.3 / 6_300) ** 2.5 + (2_000 / 9_000) ** 1.5,
+                                            abs=1e-3)  # fmt: skip
+    assert d["body_index"] < 1 < d["threads_index"]
+    _assert_narrates_computed("eccentric_bolt_pattern.py", namespace)
