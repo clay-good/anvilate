@@ -1710,6 +1710,7 @@ _ANSWERED_BY_A_CHECK = {
     "keepouts": "one keepout entry each, not evaluated until intrusion is measured on geometry",
     "assembly": "the build order, each adjustment's reach in its state, and inspectability",
     "carbon": "one embodied carbon entry, judged against the declared budget",
+    "duty_cycle": "one duty-cycle fatigue entry, Miner's damage per life by event",
     "sources": (
         "an unconfirmed agent reading is one entry and a note on each check that used it; a "
         "cited file that is found is held to its recorded digest"
@@ -2395,6 +2396,7 @@ def test_every_spec_field_is_screened_reported_or_reasoned_metadata():
         "keepouts",
         "assembly",
         "carbon",
+        "duty_cycle",
         "sources",
     }
     missing = sorted(fields - probed - set(_NOTHING_TO_SCREEN))

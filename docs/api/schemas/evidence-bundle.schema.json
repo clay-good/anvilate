@@ -179,6 +179,29 @@
       "title": "AssemblyState",
       "type": "object"
     },
+    "BasquinCurve": {
+      "description": "A Basquin S-N curve σ_a = a·N^b and its source (the caller's material record).",
+      "properties": {
+        "coefficient": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "exponent": {
+          "title": "Exponent",
+          "type": "number"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "coefficient",
+        "exponent",
+        "source"
+      ],
+      "title": "BasquinCurve",
+      "type": "object"
+    },
     "Budget": {
       "additionalProperties": false,
       "description": "An allocated limit on one quantity, and the terms that spend it.",
@@ -1021,7 +1044,7 @@
           "$ref": "#/$defs/AcceptanceCriteria"
         },
         "anvilate_spec": {
-          "default": "1.20.0",
+          "default": "1.21.0",
           "title": "Anvilate Spec",
           "type": "string"
         },
@@ -1104,6 +1127,17 @@
           },
           "title": "Dimensions",
           "type": "array"
+        },
+        "duty_cycle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DutyCycleDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "element_params": {
           "additionalProperties": true,
@@ -1275,6 +1309,113 @@
       ],
       "title": "Direction",
       "type": "string"
+    },
+    "DutyCycleDeclaration": {
+      "additionalProperties": false,
+      "description": "The part's duty cycle: a life, named events over it, and the S-N curve it uses.\n\nEach event states its stress history at the critical point or its blocks of ranges, how\nmany times it occurs per life, and its source. Screened as one entry: Miner's damage per\nlife over the declared ``curve`` with the declared mean-stress ``correction``, each\nevent's share, and the event that drives it. Goodman needs ``ultimate_strength``.",
+      "properties": {
+        "correction": {
+          "$ref": "#/$defs/MeanStressCorrection",
+          "default": "none"
+        },
+        "curve": {
+          "$ref": "#/$defs/BasquinCurve"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/DutyEvent"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        },
+        "life": {
+          "$ref": "#/$defs/DutyLife"
+        },
+        "ultimate_strength": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "life",
+        "events",
+        "curve"
+      ],
+      "title": "DutyCycleDeclaration",
+      "type": "object"
+    },
+    "DutyEvent": {
+      "description": "One named event of a duty cycle: its stress history or its blocks, and its source.\n\n``history`` is the stress at the critical point through one pass of the event, counted\nby rainflow (ASTM E1049); ``repeating`` declares whether one pass is a block that\ncloses on itself (counted from its extreme) or a trace applied once (with residual half\ncycles), as :func:`~anvilate.analysis.rainflow.rainflow_count` reads it. ``blocks``\nare the event's cycles stated instead as ranges, means and counts per pass. An event\nstates exactly one of them.",
+      "properties": {
+        "blocks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/StressBlock"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "history": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Quantity"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "occurrences_per_life": {
+          "title": "Occurrences Per Life",
+          "type": "number"
+        },
+        "repeating": {
+          "default": false,
+          "title": "Repeating",
+          "type": "boolean"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "occurrences_per_life",
+        "source"
+      ],
+      "title": "DutyEvent",
+      "type": "object"
+    },
+    "DutyLife": {
+      "additionalProperties": false,
+      "description": "The life a duty cycle's occurrences are counted over: hours, distance or cycles.",
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "title": "DutyLife",
+      "type": "object"
     },
     "EmbodiedCarbonEstimate": {
       "description": "An itemised ISO 14040 cradle-to-gate estimate, its band, and its EN 15978 scope.\n\n``total`` is the sum of the contributions and ``low``/``high`` the band carried\nthrough from each factor. ``scope`` is the single module range every contribution\nshares — the constructor refuses a mixture, because a sum across scopes is not an\nestimate of anything.\n\n``dominant`` names the contribution carrying the most, which is the only part of\nthis worth acting on first: embodied carbon is almost always concentrated in one\nmaterial, and a redesign that trims the other three is motion without progress.",
@@ -2406,6 +2547,16 @@
       "title": "MaterialRef",
       "type": "object"
     },
+    "MeanStressCorrection": {
+      "description": "The declared mean-stress model: none, Goodman (Shigley §6-12), or Smith-Watson-Topper.",
+      "enum": [
+        "none",
+        "goodman",
+        "smith_watson_topper"
+      ],
+      "title": "MeanStressCorrection",
+      "type": "string"
+    },
     "ModuleScope": {
       "description": "Which EN 15978 life-cycle modules a factor or an estimate covers.\n\nThe scope is not a label on the answer, it is part of what the answer *is*. Two\nfactors quoted over different module sets are not addable, and a total whose scope\nis unstated cannot be compared with anything. Values are the standard module\nranges, so a report prints the same string a reviewer reads in the source.",
       "enum": [
@@ -3388,6 +3539,31 @@
       "title": "StandardComponentInterface",
       "type": "object"
     },
+    "StressBlock": {
+      "description": "``count`` cycles of one stress ``range`` about one ``mean``, as a test or a spectrum\nstates them, applied as declared rather than counted, and summed by Miner's rule.",
+      "properties": {
+        "count": {
+          "title": "Count",
+          "type": "number"
+        },
+        "mean": {
+          "$ref": "#/$defs/Quantity",
+          "default": {
+            "magnitude": 0.0,
+            "unit": "MPa"
+          }
+        },
+        "range": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "range",
+        "count"
+      ],
+      "title": "StressBlock",
+      "type": "object"
+    },
     "Study": {
       "description": "A declared design-space study: what to sweep, what to rank by, and how far to go.\n\n``budget`` caps how many points are evaluated. A grid larger than the budget is\n*truncated*, not resampled, and the result says so — a front from a truncated sweep\nis provisional, and the distinction between \"the lightest passing design\" and \"the\nlightest passing design we got to\" is the whole reason the flag exists.\n\n``seed`` is recorded for reproducibility even though nothing here is random: both\nstrategies are pure functions of the study, so a study re-run returns the identical\nset in the identical order. The seed shifts the Halton start index, which is the one\nknob that changes which points a truncated sweep gets to.",
       "properties": {
@@ -3939,7 +4115,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:evidence-bundle:1.28.0",
+  "$id": "urn:anvilate:schema:evidence-bundle:1.29.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate evidence bundle: every screening layer's contribution for one part, with one rolled-up status, the scorecard, and the spec the verdicts were computed from. A layer that never ran is an absent key, not a null one — the two are different facts and the bundle refuses to collapse them. Carries the screening disclaimer unconditionally. Generated from anvilate.bundle.BundleDocument.",
   "properties": {
@@ -4150,5 +4326,5 @@
   ],
   "title": "BundleDocument",
   "type": "object",
-  "x-anvilate-version": "1.28.0"
+  "x-anvilate-version": "1.29.0"
 }

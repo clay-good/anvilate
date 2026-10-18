@@ -25,21 +25,23 @@ endurance limit, if any, is the caller's to state by the curve they declare.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from enum import StrEnum
 from math import sqrt
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from .._models import Named, Provenance, RevalidatedModel, each_one
+from .._models import Named, Provenance, RevalidatedModel, StatableModel, each_one
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 from .fatigue import basquin_cycles_to_failure, goodman_equivalent_reversed_stress
-from .rainflow import RainflowCount, rainflow_count
+from .rainflow import RainflowCount, RainflowCycle, rainflow_count
 
 __all__ = [
     "MeanStressCorrection",
     "BasquinCurve",
+    "StressBlock",
     "DutyEvent",
     "EventDamage",
     "DutyCycleDamage",
@@ -67,7 +69,7 @@ class MeanStressCorrection(StrEnum):
     SMITH_WATSON_TOPPER = "smith_watson_topper"
 
 
-class BasquinCurve(RevalidatedModel):
+class BasquinCurve(StatableModel):
     """A Basquin S-N curve σ_a = a·N^b and its source (the caller's material record)."""
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -77,22 +79,58 @@ class BasquinCurve(RevalidatedModel):
     source: Provenance
 
 
-class DutyEvent(RevalidatedModel):
-    """One named event of a duty cycle, counted by rainflow (ASTM E1049): history and source.
+class StressBlock(StatableModel):
+    """``count`` cycles of one stress ``range`` about one ``mean``, as a test or a spectrum
+    states them, applied as declared rather than counted, and summed by Miner's rule."""
 
-    ``history`` is the stress at the critical point through one pass of the event;
-    ``repeating`` declares whether one pass is a block that closes on itself (counted
-    from its extreme) or a trace applied once (with residual half cycles), as
-    :func:`~anvilate.analysis.rainflow.rainflow_count` reads it.
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    range: Quantity
+    mean: Quantity = Quantity(magnitude=0.0, unit="MPa")
+    count: float
+
+    @model_validator(mode="after")
+    def _a_block(self) -> StressBlock:
+        for name, value in (("range", self.range), ("mean", self.mean)):
+            if not value.has_dimension("[pressure]") or not math.isfinite(value.magnitude):
+                raise _refusal(f"a block's {name} is {value}; it is a finite stress",
+                               subject=name)  # fmt: skip
+        if not self.range.magnitude >= 0:
+            raise _refusal(f"a block's range is {self.range}; a range is not negative",
+                           subject="range")  # fmt: skip
+        if not (math.isfinite(self.count) and self.count > 0):
+            raise _refusal(f"a block's count is {self.count}; it is a positive number of cycles",
+                           subject="count")  # fmt: skip
+        return self
+
+
+class DutyEvent(StatableModel):
+    """One named event of a duty cycle: its stress history or its blocks, and its source.
+
+    ``history`` is the stress at the critical point through one pass of the event, counted
+    by rainflow (ASTM E1049); ``repeating`` declares whether one pass is a block that
+    closes on itself (counted from its extreme) or a trace applied once (with residual half
+    cycles), as :func:`~anvilate.analysis.rainflow.rainflow_count` reads it. ``blocks``
+    are the event's cycles stated instead as ranges, means and counts per pass. An event
+    states exactly one of them.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     name: Named
-    history: tuple[Quantity, ...]
+    history: tuple[Quantity, ...] = ()
+    blocks: tuple[StressBlock, ...] = ()
     occurrences_per_life: float
     source: Provenance
     repeating: bool = False
+
+    @model_validator(mode="after")
+    def _one_way(self) -> DutyEvent:
+        if bool(self.history) == bool(self.blocks):
+            raise _refusal(f"event '{self.name}' states {'both' if self.history else 'neither'} "
+                           "of history and blocks; an event states one",
+                           subject="history")  # fmt: skip
+        return self
 
 
 class EventDamage(RevalidatedModel):
@@ -166,6 +204,33 @@ def _equivalent_amplitude(
     return sqrt(peak * amplitude)
 
 
+def _damage(
+    count: RainflowCount,
+    correction: MeanStressCorrection,
+    su: float | None,
+    curve: BasquinCurve,
+    occurrences: float,
+) -> tuple[float, float]:
+    """Miner's damage per pass and per life over the counted cycles."""
+    per_pass = 0.0
+    for cycle in count.cycles:
+        amplitude = _equivalent_amplitude(
+            float(Quantity(magnitude=cycle.range, unit=count.unit).to("MPa").magnitude),
+            float(Quantity(magnitude=cycle.mean, unit=count.unit).to("MPa").magnitude),
+            correction,
+            su,
+        )
+        if amplitude == 0:
+            continue
+        life = basquin_cycles_to_failure(
+            stress_amplitude=Quantity(magnitude=amplitude, unit="MPa"),
+            coefficient=curve.coefficient,
+            exponent=curve.exponent,
+        )
+        per_pass += cycle.count / life
+    return per_pass, per_pass * occurrences
+
+
 def duty_cycle_damage(
     events: Sequence[DutyEvent],
     *,
@@ -178,7 +243,8 @@ def duty_cycle_damage(
     Every event's history is counted by rainflow; each cycle's equivalent amplitude under
     ``correction`` is read on ``curve`` for its life; damage per pass is Σ count/N, and per
     life it is that times the event's occurrences. ``ultimate_strength`` is required for
-    Goodman. A history with fewer than three reversals is refused naming its event.
+    Goodman. A history with fewer than three reversals is refused naming its event. An
+    event's blocks are taken as declared, each its count of cycles.
     """
     declared = each_one(events, DutyEvent, named="events")
     if not declared:
@@ -205,6 +271,17 @@ def duty_cycle_damage(
         if occurrences < 0:
             raise _refusal(f"event '{event.name}' occurs {occurrences} times per life",
                            subject="events")  # fmt: skip
+        if event.blocks:
+            count = RainflowCount(
+                cycles=tuple(
+                    RainflowCycle(range=float(b.range.to("MPa").magnitude),
+                                  mean=float(b.mean.to("MPa").magnitude), count=b.count)
+                    for b in event.blocks
+                ),
+                residual=(), repeating=True, unit="MPa", reversals=0,
+            )  # fmt: skip
+            damages.append((event, count, *_damage(count, correction, su, curve, occurrences)))
+            continue
         try:
             count = rainflow_count(list(event.history), repeating=event.repeating)
         except RefusalError as error:
@@ -216,23 +293,7 @@ def duty_cycle_damage(
                 "shorter than three reversals has no closed cycle to count",
                 subject="events",
             )
-        per_pass = 0.0
-        for cycle in count.cycles:
-            amplitude = _equivalent_amplitude(
-                float(Quantity(magnitude=cycle.range, unit=count.unit).to("MPa").magnitude),
-                float(Quantity(magnitude=cycle.mean, unit=count.unit).to("MPa").magnitude),
-                correction,
-                su,
-            )
-            if amplitude == 0:
-                continue
-            life = basquin_cycles_to_failure(
-                stress_amplitude=Quantity(magnitude=amplitude, unit="MPa"),
-                coefficient=curve.coefficient,
-                exponent=curve.exponent,
-            )
-            per_pass += cycle.count / life
-        damages.append((event, count, per_pass, per_pass * occurrences))
+        damages.append((event, count, *_damage(count, correction, su, curve, occurrences)))
     total = sum(d[3] for d in damages)
     results = tuple(
         EventDamage(event=e.name, count=c, damage_per_pass=p, damage_per_life=life,

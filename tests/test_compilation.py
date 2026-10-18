@@ -31,6 +31,7 @@ from anvilate.compilation import (
     score_task_set,
     task_set_issues,
 )
+from anvilate.spec.ir import SCHEMA_VERSION
 from anvilate.units import Quantity
 
 _TASK = CompilationTask(
@@ -244,7 +245,7 @@ def test_evaluation_retains_every_success_and_bounded_failure_then_scores_all_ta
     assert "test-backend" in evaluation.report.configuration
     assert "small-local-model" in evaluation.report.configuration
     assert "two_pass" in evaluation.report.configuration
-    assert "schema 1.20.0" in evaluation.report.configuration
+    assert f"schema {SCHEMA_VERSION}" in evaluation.report.configuration
     assert "retry budget 2" in evaluation.report.configuration
 
 
@@ -365,7 +366,7 @@ def test_recommendation_markdown_carries_the_model_run_policy_and_three_metrics(
         "test-backend",
         "1.0.0",
         "two_pass",
-        "schema 1.20.0",
+        f"schema {SCHEMA_VERSION}",
         "Schema validity",
         "Field correctness",
         "Wrong-but-valid",

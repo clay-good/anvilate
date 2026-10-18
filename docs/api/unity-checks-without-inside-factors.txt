@@ -17,3 +17,4 @@ analysis/pressure_vessel.py | asme_b313_pressure_scorecard | the factor lives in
 packs/hydraulics.py | screen_pipe_run | a budget, not a strength: the head the supply provides against the head the run loses
 packs/machinery.py | _undercut_entry | a geometric criterion: the tooth count against the undercut limit, with no factor applied
 packs/machinery.py | _spring_buckling_entry | a stability criterion: the free-length ratio against the buckling boundary for the end condition, with no factor applied
+screening.py | _duty_cycle_entries | a criterion: Miner's damage of 1 per declared life, with the scatter left in the S-N curve the document declares and its source

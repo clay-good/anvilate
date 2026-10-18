@@ -85,5 +85,29 @@ mounted item feels the pulse times the half-sine shock amplification at its own 
 frequency, so an item tuned near the worst ratio sees about 1.77 times the peak. The
 contact stiffness is the weakest number, and every drop result is labelled an estimate.
 
-Not yet built: declaring a duty cycle in a Design Spec. The analysis takes events directly
-today.
+## Declaring a duty cycle
+
+A Design Spec (1.21.0) declares its duty cycle under `duty_cycle`, and `anvilate check`
+adds one `duty-cycle fatigue` entry. It passes while Miner's damage over one declared life
+is at most 1, and states each event's share and the event that drives it.
+
+```yaml
+duty_cycle:
+  life: {value: {magnitude: 240000, unit: km}, source: vehicle program}
+  events:
+    - name: pothole
+      history: [{magnitude: 0, unit: MPa}, {magnitude: 200, unit: MPa}, ...]
+      occurrences_per_life: 1000
+      source: strain-gauge trace, run 14
+    - name: braking
+      blocks: [{range: {magnitude: 300, unit: MPa}, count: 1}]
+      occurrences_per_life: 20000
+      source: proving-ground braking survey
+  curve: {coefficient: {magnitude: 1000, unit: MPa}, exponent: -0.1, source: coupon S-N fit}
+  correction: none          # or goodman (with ultimate_strength), smith_watson_topper
+```
+
+A life is a time, a distance or a number of cycles. Each event states a measured
+`history`, counted by rainflow, or `blocks` of range, mean and count per pass, taken as
+declared. A history too short to count, two events with one name, an event with both or
+neither, and Goodman without `ultimate_strength` are refused when the document is read.

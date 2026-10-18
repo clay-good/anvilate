@@ -121,6 +121,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Design Spec 1.21.0: a part declares its duty cycle
+
+`duty_cycle` holds a `life` (a time, a distance or a number of cycles, with its source),
+named `events` (each a stress `history` or `blocks` of range, mean and count, its
+occurrences per life and its source), the Basquin `curve`, and the mean-stress `correction`.
+`screen_spec` adds a `duty-cycle fatigue` entry. Evidence bundle 1.29.0 and CLI output
+1.63.0 move with it, because each carries the Design Spec; nothing else in them changes.
+
 ### Product document 1.0.0: the product is a published document kind
 
 `anvilate_product: 1.0.0` names this schema; another version is refused. A definition's

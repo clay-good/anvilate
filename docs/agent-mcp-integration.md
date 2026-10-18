@@ -190,7 +190,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 protocol: 2026-07-28
 server: anvilate
 tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, build_combination, list_context, read_cad_file, describe_part
-compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.20.0"}
+compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.21.0"}
 ```
 
 **Read the `$ref`, not the property name.** A tool that consumes a spec or returns a

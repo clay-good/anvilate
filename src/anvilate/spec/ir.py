@@ -9,6 +9,7 @@ origin recorded via :class:`Provenanced`.
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from datetime import date
@@ -26,6 +27,7 @@ from pydantic import (
 
 from .._assembly_declarations import Adjustment, AssemblyState, Inspection, Part
 from .._models import FrozenMap, Named, Provenance, StatableModel, rebuilt_quantities
+from ..analysis.duty_cycle import BasquinCurve, DutyCycleDamage, DutyEvent, MeanStressCorrection
 from ..analysis.embodied_carbon import CarbonFactor
 from ..budget import Budget
 from ..loads import (
@@ -595,6 +597,103 @@ class CarbonDeclaration(_Base):
                     source=_CARBON_SOURCE,
                 )
         return self
+
+
+# --- Duty cycle ---
+
+_DUTY_SOURCE = "the duty cycle: the part's life, its events and the S-N curve they are judged on"
+
+
+class DutyLife(_Base):
+    """The life a duty cycle's occurrences are counted over: hours, distance or cycles."""
+
+    value: Quantity
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _a_life(self) -> DutyLife:
+        kinds = ("[time]", "[length]", "[]")
+        if not any(self.value.has_dimension(kind) for kind in kinds):
+            raise _ir_refusal(
+                f"the duty cycle's life is {self.value}; a life is a time, a distance or a "
+                "number of cycles",
+                subject="life.value",
+                source=_DUTY_SOURCE,
+            )
+        if not (math.isfinite(self.value.magnitude) and self.value.magnitude > 0):
+            raise _ir_refusal(
+                f"the duty cycle's life is {self.value}; a life is positive",
+                subject="life.value",
+                source=_DUTY_SOURCE,
+            )
+        return self
+
+
+class DutyCycleDeclaration(_Base):
+    """The part's duty cycle: a life, named events over it, and the S-N curve it uses.
+
+    Each event states its stress history at the critical point or its blocks of ranges, how
+    many times it occurs per life, and its source. Screened as one entry: Miner's damage per
+    life over the declared ``curve`` with the declared mean-stress ``correction``, each
+    event's share, and the event that drives it. Goodman needs ``ultimate_strength``.
+    """
+
+    life: DutyLife
+    events: tuple[DutyEvent, ...] = Field(min_length=1, max_length=64)
+    curve: BasquinCurve
+    correction: MeanStressCorrection = MeanStressCorrection.NONE
+    ultimate_strength: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _a_duty_cycle(self) -> DutyCycleDeclaration:
+        names = [event.name for event in self.events]
+        doubled = sorted({name for name in names if names.count(name) > 1})
+        if doubled:
+            raise _ir_refusal(
+                f"the duty cycle names {', '.join(doubled)} more than once; each event is "
+                "reported by its name",
+                subject="events[].name",
+                source=_DUTY_SOURCE,
+            )
+        if self.correction is MeanStressCorrection.GOODMAN and self.ultimate_strength is None:
+            raise _ir_refusal(
+                "the duty cycle declares Goodman's correction and no ultimate_strength; "
+                "Goodman reads the mean against it",
+                subject="ultimate_strength",
+                source=_DUTY_SOURCE,
+            )
+        if self.ultimate_strength is not None and not (
+            self.ultimate_strength.has_dimension("[pressure]")
+            and self.ultimate_strength.magnitude > 0
+        ):
+            raise _ir_refusal(
+                f"the duty cycle's ultimate_strength is {self.ultimate_strength}; it is a "
+                "positive stress",
+                subject="ultimate_strength",
+                source=_DUTY_SOURCE,
+            )
+        from ..refusal import RefusalError
+
+        try:
+            self.damage()
+        except RefusalError as refused:  # a short history, a negative count: name it here
+            raise _ir_refusal(
+                f"the duty cycle cannot be counted: {refused}",
+                subject="events",
+                source=_DUTY_SOURCE,
+            ) from refused
+        return self
+
+    def damage(self) -> DutyCycleDamage:
+        """Miner's damage per life over the declared events (``duty_cycle_damage``)."""
+        from ..analysis.duty_cycle import duty_cycle_damage
+
+        return duty_cycle_damage(
+            self.events,
+            curve=self.curve,
+            correction=self.correction,
+            ultimate_strength=self.ultimate_strength,
+        )
 
 
 # --- Assembly ---
@@ -1201,11 +1300,11 @@ class SourceReference(_Base):
 # 1.18.0 carbon, the embodied-carbon inputs and their budget. 1.19.0 changes no field:
 # the schema's identifier became a URN (urn:anvilate:schema:design-spec:1.19.0). 1.20.0 adds
 # sources, the file each value came from, and the origins measured_from_file and agent_read.
-# All
+# 1.21.0 adds duty_cycle, the life, events and S-N curve a fatigue screen reads. All
 # additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.20.0"
+SCHEMA_VERSION = "1.21.0"
 
 
 class DesignSpec(_Base):
@@ -1272,6 +1371,9 @@ class DesignSpec(_Base):
     # budget the estimate is judged against. A factor carries its source, so one copied from
     # a product's EPD keeps naming that declaration on the card and in the bundle.
     carbon: CarbonDeclaration | None = None
+    # The part's duty cycle: a life, named events with their histories or blocks and their
+    # sources, and the S-N curve and mean-stress correction the damage is computed with.
+    duty_cycle: DutyCycleDeclaration | None = None
     # Where values came from, when they came from a file: the file, where in it, whether
     # Anvilate measured it or an agent read it, and who confirmed an agent's reading.
     sources: tuple[SourceReference, ...] = ()

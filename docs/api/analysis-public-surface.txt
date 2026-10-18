@@ -192,6 +192,7 @@ rainflow.rainflow_count
 duty_cycle.MeanStressCorrection
 duty_cycle.BasquinCurve
 duty_cycle.DutyEvent
+duty_cycle.StressBlock
 duty_cycle.EventDamage
 duty_cycle.DutyCycleDamage
 duty_cycle.duty_cycle_damage

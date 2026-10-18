@@ -179,6 +179,29 @@
       "title": "AssemblyState",
       "type": "object"
     },
+    "BasquinCurve": {
+      "description": "A Basquin S-N curve σ_a = a·N^b and its source (the caller's material record).",
+      "properties": {
+        "coefficient": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "exponent": {
+          "title": "Exponent",
+          "type": "number"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "coefficient",
+        "exponent",
+        "source"
+      ],
+      "title": "BasquinCurve",
+      "type": "object"
+    },
     "Budget": {
       "additionalProperties": false,
       "description": "An allocated limit on one quantity, and the terms that spend it.",
@@ -323,12 +346,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -617,12 +640,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -910,12 +933,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2156,7 +2179,7 @@
           "$ref": "#/$defs/AcceptanceCriteria"
         },
         "anvilate_spec": {
-          "default": "1.20.0",
+          "default": "1.21.0",
           "title": "Anvilate Spec",
           "type": "string"
         },
@@ -2239,6 +2262,17 @@
           },
           "title": "Dimensions",
           "type": "array"
+        },
+        "duty_cycle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DutyCycleDeclaration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "element_params": {
           "additionalProperties": true,
@@ -2417,12 +2451,12 @@
           "$ref": "#/$defs/Regression"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2557,12 +2591,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2583,6 +2617,113 @@
         "checks"
       ],
       "title": "DoctorOutput",
+      "type": "object"
+    },
+    "DutyCycleDeclaration": {
+      "additionalProperties": false,
+      "description": "The part's duty cycle: a life, named events over it, and the S-N curve it uses.\n\nEach event states its stress history at the critical point or its blocks of ranges, how\nmany times it occurs per life, and its source. Screened as one entry: Miner's damage per\nlife over the declared ``curve`` with the declared mean-stress ``correction``, each\nevent's share, and the event that drives it. Goodman needs ``ultimate_strength``.",
+      "properties": {
+        "correction": {
+          "$ref": "#/$defs/MeanStressCorrection",
+          "default": "none"
+        },
+        "curve": {
+          "$ref": "#/$defs/BasquinCurve"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/DutyEvent"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Events",
+          "type": "array"
+        },
+        "life": {
+          "$ref": "#/$defs/DutyLife"
+        },
+        "ultimate_strength": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "life",
+        "events",
+        "curve"
+      ],
+      "title": "DutyCycleDeclaration",
+      "type": "object"
+    },
+    "DutyEvent": {
+      "description": "One named event of a duty cycle: its stress history or its blocks, and its source.\n\n``history`` is the stress at the critical point through one pass of the event, counted\nby rainflow (ASTM E1049); ``repeating`` declares whether one pass is a block that\ncloses on itself (counted from its extreme) or a trace applied once (with residual half\ncycles), as :func:`~anvilate.analysis.rainflow.rainflow_count` reads it. ``blocks``\nare the event's cycles stated instead as ranges, means and counts per pass. An event\nstates exactly one of them.",
+      "properties": {
+        "blocks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/StressBlock"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "history": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Quantity"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "occurrences_per_life": {
+          "title": "Occurrences Per Life",
+          "type": "number"
+        },
+        "repeating": {
+          "default": false,
+          "title": "Repeating",
+          "type": "boolean"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "occurrences_per_life",
+        "source"
+      ],
+      "title": "DutyEvent",
+      "type": "object"
+    },
+    "DutyLife": {
+      "additionalProperties": false,
+      "description": "The life a duty cycle's occurrences are counted over: hours, distance or cycles.",
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "title": "DutyLife",
       "type": "object"
     },
     "DxfOutput": {
@@ -2606,12 +2747,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2760,12 +2901,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -2803,12 +2944,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -3027,12 +3168,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -3120,12 +3261,12 @@
           "$ref": "#/$defs/FetchProvenance"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -3406,12 +3547,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -4063,12 +4204,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -4637,6 +4778,16 @@
       ],
       "title": "MaterialRef",
       "type": "object"
+    },
+    "MeanStressCorrection": {
+      "description": "The declared mean-stress model: none, Goodman (Shigley §6-12), or Smith-Watson-Topper.",
+      "enum": [
+        "none",
+        "goodman",
+        "smith_watson_topper"
+      ],
+      "title": "MeanStressCorrection",
+      "type": "string"
     },
     "ModeSummary": {
       "additionalProperties": false,
@@ -5376,12 +5527,12 @@
           "default": null
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -5571,12 +5722,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -5695,12 +5846,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -6711,12 +6862,12 @@
           ]
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -6740,6 +6891,31 @@
         "problems"
       ],
       "title": "StepVerifyOutput",
+      "type": "object"
+    },
+    "StressBlock": {
+      "description": "``count`` cycles of one stress ``range`` about one ``mean``, as a test or a spectrum\nstates them, applied as declared rather than counted, and summed by Miner's rule.",
+      "properties": {
+        "count": {
+          "title": "Count",
+          "type": "number"
+        },
+        "mean": {
+          "$ref": "#/$defs/Quantity",
+          "default": {
+            "magnitude": 0.0,
+            "unit": "MPa"
+          }
+        },
+        "range": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "range",
+        "count"
+      ],
+      "title": "StressBlock",
       "type": "object"
     },
     "Study": {
@@ -7439,12 +7615,12 @@
           ]
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "const": "urn:anvilate:schema:cli-output:1.63.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.62.0",
+          "const": "1.63.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -7504,7 +7680,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:cli-output:1.62.0",
+  "$id": "urn:anvilate:schema:cli-output:1.63.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "anyOf": [
     {
@@ -7561,5 +7737,5 @@
   ],
   "description": "Every completed machine-readable Anvilate CLI result. Generated from anvilate._cli_output.CliOutput.",
   "title": "Anvilate CLI output",
-  "x-anvilate-version": "1.62.0"
+  "x-anvilate-version": "1.63.0"
 }

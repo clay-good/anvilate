@@ -170,7 +170,7 @@ _LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "urn:anvilate:schema:design-spec:1.20.0"
+_SPEC_REF = "urn:anvilate:schema:design-spec:1.21.0"
 # 1.6.0 adds a counterbore locator kind and its required through diameter.
 # 1.5.0 adds an optional concentric circular locator: a confirmed pilot bore or boss with
 # its diameter and axial extent. Existing interface contracts remain valid unchanged.
@@ -214,7 +214,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.28.0"
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.29.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"

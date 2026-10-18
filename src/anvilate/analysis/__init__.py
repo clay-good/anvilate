@@ -1778,6 +1778,7 @@ from .duty_cycle import (
     DutyEvent,
     EventDamage,
     MeanStressCorrection,
+    StressBlock,
     duty_cycle_damage,
 )
 from .dynamics import (
@@ -3682,6 +3683,7 @@ __all__ = [
     "MeanStressCorrection",
     "BasquinCurve",
     "DutyEvent",
+    "StressBlock",
     "EventDamage",
     "DutyCycleDamage",
     "duty_cycle_damage",

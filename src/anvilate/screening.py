@@ -75,7 +75,7 @@ from ._models import (
     rebuilt_quantities,
 )
 from .analysis.embodied_carbon import EmbodiedCarbonEstimate
-from .derivation import DerivationAbsence, Underived
+from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from .loads import combination_derivation
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .spec import DesignSpec, ReferenceResolver, ScreeningDepth, ValidationTier
@@ -623,6 +623,60 @@ def _carbon_entries(spec: DesignSpec) -> list[ScorecardEntry]:
         # The library names its argument; a document writes the budget under `carbon`.
         entry = entry.model_copy(update={"needs": (_NEEDS_A_CARBON_BUDGET,)})
     return [entry]
+
+
+_DUTY_CLAUSE = "ASTM E1049-85"
+
+
+def _duty_cycle_entries(spec: DesignSpec) -> list[ScorecardEntry]:
+    """One entry for the declared duty cycle: damage per life by Miner's rule, by event.
+
+    It passes while the total damage over one declared life is at most 1, and names each
+    event's share and the event that drives it.
+    """
+    if spec.duty_cycle is None:
+        return []
+    declared = spec.duty_cycle
+    damage = declared.damage()
+    life = declared.life.value
+    correction = damage.correction.value.replace("_", " ")
+    shares = "; ".join(f"{e.event} {e.damage_per_life:.3g} ({e.share:.0%})" for e in damage.events)
+    detail = (
+        f"damage {damage.total_damage:.4g} per life of {life} ({declared.life.source}); "
+        f"{damage.governing_event} drives it. By event: {shares}. Palmgren-Miner with "
+        f"{correction} mean-stress correction on the S-N curve of {damage.curve_source}; "
+        "histories counted by rainflow"
+    )
+    if damage.total_damage == 0:
+        return [ScorecardEntry(
+            name="duty-cycle fatigue", status=CheckStatus.PASS, reference=_DUTY_CLAUSE,
+            detail=f"no counted cycle reaches a damaging amplitude; {detail}",
+            underived=Underived(kind=DerivationAbsence.LOOKUP,
+                                reason="no cycle damages the part, so there is no sum to show"),
+        )]  # fmt: skip
+    entry = ScorecardEntry.from_safety_factor(
+        "duty-cycle fatigue", computed=damage.lives, required=1.0
+    )
+    derivation = Derivation(
+        symbolic="D = " + " + ".join(f"d_{i}" for i in range(1, len(damage.events) + 1)),
+        inputs=tuple(
+            SymbolValue(
+                symbol=f"d_{i}",
+                description=(
+                    f"{e.event}: {e.damage_per_pass:.4g} per pass by Miner over its "
+                    f"{e.count.total_cycles:g} cycles, times its occurrences per life"
+                ),
+                value=e.damage_per_life,
+            )
+            for i, e in enumerate(damage.events, start=1)
+        ),
+        result=SymbolValue(
+            symbol="D", description="Miner's damage per declared life", value=damage.total_damage
+        ),
+        citation=_DUTY_CLAUSE,
+    )
+    return [entry.model_copy(update={"detail": detail, "reference": _DUTY_CLAUSE,
+                                     "derivation": derivation})]  # fmt: skip
 
 
 def _keepout_entries(spec: DesignSpec) -> list[ScorecardEntry]:
@@ -2192,6 +2246,7 @@ def screen_spec(
     entries.extend(_keepout_entries(spec))
     entries.extend(_assembly_entries(spec))
     entries.extend(_carbon_entries(spec))
+    entries.extend(_duty_cycle_entries(spec))
     entries.extend(_source_entries(spec, source_roots))
     entries.extend(_declared_bound_entries(spec, entries))
     geometric = None if concept else _geometric_tolerance_entry(spec)
