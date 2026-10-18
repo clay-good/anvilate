@@ -53,9 +53,23 @@ placed assembly, moved as one body. Pattern members follow the first: shifted by
 spacing, or turned by the angle about the parent's axis.
 
 The placed product lists every leaf body at its path with its box, the interference
-between all of them, and the mass. The mass names each placeholder it rests on, and each
-part whose material gives no density, so the roll-up never reads as more complete than it
-is.
+between all of them, the mass and the centre of mass. The mass names each placeholder it
+rests on, and each part whose material gives no density, so the roll-up never reads as
+more complete than it is.
+
+## Placeholders
+
+A placeholder stands in for an item nobody here details yet, such as a bought motor before
+it is chosen. It is a box, centred on its own origin.
+
+| Field | What it does |
+| --- | --- |
+| `envelope`, `mass`, `reason` | The box, what it weighs, and why it is still a placeholder |
+| `holes` | Interfaces it offers: `tag`, `x`/`y`/`z` of the entry point, `diameter`, and the `face` it opens on. A `hole_pattern` mate bolts onto them, so the motor's bolt pattern places it now. |
+| `center_of_mass` | Measured from the envelope's centre. Left out, the centre is used and the placed product names that placeholder under `center_assumed`. |
+
+A hole or a centre of mass outside the envelope is refused. Any interference result that
+involves a placeholder says it is provisional and names the placeholders it rests on.
 
 Not yet built: layout datums, variants, a card per node with roll-up, and rebuilds keyed
 on content.

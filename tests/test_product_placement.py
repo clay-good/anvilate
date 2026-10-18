@@ -133,3 +133,80 @@ def test_the_ground_is_not_placed_by_a_mate():
     document["mates"] = _seat("base", "block")
     with pytest.raises(ProductError, match="places the ground"):
         place_product(parse_product(document))
+
+
+def _mm3(x: float, y: float, z: float) -> list[dict]:
+    return [{"magnitude": v, "unit": "mm"} for v in (x, y, z)]
+
+
+def _hole(tag: str, x: float, y: float, z: float, face: str) -> dict:
+    x_, y_, z_ = _mm3(x, y, z)
+    return {"tag": tag, "x": x_, "y": y_, "z": z_, "face": face,
+            "diameter": {"magnitude": 5, "unit": "mm"}}  # fmt: skip
+
+
+def _motor_on_plate(center_of_mass: list[dict] | None = None) -> dict:
+    """A 40 × 40 × 50 motor bolted by its base holes onto two holes in an 80 × 60 × 8 plate.
+
+    The motor's holes sit at x −10 and 20 on its bottom face (z −25), the plate's at x 0 and
+    30, y 10 on its top (z 4), so the mate shifts the motor by (10, 10, 29): its box spans
+    x 0 to 30 → −10 to 30, y −10 to 30, z 4 to 54.
+    """
+    motor = _box(40, 40, 50, 0.9)
+    motor["holes"] = [_hole("m1", -10, 0, -25, "bottom"), _hole("m2", 20, 0, -25, "bottom")]
+    if center_of_mass is not None:
+        motor["center_of_mass"] = center_of_mass
+    plate = _box(80, 60, 8, 0.6)
+    plate["holes"] = [_hole("p1", 0, 10, 4, "top"), _hole("p2", 30, 10, 4, "top")]
+    return {
+        "name": "drive",
+        "definitions": [_definition("plate", placeholder=plate),
+                        _definition("motor", placeholder=motor)],
+        "instances": [{"name": "plate", "item": "plate"}, {"name": "motor", "item": "motor"}],
+        "ground": "plate",
+        "mates": [{"id": "bolted", "kind": "hole_pattern",
+                   "place": {"part": "motor", "face": "bottom", "holes": ["m1", "m2"]},
+                   "on": {"part": "plate", "face": "top", "holes": ["p1", "p2"]}}],
+    }  # fmt: skip
+
+
+def test_a_placeholder_bolt_pattern_takes_a_hole_pattern_mate():
+    placed = place_product(parse_product(_motor_on_plate()))
+    low, high = _box_of(placed, "drive/motor")
+    assert low == pytest.approx((-10, -10, 4)) and high == pytest.approx((30, 30, 54))
+
+
+def test_the_centre_of_mass_is_the_mass_weighted_centre_of_the_leaves():
+    placed = place_product(parse_product(_motor_on_plate()))
+    # plate 0.6 kg at the origin, motor 0.9 kg at (10, 10, 29): (9, 9, 26.1) / 1.5
+    assert placed.center_of_mass_mm == pytest.approx((6.0, 6.0, 17.4))
+    assert placed.center_assumed == ("drive/plate", "drive/motor")
+    assert "centre of mass (6, 6, 17.4) mm, assuming envelope centres" in str(placed)
+
+
+def test_a_declared_centre_of_mass_moves_with_its_placeholder():
+    placed = place_product(parse_product(_motor_on_plate(_mm3(0, 0, -5))))
+    motor = next(b for b in placed.bodies if b.path == "drive/motor")
+    assert motor.center_of_mass_mm == pytest.approx((10.0, 10.0, 24.0))
+    assert placed.center_of_mass_mm == pytest.approx((6.0, 6.0, 0.9 * 24 / 1.5))
+    assert placed.center_assumed == ("drive/plate",)
+
+
+def test_interference_resting_on_placeholders_says_it_is_provisional():
+    placed = place_product(parse_product(_motor_on_plate()))
+    assert placed.interference.status is CheckStatus.PASS
+    assert "provisional: 2 placeholders (drive/plate, drive/motor)" in placed.interference.detail
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (lambda p: p.update(center_of_mass=_mm3(0, 0, 30)), "centre of mass"),
+        (lambda p: p["holes"].__setitem__(0, _hole("m1", 0, 0, -40, "bottom")), "hole 'm1'"),
+    ],
+)
+def test_a_placeholder_refuses_what_lies_outside_its_envelope(change, message):
+    document = _motor_on_plate()
+    change(document["definitions"][1]["placeholder"])
+    with pytest.raises(Exception, match=message):
+        parse_product(document)

@@ -505,6 +505,7 @@ product.PRODUCT_VERSION
 product.ItemSource
 product.ItemIdentity
 product.Placeholder
+product.PlaceholderHole
 product.Definition
 product.LinearPattern
 product.CircularPattern

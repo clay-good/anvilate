@@ -53,6 +53,7 @@ __all__ = [
     "ItemSource",
     "ItemIdentity",
     "Placeholder",
+    "PlaceholderHole",
     "Definition",
     "LinearPattern",
     "CircularPattern",
@@ -106,14 +107,38 @@ class ItemIdentity(StatableModel):
     source: ItemSource
 
 
+class PlaceholderHole(StatableModel):
+    """A hole a placeholder offers to a mate: its tag, where it is, its size, the face it is in.
+
+    ``x``, ``y`` and ``z`` are the hole's entry point in the placeholder's frame, whose origin
+    is the envelope's centre; ``face`` is the envelope face it opens on, which sets its axis.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tag: Named
+    x: Quantity
+    y: Quantity
+    z: Quantity
+    diameter: Quantity
+    face: Literal["top", "bottom", "left", "right", "front", "back"]
+
+
 class Placeholder(StatableModel):
-    """An item not yet detailed: an envelope, a mass, and why it is still a placeholder."""
+    """An item not yet detailed: an envelope, a mass, and why it is still a placeholder.
+
+    ``holes`` are the interfaces it offers, so a bought motor's bolt pattern can take a
+    hole-pattern mate before the motor is chosen. ``center_of_mass`` is measured from the
+    envelope's centre; left out, the centre is used and the placed product says so.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     envelope: tuple[Quantity, Quantity, Quantity]
     mass: Quantity
     reason: Provenance
+    holes: tuple[PlaceholderHole, ...] = Field(default=(), max_length=64)
+    center_of_mass: tuple[Quantity, Quantity, Quantity] | None = None
 
     @model_validator(mode="after")
     def _a_body(self) -> Placeholder:
@@ -124,6 +149,20 @@ class Placeholder(StatableModel):
         if not self.mass.has_dimension("[mass]") or not self.mass.magnitude > 0:
             raise _refuse(f"placeholder mass is {self.mass}; a mass is positive",
                           subject="placeholder.mass")  # fmt: skip
+        half = [size.to("mm").magnitude / 2 for size in self.envelope]
+        for hole in self.holes:
+            point = [q.to("mm").magnitude for q in (hole.x, hole.y, hole.z)]
+            if any(abs(p) > h + 1e-9 for p, h in zip(point, half, strict=True)):
+                raise _refuse(f"placeholder hole '{hole.tag}' at {point} mm is outside its "
+                              "envelope", subject="placeholder.holes")  # fmt: skip
+        if self.center_of_mass is not None:
+            point = [q.to("mm").magnitude for q in self.center_of_mass]
+            if any(abs(p) > h + 1e-9 for p, h in zip(point, half, strict=True)):
+                raise _refuse(f"placeholder centre of mass {point} mm is outside its envelope",
+                              subject="placeholder.center_of_mass")  # fmt: skip
+        tags = [hole.tag for hole in self.holes]
+        if len(set(tags)) != len(tags):
+            raise _refuse(f"placeholder holes {tags} repeat a tag", subject="placeholder.holes")
         return self
 
 
@@ -446,15 +485,18 @@ class PlacedBody(StatableModel):
     mass_kg: float | None
     box_min_mm: tuple[float, float, float]
     box_max_mm: tuple[float, float, float]
+    center_of_mass_mm: tuple[float, float, float]
 
 
 class PlacedProduct(StatableModel):
     """A product placed through its mates: its leaves, interference and mass roll-up.
 
-    ``interference`` is the combination's pairwise intersection over every leaf body.
-    ``mass_kg`` is the sum of the leaves' masses; ``mass_rests_on`` names each placeholder
-    in that sum, and ``mass_unknown`` each leaf whose material gives no density, so the
-    roll-up never reads as more complete than it is.
+    ``interference`` is the combination's pairwise intersection over every leaf body, and
+    says which placeholders it rests on. ``mass_kg`` is the sum of the leaves' masses and
+    ``center_of_mass_mm`` their mass-weighted centre; ``mass_rests_on`` names each
+    placeholder in them, ``center_assumed`` each placeholder whose centre of mass is its
+    envelope's centre, and ``mass_unknown`` each leaf whose material gives no density, so
+    the roll-up never reads as more complete than it is.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -465,19 +507,33 @@ class PlacedProduct(StatableModel):
     mass_kg: float
     mass_rests_on: tuple[str, ...]
     mass_unknown: tuple[str, ...]
+    center_of_mass_mm: tuple[float, float, float] | None
+    center_assumed: tuple[str, ...] = ()
 
     def __str__(self) -> str:
         rests = f"; rests on placeholders {list(self.mass_rests_on)}" if self.mass_rests_on else ""
         unknown = f"; no mass for {list(self.mass_unknown)}" if self.mass_unknown else ""
+        centre = ""
+        if self.center_of_mass_mm is not None:
+            x, y, z = self.center_of_mass_mm
+            assumed = (f", assuming envelope centres for {list(self.center_assumed)}"
+                       if self.center_assumed else "")  # fmt: skip
+            centre = f"; centre of mass ({x:.4g}, {y:.4g}, {z:.4g}) mm{assumed}"
         return (
-            f"{self.name}: {len(self.bodies)} bodies, {self.mass_kg:.4g} kg{rests}{unknown}; "
+            f"{self.name}: {len(self.bodies)} bodies, {self.mass_kg:.4g} kg{rests}{unknown}"
+            f"{centre}; "
             f"interference {self.interference.status.value}"
         )
 
 
 class _Leaf:
-    def __init__(self, path: str, shape: Any, placeholder: bool, mass: float | None) -> None:
+    def __init__(
+        self, path: str, shape: Any, placeholder: bool, mass: float | None, com: Any, assumed: bool
+    ) -> None:
         self.path, self.shape, self.placeholder, self.mass = path, shape, placeholder, mass
+        # The centre of mass as a vertex, moved with the shape; ``assumed`` when it is a
+        # placeholder's envelope centre rather than a declared centre of mass.
+        self.com, self.assumed = com, assumed
 
 
 class _Assembly:
@@ -503,9 +559,10 @@ def place_product(
     product_tree(product, library=shelf)  # the identity and containment refusals first
 
     def assemble(current: Product, prefix: str) -> _Assembly:
-        from build123d import Box, Compound
+        from build123d import Box, CenterOf, Compound, Vertex
 
         from .combination import _mass
+        from .features import Feature
         from .geometry import BuiltGeometry, GeometryError, build_spec
         from .spec import SpecValidationError, parse_spec
 
@@ -535,20 +592,38 @@ def place_product(
                     raise _refuse(f"'{path}' cannot be built: {failure}",
                                   subject="definitions[].spec") from failure  # fmt: skip
                 mass = _mass(spec, built)
-                inner = [(path, built.shape, False, mass)]
+                centre = built.shape.center(CenterOf.MASS)
+                inner = [(path, built.shape, False, mass, Vertex(centre.X, centre.Y, centre.Z),
+                          False)]  # fmt: skip
             elif definition.kind == "placeholder":
                 holder = definition.placeholder
                 if holder is None:  # a placeholder definition holds one, by its validator
                     raise _refuse(f"'{path}' has no placeholder", subject="definitions[]")
                 x, y, z = (q.to("mm").magnitude for q in holder.envelope)
+                holes = tuple(
+                    Feature(
+                        tag=h.tag, kind="blind_hole", diameter_mm=h.diameter.to("mm").magnitude,
+                        depth_mm=0.0,
+                        position_mm=(h.x.to("mm").magnitude, h.y.to("mm").magnitude,
+                                     h.z.to("mm").magnitude),
+                        axis=_OUTWARD[h.face],
+                    )
+                    for h in holder.holes
+                )  # fmt: skip
                 built = BuiltGeometry(name=instance.name, pattern="placeholder", shape=Box(x, y, z),
-                                      faces={}, dimensions_mm={})  # fmt: skip
-                inner = [(path, built.shape, True, float(holder.mass.to("kg").magnitude))]
+                                      faces={}, dimensions_mm={}, features=holes)  # fmt: skip
+                declared = holder.center_of_mass
+                com = (0.0, 0.0, 0.0) if declared is None else tuple(
+                    q.to("mm").magnitude for q in declared
+                )  # fmt: skip
+                inner = [(path, built.shape, True, float(holder.mass.to("kg").magnitude),
+                          Vertex(*com), declared is None)]  # fmt: skip
             else:
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
                 inner = [
-                    (leaf.path, leaf.shape, leaf.placeholder, leaf.mass) for leaf in built.leaves
+                    (leaf.path, leaf.shape, leaf.placeholder, leaf.mass, leaf.com, leaf.assumed)
+                    for leaf in built.leaves
                 ]
             if instance.name == current.ground:
                 rotation, translation = _IDENTITY, (0.0, 0.0, 0.0)
@@ -572,16 +647,32 @@ def place_product(
             for k in range(members):
                 r, t = _member(instance, k, rotation, translation)
                 label = path if members == 1 else f"{path}[{k + 1}]"
-                for leaf_path, shape, holder_flag, leaf_mass in inner:
-                    moved = shape.moved(_location(r, t))
+                for leaf_path, shape, holder_flag, leaf_mass, com, assumed in inner:
+                    where = _location(r, t)
                     leaf_label = label + leaf_path[len(path) :]
-                    leaves.append(_Leaf(leaf_label, moved, holder_flag, leaf_mass))
+                    leaves.append(_Leaf(leaf_label, shape.moved(where), holder_flag, leaf_mass,
+                                        com.moved(where), assumed))  # fmt: skip
         shape = Compound([leaf.shape for leaf in leaves])
         return _Assembly(shape, leaves)
 
     assembly = assemble(product, product.name)
     leaves = assembly.leaves
     interference = _interference([(leaf.path, leaf.shape) for leaf in leaves])
+    holders = [leaf.path for leaf in leaves if leaf.placeholder]
+    if holders:
+        interference = interference.model_copy(
+            update={
+                "detail": f"{interference.detail}; provisional: {len(holders)} placeholder"
+                f"{'s' if len(holders) != 1 else ''} ({', '.join(holders[:6])}"
+                f"{', …' if len(holders) > 6 else ''}) stand in for undetailed items"
+            }
+        )
+    weighed = [(leaf.mass, _corner(leaf.com.center())) for leaf in leaves if leaf.mass is not None]
+    total = sum(mass for mass, _ in weighed)
+    centre: tuple[float, float, float] | None = None
+    if total > 0:
+        x, y, z = (round(sum(m * c[i] for m, c in weighed) / total, 6) + 0.0 for i in range(3))
+        centre = (x, y, z)
     return PlacedProduct(
         name=product.name,
         bodies=tuple(
@@ -591,18 +682,33 @@ def place_product(
                 mass_kg=leaf.mass,
                 box_min_mm=_corner(leaf.shape.bounding_box().min),
                 box_max_mm=_corner(leaf.shape.bounding_box().max),
+                center_of_mass_mm=_corner(leaf.com.center()),
             )
             for leaf in leaves
         ),
         interference=interference,
-        mass_kg=sum(leaf.mass for leaf in leaves if leaf.mass is not None),
-        mass_rests_on=tuple(leaf.path for leaf in leaves if leaf.placeholder),
+        mass_kg=total,
+        mass_rests_on=tuple(holders),
         mass_unknown=tuple(leaf.path for leaf in leaves if leaf.mass is None),
+        center_of_mass_mm=centre,
+        center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
     )
 
 
+_OUTWARD: dict[str, tuple[float, float, float]] = {
+    "top": (0.0, 0.0, 1.0),
+    "bottom": (0.0, 0.0, -1.0),
+    "right": (1.0, 0.0, 0.0),
+    "left": (-1.0, 0.0, 0.0),
+    "back": (0.0, 1.0, 0.0),
+    "front": (0.0, -1.0, 0.0),
+}
+
+
 def _corner(v: Any) -> tuple[float, float, float]:
-    return round(float(v.X), 6) + 0.0, round(float(v.Y), 6) + 0.0, round(float(v.Z), 6) + 0.0
+    # A vector; a moved Vertex keeps its construction-time .X, so read one by .center().
+    x, y, z = (float(v.X), float(v.Y), float(v.Z))
+    return round(x, 6) + 0.0, round(y, 6) + 0.0, round(z, 6) + 0.0
 
 
 def _location(rotation: Any, translation: Any) -> Any:
