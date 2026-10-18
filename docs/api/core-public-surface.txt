@@ -396,6 +396,11 @@ limit_states.ScreenCheck
 limit_states.LimitState
 limit_states.LimitStateRegistry
 limit_states.DEFAULT_LIMIT_STATES
+dfm.DfmProcess
+dfm.DfmThreshold
+dfm.ProcessProfile
+dfm.default_profile
+dfm.screen_dfm
 fracture_control.ConditionState
 fracture_control.FractureCondition
 fracture_control.FractureAcceptance

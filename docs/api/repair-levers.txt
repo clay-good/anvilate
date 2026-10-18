@@ -129,6 +129,7 @@ aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
 callouts.callout_scorecard
 cold_formed_steel.dsm_scorecard
+dfm.screen_dfm
 dynamics.frequency_scorecard
 dynamics.half_sine_shock_scorecard
 dynamics.isolator_selection_scorecard

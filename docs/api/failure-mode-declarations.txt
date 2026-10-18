@@ -12,6 +12,7 @@ assembly.screen_adjustment_access -> an adjustment sealed away by the part close
 assembly.screen_inspectability -> a tolerance nobody can measure on the built article
 assembly.screen_swing_arc -> a fastener no tool reaches in the state it is driven
 assembly.screen_tool_access -> a fastener no tool reaches in the state it is driven
+dfm.screen_dfm -> a feature the shop cannot make as drawn
 fatigue.weld_fatigue_scorecard -> weld toe fatigue
 machinery.screen_shaft -> shaft fatigue at a stress raiser
 machinery.screen_gear_mesh -> gear tooth surface pitting

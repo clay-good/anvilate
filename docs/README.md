@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Sixty-seven pages, arranged by what you are trying to do. The [README](../README.md) is the
+Sixty-eight pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -55,6 +55,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Margins of safety](margin-of-safety.md) | The aerospace margin table: limit and ultimate kept apart, a cited factor set, the governing case of hundreds, as CSV, XLSX and a report section. |
 | [Structural hand methods](structural-hand-methods.md) | Laminates, random vibration, preloaded joints, fastener groups, sandwich panels, crippling, plasticity and thin-cylinder buckling, each read from a public-domain NASA document and pinned to it. |
 | [Durability screening](durability-screening.md) | Rainflow cycles from a load history, modes held clear of excitation, and what a drop does to what is inside. |
+| [DFM rules](dfm-rules.md) | The built solid read the way a shop quoting it would: inside corners, hole depth, bends, draft and overhang, against a profile you can load. |
 | [Load combinations](load-combinations.md) | The governing combination named, including the uplift case a gravity-only check misses. |
 | [Design-space exploration](design-space-exploration.md) | An exact Pareto front, because every check is closed-form. |
 | [Typed repair feedback](repair-feedback.md) | The parameter and the value that fixes a failing check. |

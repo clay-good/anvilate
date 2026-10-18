@@ -789,6 +789,22 @@ DEFAULT_CATALOG = ModeCatalog(
             ),
         ),
         FailureMode(
+            id="a feature the shop cannot make as drawn",
+            description=(
+                "an inside corner sharper than the cutter, a hole deeper than the drill, a "
+                "hole too near a bend to form, a wall with no draft: found in the quote, after "
+                "the drawing is released"
+            ),
+            applicability=Applicability(
+                elements=("mounting_plate", "enclosure", "enclosure_lid", "sheet_metal_bracket")
+            ),
+            stage=DiscoveryStage.PRODUCTION,
+            citation=(
+                "Boothroyd, Dewhurst and Knight, Product Design for Manufacture and Assembly, "
+                "3rd ed. (2011), design for manufacture of individual parts"
+            ),
+        ),
+        FailureMode(
             id="an adjustment sealed away by the part closed over it",
             description=(
                 "an alignment made after closure through an opening the closing part fills, "

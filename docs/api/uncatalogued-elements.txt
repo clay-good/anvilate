@@ -15,15 +15,12 @@ column_member
 concrete_bearing
 cover_plate
 driven_pile
-enclosure
-enclosure_lid
 feeder
 gusset_plate
 infinite_slope
 lifting_lug
 lighting_installation
 masonry_wall
-mounting_plate
 pipe_run
 plate_flange
 pulley
@@ -33,7 +30,6 @@ shaft_collar
 shaft_key
 shallow_footing
 shear_plate
-sheet_metal_bracket
 spacer
 standoff
 stepped_shaft

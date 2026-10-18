@@ -104,6 +104,10 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.loads` — typed load combinations and the governing one, named.
 - :mod:`anvilate.limit_states` — limit states by identity: which module check evaluates
   what, and the one implementation every screen evaluating it composes.
+- :mod:`anvilate.dfm` — geometric DFM rules measured on the built solid: internal corner
+  radius and hole depth for milling, bend radius and hole distances for sheet metal, draft
+  for molding, overhang for additive, against a process profile whose every threshold
+  says where it came from.
 - :mod:`anvilate.fracture_control` — a part's candidacy for a NASA-STD-5019A
   non-fracture-critical route, condition by condition, shown as a classification only once
   the Responsible Fracture Control Board's acceptance is recorded.
