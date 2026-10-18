@@ -569,3 +569,7 @@ def test_every_label_on_the_free_body_stays_on_the_page():
         numbers = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", path.get("d"))]
         xs, ys = numbers[0::2], numbers[1::2]
         assert all(0 <= x <= width for x in xs) and all(0 <= y <= height for y in ys)
+
+
+def test_a_factor_set_renders_its_name_and_its_source():
+    assert str(factor_set("14-cfr-25")) == "14-cfr-25 (14 CFR Part 25 (eCFR, current 2026-10-15))"
