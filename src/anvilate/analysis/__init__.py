@@ -2521,7 +2521,10 @@ from .noise_figure import (
     receiver_minimum_detectable_signal,
 )
 from .o_ring import (
+    SealCondition,
+    SealScreen,
     o_ring_gland_fill_fraction,
+    o_ring_seal_screen,
     o_ring_squeeze_fraction,
     o_ring_stretch_fraction,
 )
@@ -5099,6 +5102,9 @@ __all__ = [
     "o_ring_squeeze_fraction",
     "o_ring_gland_fill_fraction",
     "o_ring_stretch_fraction",
+    "SealCondition",
+    "SealScreen",
+    "o_ring_seal_screen",
     "polar_second_moment_solid",
     "polar_second_moment_hollow",
     "shaft_torsional_stress",

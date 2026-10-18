@@ -14922,7 +14922,7 @@ def test_joint_and_seal_refusals_carry_structured_remedies(function_name, kwargs
     ("module_name", "helper_name", "site_count"),
     (
         ("rivet", "_rivet_refusal", 6),
-        ("o_ring", "_o_ring_refusal", 5),
+        ("o_ring", "_o_ring_refusal", 13),  # +8: the seal screen, 2026-10-17
     ),
 )
 def test_every_joint_and_seal_refusal_site_is_structured(module_name, helper_name, site_count):

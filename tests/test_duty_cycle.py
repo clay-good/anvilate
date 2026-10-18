@@ -71,7 +71,8 @@ def test_goodman_inflates_a_tensile_mean_cycle():
     event = _event("lift", (0, 200, 0), 1.0)
     result = duty_cycle_damage([event], curve=_CURVE, correction=MeanStressCorrection.GOODMAN,
                                ultimate_strength=Quantity(magnitude=500, unit="MPa"))  # fmt: skip
-    assert result.total_damage == pytest.approx(1 / _life(125), rel=1e-12)
+    # damage ~1e-15 per cycle: compare it scaled, or approx's default abs swamps the rel
+    assert result.total_damage * _life(125) == pytest.approx(1.0, rel=1e-12)
 
 
 def test_smith_watson_topper_uses_the_peak():
@@ -79,7 +80,7 @@ def test_smith_watson_topper_uses_the_peak():
     event = _event("lift", (0, 200, 0), 1.0)
     result = duty_cycle_damage([event], curve=_CURVE,
                                correction=MeanStressCorrection.SMITH_WATSON_TOPPER)  # fmt: skip
-    assert result.total_damage == pytest.approx(1 / _life(20_000**0.5), rel=1e-12)
+    assert result.total_damage * _life(20_000**0.5) == pytest.approx(1.0, rel=1e-12)
 
 
 def test_a_wholly_compressive_cycle_does_no_damage_under_swt():

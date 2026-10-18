@@ -347,8 +347,10 @@ def bth1_member_scorecard(
             subject="category",
             source=_lifting_device_input_source("category"),
         )
-    applied = abs(stress.to("MPa").magnitude)
-    limit = allowable.to("MPa").magnitude
+    # An infinite allowable or stress built a card whose worked line read "n = 1 Pa / inf",
+    # which no reader can evaluate; a non-finite input is refused by name, like the rest.
+    applied = abs(require_finite(stress.to("MPa").magnitude, name="stress"))
+    limit = require_finite(allowable.to("MPa").magnitude, name="allowable")
     if limit <= 0:
         raise _lifting_device_refusal(
             f"allowable must be positive; got {allowable}",

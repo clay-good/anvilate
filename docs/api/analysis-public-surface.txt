@@ -1149,6 +1149,9 @@ noise_figure.noise_factor_from_figure
 o_ring.o_ring_gland_fill_fraction
 o_ring.o_ring_squeeze_fraction
 o_ring.o_ring_stretch_fraction
+o_ring.SealCondition
+o_ring.SealScreen
+o_ring.o_ring_seal_screen
 op_amp.gain_bandwidth_limited_bandwidth
 op_amp.inverting_gain
 op_amp.noninverting_gain

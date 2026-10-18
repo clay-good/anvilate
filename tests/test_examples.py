@@ -9595,3 +9595,13 @@ def test_bracket_duty_cycle_example():
     assert d["lives"] < 1 < d["lives_uncorrected"]  # the correction decides pass or fail
     assert d["pothole_share"] + d["cornering_share"] < 1  # braking takes the rest
     _assert_narrates_computed("bracket_duty_cycle.py", namespace)
+
+
+def test_o_ring_cold_squeeze_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "o_ring_cold_squeeze.py"))
+    d = namespace["o_ring_cold_squeeze"]()
+    assert d["cold_squeeze"] == pytest.approx(0.17074, abs=1e-5)
+    assert (d["at_15"], d["at_17_5"], d["aged"]) == ("pass", "fail", "fail")
+    assert d["squeeze_left"] == pytest.approx(d["cold_squeeze"] * 0.75, rel=1e-12)
+    assert d["hot_fill"] == pytest.approx(0.729, abs=5e-4)
+    _assert_narrates_computed("o_ring_cold_squeeze.py", namespace)

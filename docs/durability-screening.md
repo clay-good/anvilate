@@ -8,6 +8,7 @@ what excites them, and the load a drop puts on what is inside.**
 | `rainflow_count(history, repeating=...)` | The history's cycles by rainflow, with range, mean and count, a range histogram, and the residual of an open count |
 | `modal_separation(...)` | Every estimated mode below a ceiling against every declared excitation band, with the separation ratio and the verdict against the program's target |
 | `duty_cycle_damage(events, ...)` | Miner damage per pass, per life and in total over named events, each counted by rainflow, with a declared mean-stress correction, naming the event that drives it |
+| `o_ring_seal_screen(...)` | An O-ring's squeeze at the cold extreme and fill at the hot one, its extrusion gap against the cited limit, the squeeze left after compression set, and fluid compatibility |
 | `drop_screen(...)` | A drop's energy, landing speed and half-sine pulse, and the peak load on each mounted item |
 
 ## Rainflow, open or repeating
@@ -42,6 +43,18 @@ The [bracket example](../examples/bracket_duty_cycle.py) shows why the share mat
 pothole occurring 4,000 times does 0.97 of the damage, against cornering 300,000 times.
 Without the mean-stress correction, the same bracket would appear to pass.
 
+## Seals across temperature
+
+An elastomer expands about ten times as fast as a metal gland. So a seal drawn for 18%
+squeeze at room temperature has less at the cold extreme, and fills more of its groove at
+the hot one. The screen scales the cross-section and the gland from the drawing's
+temperature to each extreme. It holds squeeze and fill to the caller's cited limits, and
+the extrusion gap to the limit they read for their pressure and hardness. Squeeze left
+after compression set is checked at the cold extreme. A condition the caller did not
+declare, such as fluid compatibility, is not evaluated and keeps the seal from passing.
+The [cold-squeeze example](../examples/o_ring_cold_squeeze.py) passes on day one and fails
+at end of life.
+
 ## Modes and drops
 
 A mode inside an excitation band has no separation. Outside it, the separation is
@@ -54,4 +67,4 @@ frequency, so an item tuned near the worst ratio sees about 1.77 times the peak.
 contact stiffness is the weakest number, and every drop result is labelled an estimate.
 
 Not yet built: declaring a duty cycle in a Design Spec (the analysis takes events directly
-today), joint embedding loss, seals across temperature, and plastic retention.
+today), joint embedding loss, and plastic retention.
