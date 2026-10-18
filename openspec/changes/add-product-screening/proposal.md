@@ -35,6 +35,7 @@ change connects them across a product tree.
   Reuses `add-performance-budgets` for mass/CG budgets, `add-constraint-topology` for
   indeterminacy, `add-keepout-envelopes` for swept volumes, and `add-check-dependency-graph`
   so a part screen that reads an interface load is downstream of the load-path entry.
-- Explicitly out: FEA of the whole product; statically indeterminate load sharing (named,
-  not solved); dynamics beyond the existing equivalent-static screens; proprietary DFA
+- Explicitly out: FEA of the whole product here (a product's FEA, with bonded contact
+  between items, is `add-local-fea`); statically indeterminate load sharing (named, not
+  solved here); dynamics beyond the existing equivalent-static screens; proprietary DFA
   time tables.

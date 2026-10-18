@@ -101,8 +101,8 @@ reason and name the joints. It SHALL NOT state that a product cannot move.
 
 ### Requirement: Dissimilar joints are checked for thermal mismatch
 
-For each connection between items of different materials, under a declared temperature
-range, the system SHALL report the differential growth across the connection's span and
+The system SHALL screen thermal mismatch: for each connection between items of different
+materials, under a declared temperature range, it SHALL report the differential growth across the connection's span and
 compare it with the connection's clearance or declared slip allowance, citing the
 expansion coefficients used. A connection with no declared range SHALL be listed as not
 evaluated.
