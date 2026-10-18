@@ -5,7 +5,7 @@ anchored to a worked example from a public-domain source, with a runnable exampl
 
 ## 1. Joints and fittings
 
-- [ ] 1.1 Preloaded joints to NASA-STD-5020B: preload bounds, separation, slip, fitting
+- [x] 1.1 Preloaded joints to NASA-STD-5020B: preload bounds, separation, slip, fitting
       factor, separation before rupture
 - [ ] 1.2 Lugs: axial, transverse, oblique interaction, bushing bearing; curve ranges
       enforced; curves only from public-domain sources

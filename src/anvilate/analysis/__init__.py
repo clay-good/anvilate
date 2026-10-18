@@ -1041,6 +1041,9 @@ modules:
 - :mod:`~anvilate.analysis.shell_buckling` — the NASA SP-8007 empirical knockdown factor
   for thin cylinders in axial compression and bending, and the knocked-down design
   buckling stress built on the classical one
+- :mod:`~anvilate.analysis.preloaded_joint` — NASA-STD-5020B preloaded joints: preload
+  bounds with the tightening method's uncertainty and relaxation, separation, ultimate and
+  yield margins with separation-before-rupture decided, and slip
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -2708,6 +2711,17 @@ from .power_screw import (
     power_screw_raise_load,
     power_screw_raise_torque,
 )
+from .preloaded_joint import (
+    FayingSurface,
+    JointMargins,
+    PreloadBounds,
+    PreloadUncertainty,
+    TighteningMethod,
+    joint_slip_margin,
+    preload_bounds,
+    preload_uncertainty_from_tests,
+    preloaded_joint_margins,
+)
 from .pressure_vessel import (
     AllowableStress,
     BranchReinforcement,
@@ -3544,6 +3558,15 @@ __all__ = [
     "CylinderLoading",
     "sp8007_knockdown_factor",
     "cylinder_design_buckling_stress",
+    "TighteningMethod",
+    "FayingSurface",
+    "PreloadUncertainty",
+    "PreloadBounds",
+    "JointMargins",
+    "preload_uncertainty_from_tests",
+    "preload_bounds",
+    "preloaded_joint_margins",
+    "joint_slip_margin",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

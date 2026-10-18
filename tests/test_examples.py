@@ -9465,3 +9465,19 @@ def test_thin_cylinder_knockdown_example():
     # thinner by half, weaker by about two thirds: the knockdown falls with r/t
     assert d["design_thin_mpa"] / d["design_mpa"] == pytest.approx(0.35, abs=0.01)
     _assert_narrates_computed("thin_cylinder_knockdown.py", namespace)
+
+
+def test_preloaded_bracket_joint_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "preloaded_bracket_joint.py"))
+    d = namespace["preloaded_bracket_joint"]()
+    # 12 kN nominal, ±5% torque, dry default Γ 0.35, four bolts, 5% relaxation:
+    # max 1.05 × 1.35 × 12,000 = 17,010; slip min 0.95 × 0.825 × 12,000 × 0.95 = 8,934.75
+    assert d["maximum_preload"] == pytest.approx(17_010, rel=1e-12)
+    assert d["minimum_slip_preload"] == pytest.approx(8_934.75, rel=1e-12)
+    # nφ = 0.125: P′sep = 17,010/0.875 = 19,440
+    assert d["separation_load"] == pytest.approx(19_440, rel=1e-12)
+    assert d["ultimate_margin"] == pytest.approx(36_600 / (1.15 * 1.4 * 2_500) - 1, rel=1e-12)
+    # slip: 0.1 × 8,934.75 / (1.15 × 1.25 × (1,200 + 0.1 × 2,500)) = 0.4287
+    assert d["slip_ratio"] == pytest.approx(0.1 * 8_934.75 / (1.4375 * 1_450), rel=1e-12)
+    assert d["slip_ratio"] < d["slip_ratio_lubricated"] < d["slip_ratio_clean"] < 1
+    _assert_narrates_computed("preloaded_bracket_joint.py", namespace)

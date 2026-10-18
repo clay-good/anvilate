@@ -56,6 +56,7 @@
 
 # --- Codes and standards bodies
 GSFC-STD-7000B
+NASA-STD-5020B
 #
 # 2026-08-17: eighteen tokens were struck and two tightened, after an auditor got three
 # fabricated public checks — no source of any kind — past this gate on one ordinary
