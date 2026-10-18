@@ -22,7 +22,11 @@ for entry in screen_dfm(built, profile, tool_direction=(0, 0, 1)):
 | Sheet metal | `bend_radius_ratio_min` | Inside bend radius over thickness | 1 |
 | Sheet metal | `hole_to_bend_min` | A hole's edge to the nearest bend line, in thicknesses | 2.5 |
 | Sheet metal | `hole_to_edge_min` | A hole's edge to the blank's edge, in thicknesses | 2 |
+| Sheet metal | `flange_length_min` | Each flange's length over thickness | 4 |
 | Injection molding | `draft_min` | Each face's angle to the pull: planar faces, and cylinders about the pull | 1° |
+| Injection molding | `wall_ratio_max` | The thickest declared wall over the thinnest | 2 |
+| Die casting | `draft_min` | As for molding | 1° |
+| Die casting | `wall_ratio_max` | As for molding | 2 |
 | Additive | `overhang_min` | Each down-facing planar face's angle above horizontal, off the build plate | 45° |
 
 The corner rule judges only corners along the tool axis. Where a wall meets the floor that
@@ -46,5 +50,6 @@ too tight also says the `inside_radius` that meets the limit. The screen reads a
 solid, so it does not yet emit a typed repair hint into the part's spec. These findings are manufacturability
 findings. They sit beside the physics verdicts and change none of them.
 
-Not yet measured: wall thickness, turning, die casting, weldments, undercuts, rib and boss
-proportions, and curved down-facing faces. Cost estimates are not included either.
+The wall ratio reads the walls the part declares. A wall-thickness map measured on the solid
+is not built yet, and neither are turning, weldments, undercuts, rib and boss proportions,
+curved down-facing faces, or cost estimates.

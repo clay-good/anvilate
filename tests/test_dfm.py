@@ -91,10 +91,10 @@ def test_a_deep_hole_is_reported_by_its_ratio():
 def test_bend_radius_against_thickness():
     bracket = _part("sheet_metal_bracket")  # inside radius 2, thickness 2: ratio 1
     profile = default_profile(DfmProcess.SHEET_METAL)
-    (bend, _, _) = screen_dfm(bracket, profile)
+    (bend, _, _, _) = screen_dfm(bracket, profile)
     assert bend.status is CheckStatus.PASS
     brake = profile.override("bend_radius_ratio_min", 1.5, source="shop brake tooling list")
-    (bend, _, _) = screen_dfm(bracket, brake)
+    (bend, _, _, _) = screen_dfm(bracket, brake)
     assert bend.status is CheckStatus.FAIL
     assert "an inside_radius of 3 mm meets the limit" in bend.detail  # 1.5 × 2 mm
 
@@ -104,7 +104,7 @@ def test_a_hole_too_close_to_a_bend():
     (a, _), _ = bracket.profile.bends[0]  # the first bend line at x = 28.26
     near = dataclasses.replace(bracket.profile, circles=((a + 5.0, 0.0, 4.0),))
     built = dataclasses.replace(bracket, profile=near)
-    (_, to_bend, to_edge) = screen_dfm(built, default_profile(DfmProcess.SHEET_METAL))
+    (_, to_bend, to_edge, _) = screen_dfm(built, default_profile(DfmProcess.SHEET_METAL))
     # edge of a Ø4 hole 5 mm from the bend: 3 mm, 1.5 thicknesses, under 2.5
     assert to_bend.status is CheckStatus.FAIL
     assert to_bend.comparison.measured.magnitude == pytest.approx(1.5, abs=1e-9)
@@ -125,11 +125,11 @@ def test_an_undrafted_box_fails_and_a_drafted_one_passes():
     from build123d import Rectangle, extrude
 
     enclosure = _part("enclosure")
-    (draft,) = screen_dfm(enclosure, default_profile(DfmProcess.INJECTION_MOLDING),
+    (draft, _) = screen_dfm(enclosure, default_profile(DfmProcess.INJECTION_MOLDING),
                             pull_direction=(0, 0, 1))  # fmt: skip
     assert draft.status is CheckStatus.FAIL and draft.comparison.measured.magnitude == 0.0
     tapered = _solid(extrude(Rectangle(40, 30), amount=20, taper=2), name="tapered")
-    (draft,) = screen_dfm(tapered, default_profile(DfmProcess.INJECTION_MOLDING),
+    (draft, _) = screen_dfm(tapered, default_profile(DfmProcess.INJECTION_MOLDING),
                             pull_direction=(0, 0, 1))  # fmt: skip
     assert draft.status is CheckStatus.PASS
     assert draft.comparison.measured.magnitude == pytest.approx(2.0, abs=1e-6)
@@ -174,3 +174,27 @@ def test_the_docs_page_states_the_defaults_the_code_bundles():
         for t in default_profile(process).thresholds:
             unit = "°" if t.unit == "degree" else (" mm" if t.unit == "mm" else "")
             assert f"| `{t.rule}` |" in page and f"| {t.value:g}{unit} |" in page, t.rule
+
+
+def test_die_casting_reads_draft_and_wall_uniformity():
+    enclosure = _part("enclosure")  # wall 3, floor 3, thickness not declared
+    profile = default_profile(DfmProcess.DIE_CASTING)
+    (draft, walls) = screen_dfm(enclosure, profile, pull_direction=(0, 0, 1))
+    assert draft.status is CheckStatus.FAIL
+    assert walls.status is CheckStatus.PASS and walls.comparison.measured.magnitude == 1.0
+    uneven = dataclasses.replace(enclosure, dimensions_mm={**enclosure.dimensions_mm,
+                                                           "wall": 2.0, "floor": 5.0})  # fmt: skip
+    (_, walls) = screen_dfm(uneven, profile, pull_direction=(0, 0, 1))
+    assert walls.status is CheckStatus.FAIL
+    assert walls.comparison.measured.magnitude == pytest.approx(2.5)  # 5/2
+
+
+def test_a_short_flange_against_the_brake():
+    bracket = _part("sheet_metal_bracket")  # flanges 30, 50, 25 at t = 2: 15, 25, 12.5
+    profile = default_profile(DfmProcess.SHEET_METAL)
+    flange = screen_dfm(bracket, profile)[-1]
+    assert flange.status is CheckStatus.PASS
+    assert flange.comparison.measured.magnitude == pytest.approx(12.5)
+    deep_die = profile.override("flange_length_min", 15.0, source="shop: 30 mm V-die")
+    flange = screen_dfm(bracket, deep_die)[-1]
+    assert flange.status is CheckStatus.FAIL and "flange_c 25 mm" in flange.detail

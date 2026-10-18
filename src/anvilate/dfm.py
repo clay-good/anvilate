@@ -65,6 +65,8 @@ __all__ = [
 
 _PRACTICE = "practice default (a common shop figure, not a standard's clause)"
 _PROFILE_SOURCE = "the shop's process profile, with its source"
+#: The declared dimensions that are walls, for the uniformity rule.
+_WALL_KEYS = frozenset({"wall", "floor", "thickness", "lid_thickness", "rib", "boss_wall"})
 #: The catalogued failure mode every DFM entry answers (anvilate.failure_modes).
 _ADDRESSES = ("a feature the shop cannot make as drawn",)
 
@@ -85,25 +87,68 @@ class DfmProcess(StrEnum):
     CNC_MILLING = "cnc_milling"
     SHEET_METAL = "sheet_metal"
     INJECTION_MOLDING = "injection_molding"
+    DIE_CASTING = "die_casting"
     ADDITIVE = "additive"
 
 
-# rule: (process, value, unit, sense, what it is) — the bundled practice defaults.
-_DEFAULTS: dict[str, tuple[DfmProcess, float, str, LimitSense, str]] = {
-    "internal_radius_min": (DfmProcess.CNC_MILLING, 1.0, "mm", LimitSense.AT_LEAST,
-                            "the smallest inside corner radius the shop's tools cut"),
-    "hole_depth_ratio_max": (DfmProcess.CNC_MILLING, 10.0, "dimensionless", LimitSense.AT_MOST,
-                             "the deepest hole, in diameters, the shop drills"),
-    "bend_radius_ratio_min": (DfmProcess.SHEET_METAL, 1.0, "dimensionless", LimitSense.AT_LEAST,
-                              "the smallest inside bend radius, in thicknesses"),
-    "hole_to_bend_min": (DfmProcess.SHEET_METAL, 2.5, "dimensionless", LimitSense.AT_LEAST,
-                         "a hole's edge to a bend line, in thicknesses"),
-    "hole_to_edge_min": (DfmProcess.SHEET_METAL, 2.0, "dimensionless", LimitSense.AT_LEAST,
-                         "a hole's edge to the blank's edge, in thicknesses"),
-    "draft_min": (DfmProcess.INJECTION_MOLDING, 1.0, "degree", LimitSense.AT_LEAST,
-                  "the least draft on a face along the pull"),
-    "overhang_min": (DfmProcess.ADDITIVE, 45.0, "degree", LimitSense.AT_LEAST,
-                     "the least angle above horizontal a down-facing face builds unsupported"),
+# rule: (unit, the sense that passes, what it is) — one meaning per rule, whatever process.
+_RULES: dict[str, tuple[str, LimitSense, str]] = {
+    "internal_radius_min": (
+        "mm",
+        LimitSense.AT_LEAST,
+        "the smallest inside corner radius the shop's tools cut",
+    ),
+    "hole_depth_ratio_max": (
+        "dimensionless",
+        LimitSense.AT_MOST,
+        "the deepest hole, in diameters, the shop drills",
+    ),
+    "bend_radius_ratio_min": (
+        "dimensionless",
+        LimitSense.AT_LEAST,
+        "the smallest inside bend radius, in thicknesses",
+    ),
+    "hole_to_bend_min": (
+        "dimensionless",
+        LimitSense.AT_LEAST,
+        "a hole's edge to a bend line, in thicknesses",
+    ),
+    "hole_to_edge_min": (
+        "dimensionless",
+        LimitSense.AT_LEAST,
+        "a hole's edge to the blank's edge, in thicknesses",
+    ),
+    "flange_length_min": (
+        "dimensionless",
+        LimitSense.AT_LEAST,
+        "the shortest flange the brake forms, in thicknesses",
+    ),
+    "draft_min": ("degree", LimitSense.AT_LEAST, "the least draft on a face along the pull"),
+    "wall_ratio_max": (
+        "dimensionless",
+        LimitSense.AT_MOST,
+        "the thickest declared wall over the thinnest, for even filling",
+    ),
+    "overhang_min": (
+        "degree",
+        LimitSense.AT_LEAST,
+        "the least angle above horizontal a down-facing face builds unsupported",
+    ),
+}
+
+# (process, rule): the bundled practice default.
+_DEFAULTS: dict[tuple[DfmProcess, str], float] = {
+    (DfmProcess.CNC_MILLING, "internal_radius_min"): 1.0,
+    (DfmProcess.CNC_MILLING, "hole_depth_ratio_max"): 10.0,
+    (DfmProcess.SHEET_METAL, "bend_radius_ratio_min"): 1.0,
+    (DfmProcess.SHEET_METAL, "hole_to_bend_min"): 2.5,
+    (DfmProcess.SHEET_METAL, "hole_to_edge_min"): 2.0,
+    (DfmProcess.SHEET_METAL, "flange_length_min"): 4.0,
+    (DfmProcess.INJECTION_MOLDING, "draft_min"): 1.0,
+    (DfmProcess.INJECTION_MOLDING, "wall_ratio_max"): 2.0,
+    (DfmProcess.DIE_CASTING, "draft_min"): 1.0,
+    (DfmProcess.DIE_CASTING, "wall_ratio_max"): 2.0,
+    (DfmProcess.ADDITIVE, "overhang_min"): 45.0,
 }  # fmt: skip
 
 
@@ -158,8 +203,14 @@ def default_profile(process: DfmProcess) -> ProcessProfile:
     return ProcessProfile(
         process=process,
         thresholds=tuple(
-            DfmThreshold(rule=rule, value=value, unit=unit, source=_PRACTICE, practice_default=True)
-            for rule, (p, value, unit, _, _) in _DEFAULTS.items()
+            DfmThreshold(
+                rule=rule,
+                value=value,
+                unit=_RULES[rule][0],
+                source=_PRACTICE,
+                practice_default=True,
+            )
+            for (p, rule), value in _DEFAULTS.items()
             if p is process
         ),
     )
@@ -269,7 +320,7 @@ def _entry(
     label: str,
     note: str = "",
 ) -> ScorecardEntry:
-    _, _, unit, sense, meaning = _DEFAULTS[rule]
+    unit, sense, meaning = _RULES[rule]
     basis = "a practice default" if threshold.practice_default else threshold.source
     reason = Underived(
         kind=DerivationAbsence.NUMERIC_RESULT,
@@ -292,7 +343,11 @@ def _entry(
         limit=Quantity(magnitude=threshold.value, unit=unit),
         sense=sense,
         measured_label=f"worst {label}",
-        limit_label=f"limit ({basis})",
+        # The source is free text and may carry a unit of its own ("30 mm V-die"), so it
+        # stays in the detail; the label says only what kind of limit it is.
+        limit_label="limit (a practice default)"
+        if threshold.practice_default
+        else "limit (the shop's override)",
     )
     suffix = {"mm": " mm", "degree": "°"}.get(unit, "")
     where = "; ".join(f"{i.where} ({i.value:.3g}{suffix})" for i in failing[:5])
@@ -392,6 +447,11 @@ def _findings(
                 edge_items.append(_Item(f"hole Ø{d:g} at ({x:g}, {y:g}) to the blank's edge",
                                         edge / t))  # fmt: skip
         target = bend.value * t
+        flange_items = [
+            _Item(f"{key} {value:g} mm", value / t)
+            for key, value in sorted(dims.items())
+            if key.startswith("flange_")
+        ]
         return (
             _entry(built, "bend_radius_ratio_min", bend, radius_items,
                    label="bend radius ratios",
@@ -401,8 +461,10 @@ def _findings(
             _entry(built, "hole_to_edge_min", to_edge, edge_items,
                    label="hole-to-edge distances over thickness",
                    note="; arcs in the outline are measured as their chords"),
+            _entry(built, "flange_length_min", profile.threshold("flange_length_min"),
+                   flange_items, label="flange lengths over thickness"),
         )  # fmt: skip
-    if process is DfmProcess.INJECTION_MOLDING:
+    if process in (DfmProcess.INJECTION_MOLDING, DfmProcess.DIE_CASTING):
         pull = _vector(pull_direction, "pull_direction")
         draft = profile.threshold("draft_min")
         items = []
@@ -426,9 +488,23 @@ def _findings(
             else:
                 continue
             items.append(_Item(_face_tag(built, face), angle))
+        walls = {k: v for k, v in dims.items() if k in _WALL_KEYS}
+        ratio_items = (
+            [
+                _Item(
+                    f"thickest over thinnest of {sorted(walls)}",
+                    max(walls.values()) / min(walls.values()),
+                )
+            ]
+            if len(walls) >= 2
+            else []
+        )
         return (
             _entry(built, "draft_min", draft, items, label="face drafts",
                    note="; curved faces other than cylinders about the pull are not measured"),
+            _entry(built, "wall_ratio_max", profile.threshold("wall_ratio_max"), ratio_items,
+                   label="wall thickness ratios",
+                   note="; walls are read from the part's declared dimensions"),
         )  # fmt: skip
     up = _vector(build_direction, "build_direction")
     overhang = profile.threshold("overhang_min")
