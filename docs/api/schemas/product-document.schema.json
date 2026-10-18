@@ -329,6 +329,30 @@
       "title": "Demand",
       "type": "object"
     },
+    "Expansion": {
+      "additionalProperties": false,
+      "description": "A material's coefficient of thermal expansion, as the declaration read it, cited.",
+      "properties": {
+        "coefficient": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "material": {
+          "title": "Material",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "material",
+        "coefficient",
+        "source"
+      ],
+      "title": "Expansion",
+      "type": "object"
+    },
     "Instance": {
       "additionalProperties": false,
       "description": "A definition placed in its parent, once or as a pattern, under a name.\n\n``mirrored`` is refused: an opposite-hand part is a different part to make and to buy,\nso it is its own definition with its own number, never a negatively scaled instance.",
@@ -1273,6 +1297,15 @@
           ],
           "default": null
         },
+        "serviced": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Serviced",
+          "type": "array"
+        },
         "splits": {
           "default": [],
           "items": {
@@ -1281,6 +1314,17 @@
           "maxItems": 256,
           "title": "Splits",
           "type": "array"
+        },
+        "thermal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Thermal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "title": "Screening",
@@ -1330,6 +1374,39 @@
         "number"
       ],
       "title": "SupplierNumber",
+      "type": "object"
+    },
+    "Thermal": {
+      "additionalProperties": false,
+      "description": "The temperature range the product sees, the slip its connections allow, and the\nexpansion coefficients of its materials, each cited.",
+      "properties": {
+        "coefficients": {
+          "items": {
+            "$ref": "#/$defs/Expansion"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Coefficients",
+          "type": "array"
+        },
+        "range": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "slip": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "range",
+        "slip",
+        "coefficients",
+        "source"
+      ],
+      "title": "Thermal",
       "type": "object"
     },
     "Variant": {
@@ -1383,13 +1460,13 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.8.0",
+  "$id": "urn:anvilate:schema:product-document:1.9.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.8.0",
+      "default": "1.9.0",
       "enum": [
         "1.0.0",
         "1.1.0",
@@ -1399,7 +1476,8 @@
         "1.5.0",
         "1.6.0",
         "1.7.0",
-        "1.8.0"
+        "1.8.0",
+        "1.9.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -1520,5 +1598,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.8.0"
+  "x-anvilate-version": "1.9.0"
 }

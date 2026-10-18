@@ -43,6 +43,7 @@ __all__ = [
     "MassRollup",
     "Mobility",
     "ClosestApproach",
+    "Economy",
     "ProductScreening",
     "product_screening",
 ]
@@ -143,6 +144,7 @@ class ProductScreening(StatableModel):
     approaches: tuple[ClosestApproach, ...] = Field(default=(), max_length=4096)
     mobility: Mobility
     load_path: tuple[LoadStep, ...] = ()
+    economy: Economy | None = None
     entries: tuple[ScorecardEntry, ...] = ()
 
 
@@ -244,6 +246,7 @@ def product_screening(
     steps, path_entries = _load_path(product, placed)
     entries += path_entries
     entries += _rated_from_path(product, shelf, steps)
+    entries += _thermal(product, placed)
     approaches = _approaches(product, bodies)
     if declared is not None and declared.min_clearance is not None:
         entries.append(_clearance_entry(approaches, declared.min_clearance))
@@ -251,6 +254,7 @@ def product_screening(
         name=product.name, contributions=tuple(contributions), nodes=tuple(nodes),
         rollup=rollup, approaches=approaches, mobility=_mobility(product, placed),
         load_path=tuple(steps),
+        economy=_economy(product, shelf, bodies),
         entries=tuple(entries),
     )  # fmt: skip
 
@@ -666,3 +670,144 @@ def _rated_from_path(
                     "detail": f"{entry.detail}; reads '{name}'",
                 }))  # fmt: skip
     return entries
+
+
+class Economy(StatableModel):
+    """Assembly economy, advisory: what a reviewer counts before asking to merge parts.
+
+    ``parts`` counts the bodies; ``purchased`` each bought designation with how many the
+    product uses; ``merge_candidates`` pairs of made parts joined by mates alone, of one
+    material, neither separated for service, by the three part-count questions. None of it
+    changes the verdict.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    parts: int
+    purchased: tuple[tuple[str, int], ...] = ()
+    merge_candidates: tuple[str, ...] = ()
+    note: str = ""
+
+
+def _pairs(product: Product) -> dict[frozenset[str], list[Any]]:
+    """The top-level items joined by mates, each pair with its mates."""
+    joined: dict[frozenset[str], list[Any]] = {}
+    for mate in product.mates:
+        joined.setdefault(frozenset((mate.place.part, mate.on.part)), []).append(mate)
+    return joined
+
+
+def _item(path: str) -> str:
+    return path.split("/")[1].split("[")[0]
+
+
+def _material(definition: Any) -> str | None:
+    if definition is None or definition.spec is None:
+        return None
+    return str((dict(definition.spec).get("material") or {}).get("ref") or "") or None
+
+
+def _thermal(product: Product, placed: Any) -> list[ScorecardEntry]:
+    """Differential growth across each connection of two catalog parts of different materials."""
+    from .geometry import build_spec
+    from .spec import parse_spec
+
+    definitions = {d.id: d for d in product.definitions}
+    of = {i.name: definitions[i.item] for i in product.instances}
+    declared = product.screening.thermal if product.screening is not None else None
+    coefficients = {e.material: e for e in declared.coefficients} if declared else {}
+    entries = []
+    for pair, mates in _pairs(product).items():
+        if len(pair) != 2 or not pair <= set(of):
+            continue
+        a, b = sorted(pair)
+        ma, mb = _material(of[a]), _material(of[b])
+        if ma is None or mb is None or ma == mb:
+            continue
+        name = f"thermal {a} ~ {b}"
+        need = _need("screening.thermal", "the temperature range, the slip a connection allows, "
+                     "and each material's expansion coefficient, cited", "[]", ())  # fmt: skip
+        if declared is None:
+            entries.append(ScorecardEntry(
+                name=name, status=CheckStatus.NOT_EVALUATED, needs=(need,),
+                detail=f"{a} ({ma}) meets {b} ({mb}) and no temperature range is declared",
+            ))  # fmt: skip
+            continue
+        missing = [m for m in (ma, mb) if m not in coefficients]
+        if missing:
+            entries.append(ScorecardEntry(name=name, status=CheckStatus.NOT_EVALUATED,
+                                          detail=f"no expansion coefficient is declared for "
+                                          f"{', '.join(missing)}", needs=(need,)))  # fmt: skip
+            continue
+        span, how = 0.0, ""
+        for mate in mates:
+            if mate.kind == "hole_pattern" and len(mate.place.holes) >= 2:
+                built = build_spec(parse_spec(dict(of[mate.place.part].spec or {})))
+                where = {f.tag: f.position_mm for f in built.features}
+                points = [where[t] for t in mate.place.holes if t in where]
+                span = max((math.dist(p, q) for p in points for q in points), default=0.0)
+                how = f"between the outermost of {len(points)} mated holes"
+        if not span:
+            first = next(x for x in placed.bodies if _item(x.path) == a)
+            second = next(x for x in placed.bodies if _item(x.path) == b)
+            lo = [max(first.box_min_mm[i], second.box_min_mm[i]) for i in (0, 1)]
+            hi = [min(first.box_max_mm[i], second.box_max_mm[i]) for i in (0, 1)]
+            span, how = max(hi[0] - lo[0], hi[1] - lo[1], 0.0), "across where they meet"
+        ea, eb = coefficients[ma], coefficients[mb]
+        alpha_a = ea.coefficient.to("1/K").magnitude
+        alpha_b = eb.coefficient.to("1/K").magnitude
+        rise = declared.range.to("K").magnitude
+        growth = abs(alpha_a - alpha_b) * rise * span
+        slip = declared.slip.to("mm").magnitude
+        entries.append(ScorecardEntry(
+            name=name, status=CheckStatus.PASS if growth <= slip else CheckStatus.FAIL,
+            detail=f"{growth:.3g} mm of differential growth over {span:.4g} mm {how} and "
+            f"{rise:g} K, against {slip:g} mm of slip ({declared.source}); {ma} "
+            f"{alpha_a * 1e6:.4g}e-6/K ({ea.source}), {mb} {alpha_b * 1e6:.4g}e-6/K ({eb.source})",
+            underived=_SUMMED,
+        ))  # fmt: skip
+    return entries
+
+
+def _economy(product: Product, shelf: Mapping[str, Product], bodies: list[Any]) -> Economy:
+    """Part count, bought designations, and pairs a designer might merge."""
+    from .product import product_tree
+
+    counts: dict[str, int] = {}
+    definitions: dict[str, Any] = {}
+    for current in (product, *shelf.values()):
+        for definition in current.definitions:
+            definitions.setdefault(definition.id, definition)
+    for node in product_tree(product, library=shelf).walk()[1:]:
+        if node.source.value != "buy" or node.kind == "product":
+            continue
+        record = definitions[node.definition].component
+        key = (f"{record.manufacturer} {record.part_number}" if record is not None
+               else node.part_number)  # fmt: skip
+        counts[key] = counts.get(key, 0) + 1
+    of = {i.name: next(d for d in product.definitions if d.id == i.item) for i in product.instances}
+    moving = {
+        frozenset((c.on.rpartition(".")[0], c.place.rpartition(".")[0]))
+        for c in product.connections
+        if c.joint is not None and c.joint.kind != "rigid"
+    }
+    serviced = set(product.screening.serviced) if product.screening is not None else set()
+    candidates = []
+    for pair in _pairs(product):
+        if len(pair) != 2 or pair in moving or pair & serviced or not pair <= set(of):
+            continue
+        a, b = sorted(pair)
+        ma, mb = _material(of[a]), _material(of[b])
+        made = all(of[x].identity.source.value == "make" for x in (a, b))
+        if made and ma is not None and ma == mb:
+            candidates.append(f"{a} + {b}: one material ({ma}), joined without relative "
+                              "motion, neither separated for service")  # fmt: skip
+    return Economy(
+        parts=len(bodies), purchased=tuple(sorted(counts.items())),
+        merge_candidates=tuple(candidates),
+        note="fasteners and the tools they need are not counted: a product declares no "
+        "fastener hardware yet",
+    )  # fmt: skip
+
+
+ProductScreening.model_rebuild()

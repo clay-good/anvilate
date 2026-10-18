@@ -234,3 +234,70 @@ def test_four_casters_are_indeterminate_until_a_split_is_declared():
     frame = _named(declared, "load path cart/frame")
     assert frame.status is CheckStatus.PASS and "divided as declared" in frame.detail
     assert _named(declared, "cart/caster1 caster load").status is CheckStatus.PASS
+
+
+def _plate(material: str) -> dict:
+    """A 640 × 80 mounting plate with one hole near each end, 600 mm apart."""
+    plate = parse_yaml((_ROOT / "examples" / "parts" / "mounting_plate.spec.yaml").read_text())
+    plate["material"] = {"ref": material}
+    params = plate["element_params"]
+    params["width"] = _q(640, "mm")
+    params["holes"] = [{"tag": tag, "x": _q(x, "mm"), "y": _q(0, "mm"), "diameter": _q(6.6, "mm")}
+                       for tag, x in (("end1", -300), ("end2", 300))]  # fmt: skip
+    params["hole_patterns"] = []
+    params["slots"] = []
+    return plate
+
+
+def _bolted(slip: float | None, coefficients: bool = True) -> dict:
+    document = {
+        "name": "deck",
+        "definitions": [_definition("frame", spec=_plate("ASTM-A36")),
+                        _definition("plate", spec=_plate("AA-6061-T6"))],
+        "instances": [{"name": "frame", "item": "frame"}, {"name": "plate", "item": "plate"}],
+        "ground": "frame",
+        "mates": [{"id": "bolted", "kind": "hole_pattern",
+                   "place": {"part": "plate", "face": "bottom", "holes": ["end1", "end2"]},
+                   "on": {"part": "frame", "face": "top", "holes": ["end1", "end2"]}}],
+    }  # fmt: skip
+    if slip is not None:
+        thermal = {"range": _q(60, "K"), "slip": _q(slip, "mm"), "source": "service envelope",
+                   "coefficients": [
+                       {"material": "ASTM-A36", "coefficient": _q(11.7e-6, "1/K"),
+                        "source": "test fixture value"},
+                       {"material": "AA-6061-T6", "coefficient": _q(23.4e-6, "1/K"),
+                        "source": "test fixture value"}][: 2 if coefficients else 1]}  # fmt: skip
+        document["screening"] = {"thermal": thermal}
+    return document
+
+
+@pytest.mark.parametrize(("slip", "status"), [(0.5, CheckStatus.PASS), (0.3, CheckStatus.FAIL)])
+def test_an_aluminium_plate_on_a_steel_frame_grows_against_its_slip(slip, status):
+    # (23.4 − 11.7)e−6 /K × 60 K × 600 mm between the bolts = 0.4212 mm
+    entry = _named(product_screening(parse_product(_bolted(slip))), "thermal frame ~ plate")
+    assert entry.status is status
+    assert entry.detail.startswith("0.421 mm of differential growth over 600 mm between the "
+                                   "outermost of 2 mated holes and 60 K")  # fmt: skip
+    assert "ASTM-A36 11.7e-6/K (test fixture value)" in entry.detail
+
+
+def test_a_dissimilar_joint_with_no_range_or_coefficient_is_not_evaluated():
+    bare = _named(product_screening(parse_product(_bolted(None))), "thermal frame ~ plate")
+    assert bare.status is CheckStatus.NOT_EVALUATED and "no temperature range" in bare.detail
+    half = _named(product_screening(parse_product(_bolted(0.5, coefficients=False))),
+                  "thermal frame ~ plate")  # fmt: skip
+    assert half.status is CheckStatus.NOT_EVALUATED and "AA-6061-T6" in half.detail
+
+
+def test_assembly_economy_counts_parts_and_bought_items_and_offers_merges():
+    report = product_screening(parse_product(_carted(_THREE, ("right", "back"))))
+    assert report.economy.parts == 5
+    assert report.economy.purchased == (("Acme caster-1", 3),)
+    same = _bolted(None)
+    same["definitions"][1] = _definition("plate", spec=_plate("ASTM-A36"))
+    merged = product_screening(parse_product(same)).economy
+    (candidate,) = merged.merge_candidates
+    assert candidate == ("frame + plate: one material (ASTM-A36), joined without relative "
+                         "motion, neither separated for service")  # fmt: skip
+    same["screening"] = {"serviced": ["plate"]}
+    assert product_screening(parse_product(same)).economy.merge_candidates == ()

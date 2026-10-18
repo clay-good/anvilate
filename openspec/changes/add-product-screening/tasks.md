@@ -27,12 +27,14 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 - [ ] 3.1 Pairwise minimum clearance with location; swept clearance over joint ranges
       (pairwise clearance is built; joint sweeps report collision, not swept clearance)
 - [ ] 3.2 Cross-item 1D tolerance chains (worst-case, RSS, seeded Monte Carlo)
-- [ ] 3.3 Thermal mismatch across dissimilar connections
+- [x] 3.3 Thermal mismatch across dissimilar connections
 
 ## 4. Mechanism and economy
 
 - [x] 4.1 Grübler–Kutzbach count with axis caveats
 - [ ] 4.2 Part count, unique fasteners, tool count, merge candidates (advisory)
+      (part count, bought designations and merge candidates are built; fasteners and tools
+      wait on fastener hardware in products)
 - [ ] 4.3 A docs page for product screening: each check, its method and its citation
 - [x] 4.4 Mass maturity (estimated, calculated, measured) and growth allowance per
       maturity; budgets on predicted mass

@@ -88,6 +88,8 @@ __all__ = [
     "Limit",
     "ProductLoad",
     "Split",
+    "Expansion",
+    "Thermal",
     "Screening",
     "Product",
     "ProductNode",
@@ -111,7 +113,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.8.0"] = "1.8.0"
+PRODUCT_VERSION: Literal["1.9.0"] = "1.9.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -608,6 +610,47 @@ class Split(StatableModel):
         return self
 
 
+class Expansion(StatableModel):
+    """A material's coefficient of thermal expansion, as the declaration read it, cited."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    material: Named
+    coefficient: Quantity
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _a_coefficient(self) -> Expansion:
+        if not (self.coefficient.has_dimension("1 / [temperature]")
+                and self.coefficient.magnitude > 0):  # fmt: skip
+            raise _refuse(f"{self.material}'s expansion coefficient is {self.coefficient}; it "
+                          "is a positive strain per kelvin, such as 1/K",
+                          subject="screening.thermal.coefficients")  # fmt: skip
+        return self
+
+
+class Thermal(StatableModel):
+    """The temperature range the product sees, the slip its connections allow, and the
+    expansion coefficients of its materials, each cited."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    range: Quantity
+    slip: Quantity
+    coefficients: tuple[Expansion, ...] = Field(min_length=1, max_length=64)
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _a_range(self) -> Thermal:
+        if not (self.range.has_dimension("[temperature]") and self.range.magnitude > 0):
+            raise _refuse(f"the thermal range is {self.range}; it is a positive temperature "
+                          "difference, such as K", subject="screening.thermal.range")  # fmt: skip
+        if not (self.slip.has_dimension("[length]") and self.slip.magnitude >= 0):
+            raise _refuse(f"the thermal slip is {self.slip}; it is a length",
+                          subject="screening.thermal.slip")  # fmt: skip
+        return self
+
+
 class Screening(StatableModel):
     """What the product as a whole is held to.
 
@@ -627,6 +670,9 @@ class Screening(StatableModel):
     min_clearance: Limit | None = None
     loads: tuple[ProductLoad, ...] = Field(default=(), max_length=256)
     splits: tuple[Split, ...] = Field(default=(), max_length=256)
+    thermal: Thermal | None = None
+    # Items separated for service, which assembly economy never proposes merging.
+    serviced: tuple[Named, ...] = Field(default=(), max_length=256)
 
     @model_validator(mode="after")
     def _dimensions(self) -> Screening:
@@ -659,9 +705,10 @@ class Product(StatableModel):
     # drafted state, 1.3.0 interfaces, connections and open interfaces, and 1.4.0 a catalog
     # part's interfaces bound to its features, 1.5.0 a joint on a connection, and 1.6.0 a
     # reference assembly, 1.7.0 what the product as a whole is screened against, and 1.8.0
-    # the loads it carries and declared splits; an older document reads unchanged.
+    # the loads it carries and declared splits, and 1.9.0 its thermal range and the items
+    # separated for service; an older document reads unchanged.
     anvilate_product: Literal[
-        "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0"
+        "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0"
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

@@ -21,6 +21,7 @@ screening:
 | clearance | the least gap between every two items that share no mate or connection, and where it is | `min_clearance` |
 | load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits` |
 | caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` |
+| thermal mismatch | for each connection between two catalog parts of different materials, \|α₁ − α₂\| · ΔT · span, the span between the outermost mated holes or across where they meet, against the declared slip, citing both coefficients | `thermal` |
 | mobility | Grübler–Kutzbach, M = 6(n − 1 − j) + Σf, over bodies joined rigidly into links | declared joints |
 
 A body rests on the bodies whose tops meet its bottom over a shared plan area, and the
@@ -34,6 +35,14 @@ split, with its basis, divides it instead:
 splits:
   - {body: cart/frame, basis: measured at the four wheels, shares: {cart/caster1: 0.25, ...}}
 ```
+
+Expansion coefficients are declared with their source, not looked up: the bundled
+materials carry none. A dissimilar connection with no range, or a material with no declared
+coefficient, is not evaluated, naming what is missing.
+
+`report.economy` is advisory and never changes the verdict: the part count, each bought
+designation with how many are used, and merge candidates, pairs of made parts joined without
+relative motion, of one material, neither listed in `serviced`.
 
 Each body's mass states its basis and maturity:
 
@@ -52,6 +61,6 @@ coaxial hinges counts −9 and moves. Mates between two items that a declared jo
 read as part of that joint, not as welding them.
 
 Not yet built: accelerations and loads on interfaces, side connections in the load path,
-part screens other than a caster's fed their loads, cost roll-up,
-cross-item tolerance chains, thermal mismatch, swept clearance over joint ranges, the
-budget mechanism for mass and CG limits, and assembly economy.
+part screens other than a caster's fed their loads, cost roll-up, cross-item tolerance
+chains, swept clearance over joint ranges, the budget mechanism for mass and CG limits, and
+fastener and tool counts.

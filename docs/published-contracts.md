@@ -121,6 +121,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.9.0: a thermal range, and items separated for service
+
+`screening` gains `thermal` (the temperature `range`, the `slip` a connection allows, and
+each material's expansion `coefficients`, cited) and `serviced` (items separated for
+service, which assembly economy never proposes merging). An older product document reads
+unchanged.
+
 ### Product document 1.8.0: loads, splits, and casters
 
 `screening` gains `loads` (each on an item, as a force or a mass under gravity, with its

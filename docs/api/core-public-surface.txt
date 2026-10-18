@@ -551,6 +551,8 @@ product.MassGrowth
 product.Limit
 product.ProductLoad
 product.Split
+product.Expansion
+product.Thermal
 product.Screening
 product.Product
 product.ProductNode
@@ -580,6 +582,7 @@ product_screening.MaturityLine
 product_screening.MassRollup
 product_screening.Mobility
 product_screening.ClosestApproach
+product_screening.Economy
 product_screening.ProductScreening
 product_screening.product_screening
 profile.Applicability
