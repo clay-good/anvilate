@@ -16,8 +16,7 @@ Depends on `add-part-combinations` (mates, hardware, combination card).
 - [x] 2.1 Definitions and instances; linear and circular patterns
 - [x] 2.2 Stable instance paths, unaffected by sibling order
 - [x] 2.3 Placeholders: envelope, mass, center of mass, interfaces, reason
-- [ ] 2.4 Layout datums and driving parameters; unused-parameter report
-      (driving parameters and the unused report are built; datums are not)
+- [x] 2.4 Layout datums and driving parameters; unused-parameter report
 - [x] 2.5 Variants resolved to complete products; interface check on substitution
 
 ## 3. Cards and builds

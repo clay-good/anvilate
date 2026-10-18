@@ -129,9 +129,3 @@ def test_a_stored_product_cannot_claim_a_reader_it_does_not_have():
     dumped["layout"]["parameters"][1]["read_by"] = ["nowhere:spec.x"]
     with pytest.raises(ValueError, match="'nowhere:spec.x'"):
         Product.model_validate(dumped)
-
-
-def test_a_layout_is_its_parameters():
-    layout = parse_product(_shaft_line()).layout
-    assert len(layout) == 2 and layout.parameters[1] in layout
-    assert [p.name for p in layout] == ["shaft_dia", "stroke"]

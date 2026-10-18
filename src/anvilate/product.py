@@ -45,7 +45,6 @@ from pydantic import ConfigDict, Field, computed_field, model_validator
 from ._models import (
     EMPTY_MAP,
     FrozenMap,
-    ItemCollection,
     Named,
     Provenance,
     StatableModel,
@@ -68,6 +67,7 @@ __all__ = [
     "CircularPattern",
     "Instance",
     "LayoutParameter",
+    "LayoutDatum",
     "Layout",
     "Variant",
     "Product",
@@ -283,12 +283,53 @@ class LayoutParameter(StatableModel):
     read_by: tuple[str, ...] = Field(default=(), max_length=1024)
 
 
-class Layout(ItemCollection, StatableModel):
-    """The product's driving parameters, read by name and never itself a part."""
+_FACE_AXIS = {"top": "z", "bottom": "z", "right": "x", "left": "x", "back": "y", "front": "y"}
+
+
+class LayoutDatum(StatableModel):
+    """A named datum items mate to: a point, an axis or a plane, fixed in the product's frame.
+
+    ``at`` is where it is. An ``axis`` runs along ``direction`` through it, and a ``plane``
+    is normal to ``direction`` through it. A mate names the datum as its ``on`` part: a
+    plane offers the two faces normal to it (``top`` and ``bottom`` for a ``z`` plane), an
+    axis offers itself to a ``shaft_in_bore`` mate, and a point offers any face or axis
+    through it. Its coordinates may read layout parameters like any other value.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    parameters: tuple[LayoutParameter, ...] = Field(min_length=1, max_length=256)
+    name: Named
+    kind: Literal["point", "axis", "plane"]
+    at: tuple[Quantity, Quantity, Quantity]
+    direction: Literal["x", "y", "z"] | None = None
+
+    @property
+    def at_mm(self) -> tuple[float, float, float]:
+        """Where the datum is, in millimetres."""
+        x, y, z = (float(q.to("mm").magnitude) for q in self.at)
+        return x, y, z
+
+    @model_validator(mode="after")
+    def _a_datum(self) -> LayoutDatum:
+        for index, value in enumerate(self.at):
+            if not value.has_dimension("[length]") or not math.isfinite(value.magnitude):
+                raise _refuse(f"datum '{self.name}' at[{index}] is {value}; a datum is placed by "
+                              "three finite lengths", subject="layout.datums[].at")  # fmt: skip
+        if (self.kind == "point") != (self.direction is None):
+            raise _refuse(f"datum '{self.name}' is a {self.kind} and "
+                          f"{'states' if self.direction else 'states no'} direction; an axis or "
+                          "plane takes one and a point none",
+                          subject="layout.datums[].direction")  # fmt: skip
+        return self
+
+
+class Layout(StatableModel):
+    """The product's driving parameters and datums, read by name and never itself a part."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    parameters: tuple[LayoutParameter, ...] = Field(default=(), max_length=256)
+    datums: tuple[LayoutDatum, ...] = Field(default=(), max_length=256)
 
     @property
     def unused(self) -> tuple[str, ...]:
@@ -338,7 +379,7 @@ class Product(StatableModel):
         repeated = sorted({i for i in ids if ids.count(i) > 1})
         if repeated:
             raise _refuse(f"definitions {repeated} are declared twice", subject="definitions[].id")
-        names = [i.name for i in self.instances]
+        names = order = [i.name for i in self.instances]
         repeated = sorted({n for n in names if names.count(n) > 1})
         if repeated:
             raise _refuse(f"instances {repeated} are named twice; a path names each once",
@@ -357,7 +398,14 @@ class Product(StatableModel):
             if repeated:
                 raise _refuse(f"layout parameters {repeated} are declared twice",
                               subject="layout.parameters[].name")  # fmt: skip
+            names = [d.name for d in self.layout.datums]
+            repeated = sorted({n for n in names if names.count(n) > 1 or n in order})
+            if repeated:
+                raise _refuse(f"layout datums {repeated} are declared twice or share an "
+                              "instance's name; a mate names each once",
+                              subject="layout.datums[].name")  # fmt: skip
             dumped = {d.id: d.model_dump(mode="json") for d in self.definitions}
+            dumped["@layout"] = {"datums": [d.model_dump(mode="json") for d in self.layout.datums]}
             for parameter in self.layout.parameters:
                 want = parameter.value.model_dump(mode="json")
                 for place in parameter.read_by:
@@ -404,10 +452,12 @@ def _at(node: Any, path: str) -> Any:
 def _resolve(document: Mapping[str, Any]) -> dict[str, Any]:
     """The document with every ``{layout: name}`` replaced by that parameter's value."""
     layout = document.get("layout")
-    if not isinstance(layout, Mapping) or not isinstance(layout.get("parameters"), list):
+    if not isinstance(layout, Mapping):
         return dict(document)
+    declared = layout.get("parameters")
+    declared = declared if isinstance(declared, list) else []
     values: dict[str, Any] = {}
-    for parameter in layout["parameters"]:
+    for parameter in declared:
         if isinstance(parameter, Mapping) and isinstance(parameter.get("name"), str):
             values[parameter["name"]] = parameter.get("value")
     readers: dict[str, list[str]] = {name: [] for name in values}
@@ -434,6 +484,11 @@ def _resolve(document: Mapping[str, Any]) -> dict[str, Any]:
             definition = {k: walk(v, owner, k) if k in ("spec", "placeholder") else v
                           for k, v in definition.items()}  # fmt: skip
         definitions.append(definition)
+    datums = layout.get("datums")
+    if isinstance(datums, list):
+        datums = [{**d, "at": walk(d["at"], "@layout", f"datums.{i}.at")}
+                  if isinstance(d, Mapping) and "at" in d else d
+                  for i, d in enumerate(datums)]  # fmt: skip
     variants = []
     for variant in document.get("variants") or ():
         if isinstance(variant, Mapping) and isinstance(variant.get("substitutions"), list):
@@ -457,10 +512,12 @@ def _resolve(document: Mapping[str, Any]) -> dict[str, Any]:
         {**p, "read_by": readers[p["name"]]}
         if isinstance(p, Mapping) and p.get("name") in readers and "read_by" not in p
         else p
-        for p in layout["parameters"]
+        for p in declared
     ]
-    resolved = {**document, "definitions": definitions,
-                "layout": {**layout, "parameters": parameters}}  # fmt: skip
+    resolved_layout = {**layout, "parameters": parameters} if "parameters" in layout else {**layout}
+    if isinstance(datums, list):
+        resolved_layout["datums"] = datums
+    resolved = {**document, "definitions": definitions, "layout": resolved_layout}
     if "variants" in document:
         resolved["variants"] = variants
     return resolved
@@ -504,6 +561,8 @@ def resolve_variant(product: Product, name: str) -> Product:
     data = product.model_dump(mode="json")
     replaced = {d.id: d for d in variant.substitutions}
     index = {d["id"]: d for d in data["definitions"]}
+    if data["layout"] is not None:
+        index["@layout"] = data["layout"]
     for parameter in (data["layout"] or {}).get("parameters", ()):
         if parameter["name"] not in variant.parameters:
             continue
@@ -533,7 +592,7 @@ def resolve_variant(product: Product, name: str) -> Product:
     items = {i.name: i.item for i in product.instances}
     for mate in product.mates:
         for end in (mate.place, mate.on):
-            substitute = replaced.get(items[end.part])
+            substitute = replaced.get(items.get(end.part, ""))  # a datum is substituted by none
             wanted = [*end.holes, *([end.feature] if end.feature is not None else [])]
             if substitute is None or not wanted:
                 continue
@@ -918,16 +977,28 @@ def place_product(
 
         definitions = {d.id: d for d in current.definitions}
         order = [i.name for i in current.instances]
+        datums = {d.name: d for d in current.layout.datums} if current.layout is not None else {}
         for mate in current.mates:
+            if mate.place.part in datums:
+                raise _refuse(f"mate '{mate.id}' places the datum '{mate.place.part}', which is "
+                              "fixed; a datum is a mate's 'on' end",
+                              subject="mates[].place.part")  # fmt: skip
             for end in (mate.place, mate.on):
-                if end.part not in order:
+                if end.part not in order and end.part not in datums:
                     raise _refuse(f"mate '{mate.id}' names '{end.part}', which is not an instance "
-                                  f"of '{current.name}' ({', '.join(order)})",
+                                  f"or datum of '{current.name}' ({', '.join([*order, *datums])})",
                                   subject="mates[].place.part")  # fmt: skip
             if mate.place.part == current.ground:
                 raise _refuse(f"mate '{mate.id}' places the ground '{current.ground}', which stays "
                               "where it is", subject="mates[].place.part")  # fmt: skip
-        placed: dict[str, PlacedPart] = {}
+            if mate.on.part in datums:
+                _offers(datums[mate.on.part], mate)
+        placed: dict[str, PlacedPart] = {
+            name: PlacedPart(name, BuiltGeometry(name=name, pattern="datum", shape=Vertex(0, 0, 0),
+                                                 faces={}, dimensions_mm={}),
+                             None, _IDENTITY, datum.at_mm)
+            for name, datum in datums.items()
+        }  # fmt: skip
         leaves: list[_Leaf] = []
         ground_first = sorted(current.instances, key=lambda i: i.name != current.ground)
         for instance in ground_first:
@@ -1039,6 +1110,22 @@ def place_product(
         unused_parameters=product.layout.unused if product.layout is not None else (),
         card=_card(product.name, leaves),
     )
+
+
+def _offers(datum: LayoutDatum, mate: Mate) -> None:
+    """Refuse a mate that asks a datum for a face or axis it does not have."""
+    if mate.kind == "hole_pattern" or mate.on.feature is not None or mate.on.holes:
+        raise _refuse(f"mate '{mate.id}' asks the datum '{datum.name}' for holes or a feature; a "
+                      "datum offers faces and axes", subject="product")  # fmt: skip
+    face, axis = mate.on.face, mate.on.axis
+    if datum.kind == "plane" and (face is None or _FACE_AXIS[face] != datum.direction):
+        raise _refuse(f"mate '{mate.id}' asks the {datum.direction} plane '{datum.name}' for "
+                      f"{f'its {face} face' if face else 'an axis'}; it offers only the two faces "
+                      f"normal to {datum.direction}", subject="product")  # fmt: skip
+    if datum.kind == "axis" and axis != datum.direction:
+        raise _refuse(f"mate '{mate.id}' asks the {datum.direction} axis '{datum.name}' for "
+                      f"{f'a {face} face' if face else f'the {axis} axis'}; it offers only itself "
+                      "to a shaft_in_bore mate", subject="product")  # fmt: skip
 
 
 _NEEDS_A_DETAIL = Need(

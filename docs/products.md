@@ -97,6 +97,31 @@ layout does not declare is refused. A parameter nothing reads is listed under `u
 named by the placed product. The layout is in no parts list and no mass roll-up. A
 provisional part number follows the values its item reads.
 
+### Datums
+
+The layout can also fix named datums in the product's frame: a `point`, an `axis` along a
+`direction`, or a `plane` normal to one. A mate names a datum as its `on` part, so an item
+can sit on a deck height or run on a spindle axis that no part defines.
+
+```yaml
+layout:
+  datums:
+    - {name: deck, kind: plane, direction: z, at: [{magnitude: 0, unit: mm}, {magnitude: 0, unit: mm}, {layout: deck_height}]}
+    - {name: spindle, kind: axis, direction: z, at: [...]}
+mates:
+  - {id: on-deck, kind: face_to_face, place: {part: block, face: bottom}, on: {part: deck, face: top}}
+```
+
+| Datum | Offers a mate |
+| --- | --- |
+| `plane` | The two faces normal to it (`top` and `bottom` for a `z` plane), both through `at` |
+| `axis` | Itself, to a `shaft_in_bore` mate naming its direction |
+| `point` | Any face or axis through it |
+
+A datum's coordinates can read layout parameters, so a variant can move it. A datum is in
+no body, no mass and no parts list. A mate that places a datum, asks a plane for a face it
+does not have, or asks a datum for holes is refused.
+
 ## Variants
 
 A variant names a set of parameter overrides and definition substitutions against the base
@@ -130,5 +155,4 @@ it is chosen. It is a box, centred on its own origin.
 A hole or a centre of mass outside the envelope is refused. Any interference result that
 involves a placeholder says it is provisional and names the placeholders it rests on.
 
-Not yet built: layout datums (points, axes and planes to mate to) and rebuilds keyed
-on content.
+Not yet built: rebuilds keyed on content.

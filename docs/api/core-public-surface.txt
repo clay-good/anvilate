@@ -512,6 +512,7 @@ product.CircularPattern
 product.Instance
 product.Layout
 product.LayoutParameter
+product.LayoutDatum
 product.Variant
 product.Product
 product.ProductNode
