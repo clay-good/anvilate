@@ -1047,6 +1047,9 @@ modules:
 - :mod:`~anvilate.analysis.crippling` — Gerard's closed-form crippling stress of formed
   and extruded thin-walled sections by their corners and flanges (NACA TN 3784), refused
   above each form's cutoff
+- :mod:`~anvilate.analysis.plasticity` — a Ramberg-Osgood curve fitted at F_0.7 and
+  F_0.85, and the tangent-modulus column and plasticity-reduced plate buckling stresses of
+  the Astronautic Structures Manual §C2
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -2665,6 +2668,13 @@ from .plasma import (
     plasma_frequency,
     plasma_parameter,
 )
+from .plasticity import (
+    PlasticBuckling,
+    PlateEdge,
+    RambergOsgood,
+    plastic_column_buckling_stress,
+    plastic_plate_buckling_stress,
+)
 from .plate import (
     DEFAULT_POISSON_RATIO,
     PlateBendingResult,
@@ -3578,6 +3588,11 @@ __all__ = [
     "CripplingSection",
     "CripplingStress",
     "gerard_crippling_stress",
+    "RambergOsgood",
+    "PlateEdge",
+    "PlasticBuckling",
+    "plastic_column_buckling_stress",
+    "plastic_plate_buckling_stress",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

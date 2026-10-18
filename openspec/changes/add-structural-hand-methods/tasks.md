@@ -13,7 +13,7 @@ anchored to a worked example from a public-domain source, with a runnable exampl
 
 ## 2. Thin-walled structure
 
-- [ ] 2.1 Crippling by element; plasticity-corrected column and plate buckling
+- [x] 2.1 Crippling by element; plasticity-corrected column and plate buckling
 - [x] 2.2 Thin-cylinder knockdown from NASA-SP-8007
 
 ## 3. Composites

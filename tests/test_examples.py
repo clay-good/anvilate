@@ -9519,3 +9519,18 @@ def test_z_stringer_crippling_example():
         web_width=Quantity(magnitude=30.0, unit="mm"),
     )
     assert inside.ratio < inside.cutoff
+
+
+def test_short_stiffener_plasticity_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "short_stiffener_plasticity.py"))
+    d = namespace["short_stiffener_plasticity"]()
+    # web k = 4: 4π² × 72,400/(12 × 0.8911) × (1.6/30)² = 760.3 MPa elastic
+    assert d["elastic_mpa"] == pytest.approx(760.3, abs=0.05)
+    assert d["plastic_mpa"] == pytest.approx(335.2, abs=0.05)
+    # the stocky section is past Gerard's cutoff, so eq. 73 hands it to local buckling
+    assert d["crippling_source"] == "local buckling (NACA TN 3784 eq. 73)"
+    assert d["crippling_mpa"] == d["plastic_mpa"]
+    assert d["fraction_of_yield"] == pytest.approx(0.97, abs=0.005)
+    assert d["overstatement"] == pytest.approx(2.27, abs=0.005)
+    assert d["crippling_thin_mpa"] == pytest.approx(243.6, abs=0.05)
+    _assert_narrates_computed("short_stiffener_plasticity.py", namespace)

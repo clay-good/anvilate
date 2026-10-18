@@ -1751,8 +1751,10 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # a test sample or preload bounds, and tests/test_preloaded_joint.py refuses a NaN, an
     # infinite and a negative measured preload and a NaN stiffness factor. Raise this only
     # with such a test named. 94 -> 95: gerard_crippling_stress takes a CripplingSection,
-    # and tests/test_crippling.py refuses a NaN area and a zero thickness.
-    assert len(unbuildable) <= 95, (
+    # and tests/test_crippling.py refuses a NaN area and a zero thickness. 95 -> 97: the
+    # two plasticity functions take a RambergOsgood curve, and tests/test_plasticity.py
+    # refuses a NaN and an infinite slenderness.
+    assert len(unbuildable) <= 97, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

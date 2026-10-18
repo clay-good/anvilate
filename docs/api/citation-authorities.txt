@@ -109,6 +109,7 @@ TMS
 
 # --- Handbooks and texts
 NASA RP-1351
+NASA TM X-73306
 NASA SP-8007
 Agrawal
 Anderson

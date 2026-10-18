@@ -162,6 +162,11 @@ preloaded_joint.joint_slip_margin
 crippling.CripplingSection
 crippling.CripplingStress
 crippling.gerard_crippling_stress
+plasticity.RambergOsgood
+plasticity.PlateEdge
+plasticity.PlasticBuckling
+plasticity.plastic_column_buckling_stress
+plasticity.plastic_plate_buckling_stress
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors
