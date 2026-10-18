@@ -2550,6 +2550,8 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     """
     if args.envelope.suffix.lower() in {".step", ".stp"}:
         return _verify_step(args, out=out, err=err)
+    if args.envelope.is_dir() and (args.envelope / "manifest.json").is_file():
+        return _verify_package(args, out=out, err=err)
 
     from pydantic import ValidationError
 
@@ -2651,6 +2653,32 @@ def _verify(args: argparse.Namespace, *, out, err) -> int:
     for problem in report.problems:
         print(f"anvilate verify: {problem}", file=err)
     return EXIT_CODES[report.status]
+
+
+def _verify_package(args: argparse.Namespace, *, out, err) -> int:
+    """Verify a release package folder: every file its manifest lists, by its SHA-256."""
+    from pydantic import ValidationError
+
+    from .release import verify_package
+
+    try:
+        problems = verify_package(args.envelope)
+    except (ValueError, ValidationError) as refused:
+        print(f"anvilate verify: {args.envelope}: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    if args.format == "json":
+        document = machine_document(
+            "verify", {"package": str(args.envelope), "intact": not problems,
+                       "problems": list(problems)},
+        )  # fmt: skip
+        print(json.dumps(document, indent=2), file=out)
+    elif problems:
+        print(f"{args.envelope}: {len(problems)} file(s) do not match the manifest", file=out)
+        for problem in problems:
+            print(f"  {problem}", file=out)
+    else:
+        print(f"{args.envelope}: every file matches the manifest", file=out)
+    return EXIT_FAILED if problems else EXIT_OK
 
 
 def _verify_step(args: argparse.Namespace, *, out, err) -> int:

@@ -121,6 +121,11 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### CLI output 1.65.0: `verify` reads a release package
+
+`anvilate verify <folder>` on a folder holding a `manifest.json` checks every listed file
+and answers `--format json` with `package`, `intact` and `problems`.
+
 ### Product document 1.5.0: a joint on a connection
 
 A connection gains `joint`: its `kind` (rigid, revolute, linear, cylindrical, ball) and,

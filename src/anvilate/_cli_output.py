@@ -36,10 +36,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.64.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.65.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.64.0"]
-SchemaVersion = Literal["1.64.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.65.0"]
+SchemaVersion = Literal["1.65.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -408,6 +408,17 @@ class FetchedOutput(_WireModel):
     provenance: FetchProvenance
 
 
+class PackageVerifyOutput(_WireModel):
+    """``verify`` on a release package folder: whether every listed file matches."""
+
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["verify"]
+    package: str
+    intact: bool
+    problems: tuple[str, ...]
+
+
 class InterfacesOutput(_WireModel):
     schema_: SchemaId = Field(alias="schema")
     schema_version: SchemaVersion
@@ -435,6 +446,7 @@ CliOutput = (
     | GeometryExportOutput
     | VerifyOutput
     | StepVerifyOutput
+    | PackageVerifyOutput
     | DiffOutput
     | RefusalOutput
     | ErrorOutput

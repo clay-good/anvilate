@@ -591,6 +591,12 @@ keepouts.build_keepout
 keepouts.screen_keepouts
 keepouts.keepout_label
 keepouts.write_keepout_step
+release.ReleaseRefused
+release.ManifestFile
+release.Manifest
+release.release_blockers
+release.export_package
+release.verify_package
 review.DecisionOrigin
 review.ReviewPriority
 review.ReviewItem

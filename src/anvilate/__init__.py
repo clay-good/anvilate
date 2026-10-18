@@ -148,6 +148,8 @@ that already ran and does one more thing with them:
   list, and the containment, numbering and mirroring refusals, before any geometry.
 - :mod:`anvilate.profile` — a cited, versioned bundle of declarations bound in one
   action, refused outside its own applicability and attributed wherever a value appears.
+- :mod:`anvilate.release` — the release package: a gate naming every blocker, the indented
+  BOM, the buy list, part and assembly STEP, parameter tables, and a hashed manifest.
 - :mod:`anvilate.refusal` — raised refusals with structured action, subject, and source
   remedies beside their human-readable message.
 - :mod:`anvilate.keepouts` — each declared keepout built on the part's own geometry, and the
