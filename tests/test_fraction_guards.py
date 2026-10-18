@@ -1759,8 +1759,10 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # NaN BTH-1 category, and an aluminium edge support whose `else` accepted `None`).
     # 97 -> 98: o_ring_seal_screen takes its limits' source as text; tests/test_o_ring_seal.py
     # refuses a NaN or infinite expansion coefficient and a non-temperature extreme.
+    # 98 -> 99: embedding_preload_loss takes its source as text; tests/test_preloaded_joint.py
+    # refuses a NaN embedding.
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 98, (
+    assert len(unbuildable) <= 99, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

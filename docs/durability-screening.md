@@ -55,6 +55,15 @@ declare, such as fluid compatibility, is not evaluated and keeps the seal from p
 The [cold-squeeze example](../examples/o_ring_cold_squeeze.py) passes on day one and fails
 at end of life.
 
+## Embedding in preloaded joints
+
+`embedding_preload_loss` turns the settlement of a joint's faying surfaces into lost
+preload: the total settlement over the bolt and clamp stiffnesses in series. The
+settlement per interface is the caller's to read and cite. The tables for it are not
+public, and none is bundled. `preload_bounds(..., embedding=...)` takes the larger of
+it and NASA-STD-5020B's 5% short-term relaxation, rather than adding them. Both are the
+same loss, and the standard warns 5% may be too little with several faying surfaces.
+
 ## Modes and drops
 
 A mode inside an excitation band has no separation. Outside it, the separation is
@@ -67,4 +76,4 @@ frequency, so an item tuned near the worst ratio sees about 1.77 times the peak.
 contact stiffness is the weakest number, and every drop result is labelled an estimate.
 
 Not yet built: declaring a duty cycle in a Design Spec (the analysis takes events directly
-today), joint embedding loss, and plastic retention.
+today), and plastic retention.

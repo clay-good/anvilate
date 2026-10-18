@@ -10,7 +10,7 @@
 
 ## 2. Joints and seals
 
-- [ ] 2.1 Embedding loss and load-introduction factor; user-cited table values
+- [x] 2.1 Embedding loss and load-introduction factor; user-cited table values
 - [x] 2.2 O-ring: temperature-extreme squeeze and fill, extrusion against cited limits,
       compression set over life, fluid compatibility attribute
 

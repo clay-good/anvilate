@@ -238,3 +238,51 @@ def test_the_hand_methods_page_quotes_the_appendix_a2_figures():
     page = (Path(__file__).parents[1] / "docs" / "structural-hand-methods.md").read_text()
     assert "4,721 lb nominal, 1,097 lb σ and Γ90/95 0.498" in page
     assert "chooses Γ 0.353" in page
+
+
+def _embedding(per_um: float = 3.0, interfaces: int = 4):
+    from anvilate.analysis.preloaded_joint import embedding_preload_loss
+
+    return embedding_preload_loss(
+        interfaces=interfaces,
+        embedding_per_interface=Quantity(magnitude=per_um, unit="um"),
+        source="the user's cited embedding table, machined surfaces",
+        bolt_stiffness=Quantity(magnitude=200_000, unit="N/mm"),
+        clamp_stiffness=Quantity(magnitude=800_000, unit="N/mm"),
+    )
+
+
+def test_four_interfaces_in_a_stack():
+    """The spec's scenario: a bracket, a spacer and a plate, four interfaces."""
+    loss = _embedding()
+    # 4 × 3 µm = 0.012 mm over k = 200,000 × 800,000/1,000,000 = 160,000 N/mm: 1,920 N
+    assert loss.embedding == pytest.approx(0.012, rel=1e-12)
+    assert loss.loss == pytest.approx(1_920, rel=1e-12)
+    bounds = preload_bounds(
+        nominal_preload=_n(12_000), method=TighteningMethod.TORQUE_DRY, torque_tolerance=0.05,
+        separation_critical=False, fastener_count=1, all_metallic_clamp=True, embedding=loss,
+    )  # fmt: skip
+    # Eq. 4: 0.95 × 0.65 × 12,000 = 7,410; embedding 1,920 beats the 5% default (370.5)
+    assert bounds.relaxation == pytest.approx(1_920, rel=1e-12)
+    assert bounds.minimum == pytest.approx(7_410 - 1_920, rel=1e-12)
+    assert bounds.relaxation_basis == "embedding over 4 interfaces"
+    assert "1920 N of preload" in str(loss)
+
+
+def test_a_small_embedding_does_not_double_count_the_default():
+    small = _embedding(per_um=0.1)  # 0.4 µm × 160,000 = 64 N, below the 5% default
+    bounds = preload_bounds(
+        nominal_preload=_n(12_000), method=TighteningMethod.TORQUE_DRY, torque_tolerance=0.05,
+        separation_critical=False, fastener_count=1, all_metallic_clamp=True, embedding=small,
+    )  # fmt: skip
+    assert bounds.relaxation == pytest.approx(0.05 * 7_410, rel=1e-12)
+    assert bounds.relaxation_basis == "Table 1 default, 5%"
+
+
+def test_embedding_refusals():
+    with pytest.raises(RefusalError, match="interfaces"):
+        _embedding(interfaces=0)
+    with pytest.raises(ValueError, match="embedding_per_interface"):
+        _embedding(per_um=float("nan"))
+    with pytest.raises(RefusalError, match="embedding_per_interface"):
+        _embedding(per_um=-1)

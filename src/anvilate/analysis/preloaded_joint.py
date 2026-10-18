@@ -51,7 +51,7 @@ from math import isfinite, sqrt
 
 from pydantic import BaseModel, ConfigDict
 
-from .._models import each_one
+from .._models import Provenance, RevalidatedModel, each_one
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity, require_finite
 
@@ -59,9 +59,11 @@ __all__ = [
     "TighteningMethod",
     "FayingSurface",
     "PreloadUncertainty",
+    "EmbeddingLoss",
     "PreloadBounds",
     "JointMargins",
     "preload_uncertainty_from_tests",
+    "embedding_preload_loss",
     "preload_bounds",
     "preloaded_joint_margins",
     "joint_slip_margin",
@@ -195,6 +197,90 @@ def _fraction(value: float, name: str, *, upper: float, source: str) -> float:
     return v
 
 
+class EmbeddingLoss(RevalidatedModel):
+    """Preload lost to embedding at the faying surfaces, and the cited value it came from.
+
+    ``loss`` is in N and ``embedding`` (the total settlement) in mm; the bolt and the clamp
+    are springs in series under it, so the loss is the settlement times their combined
+    stiffness, k_b·k_c/(k_b + k_c) (the joint stiffness model of Shigley's bolted-joint
+    chapter, used with NASA-STD-5020B's minimum-preload bookkeeping).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    interfaces: int
+    embedding: float
+    loss: float
+    source: Provenance
+
+    def __str__(self) -> str:
+        return (
+            f"embedding {self.embedding * 1000:.3g} µm over {self.interfaces} interfaces "
+            f"costs {self.loss:.4g} N of preload ({self.source})"
+        )
+
+
+def embedding_preload_loss(
+    *,
+    interfaces: int,
+    embedding_per_interface: Quantity,
+    source: str,
+    bolt_stiffness: Quantity,
+    clamp_stiffness: Quantity,
+) -> EmbeddingLoss:
+    """The preload a joint loses as its faying surfaces settle (Shigley's joint stiffness).
+
+    ``interfaces`` counts every surface pair the preload crosses — under the head, between
+    each clamped part, under the nut or into the thread; ``embedding_per_interface`` is the
+    settlement per interface for their surface condition, which is the caller's to read and
+    cite in ``source``: the tables for it are not public, and none is bundled. The loss is
+    the total settlement over the bolt and clamp compliances in series.
+    """
+    if isinstance(interfaces, bool) or not isinstance(interfaces, int) or interfaces < 1:
+        raise _refusal(
+            f"interfaces is {interfaces!r}; a joint has at least one",
+            subject="interfaces",
+            source=_JOINT_SOURCE,
+        )
+    if not isinstance(source, str) or not source.strip():
+        raise _refusal("source must cite where the embedding per interface was read",
+                       subject="source", source=_JOINT_SOURCE)  # fmt: skip
+    if not isinstance(embedding_per_interface, Quantity):
+        raise _refusal(
+            "embedding_per_interface must be a length",
+            subject="embedding_per_interface",
+            source=_JOINT_SOURCE,
+        )
+    try:
+        per = embedding_per_interface.to("mm").magnitude
+    except Exception as error:
+        raise _refusal(f"embedding_per_interface is {embedding_per_interface}, which is not a "
+                       "length", subject="embedding_per_interface",
+                       source=_JOINT_SOURCE) from error  # fmt: skip
+    per = require_finite(per, name="embedding_per_interface")
+    if per < 0:
+        raise _refusal("embedding_per_interface is a settlement, zero or positive",
+                       subject="embedding_per_interface", source=_JOINT_SOURCE)  # fmt: skip
+    stiffness = []
+    for name, value in (("bolt_stiffness", bolt_stiffness), ("clamp_stiffness", clamp_stiffness)):
+        if not isinstance(value, Quantity):
+            raise _refusal(f"{name} must be a stiffness in N/mm", subject=name,
+                           source=_JOINT_SOURCE)  # fmt: skip
+        try:
+            k = value.to("N/mm").magnitude
+        except Exception as error:
+            raise _refusal(f"{name} is {value}, which is not a stiffness", subject=name,
+                           source=_JOINT_SOURCE) from error  # fmt: skip
+        k = require_finite(k, name=name)
+        if k <= 0:
+            raise _refusal(f"{name} must be positive", subject=name, source=_JOINT_SOURCE)
+        stiffness.append(k)
+    kb, kc = stiffness
+    total = interfaces * per
+    return EmbeddingLoss(interfaces=interfaces, embedding=total,
+                         loss=total * kb * kc / (kb + kc), source=source)  # fmt: skip
+
+
 class PreloadBounds(BaseModel):
     """The maximum and minimum preloads of NASA-STD-5020B §4.3.1, in N, and their basis.
 
@@ -216,6 +302,7 @@ class PreloadBounds(BaseModel):
     relaxation: float
     separation_critical: bool
     fastener_count: int
+    relaxation_basis: str = "Table 1 default, 5%"
 
     def __str__(self) -> str:
         return (
@@ -238,6 +325,7 @@ def preload_bounds(
     creep_loss: Quantity | None = None,
     thermal_increase: Quantity | None = None,
     thermal_decrease: Quantity | None = None,
+    embedding: EmbeddingLoss | None = None,
 ) -> PreloadBounds:
     """Maximum and minimum preload by NASA-STD-5020B Eqs. 1–5 and Tables 1 and 3.
 
@@ -250,6 +338,12 @@ def preload_bounds(
     ``relaxation`` defaults to 5% of the minimum initial preload for an all-metallic clamp
     (Table 1) and must be declared otherwise. The losses and the thermal changes are
     positive forces, zero when absent.
+
+    ``embedding`` is the preload lost to the faying surfaces settling
+    (:func:`embedding_preload_loss`). It is short-term relaxation by another route, so it
+    is not added to it: the larger of the two governs, as Table 1's footnote warns that 5%
+    may be non-conservative with several faying surfaces, and ``relaxation_basis`` says
+    which.
     """
     if not isinstance(method, TighteningMethod):
         raise _refusal(f"method must be a TighteningMethod; got {method!r}", subject="method",
@@ -321,6 +415,14 @@ def preload_bounds(
             subject="relaxation",
             source=_TEST_SOURCE,
         )
+    relaxation_basis = "declared" if relaxation is not None else "Table 1 default, 5%"
+    if embedding is not None:
+        if not isinstance(embedding, EmbeddingLoss):
+            raise _refusal("embedding must come from embedding_preload_loss", subject="embedding",
+                           source=_JOINT_SOURCE)  # fmt: skip
+        if embedding.loss > ppr:
+            ppr = ppr_slip = embedding.loss
+            relaxation_basis = f"embedding over {embedding.interfaces} interfaces"
     return PreloadBounds(
         nominal=nominal,
         maximum=(1 + tol) * (1 + g_max) * nominal + rise,
@@ -330,6 +432,7 @@ def preload_bounds(
         gamma_for_minimum=g_min,
         gamma_basis=basis,
         relaxation=ppr,
+        relaxation_basis=relaxation_basis,
         separation_critical=separation_critical,
         fastener_count=fastener_count,
     )

@@ -2772,11 +2772,13 @@ from .power_screw import (
     power_screw_raise_torque,
 )
 from .preloaded_joint import (
+    EmbeddingLoss,
     FayingSurface,
     JointMargins,
     PreloadBounds,
     PreloadUncertainty,
     TighteningMethod,
+    embedding_preload_loss,
     joint_slip_margin,
     preload_bounds,
     preload_uncertainty_from_tests,
@@ -3639,6 +3641,8 @@ __all__ = [
     "preload_bounds",
     "preloaded_joint_margins",
     "joint_slip_margin",
+    "EmbeddingLoss",
+    "embedding_preload_loss",
     "CripplingSection",
     "CripplingStress",
     "gerard_crippling_stress",

@@ -159,6 +159,8 @@ preloaded_joint.preload_uncertainty_from_tests
 preloaded_joint.preload_bounds
 preloaded_joint.preloaded_joint_margins
 preloaded_joint.joint_slip_margin
+preloaded_joint.EmbeddingLoss
+preloaded_joint.embedding_preload_loss
 crippling.CripplingSection
 crippling.CripplingStress
 crippling.gerard_crippling_stress
