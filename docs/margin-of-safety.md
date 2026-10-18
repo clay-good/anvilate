@@ -86,5 +86,14 @@ What the sources do not state is left out rather than filled in:
 - Paid standards' factors (the MMPDS allowables, the composites handbooks) are cited,
   never bundled. Enter them in your own set with their source.
 
-Not yet built: the free-body rendering for each governing row (the `calculation-report`
-delta of this change), and loads read from a solver deck (`add-cae-handoff`).
+## Free bodies
+
+A check can carry a `FreeBody` per load case: the item's outline, the applied loads, and
+the reactions at each connection. The governing row carries the free body of its governing
+case. If the residual exceeds the body's tolerance, the row gets a `finding`. The default
+tolerance is 1% of the largest applied load for ΣF, and that force times the outline's
+diagonal for ΣM. The finding does not change the row's verdict: it says the reactions
+shown are not the ones the loads produce. `FreeBody.svg()` draws it with applied loads
+solid and reactions dashed, and `anvilate.raster.svg_to_png` turns it into a PNG.
+
+Not yet built: loads read from a solver deck (`add-cae-handoff`).

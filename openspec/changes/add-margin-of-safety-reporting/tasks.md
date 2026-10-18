@@ -19,6 +19,6 @@
 
 - [x] 3.1 Governing case per check across all cases; count, ties, unevaluated cases
 - [x] 3.2 Margin table CSV, XLSX, report section; subsystem summary
-- [ ] 3.3 Free-body rendering with equilibrium residual
+- [x] 3.3 Free-body rendering with equilibrium residual
 - [x] 3.4 A docs page for margin reporting: binding a set, reading the table, what the
       bundled sets cite

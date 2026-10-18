@@ -37,7 +37,7 @@ import io
 import zipfile
 from collections.abc import Sequence
 from enum import StrEnum
-from math import inf, isfinite, prod
+from math import hypot, inf, isfinite, prod
 from typing import Any, Self
 from xml.sax.saxutils import escape
 
@@ -67,6 +67,10 @@ __all__ = [
     "MarginCheck",
     "AppliedFactor",
     "UnevaluatedCase",
+    "ForceRole",
+    "BodyForce",
+    "FreeBody",
+    "DEFAULT_EQUILIBRIUM_TOLERANCE",
     "MarginRow",
     "RequiredTest",
     "SubsystemMinimum",
@@ -411,6 +415,213 @@ class LoadCase(StatableModel):
     level: LoadLevel | None = None
 
 
+class ForceRole(StrEnum):
+    """Whether a force on a free body is a load put on it or a reaction holding it."""
+
+    APPLIED = "applied"
+    REACTION = "reaction"
+
+
+class BodyForce(StatableModel):
+    """One force on a planar free body: where it acts, its components, and any couple.
+
+    ``x`` and ``y`` are in the free body's length unit; ``fx`` and ``fy`` in its force unit;
+    ``moment`` is a couple about the out-of-plane axis, counter-clockwise positive, in force
+    unit × length unit.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
+
+    name: Named
+    role: ForceRole
+    x: float
+    y: float
+    fx: float
+    fy: float
+    moment: float = 0.0
+
+
+#: A free body is in equilibrium when each residual is within this share of the largest
+#: applied load: 1% of the largest force, and 1% of that force times the outline's diagonal.
+DEFAULT_EQUILIBRIUM_TOLERANCE = 0.01
+
+
+class FreeBody(StatableModel):
+    """The free body behind one load case: the item's outline, the loads in, the reactions out.
+
+    The residual is what is left when every force and couple is summed. A free body a
+    reviewer can sign has a residual within ``tolerance`` of the largest applied load; one
+    that does not is a finding on the margin row it backs, because the reactions it shows
+    are not the ones the applied loads produce.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
+
+    case: Named
+    outline: tuple[tuple[float, float], ...]
+    length_unit: Named
+    force_unit: Named
+    forces: tuple[BodyForce, ...]
+    tolerance: float = DEFAULT_EQUILIBRIUM_TOLERANCE
+
+    @model_validator(mode="after")
+    def _a_body(self) -> Self:
+        if len(self.outline) < 3:
+            raise _refusal(
+                f"the free body for '{self.case}' has an outline of {len(self.outline)} "
+                "points; an outline is a polygon of at least three",
+                subject="outline",
+                source="the item's outline in the plane of the loads",
+            )
+        if not any(force.role is ForceRole.APPLIED for force in self.forces):
+            raise _refusal(
+                f"the free body for '{self.case}' has no applied load; a free body shows the "
+                "loads in and the reactions out",
+                subject="forces",
+                source="the load case's applied loads at their points of application",
+            )
+        names = [force.name for force in self.forces]
+        doubled = sorted({name for name in names if names.count(name) > 1})
+        if doubled:
+            raise _refusal(
+                f"the free body for '{self.case}' names forces {doubled} twice",
+                subject="forces",
+                source="one name per force on the free body",
+            )
+        if not 0 < self.tolerance < 1:
+            raise _refusal(
+                f"the equilibrium tolerance is {self.tolerance}; it is a share of the largest "
+                "applied load, above 0 and below 1",
+                subject="tolerance",
+                source="the share of the largest applied load a residual may be",
+            )
+        return self
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def residual(self) -> tuple[float, float, float]:
+        """ΣFx, ΣFy and ΣM about the origin of the outline's coordinates."""
+        return (
+            sum(force.fx for force in self.forces),
+            sum(force.fy for force in self.forces),
+            sum(force.x * force.fy - force.y * force.fx + force.moment for force in self.forces),
+        )
+
+    def _scales(self) -> tuple[float, float]:
+        largest = max(hypot(f.fx, f.fy) for f in self.forces if f.role is ForceRole.APPLIED)
+        xs = [x for x, _ in self.outline]
+        ys = [y for _, y in self.outline]
+        return largest, largest * hypot(max(xs) - min(xs), max(ys) - min(ys))
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def balanced(self) -> bool:
+        """Whether both residuals are within the tolerance of the largest applied load."""
+        return self.finding() is None
+
+    def finding(self) -> str | None:
+        """The equilibrium finding a margin row carries, or ``None`` when the body balances."""
+        fx, fy, m = self.residual
+        force_scale, moment_scale = self._scales()
+        out = []
+        if hypot(fx, fy) > self.tolerance * force_scale:
+            out.append(f"ΣF = ({fx:.4g}, {fy:.4g}) {self.force_unit}")
+        if abs(m) > self.tolerance * moment_scale:
+            out.append(f"ΣM = {m:.4g} {self.force_unit}·{self.length_unit}")
+        if not out:
+            return None
+        return (
+            f"the free body for '{self.case}' is out of equilibrium: {' and '.join(out)}, "
+            f"beyond {self.tolerance:g} of the largest applied load "
+            f"({force_scale:.4g} {self.force_unit})"
+        )
+
+    def svg(self, *, width_px: int = 480) -> bytes:
+        """The free body as SVG: outline, applied loads, reactions, and the residual.
+
+        Arrows end at their point of application with length in proportion to magnitude;
+        applied loads are drawn solid and reactions dashed, and every arrow is labelled.
+        """
+        from .projection import _INK, _document, _polyline, _text
+
+        if not 160 <= width_px <= 4096:
+            raise _refusal(
+                f"width_px is {width_px}; a free-body picture is 160 to 4,096 pixels wide",
+                subject="width_px",
+                source="a picture width in pixels",
+            )
+        xs = [x for x, _ in self.outline] + [f.x for f in self.forces]
+        ys = [y for _, y in self.outline] + [f.y for f in self.forces]
+        span = max(max(xs) - min(xs), max(ys) - min(ys)) or 1.0
+        largest = max(hypot(f.fx, f.fy) for f in self.forces) or 1.0
+        arrow = 0.35 * span  # the longest arrow, in model units
+        tails = [(f.x - f.fx / largest * arrow, f.y - f.fy / largest * arrow) for f in self.forces]
+        xs += [x for x, _ in tails]
+        ys += [y for _, y in tails]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        margin, text = 40.0, max(9.0, width_px / 48)
+        scale = (width_px - 2 * margin) / max(x1 - x0, y1 - y0, 1e-12)
+        height_px = round((y1 - y0) * scale + 2 * margin + 3 * text * 1.6)
+
+        def at(x: float, y: float) -> tuple[float, float]:
+            return margin + (x - x0) * scale, margin + (y1 - y) * scale
+
+        outline = " ".join(f"{a:.2f},{b:.2f}" for a, b in (at(x, y) for x, y in self.outline))
+        body = [f'<polygon points="{outline}" fill="#e2e8f0" stroke="{_INK}"/>']
+        for force, tail in zip(self.forces, tails, strict=True):
+            head = at(force.x, force.y)
+            start = at(*tail)
+            colour = "#b91c1c" if force.role is ForceRole.APPLIED else "#1d4ed8"
+            dash = "" if force.role is ForceRole.APPLIED else ' stroke-dasharray="6 4"'
+            body.append(
+                f'<path d="{_polyline([start, head])}" fill="none" stroke="{colour}" '
+                f'stroke-width="2"{dash}/>'
+            )
+            length = hypot(head[0] - start[0], head[1] - start[1])
+            if length > 0:
+                ux, uy = (head[0] - start[0]) / length, (head[1] - start[1]) / length
+                barb = 10.0
+                left = (
+                    head[0] - barb * ux - barb * 0.45 * uy,
+                    head[1] - barb * uy + barb * 0.45 * ux,
+                )
+                right = (
+                    head[0] - barb * ux + barb * 0.45 * uy,
+                    head[1] - barb * uy - barb * 0.45 * ux,
+                )
+                body.append(
+                    f'<polygon points="{head[0]:.2f},{head[1]:.2f} {left[0]:.2f},{left[1]:.2f} '
+                    f'{right[0]:.2f},{right[1]:.2f}" fill="{colour}" stroke="{colour}"/>'
+                )
+            magnitude = hypot(force.fx, force.fy)
+            # A label on the right half reads leftward from its arrow, so none runs off the page.
+            right_half = start[0] > width_px / 2
+            body.append(
+                _text(
+                    f"{force.name} {magnitude:.4g} {self.force_unit}",
+                    start[0] - 4 if right_half else start[0] + 4,
+                    start[1] - 4,
+                    text * 0.8,
+                    anchor="end" if right_half else "start",
+                )
+            )
+        fx, fy, m = self.residual
+        verdict = "IN EQUILIBRIUM" if self.balanced else "OUT OF EQUILIBRIUM"
+        base = height_px - 3 * text * 1.6 + text
+        body.append(_text(f"{self.case}: {verdict}", 8, base, text))
+        body.append(
+            _text(f"SUM F: {fx:.4g}, {fy:.4g} {self.force_unit}", 8, base + text * 1.6, text * 0.8)
+        )
+        body.append(
+            _text(f"SUM M: {m:.4g} {self.force_unit} {self.length_unit}", 8,
+                  base + text * 3.2, text * 0.8)
+        )  # fmt: skip
+        label = "".join(c if c.isalnum() or c in " .-_" else " " for c in self.case)
+        return _document(width_px, height_px, f"free body {label}", body)
+
+
 class MarginCheck(StatableModel):
     """One failure mode of one item, its allowables, and every load case that reaches it.
 
@@ -435,6 +646,7 @@ class MarginCheck(StatableModel):
     yield_allowable: Allowable | None = None
     special_factors: tuple[str, ...] = ()
     cases: tuple[LoadCase, ...]
+    free_bodies: tuple[FreeBody, ...] = ()
 
     @model_validator(mode="after")
     def _cases(self) -> Self:
@@ -461,7 +673,24 @@ class MarginCheck(StatableModel):
                 subject="special_factors",
                 source=_CHECK_SOURCE,
             )
+        bodies = [body.case for body in self.free_bodies]
+        stray = sorted(set(bodies) - set(names))
+        if stray or len(set(bodies)) != len(bodies):
+            raise _refusal(
+                f"check '{self.identity}' carries free bodies for {bodies}; each must back one "
+                f"of its own load cases ({names}), once"
+                + (f" — {stray} is not one of them" if stray else ""),
+                subject="free_bodies",
+                source=_CHECK_SOURCE,
+            )
         return self
+
+    def free_body(self, case: str) -> FreeBody | None:
+        """The free body declared for ``case``, if there is one."""
+        for body in self.free_bodies:
+            if body.case == case:
+                return body
+        return None
 
     @property
     def identity(self) -> str:
@@ -525,6 +754,8 @@ class MarginRow(StatableModel):
     cases_evaluated: int = 0
     ties: tuple[str, ...] = ()
     unevaluated: tuple[UnevaluatedCase, ...] = ()
+    free_body: FreeBody | None = None
+    finding: str | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -629,6 +860,7 @@ _COLUMNS = (
     "factor set",
     "factor set source",
     "reason",
+    "free body",
 )
 
 
@@ -670,6 +902,8 @@ def _cells(row: MarginRow) -> tuple[str, ...]:
         row.factor_set,
         row.factor_set_source,
         row.reason or "",
+        row.finding
+        or ("" if row.free_body is None else f"in equilibrium within {row.free_body.tolerance:g}"),
     )
 
 
@@ -843,6 +1077,7 @@ class MarginReport(StatableModel):
                 f"{_md(row.unit)} | {cells[13] or '—'} | {cells[14]}{basis} | {cells[17]} | "
                 f"{_md(special)} | {row.status.value}"
                 + (f": {_md(row.reason)}" if row.reason else "")
+                + (f"; finding: {_md(row.finding)}" if row.finding else "")
                 + " |"
             )
         for test in self.required_tests:
@@ -1070,6 +1305,7 @@ def _row(
     # Ties are kept in the order the cases were declared; the governing one is the first
     # case at the minimum, so the same input always names the same case.
     margin, governing, fs = min(evaluated, key=lambda entry: entry[0])
+    body = check.free_body(governing.case)
     ties = tuple(
         case.case
         for value, case, _ in evaluated
@@ -1088,6 +1324,8 @@ def _row(
         cases_evaluated=len(evaluated),
         ties=ties,
         unevaluated=tuple(unevaluated),
+        free_body=body,
+        finding=body.finding() if body is not None else None,
         **sourced,
         **common,
     )

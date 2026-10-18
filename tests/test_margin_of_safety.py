@@ -17,8 +17,11 @@ from anvilate.margin_of_safety import (
     AllowableBasis,
     AnalysisExclusion,
     BasisRule,
+    BodyForce,
     FactorRow,
     FactorSet,
+    ForceRole,
+    FreeBody,
     LoadCase,
     LoadLevel,
     LoadPath,
@@ -461,3 +464,108 @@ def test_the_docs_page_prints_the_margins_it_argues_from(capsys):
     assert "(yield): MS +0.73 at hard landing" in printed
     for quoted in ("MS +0.03", "+0.15", "reads +0.73", "476 / (400 × 1.0 × 1.15) − 1"):
         assert quoted in page
+
+
+# --- free bodies (calculation-report delta) -------------------------------------------------
+
+
+def _fitting_body(*, bolt_b: float = 6.0) -> FreeBody:
+    """A 100 x 40 fitting: 12 kN down at x = 50, two bolts at x = 10 and x = 90."""
+    return FreeBody(
+        case="LC1",
+        outline=((0.0, 0.0), (100.0, 0.0), (100.0, 40.0), (0.0, 40.0)),
+        length_unit="mm",
+        force_unit="kN",
+        forces=(
+            BodyForce(name="P", role=ForceRole.APPLIED, x=50.0, y=40.0, fx=0.0, fy=-12.0),
+            BodyForce(name="bolt A", role=ForceRole.REACTION, x=10.0, y=0.0, fx=0.0, fy=6.0),
+            BodyForce(name="bolt B", role=ForceRole.REACTION, x=90.0, y=0.0, fx=0.0, fy=bolt_b),
+        ),
+    )
+
+
+def test_a_reviewer_checks_equilibrium_first():
+    body = _fitting_body()
+    assert body.residual == (0.0, 0.0, 0.0) and body.balanced and body.finding() is None
+    report = margin_table([_check(free_bodies=(body,))], factor_set("14-cfr-25"))
+    for row in report.rows:
+        assert row.free_body == body and row.finding is None
+    assert "in equilibrium within 0.01" in report.to_csv()
+
+
+def test_an_unbalanced_free_body_is_a_finding_on_its_row():
+    body = _fitting_body(bolt_b=5.0)
+    # ΣFy = -12 + 6 + 5 = -1; ΣM = 50(-12) + 10(6) + 90(5) = -90 kN·mm
+    fx, fy, m = body.residual
+    assert (fx, fy) == (0.0, -1.0) and m == pytest.approx(-90.0, rel=1e-12)
+    report = margin_table([_check(free_bodies=(body,))], factor_set("14-cfr-25"))
+    for row in report.rows:
+        assert "out of equilibrium" in row.finding and "ΣM = -90" in row.finding
+        assert row.status is CheckStatus.PASS  # a finding, not a verdict change
+    assert "finding: the free body for 'LC1'" in report.section()
+
+
+def test_a_residual_inside_the_tolerance_is_balanced():
+    # 0.1 kN of 12 is 0.83%, inside 1%; the moment 9 kN·mm against 12 x 107.7 = 1,292 is 0.7%
+    assert _fitting_body(bolt_b=5.9).balanced
+    assert not _fitting_body(bolt_b=5.8).balanced
+
+
+def test_only_the_governing_cases_free_body_is_carried():
+    cases = (
+        LoadCase(case="LC1", applied=100.0, level=_LIMIT),
+        LoadCase(case="LC2", applied=150.0, level=_LIMIT),
+    )
+    report = margin_table(
+        [_check(cases=cases, free_bodies=(_fitting_body(bolt_b=5.0),))], factor_set("14-cfr-25")
+    )
+    for row in report.rows:
+        assert row.governing_case == "LC2" and row.free_body is None and row.finding is None
+
+
+def test_a_free_body_backs_one_of_the_checks_own_cases():
+    stray = _fitting_body().model_copy(update={"case": "LC99"})
+    with pytest.raises(ValidationError, match="LC99"):
+        _check(free_bodies=(stray,))
+
+
+def test_a_free_body_needs_an_outline_and_an_applied_load():
+    body = _fitting_body()
+    with pytest.raises(ValidationError, match="outline"):
+        body.model_copy(update={"outline": ((0.0, 0.0), (1.0, 0.0))})
+    with pytest.raises(ValidationError, match="applied"):
+        body.model_copy(update={"forces": body.forces[1:]})
+    with pytest.raises(ValidationError, match="tolerance"):
+        body.model_copy(update={"tolerance": 0.0})
+
+
+@pytest.mark.parametrize("value", [float("nan"), inf])
+def test_a_force_that_is_no_number_is_refused(value):
+    with pytest.raises(ValidationError):
+        BodyForce(name="P", role=ForceRole.APPLIED, x=0.0, y=0.0, fx=value, fy=0.0)
+
+
+def test_the_free_body_renders_and_rasterizes():
+    from anvilate.raster import svg_to_png
+
+    for body in (_fitting_body(), _fitting_body(bolt_b=5.0)):
+        svg = body.svg()
+        root = ElementTree.fromstring(svg)
+        assert root.get("aria-label") == "free body LC1"
+        assert svg.count(b'stroke-dasharray="6 4"') == 2  # the two reactions
+        assert svg_to_png(svg).startswith(b"\x89PNG")
+    with pytest.raises(RefusalError, match="width_px"):
+        _fitting_body().svg(width_px=10)
+
+
+def test_every_label_on_the_free_body_stays_on_the_page():
+    """A label beside a right-hand reaction ran off the page until it read leftward."""
+    import re
+
+    svg = _fitting_body(bolt_b=5.0).svg(width_px=480)
+    root = ElementTree.fromstring(svg)
+    width, height = float(root.get("width")), float(root.get("height"))
+    for path in root.iter("{http://www.w3.org/2000/svg}path"):
+        numbers = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", path.get("d"))]
+        xs, ys = numbers[0::2], numbers[1::2]
+        assert all(0 <= x <= width for x in xs) and all(0 <= y <= height for y in ys)

@@ -423,6 +423,10 @@ margin_of_safety.LoadCase
 margin_of_safety.MarginCheck
 margin_of_safety.AppliedFactor
 margin_of_safety.UnevaluatedCase
+margin_of_safety.ForceRole
+margin_of_safety.BodyForce
+margin_of_safety.FreeBody
+margin_of_safety.DEFAULT_EQUILIBRIUM_TOLERANCE
 margin_of_safety.MarginRow
 margin_of_safety.RequiredTest
 margin_of_safety.SubsystemMinimum
