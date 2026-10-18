@@ -84,6 +84,9 @@ __all__ = [
     "Connection",
     "PlacedJoint",
     "OpenInterface",
+    "MassGrowth",
+    "Limit",
+    "Screening",
     "Product",
     "ProductNode",
     "PartsListLine",
@@ -106,7 +109,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.6.0"] = "1.6.0"
+PRODUCT_VERSION: Literal["1.7.0"] = "1.7.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -538,6 +541,59 @@ def _split(reference: str, subject: str) -> tuple[str, str]:
     return item, name
 
 
+class MassGrowth(StatableModel):
+    """The growth allowance a mass carries by its maturity, as fractions, and their source."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    estimated: float = Field(default=0.0, ge=0, le=1)
+    calculated: float = Field(default=0.0, ge=0, le=1)
+    measured: float = Field(default=0.0, ge=0, le=1)
+    source: Provenance
+
+
+class Limit(StatableModel):
+    """A declared limit on the product as a whole, and where it comes from."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    value: Quantity
+    source: Provenance
+
+
+class Screening(StatableModel):
+    """What the product as a whole is held to.
+
+    ``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on
+    the predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must
+    stay inside the footprint up to; ``min_clearance`` the least gap between any two items
+    that share no connection.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    mass_growth: MassGrowth | None = None
+    max_mass: Limit | None = None
+    min_tilt: Limit | None = None
+    min_clearance: Limit | None = None
+
+    @model_validator(mode="after")
+    def _dimensions(self) -> Screening:
+        stated = (
+            ("max_mass", self.max_mass, "[mass]"),
+            ("min_tilt", self.min_tilt, "[]"),
+            ("min_clearance", self.min_clearance, "[length]"),
+        )
+        for name, limit, dimension in stated:
+            if limit is not None and not (
+                limit.value.has_dimension(dimension) and limit.value.magnitude >= 0
+            ):
+                raise _refuse(f"screening {name} is {limit.value}; it is a non-negative "
+                              f"{'angle' if dimension == '[]' else dimension}",
+                              subject=f"screening.{name}")  # fmt: skip
+        return self
+
+
 class Product(StatableModel):
     """A product document: its definitions, the instances that place them, and the ground.
 
@@ -551,10 +607,11 @@ class Product(StatableModel):
     # 1.1.0 adds a definition's component and demands, 1.2.0 a component's vendor model and
     # drafted state, 1.3.0 interfaces, connections and open interfaces, and 1.4.0 a catalog
     # part's interfaces bound to its features, 1.5.0 a joint on a connection, and 1.6.0 a
-    # reference assembly; an older document reads unchanged.
-    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"] = (
-        PRODUCT_VERSION
-    )
+    # reference assembly, and 1.7.0 what the product as a whole is screened against; an
+    # older document reads unchanged.
+    anvilate_product: Literal[
+        "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"
+    ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
     identity: ItemIdentity | None = None
@@ -565,6 +622,7 @@ class Product(StatableModel):
     layout: Layout | None = None
     variants: tuple[Variant, ...] = Field(default=(), max_length=64)
     connections: tuple[Connection, ...] = Field(default=(), max_length=512)
+    screening: Screening | None = None
     open_interfaces: tuple[OpenInterface, ...] = Field(default=(), max_length=512)
 
     def offers(self) -> dict[str, dict[str, Interface | PartInterface]]:

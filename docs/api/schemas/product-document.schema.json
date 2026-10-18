@@ -667,6 +667,25 @@
       "title": "LayoutParameter",
       "type": "object"
     },
+    "Limit": {
+      "additionalProperties": false,
+      "description": "A declared limit on the product as a whole, and where it comes from.",
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "value",
+        "source"
+      ],
+      "title": "Limit",
+      "type": "object"
+    },
     "LinearPattern": {
       "additionalProperties": false,
       "description": "``count`` instances ``spacing`` apart along one of the parent's axes.",
@@ -702,6 +721,42 @@
         "direction"
       ],
       "title": "LinearPattern",
+      "type": "object"
+    },
+    "MassGrowth": {
+      "additionalProperties": false,
+      "description": "The growth allowance a mass carries by its maturity, as fractions, and their source.",
+      "properties": {
+        "calculated": {
+          "default": 0.0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Calculated",
+          "type": "number"
+        },
+        "estimated": {
+          "default": 0.0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Estimated",
+          "type": "number"
+        },
+        "measured": {
+          "default": 0.0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Measured",
+          "type": "number"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "MassGrowth",
       "type": "object"
     },
     "Mate": {
@@ -1118,6 +1173,58 @@
       "title": "Reference",
       "type": "object"
     },
+    "Screening": {
+      "additionalProperties": false,
+      "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection.",
+      "properties": {
+        "mass_growth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MassGrowth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "max_mass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Limit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "min_clearance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Limit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "min_tilt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Limit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "Screening",
+      "type": "object"
+    },
     "SupplierNumber": {
       "additionalProperties": false,
       "description": "Where to buy it: a supplier and that supplier's part number.",
@@ -1189,13 +1296,13 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.6.0",
+  "$id": "urn:anvilate:schema:product-document:1.7.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.6.0",
+      "default": "1.7.0",
       "enum": [
         "1.0.0",
         "1.1.0",
@@ -1203,7 +1310,8 @@
         "1.3.0",
         "1.4.0",
         "1.5.0",
-        "1.6.0"
+        "1.6.0",
+        "1.7.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -1295,6 +1403,17 @@
       "title": "Open Interfaces",
       "type": "array"
     },
+    "screening": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Screening"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "variants": {
       "default": [],
       "items": {
@@ -1313,5 +1432,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.6.0"
+  "x-anvilate-version": "1.7.0"
 }

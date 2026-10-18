@@ -547,6 +547,9 @@ product.Joint
 product.Connection
 product.PlacedJoint
 product.OpenInterface
+product.MassGrowth
+product.Limit
+product.Screening
 product.Product
 product.ProductNode
 product.PartsListLine
@@ -567,6 +570,14 @@ product.ProductSummary
 product.summarize_product
 product.place_product
 product.write_product_step
+product_screening.MassContribution
+product_screening.NodeMass
+product_screening.MaturityLine
+product_screening.MassRollup
+product_screening.Mobility
+product_screening.ClosestApproach
+product_screening.ProductScreening
+product_screening.product_screening
 profile.Applicability
 profile.SuppliedValue
 profile.Profile

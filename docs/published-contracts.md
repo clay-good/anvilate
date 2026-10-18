@@ -121,6 +121,12 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.7.0: what the product as a whole is screened against
+
+A product gains `screening`: `mass_growth` (the allowance per mass maturity, with its
+source), `max_mass`, `min_tilt` and `min_clearance`, each a value with its source. An older
+product document reads unchanged.
+
 ### Product document 1.6.0: a reference assembly
 
 A definition may be a `reference`: an existing STEP assembly by `file`, with the least

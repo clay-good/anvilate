@@ -146,6 +146,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.product` — a product as a tree of definitions placed as instances: item
   identity with provisional part numbers marked as such, stable instance paths, a parts
   list, and the containment, numbering and mirroring refusals, before any geometry.
+- :mod:`anvilate.product_screening` — checks only a whole product has: mass properties per
+  node with their basis, growth by maturity, tip-over, clearance between items, mobility.
 - :mod:`anvilate.profile` — a cited, versioned bundle of declarations bound in one
   action, refused outside its own applicability and attributed wherever a value appears.
 - :mod:`anvilate.release` — the release package: a gate naming every blocker, the indented
