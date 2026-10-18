@@ -534,6 +534,7 @@ product.SummaryNode
 product.ProductSummary
 product.summarize_product
 product.place_product
+product.write_product_step
 profile.Applicability
 profile.SuppliedValue
 profile.Profile

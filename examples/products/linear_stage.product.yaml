@@ -1,0 +1,237 @@
+# A worked product: a single-axis linear stage. Start here for a linear axis: change
+# rail_length for the stroke, swap the motor and carriage definitions.
+#   anvilate check examples/products/linear_stage.product.yaml
+anvilate_product: 1.0.0
+name: linear-stage
+description: 'A single-axis linear stage: two guide rails on a base, a carriage plate riding them, and
+  a motor at one end'
+layout:
+  parameters:
+  - name: rail_length
+    value:
+      magnitude: 450
+      unit: mm
+    source: stroke of 330 mm plus the 120 mm carriage
+definitions:
+- id: base
+  identity:
+    description: stage base plate
+    source: make
+  placeholder:
+    envelope:
+    - magnitude: 600
+      unit: mm
+    - magnitude: 140
+      unit: mm
+    - magnitude: 15
+      unit: mm
+    mass:
+      magnitude: 9.9
+      unit: kg
+    reason: base plate to be detailed once the frame is chosen
+- id: rail
+  identity:
+    description: linear guide rail, 15 mm
+    source: buy
+  placeholder:
+    envelope:
+    - layout: rail_length
+    - magnitude: 15
+      unit: mm
+    - magnitude: 15
+      unit: mm
+    mass:
+      magnitude: 0.7
+      unit: kg
+    reason: rail not yet chosen from a catalog
+- id: carriage
+  identity:
+    description: carriage plate
+    source: make
+  spec:
+    anvilate_spec: 1.3.0
+    name: motor-mounting-plate
+    description: A mounting plate with holes, a counterbore and a slot.
+    units:
+      value: SI
+      origin: user_stated
+    material:
+      ref: ASTM-A36
+    manufacturing:
+      process: cnc_milling
+    element_type: mounting_plate
+    element_params:
+      name: motor-mounting-plate
+      width:
+        magnitude: 120.0
+        unit: mm
+      length:
+        magnitude: 80.0
+        unit: mm
+      thickness:
+        magnitude: 6.0
+        unit: mm
+      corner_radius:
+        magnitude: 8.0
+        unit: mm
+      holes:
+      - tag: cb
+        x:
+          magnitude: 0.0
+          unit: mm
+        y:
+          magnitude: 0.0
+          unit: mm
+        diameter:
+          magnitude: 6.6
+          unit: mm
+        kind: counterbore
+        counterbore_diameter:
+          magnitude: 11.0
+          unit: mm
+        counterbore_depth:
+          magnitude: 3.0
+          unit: mm
+      hole_patterns:
+      - tag: m6
+        kind: rectangular
+        diameter:
+          magnitude: 6.6
+          unit: mm
+        count_x: 2
+        count_y: 2
+        pitch_x:
+          magnitude: 100.0
+          unit: mm
+        pitch_y:
+          magnitude: 60.0
+          unit: mm
+      slots:
+      - tag: adj
+        x:
+          magnitude: 0.0
+          unit: mm
+        y:
+          magnitude: 25.0
+          unit: mm
+        length:
+          magnitude: 30.0
+          unit: mm
+        width:
+          magnitude: 6.0
+          unit: mm
+    acceptance:
+      tiers:
+      - T1_analytical
+- id: motor
+  identity:
+    description: stepper motor, NEMA 23
+    source: buy
+  placeholder:
+    envelope:
+    - magnitude: 57
+      unit: mm
+    - magnitude: 57
+      unit: mm
+    - magnitude: 76
+      unit: mm
+    mass:
+      magnitude: 1.0
+      unit: kg
+    reason: motor not yet sized for the axis load
+instances:
+- name: base
+  item: base
+- name: rail
+  item: rail
+  pattern:
+    kind: linear
+    count: 2
+    spacing:
+      magnitude: 60
+      unit: mm
+    direction: y
+- name: carriage
+  item: carriage
+- name: motor
+  item: motor
+ground: base
+mates:
+- id: rail-sits
+  kind: face_to_face
+  place:
+    part: rail
+    face: bottom
+  'on':
+    part: base
+    face: top
+- id: rail-left
+  kind: edge_flush
+  place:
+    part: rail
+    face: left
+  'on':
+    part: base
+    face: left
+- id: rail-front
+  kind: edge_flush
+  place:
+    part: rail
+    face: front
+  'on':
+    part: base
+    face: front
+- id: carriage-rides
+  kind: face_to_face
+  place:
+    part: carriage
+    face: bottom
+  'on':
+    part: rail
+    face: top
+- id: carriage-left
+  kind: edge_flush
+  place:
+    part: carriage
+    face: left
+  'on':
+    part: base
+    face: left
+- id: carriage-front
+  kind: edge_flush
+  place:
+    part: carriage
+    face: front
+  'on':
+    part: base
+    face: front
+- id: motor-sits
+  kind: face_to_face
+  place:
+    part: motor
+    face: bottom
+  'on':
+    part: base
+    face: top
+- id: motor-right
+  kind: edge_flush
+  place:
+    part: motor
+    face: right
+  'on':
+    part: base
+    face: right
+- id: motor-front
+  kind: edge_flush
+  place:
+    part: motor
+    face: front
+  'on':
+    part: base
+    face: front
+variants:
+- name: long
+  parameters:
+    rail_length:
+      magnitude: 520
+      unit: mm

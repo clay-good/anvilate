@@ -17,7 +17,7 @@ has not shipped exits 4 naming that gap.
 | `doctor` | no arguments | `--format` | nothing you can change is wrong (a capability this release does not build is listed as not shipped) |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
-| `combine` | a combination document | `--output`, `--picture`, `--exploded`, `--unvalidated`, `--force` | the combination's card passes |
+| `combine` | a combination document, or a product document | `--output`, `--picture`, `--exploded`, `--unvalidated`, `--force` | the combination's or product's card passes |
 | `read` | a CAD file, or a folder | `--against`, `--material`, `--unit` | the file was measured, or the folder listed |
 | `parts` | an element type, or none to list them | none | the catalog, or that element's fields and example, was printed |
 

@@ -504,7 +504,7 @@ _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
     "product.py:assemble<-screen_spec": (
         "the same read as its nested make, which the scan also sees from the outer function"
     ),
-    "product.py:place_product<-screen_spec": (
+    "product.py:_placed_leaves<-screen_spec": (
         "the same read as its nested make, which the scan also sees from the outer function"
     ),
     "mcp.py:_run_fea_validation_task<-screen_spec": "the MCP task reports the card it ran",

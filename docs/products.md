@@ -172,6 +172,27 @@ the product document goes in `combination`, the sub-products in `library`. It re
 summary tree as `product`. One more call with `node: "stage/drive[2]"` returns that node's
 full card.
 
+`anvilate combine stage.product.yaml --output stage.step` places it, prints the same
+summary, and writes one STEP AP242 assembly (`write_product_step` in Python). Each item is
+one named product, its part number and description, placed once per occurrence. The export
+gate judges the whole tree's card, so a product resting on placeholders is written only
+with `--unvalidated` and watermarked so.
+
+## Worked products
+
+Four products ship under [`examples/products/`](../examples/products/), each one placed,
+checked and exported in CI. Copy one and change it rather than compose a tree from nothing.
+
+| Product | What it shows |
+| --- | --- |
+| [`linear_stage`](../examples/products/linear_stage.product.yaml) | A rail pattern whose length a layout parameter drives, a catalog carriage plate, a bought motor, and a `long` variant |
+| [`gear_reducer`](../examples/products/gear_reducer.product.yaml) | Gear stages and an output shaft placed on axis datums; one bought stage placed twice |
+| [`enclosure`](../examples/products/enclosure.product.yaml) | A catalog box and lid, the lid's lip inside the walls, a board on datum planes, a fan on the lid |
+| [`cart_frame`](../examples/products/cart_frame.product.yaml) | A frame on four casters from two patterns, with a catalog deck plate |
+
+Each rests on placeholders for what is bought or not yet detailed, so each is not
+evaluated and exports only marked unvalidated.
+
 ## Rebuilding what changed
 
 Pass one `BuildCache` to successive `place_product(..., cache=cache)` calls. Each item is

@@ -12,6 +12,7 @@ written for you, and each runs with one command from the repository root.
 | [`parts/clevis.spec.yaml`](parts/clevis.spec.yaml) | A drawn part that is also screened once it states its load. | `anvilate check examples/parts/clevis.spec.yaml` |
 | [`base_plate.spec.yaml`](base_plate.spec.yaml) | A part built to a STEP file you can open in your CAD. | `anvilate build examples/base_plate.spec.yaml --output base_plate.step` |
 | [`combinations/`](combinations) | Parts put together by the holes and faces they share, with bolts, and checked where they meet. See the [guide](../docs/combinations.md). | `anvilate combine examples/combinations/bracket_on_plate.combination.yaml --picture bracket.png` |
+| [`products/`](products) | Products: trees of catalog parts, bought items and placeholders, placed by mates, with a layout and variants. See the [guide](../docs/products.md). | `anvilate check examples/products/linear_stage.product.yaml` |
 | [`context/`](context) | A spec whose dimensions cite the drawing they were measured from. | `anvilate read examples/context/plate.dxf` |
 | [`third_party_module/`](third_party_module) | A check of your own, added from one file. See [discipline modules](../docs/discipline-modules.md). | `anvilate check examples/third_party_module/hanger_rod.spec.yaml --module examples/third_party_module/hanger_rod.py` |
 

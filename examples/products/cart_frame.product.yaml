@@ -1,0 +1,215 @@
+# A worked product: a welded frame on four casters with a catalog deck plate.
+#   anvilate check examples/products/cart_frame.product.yaml
+anvilate_product: 1.0.0
+name: cart-frame
+description: 'A welded frame on four casters with a deck plate: the frame and casters as bought or not
+  yet detailed, the deck a catalog plate'
+definitions:
+- id: frame
+  identity:
+    description: welded frame
+    source: make
+  placeholder:
+    envelope:
+    - magnitude: 600
+      unit: mm
+    - magnitude: 400
+      unit: mm
+    - magnitude: 40
+      unit: mm
+    mass:
+      magnitude: 12.0
+      unit: kg
+    reason: weldment not yet detailed; its members are sized separately
+- id: caster
+  identity:
+    description: swivel caster, 75 mm
+    source: buy
+  placeholder:
+    envelope:
+    - magnitude: 60
+      unit: mm
+    - magnitude: 60
+      unit: mm
+    - magnitude: 100
+      unit: mm
+    mass:
+      magnitude: 0.6
+      unit: kg
+    reason: caster not yet chosen
+- id: deck
+  identity:
+    description: deck plate
+    source: make
+  spec:
+    anvilate_spec: 1.3.0
+    name: motor-mounting-plate
+    description: A mounting plate with holes, a counterbore and a slot.
+    units:
+      value: SI
+      origin: user_stated
+    material:
+      ref: ASTM-A36
+    manufacturing:
+      process: cnc_milling
+    element_type: mounting_plate
+    element_params:
+      name: motor-mounting-plate
+      width:
+        magnitude: 120.0
+        unit: mm
+      length:
+        magnitude: 80.0
+        unit: mm
+      thickness:
+        magnitude: 6.0
+        unit: mm
+      corner_radius:
+        magnitude: 8.0
+        unit: mm
+      holes:
+      - tag: cb
+        x:
+          magnitude: 0.0
+          unit: mm
+        y:
+          magnitude: 0.0
+          unit: mm
+        diameter:
+          magnitude: 6.6
+          unit: mm
+        kind: counterbore
+        counterbore_diameter:
+          magnitude: 11.0
+          unit: mm
+        counterbore_depth:
+          magnitude: 3.0
+          unit: mm
+      hole_patterns:
+      - tag: m6
+        kind: rectangular
+        diameter:
+          magnitude: 6.6
+          unit: mm
+        count_x: 2
+        count_y: 2
+        pitch_x:
+          magnitude: 100.0
+          unit: mm
+        pitch_y:
+          magnitude: 60.0
+          unit: mm
+      slots:
+      - tag: adj
+        x:
+          magnitude: 0.0
+          unit: mm
+        y:
+          magnitude: 25.0
+          unit: mm
+        length:
+          magnitude: 30.0
+          unit: mm
+        width:
+          magnitude: 6.0
+          unit: mm
+    acceptance:
+      tiers:
+      - T1_analytical
+instances:
+- name: frame
+  item: frame
+- name: front_caster
+  item: caster
+  pattern:
+    kind: linear
+    count: 2
+    spacing:
+      magnitude: 540
+      unit: mm
+    direction: x
+- name: back_caster
+  item: caster
+  pattern:
+    kind: linear
+    count: 2
+    spacing:
+      magnitude: 540
+      unit: mm
+    direction: x
+- name: deck
+  item: deck
+ground: frame
+mates:
+- id: front-under
+  kind: face_to_face
+  place:
+    part: front_caster
+    face: top
+  'on':
+    part: frame
+    face: bottom
+- id: front-left
+  kind: edge_flush
+  place:
+    part: front_caster
+    face: left
+  'on':
+    part: frame
+    face: left
+- id: front-front
+  kind: edge_flush
+  place:
+    part: front_caster
+    face: front
+  'on':
+    part: frame
+    face: front
+- id: back-under
+  kind: face_to_face
+  place:
+    part: back_caster
+    face: top
+  'on':
+    part: frame
+    face: bottom
+- id: back-left
+  kind: edge_flush
+  place:
+    part: back_caster
+    face: left
+  'on':
+    part: frame
+    face: left
+- id: back-back
+  kind: edge_flush
+  place:
+    part: back_caster
+    face: back
+  'on':
+    part: frame
+    face: back
+- id: deck-sits
+  kind: face_to_face
+  place:
+    part: deck
+    face: bottom
+  'on':
+    part: frame
+    face: top
+- id: deck-left
+  kind: edge_flush
+  place:
+    part: deck
+    face: left
+  'on':
+    part: frame
+    face: left
+- id: deck-front
+  kind: edge_flush
+  place:
+    part: deck
+    face: front
+  'on':
+    part: frame
+    face: front

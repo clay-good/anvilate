@@ -2056,6 +2056,36 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
     watermark, as a single part's file does. The file is read back before it is released:
     it must hold one assembly with a component for every body.
     """
+    bodies = [
+        (f"part:{part.id}", part.id, part.built.shape, _location(part.rotation, part.translation))
+        for part in built.parts
+    ]
+    bodies += [
+        (f"{body.kind}:{body.designation}", f"{body.designation} (envelope)", body.solid,
+         _location(body.rotation, body.translation))
+        for body in built.hardware
+    ]  # fmt: skip
+    return _write_assembly(
+        built.name,
+        bodies,
+        path,
+        authorization=authorization,
+        description="Anvilate combination: an assembly of catalog parts and fastener envelopes",
+    )
+
+
+def _write_assembly(
+    name: str,
+    bodies: Sequence[tuple[str, str, Any, Any]],
+    path: Any,
+    *,
+    authorization: Any,
+    description: str,
+) -> Any:
+    """Write ``bodies`` — (key, product name, solid, location) — as one named STEP assembly.
+
+    Bodies sharing a key are one product placed once per body.
+    """
     import re
     from pathlib import Path
 
@@ -2101,12 +2131,12 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
         XCAFDoc_DocumentTool.SetLengthUnit_s(document, 0.001)
         tool = XCAFDoc_DocumentTool.ShapeTool_s(document.Main())
         assembly = tool.NewShape()
-        named(assembly, built.name)
+        named(assembly, name)
         products: list[str] = []
         prototypes: dict[str, Any] = {}
         instances = 0
 
-        def component(key: str, product: str, solid: Any, rotation: Matrix, shift: Vec) -> None:
+        def component(key: str, product: str, solid: Any, where: Any) -> None:
             nonlocal instances
             if key not in prototypes:
                 # A primitive built off its own origin (a base plate is a box standing on
@@ -2126,21 +2156,13 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
             placed = tool.AddComponent(
                 assembly,
                 prototypes[key],
-                TopLoc_Location(_location(rotation, shift).wrapped.Transformation()),
+                TopLoc_Location(where.wrapped.Transformation()),
             )
             instances += 1
             named(placed, f"{product} {instances}")
 
-        for part in built.parts:
-            component(f"part:{part.id}", part.id, part.built.shape, part.rotation, part.translation)
-        for body in built.hardware:
-            component(
-                f"{body.kind}:{body.designation}",
-                f"{body.designation} (envelope)",
-                body.solid,
-                body.rotation,
-                body.translation,
-            )
+        for key, product, solid, where in bodies:
+            component(key, product, solid, where)
         tool.UpdateAssemblies()
 
         STEPCAFControl_Controller.Init_s()
@@ -2172,10 +2194,10 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
         # each kind of fastener. A product under the kernel's placeholder name is a body
         # that would open in CAD as "SOLID".
         written = re.findall(r"PRODUCT\('((?:[^']|'')*)'", text)
-        expected = [geometry._step_string(name) for name in (built.name, *products)]
+        expected = [geometry._step_string(text) for text in (name, *products)]
         descriptions = [
             "Open CASCADE Model",
-            "Anvilate combination: an assembly of catalog parts and fastener envelopes",
+            description,
             *(f"{key}={value}" for key, value in authorization.metadata()),
         ]
         header = (
@@ -2184,7 +2206,7 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
             + "),'2;1');"
         )
         text, described = re.subn(r"FILE_DESCRIPTION\(.*?\);", header, text, count=1)
-        filename = f"FILE_NAME('{geometry._step_string(built.name)}','2000-01-01T00:00:00',"
+        filename = f"FILE_NAME('{geometry._step_string(name)}','2000-01-01T00:00:00',"
         text, filed = re.subn(r"FILE_NAME\('[^']*','[^']*',", lambda _m: filename, text, count=1)
         if written != expected or described != 1 or filed != 1:
             raise _refuse(

@@ -1,0 +1,210 @@
+# A worked product: a two-stage gear reducer laid out on axes the layout fixes. Move
+# output_x to move the output shaft; the gear stages are bought modules.
+#   anvilate check examples/products/gear_reducer.product.yaml
+anvilate_product: 1.0.0
+name: gear-reducer
+description: 'A two-stage gear reducer laid out on a base: a motor, two gear stages and an output shaft
+  on axes the layout fixes'
+layout:
+  parameters:
+  - name: output_x
+    value:
+      magnitude: 100
+      unit: mm
+    source: output shaft position the driven machine sets
+  datums:
+  - name: input_axis
+    kind: axis
+    direction: z
+    at:
+    - magnitude: -100
+      unit: mm
+    - magnitude: 0
+      unit: mm
+    - magnitude: 0
+      unit: mm
+  - name: output_axis
+    kind: axis
+    direction: z
+    at:
+    - layout: output_x
+    - magnitude: 0
+      unit: mm
+    - magnitude: 0
+      unit: mm
+definitions:
+- id: base
+  identity:
+    description: reducer base plate
+    source: make
+  placeholder:
+    envelope:
+    - magnitude: 360
+      unit: mm
+    - magnitude: 160
+      unit: mm
+    - magnitude: 12
+      unit: mm
+    mass:
+      magnitude: 5.4
+      unit: kg
+    reason: base to be detailed once the housing is drawn
+- id: stage
+  identity:
+    description: gear stage, 2:1
+    source: buy
+  placeholder:
+    envelope:
+    - magnitude: 60
+      unit: mm
+    - magnitude: 60
+      unit: mm
+    - magnitude: 40
+      unit: mm
+    mass:
+      magnitude: 1.2
+      unit: kg
+    reason: gear stage bought as a module, not yet chosen
+- id: shaft
+  identity:
+    description: output shaft
+    source: make
+  spec:
+    anvilate_spec: 1.3.0
+    name: drive-shaft
+    description: "A three-step shaft with a keyway, screened under 40 N\xB7m."
+    units:
+      value: SI
+      origin: user_stated
+    material:
+      ref: ASTM-A36
+    manufacturing:
+      process: cnc_turning
+    element_type: stepped_shaft
+    element_params:
+      name: drive-shaft
+      steps:
+      - diameter:
+          magnitude: 20.0
+          unit: mm
+        length:
+          magnitude: 40.0
+          unit: mm
+      - diameter:
+          magnitude: 30.0
+          unit: mm
+        length:
+          magnitude: 60.0
+          unit: mm
+      - diameter:
+          magnitude: 25.0
+          unit: mm
+        length:
+          magnitude: 30.0
+          unit: mm
+      keyways:
+      - step: 1
+        width:
+          magnitude: 6.0
+          unit: mm
+        depth:
+          magnitude: 3.5
+          unit: mm
+        length:
+          magnitude: 25.0
+          unit: mm
+        offset:
+          magnitude: 5.0
+          unit: mm
+      end_chamfer:
+        magnitude: 1.0
+        unit: mm
+      torque:
+        magnitude: 40.0
+        unit: N*m
+      shoulder_stress_concentration: 1.6
+      allowable_shear:
+        magnitude: 145.0
+        unit: MPa
+      bending_moment:
+        magnitude: 30.0
+        unit: N*m
+      shoulder_bending_stress_concentration: 1.9
+      allowable_bending:
+        magnitude: 250.0
+        unit: MPa
+    acceptance:
+      tiers:
+      - T1_analytical
+instances:
+- name: base
+  item: base
+- name: input
+  item: stage
+- name: second
+  item: stage
+- name: output
+  item: shaft
+ground: base
+mates:
+- id: input-axis
+  kind: shaft_in_bore
+  place:
+    part: input
+    axis: z
+  'on':
+    part: input_axis
+    axis: z
+  rotation_deg: 0.0
+- id: input-sits
+  kind: face_to_face
+  place:
+    part: input
+    face: bottom
+  'on':
+    part: base
+    face: top
+- id: second-sits
+  kind: face_to_face
+  place:
+    part: second
+    face: bottom
+  'on':
+    part: base
+    face: top
+- id: second-beside
+  kind: face_to_face
+  place:
+    part: second
+    face: left
+  'on':
+    part: input
+    face: right
+  offset:
+    magnitude: 10
+    unit: mm
+- id: second-front
+  kind: edge_flush
+  place:
+    part: second
+    face: front
+  'on':
+    part: input
+    face: front
+- id: output-axis
+  kind: shaft_in_bore
+  place:
+    part: output
+    axis: z
+  'on':
+    part: output_axis
+    axis: z
+  rotation_deg: 0.0
+- id: output-sits
+  kind: face_to_face
+  place:
+    part: output
+    face: bottom
+  'on':
+    part: base
+    face: top

@@ -1,0 +1,280 @@
+# A worked product: an electronics enclosure with a board, a lid and a fan. The board
+# sits on datum planes at board_height; the lid's lip drops inside the walls.
+#   anvilate check examples/products/enclosure.product.yaml
+anvilate_product: 1.0.0
+name: control-enclosure
+description: 'An electronics enclosure: the box, a board on standoff height inside it, the lid with its
+  lip inside the walls, and a fan on the lid'
+layout:
+  parameters:
+  - name: board_height
+    value:
+      magnitude: 10
+      unit: mm
+    source: standoff height above the floor
+  datums:
+  - name: board_plane
+    kind: plane
+    direction: z
+    at:
+    - magnitude: 0
+      unit: mm
+    - magnitude: 0
+      unit: mm
+    - layout: board_height
+  - name: board_left
+    kind: plane
+    direction: x
+    at:
+    - magnitude: -50
+      unit: mm
+    - magnitude: 0
+      unit: mm
+    - magnitude: 0
+      unit: mm
+  - name: board_front
+    kind: plane
+    direction: y
+    at:
+    - magnitude: 0
+      unit: mm
+    - magnitude: -30
+      unit: mm
+    - magnitude: 0
+      unit: mm
+definitions:
+- id: box
+  identity:
+    description: control box
+    source: make
+  spec:
+    anvilate_spec: 1.3.0
+    name: control-box
+    description: An open box with 3 mm walls and four floor mounting holes.
+    units:
+      value: SI
+      origin: user_stated
+    material:
+      ref: ASTM-A36
+    manufacturing:
+      process: cnc_milling
+    element_type: enclosure
+    element_params:
+      name: control-box
+      width:
+        magnitude: 120.0
+        unit: mm
+      length:
+        magnitude: 80.0
+        unit: mm
+      height:
+        magnitude: 40.0
+        unit: mm
+      wall:
+        magnitude: 3.0
+        unit: mm
+      corner_radius:
+        magnitude: 6.0
+        unit: mm
+      floor_patterns:
+      - tag: mnt
+        kind: rectangular
+        diameter:
+          magnitude: 4.5
+          unit: mm
+        count_x: 2
+        count_y: 2
+        pitch_x:
+          magnitude: 90.0
+          unit: mm
+        pitch_y:
+          magnitude: 50.0
+          unit: mm
+    acceptance:
+      tiers:
+      - T1_analytical
+- id: lid
+  identity:
+    description: control box lid
+    source: make
+  spec:
+    anvilate_spec: 1.3.0
+    name: control-box-lid
+    description: A control-box lid with a lip, four screws and a gland hole.
+    units:
+      value: SI
+      origin: user_stated
+    material:
+      ref: ASTM-A36
+    manufacturing:
+      process: cnc_milling
+    element_type: enclosure_lid
+    element_params:
+      name: control-box-lid
+      width:
+        magnitude: 120.0
+        unit: mm
+      length:
+        magnitude: 80.0
+        unit: mm
+      thickness:
+        magnitude: 3.0
+        unit: mm
+      corner_radius:
+        magnitude: 6.0
+        unit: mm
+      lip_inset:
+        magnitude: 3.2
+        unit: mm
+      lip_wall:
+        magnitude: 2.0
+        unit: mm
+      lip_height:
+        magnitude: 4.0
+        unit: mm
+      holes:
+      - tag: gland
+        x:
+          magnitude: 0.0
+          unit: mm
+        y:
+          magnitude: 0.0
+          unit: mm
+        diameter:
+          magnitude: 12.5
+          unit: mm
+      hole_patterns:
+      - tag: scr
+        kind: rectangular
+        diameter:
+          magnitude: 3.4
+          unit: mm
+        count_x: 2
+        count_y: 2
+        pitch_x:
+          magnitude: 90.0
+          unit: mm
+        pitch_y:
+          magnitude: 50.0
+          unit: mm
+    acceptance:
+      tiers:
+      - T1_analytical
+- id: board
+  identity:
+    description: controller board
+    source: buy
+  placeholder:
+    envelope:
+    - magnitude: 100
+      unit: mm
+    - magnitude: 60
+      unit: mm
+    - magnitude: 1.6
+      unit: mm
+    mass:
+      magnitude: 0.05
+      unit: kg
+    reason: board layout not yet released
+- id: fan
+  identity:
+    description: fan, 40 mm
+    source: buy
+  placeholder:
+    envelope:
+    - magnitude: 40
+      unit: mm
+    - magnitude: 40
+      unit: mm
+    - magnitude: 10
+      unit: mm
+    mass:
+      magnitude: 0.03
+      unit: kg
+    reason: fan not yet chosen
+instances:
+- name: box
+  item: box
+- name: board
+  item: board
+- name: lid
+  item: lid
+- name: fan
+  item: fan
+ground: box
+mates:
+- id: board-sits
+  kind: face_to_face
+  place:
+    part: board
+    face: bottom
+  'on':
+    part: board_plane
+    face: top
+- id: board-left
+  kind: edge_flush
+  place:
+    part: board
+    face: left
+  'on':
+    part: board_left
+    face: left
+- id: board-front
+  kind: edge_flush
+  place:
+    part: board
+    face: front
+  'on':
+    part: board_front
+    face: front
+- id: lid-on
+  kind: face_to_face
+  place:
+    part: lid
+    face: bottom
+  'on':
+    part: box
+    face: top
+  offset:
+    magnitude: -4
+    unit: mm
+- id: lid-left
+  kind: edge_flush
+  place:
+    part: lid
+    face: left
+  'on':
+    part: box
+    face: left
+- id: lid-front
+  kind: edge_flush
+  place:
+    part: lid
+    face: front
+  'on':
+    part: box
+    face: front
+- id: fan-sits
+  kind: face_to_face
+  place:
+    part: fan
+    face: bottom
+  'on':
+    part: lid
+    face: top
+- id: fan-right
+  kind: edge_flush
+  place:
+    part: fan
+    face: right
+  'on':
+    part: lid
+    face: right
+- id: fan-back
+  kind: edge_flush
+  place:
+    part: fan
+    face: back
+  'on':
+    part: lid
+    face: back

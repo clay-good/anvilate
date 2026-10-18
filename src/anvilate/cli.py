@@ -1142,6 +1142,8 @@ def _combine(args: argparse.Namespace, *, out, err) -> int:
     if not isinstance(document, dict):
         print(f"anvilate combine: {args.combination}: not a combination document", file=err)
         return EXIT_BAD_REQUEST
+    if "anvilate_product" in document:
+        return _combine_product(document, args, out=out, err=err)
     try:
         built = build_combination(parse_combination(document))
     except GeometryUnavailable as failure:
@@ -3671,6 +3673,73 @@ def _product_document(paths: list[Path]) -> tuple[Path, dict[str, Any]] | None:
     return paths[0], document
 
 
+def _product_library(path: Path) -> dict[str, Any]:
+    """The products beside ``path``, the ``*.product.yaml`` files, by name."""
+    from .product import parse_product
+
+    library = {}
+    for sibling in sorted(path.parent.glob("*.product.y*ml")):
+        if sibling.resolve() != path.resolve():
+            try:
+                text = sibling.read_text(encoding="utf-8")
+            except UnicodeDecodeError as failure:
+                # Read as a failed read, which every caller reports naming the file.
+                raise OSError(f"{sibling} is not UTF-8 text") from failure
+            sub = parse_product(parse_yaml(text))
+            library[sub.name] = sub
+    return library
+
+
+def _combine_product(document: dict[str, Any], args: argparse.Namespace, *, out, err) -> int:
+    """``combine`` on a product document: place it, print its summary, write its assembly."""
+    import yaml
+
+    from .export.gate import ExportRefused, authorize_export
+    from .geometry import GeometryUnavailable
+    from .product import (
+        ProductError,
+        parse_product,
+        place_product,
+        product_tree,
+        summarize_product,
+        write_product_step,
+    )
+
+    if args.picture is not None:
+        print("anvilate combine: --picture draws a combination; a product is not drawn yet",
+              file=err)  # fmt: skip
+        return EXIT_BAD_REQUEST
+    try:
+        product = parse_product(document)
+        library = _product_library(args.combination)
+        placed = place_product(product, library=library)
+        summary = summarize_product(
+            placed,
+            product_tree(product, library=library),
+            more=f"any node's full card: anvilate check {args.combination} --node PATH",
+        )
+    except GeometryUnavailable as failure:
+        print(f"anvilate combine: {failure}", file=err)
+        return EXIT_UNBUILT
+    except (ProductError, yaml.YAMLError, OSError, UnicodeDecodeError) as refused:
+        print(f"anvilate combine: {args.combination}: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    print(summary, file=out)
+    if args.output is not None:
+        try:
+            authorization = authorize_export(placed.card.flattened(), override=args.unvalidated)
+        except ExportRefused as refused:
+            print(f"anvilate combine: {refused.unmet}. Pass --unvalidated to write the assembly "
+                  "marked unvalidated", file=err)  # fmt: skip
+            return EXIT_CODES[summary.status]
+        except ValueError as failure:
+            print(f"anvilate combine: {failure}. Remove --unvalidated.", file=err)
+            return EXIT_BAD_REQUEST
+        write_product_step(product, args.output, authorization=authorization, library=library)
+        print(f"wrote {args.output} ({authorization.status})", file=out)
+    return EXIT_CODES[summary.status]
+
+
 def _check_product(
     found: tuple[Path, dict[str, Any]], args: argparse.Namespace, *, out, err
 ) -> int:
@@ -3691,12 +3760,7 @@ def _check_product(
     path, document = found
     try:
         product = parse_product(document)
-        library = {}
-        for sibling in sorted(path.parent.glob("*.product.y*ml")):
-            if sibling.resolve() == path.resolve():
-                continue
-            sub = parse_product(parse_yaml(sibling.read_text(encoding="utf-8")))
-            library[sub.name] = sub
+        library = _product_library(path)
         placed = place_product(product, library=library)
         tree = product_tree(product, library=library)
     except (ProductError, yaml.YAMLError, OSError, UnicodeDecodeError) as refused:
@@ -3954,6 +4018,13 @@ def _resolve(paths: list[Path], *, err, command: str = "check") -> tuple[list[Pa
                     document = None
                 if isinstance(document, dict) and _is_a_spec(document):
                     found.append(candidate)
+                elif isinstance(document, dict) and "anvilate_product" in document:
+                    # A product is a tree of items; checked on its own, it prints its tree.
+                    print(
+                        f"anvilate {command}: {candidate}: a product document; check it on "
+                        "its own with `anvilate check` and build it with `anvilate combine`",
+                        file=err,
+                    )
                 elif isinstance(document, dict) and "anvilate_combination" in document:
                     # A combination is several specs and the mates between them. It is
                     # not one of the specs this command screens, and it is not a stray file.

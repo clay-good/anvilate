@@ -86,6 +86,7 @@ __all__ = [
     "ProductSummary",
     "summarize_product",
     "place_product",
+    "write_product_step",
 ]
 
 PRODUCT_VERSION = "1.0.0"
@@ -852,6 +853,12 @@ class NodeCard(StatableModel):
         own = tuple((self.path, e) for e in self.entries if e.status is not CheckStatus.PASS)
         return own + tuple(f for child in self.children for f in child.findings())
 
+    def flattened(self) -> Scorecard:
+        """Every entry at or below this node as one card, for the export gate to judge."""
+        return Scorecard(entries=self.entries + tuple(
+            entry for child in self.children for entry in child.flattened().entries
+        ))  # fmt: skip
+
     def find(self, path: str) -> NodeCard:
         """The card of the node at ``path``, at or below this one."""
         if path == self.path:
@@ -1061,15 +1068,22 @@ class _Leaf:
         com: Any,
         assumed: bool,
         entries: tuple[ScorecardEntry, ...],
+        key: str = "",
+        built: Any = None,
+        where: Any = None,
     ) -> None:
         self.path, self.shape, self.placeholder, self.mass = path, shape, placeholder, mass
         # The centre of mass as a vertex, moved with the shape; ``assumed`` when it is a
         # placeholder's envelope centre rather than a declared centre of mass.
         self.com, self.assumed, self.entries = com, assumed, entries
+        # For export: the definition's content key, its shape as built, and every move
+        # applied to it since, so a repeated item is one STEP product placed many times.
+        self.key, self.built, self.where = key, built if built is not None else shape, where
 
     def moved(self, path: str, where: Any) -> _Leaf:
         return _Leaf(path, self.shape.moved(where), self.placeholder, self.mass,
-                     self.com.moved(where), self.assumed, self.entries)  # fmt: skip
+                     self.com.moved(where), self.assumed, self.entries, self.key, self.built,
+                     where if self.where is None else where * self.where)  # fmt: skip
 
 
 class _Assembly:
@@ -1099,23 +1113,11 @@ class BuildCache:
         return f"BuildCache({len(self._store)} built items)"
 
 
-def place_product(
-    product: Product,
-    *,
-    library: Mapping[str, Product] | None = None,
-    cache: BuildCache | None = None,
-) -> PlacedProduct:
-    """Place every instance through its mates, then check interference and roll up mass.
-
-    The ground stays at the origin. Every other instance — a pattern's first member, named
-    by the instance's name — must be placed by at least one mate onto an instance listed
-    before it; the rest of a pattern follows its first member. A mate that leaves an
-    instance free or contradicts another is refused by the combination's own rules.
-
-    With a ``cache``, an item built before from the same content is reused; the placed
-    product's ``rebuilt`` and ``reused`` count the distinct items each way.
-    """
-    from .combination import _IDENTITY, PlacedPart, _interference, _place
+def _placed_leaves(
+    product: Product, library: Mapping[str, Product] | None, cache: BuildCache | None
+) -> tuple[list[_Leaf], int, int]:
+    """Every leaf body placed where its mates put it, and the items rebuilt and reused."""
+    from .combination import _IDENTITY, PlacedPart, _place
 
     if cache is not None and not isinstance(cache, BuildCache):
         raise _refuse(f"cache is a {type(cache).__name__}; pass a BuildCache or none",
@@ -1222,7 +1224,7 @@ def place_product(
                     reused.add(key)
                 built, spec, leaf = store[key]
                 inner = [_Leaf(path, leaf.shape, leaf.placeholder, leaf.mass, leaf.com,
-                               leaf.assumed, leaf.entries)]  # fmt: skip
+                               leaf.assumed, leaf.entries, key)]  # fmt: skip
             else:
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
@@ -1254,8 +1256,28 @@ def place_product(
         shape = Compound([leaf.shape for leaf in leaves])
         return _Assembly(shape, leaves)
 
-    assembly = assemble(product, product.name)
-    leaves = assembly.leaves
+    return assemble(product, product.name).leaves, len(rebuilt), len(reused)
+
+
+def place_product(
+    product: Product,
+    *,
+    library: Mapping[str, Product] | None = None,
+    cache: BuildCache | None = None,
+) -> PlacedProduct:
+    """Place every instance through its mates, then check interference and roll up mass.
+
+    The ground stays at the origin. Every other instance — a pattern's first member, named
+    by the instance's name — must be placed by at least one mate onto an instance listed
+    before it; the rest of a pattern follows its first member. A mate that leaves an
+    instance free or contradicts another is refused by the combination's own rules.
+
+    With a ``cache``, an item built before from the same content is reused; the placed
+    product's ``rebuilt`` and ``reused`` count the distinct items each way.
+    """
+    from .combination import _interference
+
+    leaves, rebuilt, reused = _placed_leaves(product, library, cache)
     interference = _provisional(_interference([(leaf.path, leaf.shape) for leaf in leaves]), leaves)
     holders = [leaf.path for leaf in leaves if leaf.placeholder]
     weighed = [(leaf.mass, _corner(leaf.com.center())) for leaf in leaves if leaf.mass is not None]
@@ -1285,8 +1307,8 @@ def place_product(
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
         unused_parameters=product.layout.unused if product.layout is not None else (),
         card=_card(product.name, leaves),
-        rebuilt=len(rebuilt),
-        reused=len(reused),
+        rebuilt=rebuilt,
+        reused=reused,
     )
 
 
@@ -1353,6 +1375,43 @@ def _card(path: str, leaves: list[_Leaf]) -> NodeCard:
         kind="product",
         entries=(interference,),
         children=tuple(_card(child, group) for child, group in groups.items()),
+    )
+
+
+def write_product_step(
+    product: Product,
+    path: Any,
+    *,
+    authorization: Any,
+    library: Mapping[str, Product] | None = None,
+    cache: BuildCache | None = None,
+) -> Any:
+    """Write the placed product as one STEP AP242 assembly, each item one named product.
+
+    Every occurrence of an item is a component placed where its mates put it, so a drive
+    used twice is one product placed twice. Each product is named by its part number and
+    description, provisional numbers included. ``authorization`` is the export gate's
+    verdict on the product's card (:meth:`NodeCard.flattened`); a product resting on
+    placeholders is not evaluated, so it is written only watermarked unvalidated.
+    """
+    from build123d import Location
+
+    from .combination import _write_assembly
+
+    tree = product_tree(product, library=library)
+    nodes = {node.path: node for node in tree.walk()}
+    leaves, _rebuilt, _reused = _placed_leaves(product, library, cache)
+    bodies = []
+    for leaf in leaves:
+        node = nodes[leaf.path]
+        bodies.append((leaf.key, f"{node.part_number} {node.description}", leaf.built,
+                       leaf.where if leaf.where is not None else Location()))  # fmt: skip
+    return _write_assembly(
+        product.name,
+        bodies,
+        path,
+        authorization=authorization,
+        description="Anvilate product: an assembly of its items, each placed by its mates",
     )
 
 

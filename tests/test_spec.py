@@ -1653,11 +1653,12 @@ def test_the_depth_bound_is_far_above_the_documents_this_repository_ships():
         return level
 
     root = Path(__file__).resolve().parent.parent
-    # A combination is several specs and the mates between them, not one of these.
+    # A combination is several specs and the mates between them, and a product a tree of
+    # them; neither is one of these.
     specs = sorted(
         path
         for path in (root / "examples").rglob("*.yaml")
-        if not path.name.endswith(".combination.yaml")
+        if not path.name.endswith((".combination.yaml", ".product.yaml"))
     )
     assert len(specs) >= 2, f"only {len(specs)} shipped specs were measured"
     deepest = max(_depth(load_spec_yaml(s.read_text()).model_dump(mode="json")) for s in specs)
@@ -1946,6 +1947,11 @@ def test_no_yaml_document_this_package_ships_is_misread_by_the_strict_loader():
             # A combination holds a spec for each part; each is read by the same loader.
             for part in yaml.load(text, Loader=_StrictSpecLoader)["parts"]:
                 load_spec_yaml(yaml.safe_dump(part["spec"]))
+        elif path.name.endswith(".product.yaml"):
+            # A product holds a spec for each catalog item; each is read by the same loader.
+            for definition in yaml.load(text, Loader=_StrictSpecLoader)["definitions"]:
+                if "spec" in definition:
+                    load_spec_yaml(yaml.safe_dump(definition["spec"]))
         else:
             load_spec_yaml(text)
 
