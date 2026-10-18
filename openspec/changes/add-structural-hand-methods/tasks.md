@@ -20,7 +20,7 @@ anchored to a worked example from a public-domain source, with a runnable exampl
 
 - [x] 3.1 ABD matrix, ply stresses and strains, first-ply failure (max stress, max strain,
       Tsai-Wu), with strength basis
-- [ ] 3.2 Sandwich: wrinkling, dimpling, core shear, insert pull-out
+- [x] 3.2 Sandwich: wrinkling, dimpling, core shear, insert pull-out
 
 ## 4. Dynamics and fracture
 

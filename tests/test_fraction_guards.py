@@ -1755,8 +1755,9 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # two plasticity functions take a RambergOsgood curve, and tests/test_plasticity.py
     # refuses a NaN and an infinite slenderness. 97 -> 98: fastener_group_loads takes a
     # sequence of fasteners, and tests/test_fastener_group.py refuses a NaN and an
-    # infinite load and a NaN allowable.
-    assert len(unbuildable) <= 98, (
+    # infinite load and a NaN allowable. 98 -> 99: sandwich_local_modes takes a panel,
+    # and tests/test_sandwich.py refuses a NaN cell size and a zero facing thickness.
+    assert len(unbuildable) <= 99, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

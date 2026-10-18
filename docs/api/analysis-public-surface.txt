@@ -172,6 +172,11 @@ fastener_group.GroupFastener
 fastener_group.FastenerLoad
 fastener_group.FastenerGroupResult
 fastener_group.fastener_group_loads
+sandwich.CoreKind
+sandwich.SandwichPanel
+sandwich.SandwichMode
+sandwich.SandwichScreen
+sandwich.sandwich_local_modes
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors

@@ -108,6 +108,7 @@ SAE
 TMS
 
 # --- Handbooks and texts
+NASA CR-1457
 NASA RP-1351
 NASA TM X-73305
 NASA TM X-73306

@@ -9547,3 +9547,15 @@ def test_eccentric_bolt_pattern_example():
                                             abs=1e-3)  # fmt: skip
     assert d["body_index"] < 1 < d["threads_index"]
     _assert_narrates_computed("eccentric_bolt_pattern.py", namespace)
+
+
+def test_honeycomb_panel_local_modes_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "honeycomb_panel_local_modes.py"))
+    d = namespace["honeycomb_panel_local_modes"]()
+    assert d["dimpling_mpa"] == pytest.approx(106.5, abs=0.05)
+    assert d["wrinkling_mpa"] == pytest.approx(212.2, abs=0.05)
+    assert d["governing_coarse"] == "intracell dimpling"
+    # dimpling scales with 1/s²: (9.5/4.8)² = 3.917
+    assert d["dimpling_fine_mpa"] / d["dimpling_mpa"] == pytest.approx((9.5 / 4.8) ** 2, rel=1e-12)
+    assert d["governing_fine"] == "face wrinkling"
+    _assert_narrates_computed("honeycomb_panel_local_modes.py", namespace)

@@ -1053,6 +1053,9 @@ modules:
 - :mod:`~anvilate.analysis.fastener_group` — in-plane load shared over a bolt pattern by
   stiffness or shank area, eccentricity included, and each fastener's NASA-STD-5020B
   shear-tension interaction and pull-through
+- :mod:`~anvilate.analysis.sandwich` — a sandwich panel's local modes by NASA CR-1457:
+  intracell dimpling, face wrinkling, shear crimping, core shear and insert pull-out, each
+  with how conservative its coefficient is, and not evaluated where an input is missing
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -3045,6 +3048,13 @@ from .rotor_momentum import (
     hover_induced_velocity,
     ideal_hover_power,
 )
+from .sandwich import (
+    CoreKind,
+    SandwichMode,
+    SandwichPanel,
+    SandwichScreen,
+    sandwich_local_modes,
+)
 from .scotch_yoke import (
     scotch_yoke_acceleration,
     scotch_yoke_displacement,
@@ -3608,6 +3618,11 @@ __all__ = [
     "FastenerLoad",
     "FastenerGroupResult",
     "fastener_group_loads",
+    "CoreKind",
+    "SandwichPanel",
+    "SandwichMode",
+    "SandwichScreen",
+    "sandwich_local_modes",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",
