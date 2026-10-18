@@ -1761,8 +1761,10 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # refuses a NaN or infinite expansion coefficient and a non-temperature extreme.
     # 98 -> 99: embedding_preload_loss takes its source as text; tests/test_preloaded_joint.py
     # refuses a NaN embedding.
+    # 99 -> 100: retention_after_creep takes creep records; tests/test_plastic_retention.py
+    # refuses NaN hours.
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 99, (
+    assert len(unbuildable) <= 100, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

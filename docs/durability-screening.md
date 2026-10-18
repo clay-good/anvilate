@@ -9,6 +9,7 @@ what excites them, and the load a drop puts on what is inside.**
 | `modal_separation(...)` | Every estimated mode below a ceiling against every declared excitation band, with the separation ratio and the verdict against the program's target |
 | `duty_cycle_damage(events, ...)` | Miner damage per pass, per life and in total over named events, each counted by rainflow, with a declared mean-stress correction, naming the event that drives it |
 | `o_ring_seal_screen(...)` | An O-ring's squeeze at the cold extreme and fill at the hot one, its extrusion gap against the cited limit, the squeeze left after compression set, and fluid compatibility |
+| `retention_after_creep(...)` | The force a snap-fit, boss or press fit keeps after time at temperature, from a declared creep-modulus record |
 | `drop_screen(...)` | A drop's energy, landing speed and half-sine pulse, and the peak load on each mounted item |
 
 ## Rainflow, open or repeating
@@ -64,6 +65,15 @@ public, and none is bundled. `preload_bounds(..., embedding=...)` takes the larg
 it and NASA-STD-5020B's 5% short-term relaxation, rather than adding them. Both are the
 same loss, and the standard warns 5% may be too little with several faying surfaces.
 
+## Plastics after time at temperature
+
+A clip or a boss holds by a deflection fixed at assembly. Its force falls with the plastic's
+creep modulus, so the retained force is the initial force times E_creep/E. The creep modulus
+comes from the caller's record at the service temperature, interpolated in log time between
+its points. A temperature the record does not state, or a time outside its points, is not
+evaluated. The [clip example](../examples/clip_retention.py) keeps 0.67 of its grip after a
+hot summer.
+
 ## Modes and drops
 
 A mode inside an excitation band has no separation. Outside it, the separation is
@@ -75,5 +85,5 @@ mounted item feels the pulse times the half-sine shock amplification at its own 
 frequency, so an item tuned near the worst ratio sees about 1.77 times the peak. The
 contact stiffness is the weakest number, and every drop result is labelled an estimate.
 
-Not yet built: declaring a duty cycle in a Design Spec (the analysis takes events directly
-today), and plastic retention.
+Not yet built: declaring a duty cycle in a Design Spec. The analysis takes events directly
+today.

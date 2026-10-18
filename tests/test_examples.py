@@ -9605,3 +9605,13 @@ def test_o_ring_cold_squeeze_example():
     assert d["squeeze_left"] == pytest.approx(d["cold_squeeze"] * 0.75, rel=1e-12)
     assert d["hot_fill"] == pytest.approx(0.729, abs=5e-4)
     _assert_narrates_computed("o_ring_cold_squeeze.py", namespace)
+
+
+def test_clip_retention_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "clip_retention.py"))
+    d = namespace["clip_retention"]()
+    assert d["force_n"] == pytest.approx(40 * 4_000 / 6_000, rel=1e-12)
+    assert d["fraction"] == pytest.approx(2 / 3, rel=1e-12)
+    assert d["force_300_n"] == pytest.approx(28.41, abs=0.005)
+    assert "no time is extrapolated" in d["beyond"]
+    _assert_narrates_computed("clip_retention.py", namespace)

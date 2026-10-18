@@ -195,6 +195,10 @@ duty_cycle.DutyEvent
 duty_cycle.EventDamage
 duty_cycle.DutyCycleDamage
 duty_cycle.duty_cycle_damage
+plastic_retention.CreepModulusPoint
+plastic_retention.CreepModulusRecord
+plastic_retention.PlasticRetention
+plastic_retention.retention_after_creep
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors

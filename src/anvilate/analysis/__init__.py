@@ -1065,6 +1065,8 @@ modules:
 - :mod:`~anvilate.analysis.duty_cycle` — fatigue over a duty cycle: named events counted
   by rainflow, a declared mean-stress correction, Basquin lives, and Miner's rule per pass,
   per life and in total, naming the event that drives it
+- :mod:`~anvilate.analysis.plastic_retention` — the force a snap-fit, boss or press fit
+  keeps after time at temperature, from a declared creep-modulus record, never extrapolated
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -2710,6 +2712,12 @@ from .plasma import (
     plasma_frequency,
     plasma_parameter,
 )
+from .plastic_retention import (
+    CreepModulusPoint,
+    CreepModulusRecord,
+    PlasticRetention,
+    retention_after_creep,
+)
 from .plasticity import (
     PlasticBuckling,
     PlateEdge,
@@ -3677,6 +3685,10 @@ __all__ = [
     "EventDamage",
     "DutyCycleDamage",
     "duty_cycle_damage",
+    "CreepModulusPoint",
+    "CreepModulusRecord",
+    "PlasticRetention",
+    "retention_after_creep",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",
