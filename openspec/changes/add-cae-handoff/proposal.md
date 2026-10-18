@@ -37,7 +37,9 @@ replacement for it.
 - New capability: `cae-interop`. Delta: `analysis-library` (ADDED).
 - Builds on `add-product-structure` (tagged interfaces and connections), the existing
   member-force ingestion doctrine ("No silent conventions on imported analysis data"),
-  and the planned meshing pipeline. Optional dependencies (result-file readers) are
+  and the meshing pipeline and deck writer specified in `add-local-fea`, which this change
+  reuses rather than duplicates: the deck Anvilate solves itself and the deck it hands the
+  analyst come from one writer. Optional dependencies (result-file readers) are
   isolated like the existing optional extras.
 - Explicitly out:
   - Running commercial solvers.
