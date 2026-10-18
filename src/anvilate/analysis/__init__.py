@@ -1032,6 +1032,9 @@ modules:
   mixtures): the longitudinal (iso-strain) modulus and strength, and the transverse
   (iso-stress inverse-rule) modulus of a unidirectional laminate from its fiber and
   matrix properties and volume fraction
+- :mod:`~anvilate.analysis.laminate` — classical lamination theory: the ABD matrix of
+  a ply stack, mid-plane strains and curvatures under running loads, each ply's stresses,
+  and first-ply failure by maximum stress, maximum strain and Tsai-Wu
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -2308,6 +2311,20 @@ from .kinetic_theory import (
     most_probable_molecular_speed,
     rms_molecular_speed,
 )
+from .laminate import (
+    FirstPlyFailure,
+    Lamina,
+    LaminateResponse,
+    LaminateStiffness,
+    Ply,
+    PlyFailure,
+    PlyResult,
+    first_ply_failure,
+    laminate_response,
+    laminate_stiffness,
+    reduced_stiffness,
+    transformed_reduced_stiffness,
+)
 from .laser_cutting import (
     laser_cutting_speed,
     laser_max_cut_thickness,
@@ -3487,6 +3504,18 @@ __all__ = [
     "tsai_hill_failure_index",
     "off_axis_modulus",
     "fiber_volume_fraction_from_weight_fraction",
+    "Lamina",
+    "Ply",
+    "LaminateStiffness",
+    "PlyResult",
+    "LaminateResponse",
+    "PlyFailure",
+    "FirstPlyFailure",
+    "reduced_stiffness",
+    "transformed_reduced_stiffness",
+    "laminate_stiffness",
+    "laminate_response",
+    "first_ply_failure",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

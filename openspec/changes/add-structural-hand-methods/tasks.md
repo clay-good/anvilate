@@ -18,7 +18,7 @@ anchored to a worked example from a public-domain source, with a runnable exampl
 
 ## 3. Composites
 
-- [ ] 3.1 ABD matrix, ply stresses and strains, first-ply failure (max stress, max strain,
+- [x] 3.1 ABD matrix, ply stresses and strains, first-ply failure (max stress, max strain,
       Tsai-Wu), with strength basis
 - [ ] 3.2 Sandwich: wrinkling, dimpling, core shear, insert pull-out
 

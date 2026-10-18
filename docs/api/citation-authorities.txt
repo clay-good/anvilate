@@ -106,6 +106,7 @@ SAE
 TMS
 
 # --- Handbooks and texts
+NASA RP-1351
 Agrawal
 Anderson
 Balanis
@@ -158,6 +159,7 @@ Shigley
 Timoshenko
 
 # --- Named methods, laws, and correlations
+Tsai-Wu
 Archard
 Basquin
 Bernoulli

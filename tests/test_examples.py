@@ -9424,3 +9424,15 @@ def test_sealed_housing_example_cannot_focus_once_closed_until_the_side_port():
     (revised,) = namespace["repaired_card"]().entries
     assert revised.status is CheckStatus.PASS
     assert "reachable in closed via side port" in revised.detail
+
+
+def test_laminate_first_ply_failure_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "laminate_first_ply_failure.py"))
+    d = namespace["laminate_first_ply_failure"]()
+    # [0/45/-45/90]s at 100 N/mm: the 90° plies crack first, well before the 0° fibres.
+    assert d["transverse_stress_mpa"] == pytest.approx(16.88, abs=0.005)
+    assert d["first_ply_ratio"] == pytest.approx(2.70, abs=0.005)
+    assert d["criterion"] == "maximum strain (transverse)"
+    assert d["fibre_ratio"] == pytest.approx(7.73, abs=0.005)
+    assert d["first_ply_ratio"] < d["fibre_ratio"] / 2
+    _assert_narrates_computed("laminate_first_ply_failure.py", namespace)
