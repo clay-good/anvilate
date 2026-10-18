@@ -106,6 +106,15 @@
           "title": "Holes",
           "type": "array"
         },
+        "interfaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Interface"
+          },
+          "maxItems": 32,
+          "title": "Interfaces",
+          "type": "array"
+        },
         "manufacturer": {
           "title": "Manufacturer",
           "type": "string"
@@ -167,6 +176,26 @@
         "mass_source"
       ],
       "title": "ComponentRecord",
+      "type": "object"
+    },
+    "Connection": {
+      "additionalProperties": false,
+      "description": "Two interfaces that meet, each as ``item.interface``: ``place`` is placed on ``on``.\n\nThe item is an instance of the product that declares the connection. The mate is\nderived from the pair: a pattern meets a pattern hole by hole, a face meets a face, a\nshaft runs in its bore. The pairing's checks go on that product's card.",
+      "properties": {
+        "on": {
+          "title": "On",
+          "type": "string"
+        },
+        "place": {
+          "title": "Place",
+          "type": "string"
+        }
+      },
+      "required": [
+        "on",
+        "place"
+      ],
+      "title": "Connection",
       "type": "object"
     },
     "Definition": {
@@ -306,6 +335,77 @@
         "item"
       ],
       "title": "Instance",
+      "type": "object"
+    },
+    "Interface": {
+      "additionalProperties": false,
+      "description": "One interface an item offers: its name, kind, where it is, and its parameters.\n\nA ``face`` kind names the face it is on (``top``, ``bottom``…); a pattern kind also\nlists the item's ``holes`` it is made of, by tag. An ``axis`` kind names the item's own\naxis it runs along. ``parameters`` are the kind's required values (:data:`KINDS`).",
+      "properties": {
+        "axis": {
+          "anyOf": [
+            {
+              "enum": [
+                "x",
+                "y",
+                "z"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axis"
+        },
+        "face": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right",
+                "front",
+                "back"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Face"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Holes",
+          "type": "array"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "title": "Interface",
       "type": "object"
     },
     "ItemIdentity": {
@@ -669,6 +769,26 @@
       "title": "MateEnd",
       "type": "object"
     },
+    "OpenInterface": {
+      "additionalProperties": false,
+      "description": "An interface left unconnected on purpose, as ``item.interface``, and why.",
+      "properties": {
+        "at": {
+          "title": "At",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "reason"
+      ],
+      "title": "OpenInterface",
+      "type": "object"
+    },
     "Placeholder": {
       "additionalProperties": false,
       "description": "An item not yet detailed: an envelope, a mass, and why it is still a placeholder.\n\n``holes`` are the interfaces it offers, so a bought motor's bolt pattern can take a\nhole-pattern mate before the motor is chosen. ``center_of_mass`` is measured from the\nenvelope's centre; left out, the centre is used and the placed product says so.",
@@ -722,6 +842,15 @@
           },
           "maxItems": 64,
           "title": "Holes",
+          "type": "array"
+        },
+        "interfaces": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Interface"
+          },
+          "maxItems": 32,
+          "title": "Interfaces",
           "type": "array"
         },
         "mass": {
@@ -898,20 +1027,30 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.2.0",
+  "$id": "urn:anvilate:schema:product-document:1.3.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.2.0",
+      "default": "1.3.0",
       "enum": [
         "1.0.0",
         "1.1.0",
-        "1.2.0"
+        "1.2.0",
+        "1.3.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
+    },
+    "connections": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Connection"
+      },
+      "maxItems": 512,
+      "title": "Connections",
+      "type": "array"
     },
     "definitions": {
       "items": {
@@ -982,6 +1121,15 @@
       "title": "Name",
       "type": "string"
     },
+    "open_interfaces": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/OpenInterface"
+      },
+      "maxItems": 512,
+      "title": "Open Interfaces",
+      "type": "array"
+    },
     "variants": {
       "default": [],
       "items": {
@@ -1000,5 +1148,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.2.0"
+  "x-anvilate-version": "1.3.0"
 }

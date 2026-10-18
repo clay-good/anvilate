@@ -121,6 +121,13 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.3.0: interfaces, connections, and interfaces left open
+
+A placeholder and a component record gain `interfaces`, each a name, a kind from the
+closed vocabulary, the face or axis it is located by, its holes for a pattern, and its
+parameters. A product gains `connections` (`on`, `place`, each `item.interface`) and
+`open_interfaces` (`at`, `reason`). An older product document reads unchanged.
+
 ### Product document 1.2.0: a component names its vendor model, and a draft says so
 
 A component record gains `model`, the vendor's STEP by relative path and SHA-256;

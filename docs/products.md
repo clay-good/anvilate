@@ -150,6 +150,12 @@ read layout parameters too, and gets the variant's values. A substitute that doe
 the holes or feature a mate uses is refused, naming the mate. A variant that overrides an
 undeclared parameter or substitutes an undefined item is refused.
 
+## Interfaces and connections
+
+Items can offer typed interfaces, and a product can connect them by name instead of naming
+features in mates; every interface is connected or declared open. See
+[Interfaces](interfaces.md).
+
 ## Purchased components
 
 A definition can be a bought `component`: a record with its manufacturer, part numbers,

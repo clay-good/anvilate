@@ -446,6 +446,7 @@ def test_every_docs_page_is_in_the_docs_index():
         "Sixty-eight": 68,
         "Sixty-nine": 69,
         "Seventy": 70,
+        "Seventy-one": 71,
         "Fifty-two": 52,
     }
     claimed = re.search(r"^([A-Z][a-z]+(?:-[a-z]+)?) pages,", index, re.M)

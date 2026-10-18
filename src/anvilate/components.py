@@ -31,6 +31,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
+from .interfaces import Interface, check_interfaces
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 from .units import Quantity
@@ -149,6 +150,7 @@ class ComponentRecord(StatableModel):
     mass_source: Provenance
     ratings: tuple[Rating, ...] = Field(default=(), max_length=32)
     holes: tuple[PlaceholderHole, ...] = Field(default=(), max_length=64)
+    interfaces: tuple[Interface, ...] = Field(default=(), max_length=32)
     model: VendorModel | None = None
     # A record drafted from a measured vendor STEP (:func:`draft_component`) is used only
     # once a person has checked it: until ``confirmed_by`` names them, its card says so.
@@ -180,6 +182,8 @@ class ComponentRecord(StatableModel):
             if not value.has_dimension(dimension) or not value.magnitude > 0:
                 raise _refuse(f"component '{self.part_number}' rating {name} is {value}; it "
                               f"is a positive {dimension}", subject="ratings")  # fmt: skip
+        check_interfaces(self.interfaces, {h.tag for h in self.holes},
+                         f"component '{self.part_number}'")  # fmt: skip
         half = [q.to("mm").magnitude / 2 for q in self.envelope]
         for hole in self.holes:
             point = [q.to("mm").magnitude for q in (hole.x, hole.y, hole.z)]

@@ -384,6 +384,11 @@ ingest.FieldConflict
 ingest.DraftSpec
 ingest.extract_requirements
 ingest.extract_requirements_from_pdf
+interfaces.KINDS
+interfaces.COMPATIBLE
+interfaces.InterfaceError
+interfaces.Interface
+interfaces.partners_of
 interop.ForceComponent
 interop.AxisMapping
 interop.ForceStation
@@ -528,6 +533,8 @@ product.Layout
 product.LayoutParameter
 product.LayoutDatum
 product.Variant
+product.Connection
+product.OpenInterface
 product.Product
 product.ProductNode
 product.PartsListLine

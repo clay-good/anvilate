@@ -1241,6 +1241,7 @@ def agent_instructions() -> str:
     context. Generated from the resolver and the element registry, never hand-written, so it
     cannot name a material the database lacks or a field a screen does not read.
     """
+    from .interfaces import COMPATIBLE, KINDS
     from .screening import element_registry
     from .standards import default_standards_resolver
     from .standards.profiles import default_profile_table
@@ -1267,6 +1268,15 @@ def agent_instructions() -> str:
         "or a bar by its own dimensions in mm: FLAT 50x10 (breadth x depth), TUBE 60x4 "
         "(outside diameter x wall), BOX 100x50x4 (breadth x depth x wall); or pipe by "
         "its bundled ASME B36.10M nominal size and schedule: NPS 4 SCH 40.",
+        "Interface kinds a product's placeholders and components offer (required "
+        "parameters in brackets): "
+        + ", ".join(
+            f"{kind}" + (f" [{', '.join(wanted)}]" if wanted else "")
+            for kind, (_located, wanted, _partners) in KINDS.items()
+        )
+        + ". They meet in pairs: "
+        + ", ".join(f"{a} with {b}" for a, b in COMPATIBLE)
+        + ".",
         "Part screens (element_type: fields; * marks required):",
     ]
     for tag, (model, _screen) in sorted(element_registry().items()):

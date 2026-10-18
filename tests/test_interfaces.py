@@ -1,0 +1,172 @@
+"""Interface contracts on products: the spec's scenarios, worked on placeholders.
+
+A 120 × 80 × 10 bracket offers a four-hole 50 mm square bolt pattern on its top face; a
+57 × 57 × 76 motor offers the same pattern on its bottom face. Connecting them by name
+seats the motor on the bracket with its holes on the bracket's: z 5 to 81.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytest.importorskip("build123d")
+
+from anvilate.interfaces import Interface  # noqa: E402
+from anvilate.product import ProductError, parse_product, place_product  # noqa: E402
+from anvilate.scorecard import CheckStatus  # noqa: E402
+
+
+def _mm(v: float) -> dict:
+    return {"magnitude": v, "unit": "mm"}
+
+
+def _square(prefix: str, half: float, z: float, face: str) -> list[dict]:
+    return [{"tag": f"{prefix}{i}", "x": _mm(x), "y": _mm(y), "z": _mm(z), "face": face,
+             "diameter": _mm(5.5)}
+            for i, (x, y) in enumerate([(-half, -half), (half, -half), (half, half),
+                                        (-half, half)], start=1)]  # fmt: skip
+
+
+def _holder(size, kg, holes=(), interfaces=()):
+    return {"envelope": [_mm(v) for v in size], "mass": {"magnitude": kg, "unit": "kg"},
+            "reason": "not yet detailed", "holes": list(holes),
+            "interfaces": list(interfaces)}  # fmt: skip
+
+
+def _pattern(name: str, prefix: str, face: str) -> dict:
+    return {"name": name, "kind": "bolt_pattern", "face": face,
+            "holes": [f"{prefix}{i}" for i in range(1, 5)]}  # fmt: skip
+
+
+def _document(motor_half: float = 25.0, extra: dict | None = None) -> dict:
+    definitions = [
+        {"id": "bracket", "identity": {"description": "bracket", "source": "make"},
+         "placeholder": _holder((120, 80, 10), 0.5, _square("b", 25, 5, "top"),
+                                [_pattern("motor_mount", "b", "top")])},
+        {"id": "motor", "identity": {"description": "motor", "source": "buy"},
+         "placeholder": _holder((57, 57, 76), 1.0, _square("m", motor_half, -38, "bottom"),
+                                [_pattern("flange", "m", "bottom")])},
+    ]  # fmt: skip
+    document = {
+        "name": "drive",
+        "definitions": definitions,
+        "instances": [{"name": "bracket", "item": "bracket"}, {"name": "motor", "item": "motor"}],
+        "ground": "bracket",
+        "connections": [{"on": "bracket.motor_mount", "place": "motor.flange"}],
+    }
+    document.update(extra or {})
+    return document
+
+
+def _entries(placed) -> dict:
+    return {e.name: e for e in placed.card.entries}
+
+
+def test_a_motor_goes_onto_its_bracket_by_interface_names():
+    document = _document()
+    assert "mates" not in document  # no feature tag of either item is named by the product
+    placed = place_product(parse_product(document))
+    motor = next(b for b in placed.bodies if b.path == "drive/motor")
+    assert motor.box_min_mm == pytest.approx((-28.5, -28.5, 5))
+    assert motor.box_max_mm == pytest.approx((28.5, 28.5, 81))
+    pattern = _entries(placed)["bracket.motor_mount ~ motor.flange hole pattern"]
+    assert pattern.status is CheckStatus.PASS
+
+
+def test_a_flange_drawn_to_an_old_datasheet_fails_its_pattern():
+    placed = place_product(parse_product(_document(motor_half=47.14 / 2)))
+    pattern = _entries(placed)["bracket.motor_mount ~ motor.flange hole pattern"]
+    assert pattern.status is CheckStatus.FAIL and "do not line up" in pattern.detail
+
+
+def test_a_shaft_offered_to_a_bolt_pattern_is_refused_before_geometry():
+    document = _document()
+    shaft = {"name": "shaft", "kind": "shaft", "axis": "z", "parameters": {"diameter": _mm(8)}}
+    document["definitions"][1]["placeholder"]["interfaces"].append(shaft)
+    document["connections"] = [{"on": "bracket.motor_mount", "place": "motor.shaft"}]
+    with pytest.raises(ProductError, match="bracket.motor_mount is a bolt_pattern and "
+                       "motor.shaft a shaft, which do not meet; a bolt_pattern meets "
+                       "bolt_pattern or tapped_pattern"):  # fmt: skip
+        parse_product(document)
+
+
+def test_a_shaft_without_a_diameter_is_refused_naming_it_and_its_unit():
+    # a refusal inside the model's validator reaches the caller as a ValidationError
+    with pytest.raises(ValueError, match="states no diameter; a shaft needs diameter as a "
+                       r"\[length\], such as mm"):  # fmt: skip
+        Interface(name="out", kind="shaft", axis="z")
+
+
+def test_an_unknown_kind_is_refused_with_the_nearest():
+    with pytest.raises(ValueError, match="nearest: bolt_pattern"):
+        Interface(name="x", kind="bolt_patern", face="top", holes=("a",))
+
+
+def test_a_mounting_face_nobody_used_is_reported_and_an_open_reason_clears_it():
+    document = _document()
+    fan_mount = {"name": "mount", "kind": "mounting_face", "face": "bottom"}
+    document["definitions"][1]["placeholder"]["interfaces"].append(fan_mount)
+    loose = _entries(place_product(parse_product(document)))["unconnected interfaces"]
+    assert loose.status is CheckStatus.NOT_EVALUATED and "motor.mount" in loose.detail
+    document["open_interfaces"] = [{"at": "motor.mount", "reason": "held by the grille"}]
+    assert "unconnected interfaces" not in _entries(place_product(parse_product(document)))
+
+
+def test_a_pattern_with_two_partners_is_reported_naming_all_three():
+    document = _document()
+    second = {"id": "plate", "identity": {"description": "plate", "source": "make"},
+              "placeholder": _holder((57, 57, 5), 0.1, _square("q", 25, -2.5, "bottom"),
+                                     [_pattern("under", "q", "bottom")])}  # fmt: skip
+    document["definitions"].append(second)
+    document["instances"].append({"name": "plate", "item": "plate"})
+    document["connections"].append({"on": "bracket.motor_mount", "place": "plate.under"})
+    entries = _entries(place_product(parse_product(document)))
+    over = entries["bracket.motor_mount partners"]
+    assert over.status is CheckStatus.FAIL
+    assert "motor.flange" in over.detail and "plate.under" in over.detail
+
+
+@pytest.mark.parametrize(("shaft", "status"), [(8.0, CheckStatus.PASS), (8.2, CheckStatus.FAIL)])
+def test_a_shaft_larger_than_its_bore_fails(shaft, status):
+    document = _document()
+    document["definitions"][0]["placeholder"]["interfaces"].append(
+        {"name": "bore", "kind": "bore", "axis": "z", "parameters": {"diameter": _mm(8.1)}}
+    )
+    document["definitions"][1]["placeholder"]["interfaces"].append(
+        {"name": "shaft", "kind": "shaft", "axis": "z", "parameters": {"diameter": _mm(shaft)}}
+    )
+    document["open_interfaces"] = [{"at": "bracket.bore", "reason": "checked below"},
+                                   {"at": "motor.shaft", "reason": "checked below"}]  # fmt: skip
+    product = parse_product(document)
+    assert product  # the shaft and bore are offered; a fit is only checked when they meet
+    document["open_interfaces"] = []
+    document["connections"].append({"on": "bracket.bore", "place": "motor.shaft"})
+    entries = _entries(place_product(parse_product(document)))
+    assert entries["bracket.bore ~ motor.shaft diameter"].status is status
+
+
+def test_an_interface_naming_a_hole_its_item_lacks_is_refused():
+    document = _document()
+    document["definitions"][0]["placeholder"]["interfaces"][0]["holes"][0] = "b9"
+    with pytest.raises(ProductError, match=r"names holes \['b9'\], which it does not have"):
+        parse_product(document)
+
+
+def test_the_docs_tables_are_the_vocabulary_and_the_compatibility_table():
+    import re
+    from pathlib import Path
+
+    from anvilate.interfaces import COMPATIBLE, KINDS
+
+    page = (Path(__file__).resolve().parents[1] / "docs" / "interfaces.md").read_text()
+    kinds = {}
+    for kind, located, requires, partners in re.findall(
+        r"^\| `(\w+)` \| (face|axis)[^|]* \| ([^|]+) \| (one|any number) \|", page, re.M
+    ):
+        kinds[kind] = (located, tuple(re.findall(r"`(\w+)`", requires)),
+                       1 if partners == "one" else None)  # fmt: skip
+    assert kinds == {k: (loc, tuple(w), n) for k, (loc, w, n) in KINDS.items()}
+    pairs = {}
+    for a, b, agree in re.findall(r"^\| `(\w+)` with `(\w+)` \| ([^|]+) \|", page, re.M):
+        pairs[(a, b)] = tuple(re.findall(r"`(\w+)`", agree))
+    assert pairs == {pair: agree for pair, (agree, _checks) in COMPATIBLE.items()}

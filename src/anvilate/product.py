@@ -52,6 +52,7 @@ from ._models import (
 )
 from .combination import Mate
 from .derivation import DerivationAbsence, Underived
+from .interfaces import COMPATIBLE, KINDS, Interface, check_interfaces, partners_of
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
 from .units import Quantity
@@ -70,6 +71,8 @@ __all__ = [
     "LayoutDatum",
     "Layout",
     "Variant",
+    "Connection",
+    "OpenInterface",
     "Product",
     "ProductNode",
     "PartsListLine",
@@ -90,7 +93,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.2.0"] = "1.2.0"
+PRODUCT_VERSION: Literal["1.3.0"] = "1.3.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -159,6 +162,7 @@ class Placeholder(StatableModel):
     reason: Provenance
     holes: tuple[PlaceholderHole, ...] = Field(default=(), max_length=64)
     center_of_mass: tuple[Quantity, Quantity, Quantity] | None = None
+    interfaces: tuple[Interface, ...] = Field(default=(), max_length=32)
 
     @model_validator(mode="after")
     def _a_body(self) -> Placeholder:
@@ -183,6 +187,7 @@ class Placeholder(StatableModel):
         tags = [hole.tag for hole in self.holes]
         if len(set(tags)) != len(tags):
             raise _refuse(f"placeholder holes {tags} repeat a tag", subject="placeholder.holes")
+        check_interfaces(self.interfaces, set(tags), "the placeholder")
         return self
 
 
@@ -388,6 +393,36 @@ class Variant(StatableModel):
     substitutions: tuple[Definition, ...] = Field(default=(), max_length=256)
 
 
+class Connection(StatableModel):
+    """Two interfaces that meet, each as ``item.interface``: ``place`` is placed on ``on``.
+
+    The item is an instance of the product that declares the connection. The mate is
+    derived from the pair: a pattern meets a pattern hole by hole, a face meets a face, a
+    shaft runs in its bore. The pairing's checks go on that product's card.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    on: Named
+    place: Named
+
+
+class OpenInterface(StatableModel):
+    """An interface left unconnected on purpose, as ``item.interface``, and why."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    at: Named
+    reason: Provenance
+
+
+def _split(reference: str, subject: str) -> tuple[str, str]:
+    item, dot, name = reference.rpartition(".")
+    if not dot or not item or not name:
+        raise _refuse(f"'{reference}' is not item.interface", subject=subject)
+    return item, name
+
+
 class Product(StatableModel):
     """A product document: its definitions, the instances that place them, and the ground.
 
@@ -398,9 +433,10 @@ class Product(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    # 1.1.0 adds a definition's component and demands, and 1.2.0 a component's vendor model
-    # and drafted state; an older document reads unchanged.
-    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0"] = PRODUCT_VERSION
+    # 1.1.0 adds a definition's component and demands, 1.2.0 a component's vendor model and
+    # drafted state, and 1.3.0 interfaces, connections and open interfaces; an older
+    # document reads unchanged.
+    anvilate_product: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0"] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
     identity: ItemIdentity | None = None
@@ -410,6 +446,31 @@ class Product(StatableModel):
     mates: tuple[Mate, ...] = Field(default=(), max_length=512)
     layout: Layout | None = None
     variants: tuple[Variant, ...] = Field(default=(), max_length=64)
+    connections: tuple[Connection, ...] = Field(default=(), max_length=512)
+    open_interfaces: tuple[OpenInterface, ...] = Field(default=(), max_length=512)
+
+    def offers(self) -> dict[str, dict[str, Interface]]:
+        """Each instance's interfaces by name, from its placeholder or component."""
+        definitions = {d.id: d for d in self.definitions}
+        offered: dict[str, dict[str, Interface]] = {}
+        for instance in self.instances:
+            definition = definitions[instance.item]
+            held = definition.placeholder or definition.component
+            offered[instance.name] = {i.name: i for i in held.interfaces} if held else {}
+        return offered
+
+    def interface_at(self, reference: str, subject: str) -> tuple[str, Interface]:
+        """The instance and interface ``item.interface`` names, or a refusal naming it."""
+        item, name = _split(reference, subject)
+        offered = self.offers()
+        if item not in offered:
+            raise _refuse(f"'{reference}' names '{item}', which is not an instance of "
+                          f"'{self.name}'", subject=subject)  # fmt: skip
+        if name not in offered[item]:
+            raise _refuse(f"'{item}' offers no interface '{name}' "
+                          f"({', '.join(offered[item]) or 'it offers none'})",
+                          subject=subject)  # fmt: skip
+        return item, offered[item][name]
 
     @model_validator(mode="after")
     def _refers_to_its_own(self) -> Product:
@@ -452,6 +513,22 @@ class Product(StatableModel):
                         raise _refuse(f"layout parameter '{parameter.name}' lists '{place}' as "
                                       f"a reader, which does not hold {parameter.value}",
                                       subject="layout.parameters[].read_by")  # fmt: skip
+        connected: set[str] = set()
+        for connection in self.connections:
+            _on_item, first = self.interface_at(connection.on, "connections[].on")
+            _place_item, second = self.interface_at(connection.place, "connections[].place")
+            pair = (first.kind, second.kind)
+            if pair not in COMPATIBLE and pair[::-1] not in COMPATIBLE:
+                raise _refuse(f"{connection.on} is a {first.kind} and {connection.place} a "
+                              f"{second.kind}, which do not meet; a {first.kind} meets "
+                              f"{' or '.join(partners_of(first.kind))}",
+                              subject="connections[].place")  # fmt: skip
+            connected |= {connection.on, connection.place}
+        for left_open in self.open_interfaces:
+            self.interface_at(left_open.at, "open_interfaces[].at")
+            if left_open.at in connected:
+                raise _refuse(f"{left_open.at} is declared open and is connected",
+                              subject="open_interfaces[].at")  # fmt: skip
         known = sorted(p.name for p in self.layout.parameters) if self.layout is not None else []
         seen: set[str] = set()
         for variant in self.variants:
@@ -1187,8 +1264,12 @@ class _Leaf:
 class _Assembly:
     """A placed (sub-)product: a shape and features for ``_place``, and its leaves."""
 
-    def __init__(self, shape: Any, leaves: list[_Leaf]) -> None:
+    def __init__(
+        self, shape: Any, leaves: list[_Leaf], extra: dict[str, tuple[ScorecardEntry, ...]]
+    ) -> None:
         self.shape, self.leaves, self.features = shape, leaves, ()
+        # The entries each product node owns beyond its interference: its connections'.
+        self.extra = extra
 
 
 class BuildCache:
@@ -1216,8 +1297,9 @@ def _placed_leaves(
     library: Mapping[str, Product] | None,
     cache: BuildCache | None,
     root: Any = None,
-) -> tuple[list[_Leaf], int, int]:
-    """Every leaf body placed where its mates put it, and the items rebuilt and reused."""
+) -> tuple[list[_Leaf], int, int, dict[str, tuple[ScorecardEntry, ...]]]:
+    """Every leaf body placed where its mates put it, the items rebuilt and reused, and the
+    connection entries each product node owns."""
     from .combination import _IDENTITY, PlacedPart, _place
 
     if cache is not None and not isinstance(cache, BuildCache):
@@ -1244,7 +1326,9 @@ def _placed_leaves(
         definitions = {d.id: d for d in current.definitions}
         order = [i.name for i in current.instances]
         datums = {d.name: d for d in current.layout.datums} if current.layout is not None else {}
-        for mate in current.mates:
+        derived = _connection_mates(current)
+        all_mates = (*current.mates, *derived)
+        for mate in all_mates:
             if mate.place.part in datums:
                 raise _refuse(f"mate '{mate.id}' places the datum '{mate.place.part}', which is "
                               "fixed; a datum is a mate's 'on' end",
@@ -1311,11 +1395,13 @@ def _placed_leaves(
                                       declared is None, (stands_in,))  # fmt: skip
 
         leaves: list[_Leaf] = []
+        extra: dict[str, tuple[ScorecardEntry, ...]] = {}
         ground_first = sorted(current.instances, key=lambda i: i.name != current.ground)
         for instance in ground_first:
             definition = definitions[instance.item]
             path = f"{prefix}/{instance.name}"
             spec = None
+            below: dict[str, tuple[ScorecardEntry, ...]] = {}
             if definition.kind in ("part", "placeholder", "component"):
                 key = _content(definition, shelf)
                 model = definition.component.model if definition.component is not None else None
@@ -1336,10 +1422,11 @@ def _placed_leaves(
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
                 inner = built.leaves
+                below = built.extra
             if instance.name == current.ground:
                 rotation, translation = _IDENTITY, (0.0, 0.0, 0.0)
             else:
-                mates = [m for m in current.mates if m.place.part == instance.name]
+                mates = [m for m in all_mates if m.place.part == instance.name]
                 if not mates:
                     raise _refuse(
                         f"'{path}' has no mate; every instance but the ground is placed through "
@@ -1360,10 +1447,13 @@ def _placed_leaves(
                 label = path if members == 1 else f"{path}[{k + 1}]"
                 where = _location(r, t)
                 leaves.extend(leaf.moved(label + leaf.path[len(path) :], where) for leaf in inner)
+                extra.update({label + key[len(path) :]: held for key, held in below.items()})
+        extra[prefix] = _connection_entries(current, derived, placed)
         shape = Compound([leaf.shape for leaf in leaves])
-        return _Assembly(shape, leaves)
+        return _Assembly(shape, leaves, extra)
 
-    return assemble(product, product.name).leaves, len(rebuilt), len(reused)
+    top = assemble(product, product.name)
+    return top.leaves, len(rebuilt), len(reused), top.extra
 
 
 def place_product(
@@ -1386,7 +1476,7 @@ def place_product(
     """
     from .combination import _interference
 
-    leaves, rebuilt, reused = _placed_leaves(product, library, cache, root)
+    leaves, rebuilt, reused, extra = _placed_leaves(product, library, cache, root)
     interference = _provisional(_interference([(leaf.path, leaf.shape) for leaf in leaves]), leaves)
     holders = [leaf.path for leaf in leaves if leaf.placeholder]
     weighed = [(leaf.mass, _corner(leaf.com.center())) for leaf in leaves if leaf.mass is not None]
@@ -1415,7 +1505,7 @@ def place_product(
         center_of_mass_mm=centre,
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
         unused_parameters=product.layout.unused if product.layout is not None else (),
-        card=_card(product.name, leaves),
+        card=_card(product.name, leaves, extra),
         rebuilt=rebuilt,
         reused=reused,
     )
@@ -1460,7 +1550,106 @@ def _provisional(entry: ScorecardEntry, leaves: list[_Leaf]) -> ScorecardEntry:
                                     "items"})  # fmt: skip
 
 
-def _card(path: str, leaves: list[_Leaf]) -> NodeCard:
+_PATTERNS = ("bolt_pattern", "tapped_pattern")
+_MALE = ("shaft", "pin", "keyed_shaft")
+_AGREE_MM = 0.01
+_NEEDS_A_CONNECTION = Need(
+    declaration="connections",
+    takes="a connection for each interface an item offers, or open_interfaces with the reason",
+    sources=(ValueSource.USER,),
+)
+_COMPARED = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="the two interfaces' declared values compared as stated",
+)
+
+
+def _connection_mates(current: Product) -> list[Mate]:
+    """The mate each connection stands for: pattern to pattern, face to face, or on an axis."""
+    mates = []
+    for connection in current.connections:
+        on_item, on = current.interface_at(connection.on, "connections[].on")
+        place_item, place = current.interface_at(connection.place, "connections[].place")
+        ends: dict[str, Any] = {}
+        if KINDS[on.kind][0] == "face":
+            kind = "hole_pattern" if on.kind in _PATTERNS else "face_to_face"
+            ends = {"place": {"part": place_item, "face": place.face, "holes": place.holes},
+                    "on": {"part": on_item, "face": on.face, "holes": on.holes}}  # fmt: skip
+        else:
+            kind = "shaft_in_bore"
+            ends = {"place": {"part": place_item, "axis": place.axis},
+                    "on": {"part": on_item, "axis": on.axis}}  # fmt: skip
+        mates.append(Mate.model_validate({"id": f"{connection.on}~{connection.place}",
+                                          "kind": kind, **ends}))  # fmt: skip
+    return mates
+
+
+def _connection_entries(
+    current: Product, derived: list[Mate], placed: Mapping[str, Any]
+) -> tuple[ScorecardEntry, ...]:
+    """Each connection's checks, then every interface accounted for and its partners counted."""
+    from collections import Counter
+
+    from .combination import _pattern_entry
+
+    entries: list[ScorecardEntry] = []
+    for connection, mate in zip(current.connections, derived, strict=True):
+        on_item, on = current.interface_at(connection.on, "connections[].on")
+        place_item, place = current.interface_at(connection.place, "connections[].place")
+        pair = f"{connection.on} ~ {connection.place}"
+        _agree, checks = COMPATIBLE.get((on.kind, place.kind)) or COMPATIBLE[(place.kind, on.kind)]
+        for check in checks:
+            if check == "hole pattern":
+                entry = _pattern_entry(mate, placed[place_item], placed[on_item], None)
+                entries.append(entry.model_copy(update={"name": f"{pair} hole pattern"}))
+                continue
+            a, b = (
+                on.parameters[check].to("mm").magnitude,
+                place.parameters[check].to("mm").magnitude,
+            )
+            if check == "diameter":
+                male, female = (a, b) if on.kind in _MALE else (b, a)
+                ok = male <= female + 1e-9
+                fit = (f"{female - male:.4g} mm clearance" if ok
+                       else f"the {male:g} mm side is {male - female:.4g} mm over")  # fmt: skip
+                detail = f"{male:g} mm in {female:g} mm: {fit}"
+            else:
+                ok = abs(a - b) <= _AGREE_MM
+                detail = (f"{connection.on} {a:g} mm and {connection.place} {b:g} mm"
+                          + ("" if ok else f", {abs(a - b):.4g} mm apart"))  # fmt: skip
+            entries.append(ScorecardEntry(name=f"{pair} {check.replace('_', ' ')}",
+                                          status=CheckStatus.PASS if ok else CheckStatus.FAIL,
+                                          detail=detail, underived=_COMPARED))  # fmt: skip
+    partners: Counter[str] = Counter()
+    for connection in current.connections:
+        partners.update((connection.on, connection.place))
+    opened = {declared.at for declared in current.open_interfaces}
+    offered = current.offers()
+    loose = [f"{item}.{name}" for item, held in offered.items() for name in held
+             if f"{item}.{name}" not in partners and f"{item}.{name}" not in opened]  # fmt: skip
+    if loose:
+        entries.append(ScorecardEntry(
+            name="unconnected interfaces", status=CheckStatus.NOT_EVALUATED,
+            detail=f"{', '.join(loose)} {'is' if len(loose) == 1 else 'are'} neither connected "
+            "nor declared open with a reason", needs=(_NEEDS_A_CONNECTION,),
+        ))  # fmt: skip
+    for reference, count in partners.items():
+        item, name = _split(reference, "connections")
+        allowed = KINDS[offered[item][name].kind][2]
+        if allowed is not None and count > allowed:
+            others = [c.place if c.on == reference else c.on for c in current.connections
+                      if reference in (c.on, c.place)]  # fmt: skip
+            entries.append(ScorecardEntry(
+                name=f"{reference} partners", status=CheckStatus.FAIL, underived=_COMPARED,
+                detail=f"{reference} is a {offered[item][name].kind}, which takes {allowed} "
+                f"partner, and meets {', '.join(others)}",
+            ))  # fmt: skip
+    return tuple(entries)
+
+
+def _card(
+    path: str, leaves: list[_Leaf], extra: Mapping[str, tuple[ScorecardEntry, ...]]
+) -> NodeCard:
     """The card of the node at ``path``, from the leaves under it, each child in order."""
     from build123d import Compound
 
@@ -1481,8 +1670,8 @@ def _card(path: str, leaves: list[_Leaf]) -> NodeCard:
     return NodeCard(
         path=path,
         kind="product",
-        entries=(interference,),
-        children=tuple(_card(child, group) for child, group in groups.items()),
+        entries=(interference, *extra.get(path, ())),
+        children=tuple(_card(child, group, extra) for child, group in groups.items()),
     )
 
 
@@ -1508,7 +1697,7 @@ def write_product_step(
 
     tree = product_tree(product, library=library)
     nodes = {node.path: node for node in tree.walk()}
-    leaves, _rebuilt, _reused = _placed_leaves(product, library, cache)
+    leaves, _rebuilt, _reused, _extra = _placed_leaves(product, library, cache)
     bodies = []
     for leaf in leaves:
         node = nodes[leaf.path]
