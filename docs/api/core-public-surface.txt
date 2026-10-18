@@ -516,6 +516,9 @@ product.ProductError
 product.parse_product
 product.product_tree
 product.parts_list
+product.PlacedBody
+product.PlacedProduct
+product.place_product
 profile.Applicability
 profile.SuppliedValue
 profile.Profile

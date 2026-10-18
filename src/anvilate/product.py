@@ -21,14 +21,21 @@ built:
   buy, so it needs its own definition and number); a sub-product the library does not
   hold; and an instance of a definition the document does not have.
 
-Placement — the mates that put each instance on one already placed — and the cards and
-builds per node are later layers of the same document.
+**Placement** (:func:`place_product`) puts the ground instance at the origin and every other
+instance where its mates put it, using the combination's mate vocabulary with instance
+names as the parts: a product never states a coordinate. A catalog part is built from its
+spec, a placeholder is its envelope box, and a sub-product is its own placed assembly,
+moved as one body. Members of a pattern follow its first: shifted by the spacing along
+the parent's axis, or turned by the angle about it. The placed product reports every leaf
+body at its path, the interference between them, and the mass, naming each placeholder
+the mass rests on.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any, Literal
@@ -36,7 +43,9 @@ from typing import Any, Literal
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import FrozenMap, Named, Provenance, StatableModel, _refusal_line
+from .combination import Mate
 from .refusal import RefusalError, Remedy
+from .scorecard import ScorecardEntry
 from .units import Quantity
 
 __all__ = [
@@ -55,6 +64,9 @@ __all__ = [
     "parse_product",
     "product_tree",
     "parts_list",
+    "PlacedBody",
+    "PlacedProduct",
+    "place_product",
 ]
 
 PRODUCT_VERSION = "1.0.0"
@@ -213,6 +225,7 @@ class Product(StatableModel):
     definitions: tuple[Definition, ...] = Field(min_length=1, max_length=256)
     instances: tuple[Instance, ...] = Field(min_length=1, max_length=256)
     ground: Named
+    mates: tuple[Mate, ...] = Field(default=(), max_length=512)
 
     @model_validator(mode="after")
     def _refers_to_its_own(self) -> Product:
@@ -418,3 +431,195 @@ def parts_list(tree: ProductNode) -> tuple[PartsListLine, ...]:
                       quantity=n)
         for number, (node, n) in sorted(counts.items())
     )  # fmt: skip
+
+
+# --- placement -----------------------------------------------------------------------------
+
+
+class PlacedBody(StatableModel):
+    """One leaf of a placed product: its path, mass if known, placeholder or not, and its box."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path: Named
+    placeholder: bool
+    mass_kg: float | None
+    box_min_mm: tuple[float, float, float]
+    box_max_mm: tuple[float, float, float]
+
+
+class PlacedProduct(StatableModel):
+    """A product placed through its mates: its leaves, interference and mass roll-up.
+
+    ``interference`` is the combination's pairwise intersection over every leaf body.
+    ``mass_kg`` is the sum of the leaves' masses; ``mass_rests_on`` names each placeholder
+    in that sum, and ``mass_unknown`` each leaf whose material gives no density, so the
+    roll-up never reads as more complete than it is.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    bodies: tuple[PlacedBody, ...]
+    interference: ScorecardEntry
+    mass_kg: float
+    mass_rests_on: tuple[str, ...]
+    mass_unknown: tuple[str, ...]
+
+    def __str__(self) -> str:
+        rests = f"; rests on placeholders {list(self.mass_rests_on)}" if self.mass_rests_on else ""
+        unknown = f"; no mass for {list(self.mass_unknown)}" if self.mass_unknown else ""
+        return (
+            f"{self.name}: {len(self.bodies)} bodies, {self.mass_kg:.4g} kg{rests}{unknown}; "
+            f"interference {self.interference.status.value}"
+        )
+
+
+class _Leaf:
+    def __init__(self, path: str, shape: Any, placeholder: bool, mass: float | None) -> None:
+        self.path, self.shape, self.placeholder, self.mass = path, shape, placeholder, mass
+
+
+class _Assembly:
+    """A placed (sub-)product: a shape and features for ``_place``, and its leaves."""
+
+    def __init__(self, shape: Any, leaves: list[_Leaf]) -> None:
+        self.shape, self.leaves, self.features = shape, leaves, ()
+
+
+def place_product(
+    product: Product, *, library: Mapping[str, Product] | None = None
+) -> PlacedProduct:
+    """Place every instance through its mates, then check interference and roll up mass.
+
+    The ground stays at the origin. Every other instance — a pattern's first member, named
+    by the instance's name — must be placed by at least one mate onto an instance listed
+    before it; the rest of a pattern follows its first member. A mate that leaves an
+    instance free or contradicts another is refused by the combination's own rules.
+    """
+    from .combination import _IDENTITY, PlacedPart, _interference, _place
+
+    shelf = dict(library or {})
+    product_tree(product, library=shelf)  # the identity and containment refusals first
+
+    def assemble(current: Product, prefix: str) -> _Assembly:
+        from build123d import Box, Compound
+
+        from .combination import _mass
+        from .geometry import BuiltGeometry, GeometryError, build_spec
+        from .spec import SpecValidationError, parse_spec
+
+        definitions = {d.id: d for d in current.definitions}
+        order = [i.name for i in current.instances]
+        for mate in current.mates:
+            for end in (mate.place, mate.on):
+                if end.part not in order:
+                    raise _refuse(f"mate '{mate.id}' names '{end.part}', which is not an instance "
+                                  f"of '{current.name}' ({', '.join(order)})",
+                                  subject="mates[].place.part")  # fmt: skip
+            if mate.place.part == current.ground:
+                raise _refuse(f"mate '{mate.id}' places the ground '{current.ground}', which stays "
+                              "where it is", subject="mates[].place.part")  # fmt: skip
+        placed: dict[str, PlacedPart] = {}
+        leaves: list[_Leaf] = []
+        ground_first = sorted(current.instances, key=lambda i: i.name != current.ground)
+        for instance in ground_first:
+            definition = definitions[instance.item]
+            path = f"{prefix}/{instance.name}"
+            spec = None
+            if definition.kind == "part":
+                try:
+                    spec = parse_spec(dict(definition.spec or {}))
+                    built: Any = build_spec(spec)
+                except (SpecValidationError, GeometryError) as failure:
+                    raise _refuse(f"'{path}' cannot be built: {failure}",
+                                  subject="definitions[].spec") from failure  # fmt: skip
+                mass = _mass(spec, built)
+                inner = [(path, built.shape, False, mass)]
+            elif definition.kind == "placeholder":
+                holder = definition.placeholder
+                if holder is None:  # a placeholder definition holds one, by its validator
+                    raise _refuse(f"'{path}' has no placeholder", subject="definitions[]")
+                x, y, z = (q.to("mm").magnitude for q in holder.envelope)
+                built = BuiltGeometry(name=instance.name, pattern="placeholder", shape=Box(x, y, z),
+                                      faces={}, dimensions_mm={})  # fmt: skip
+                inner = [(path, built.shape, True, float(holder.mass.to("kg").magnitude))]
+            else:
+                sub = shelf[definition.product or ""]
+                built = assemble(sub, path)
+                inner = [
+                    (leaf.path, leaf.shape, leaf.placeholder, leaf.mass) for leaf in built.leaves
+                ]
+            if instance.name == current.ground:
+                rotation, translation = _IDENTITY, (0.0, 0.0, 0.0)
+            else:
+                mates = [m for m in current.mates if m.place.part == instance.name]
+                if not mates:
+                    raise _refuse(
+                        f"'{path}' has no mate; every instance but the ground is placed through "
+                        "mates onto one already placed, and a product never states a coordinate",
+                        subject="mates",
+                        action="add",
+                    )
+                for mate in mates:
+                    if mate.on.part not in placed:
+                        raise _refuse(f"mate '{mate.id}' places '{instance.name}' on "
+                                      f"'{mate.on.part}', which is not placed yet; list it first",
+                                      subject="instances")  # fmt: skip
+                rotation, translation, _ = _place(instance.name, built, mates, placed)
+            placed[instance.name] = PlacedPart(instance.name, built, spec, rotation, translation)
+            members = instance.pattern.count if instance.pattern is not None else 1
+            for k in range(members):
+                r, t = _member(instance, k, rotation, translation)
+                label = path if members == 1 else f"{path}[{k + 1}]"
+                for leaf_path, shape, holder_flag, leaf_mass in inner:
+                    moved = shape.moved(_location(r, t))
+                    leaf_label = label + leaf_path[len(path) :]
+                    leaves.append(_Leaf(leaf_label, moved, holder_flag, leaf_mass))
+        shape = Compound([leaf.shape for leaf in leaves])
+        return _Assembly(shape, leaves)
+
+    assembly = assemble(product, product.name)
+    leaves = assembly.leaves
+    interference = _interference([(leaf.path, leaf.shape) for leaf in leaves])
+    return PlacedProduct(
+        name=product.name,
+        bodies=tuple(
+            PlacedBody(
+                path=leaf.path,
+                placeholder=leaf.placeholder,
+                mass_kg=leaf.mass,
+                box_min_mm=_corner(leaf.shape.bounding_box().min),
+                box_max_mm=_corner(leaf.shape.bounding_box().max),
+            )
+            for leaf in leaves
+        ),
+        interference=interference,
+        mass_kg=sum(leaf.mass for leaf in leaves if leaf.mass is not None),
+        mass_rests_on=tuple(leaf.path for leaf in leaves if leaf.placeholder),
+        mass_unknown=tuple(leaf.path for leaf in leaves if leaf.mass is None),
+    )
+
+
+def _corner(v: Any) -> tuple[float, float, float]:
+    return round(float(v.X), 6) + 0.0, round(float(v.Y), 6) + 0.0, round(float(v.Z), 6) + 0.0
+
+
+def _location(rotation: Any, translation: Any) -> Any:
+    from .combination import _location as located
+
+    return located(rotation, translation)
+
+
+def _member(instance: Instance, k: int, rotation: Any, translation: Any) -> tuple[Any, Any]:
+    """The k-th member of an instance's pattern, from the first member's placement."""
+    from .combination import _AXES, _about, _add, _apply, _multiply, _scale
+
+    pattern = instance.pattern
+    if pattern is None or k == 0:
+        return rotation, translation
+    if isinstance(pattern, LinearPattern):
+        step = pattern.spacing.to("mm").magnitude * k
+        return rotation, _add(translation, _scale(_AXES[pattern.direction], step))
+    turn = _about(_AXES[pattern.axis], math.radians(pattern.angle_deg * k))
+    return _multiply(turn, rotation), _apply(turn, translation)

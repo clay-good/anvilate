@@ -16,7 +16,7 @@ calculation-reports.md | Start here | citations, evidence-bundle, example-highli
 check-dependencies.md | Deciding what the answer is worth | constraint-topology, example-highlights, optomechanics, published-contracts | -
 citations.md | Start here | quickstart | -
 cold-formed-steel.md | Screening by discipline | example-highlights | -
-combinations.md | Start here | README, agent-mcp-integration, headless-cli | -
+combinations.md | Start here | README, agent-mcp-integration, headless-cli, products | -
 constraint-topology.md | Deciding what the answer is worth | published-contracts, spec-screening | -
 contributing-analysis.md | Contributing | README, discipline-modules | -
 datasets.md | Start here | nothing | -

@@ -42,5 +42,20 @@ patterns and nesting.
 | A product that contains itself, at any depth, is refused | Expanding it would never end. The refusal names the chain, `a → b → a`. |
 | A mirrored instance is refused | An opposite-hand part is a different part to make and to buy. Give it its own definition and number. |
 
-Not yet built: placing instances through mates and layout datums, variants, a card per
-node with roll-up, and rebuilds keyed on content.
+## Placing it
+
+Add `mates` in the [combination](combinations.md) vocabulary, with instance names as the
+parts, and call `place_product(product, library=...)`. The ground stays at the origin.
+Every other instance is placed through its mates onto one listed before it. A product
+never states a coordinate, so an instance with no mate is refused. A catalog part is
+built from its spec, and a placeholder is its envelope box. A sub-product is its own
+placed assembly, moved as one body. Pattern members follow the first: shifted by the
+spacing, or turned by the angle about the parent's axis.
+
+The placed product lists every leaf body at its path with its box, the interference
+between all of them, and the mass. The mass names each placeholder it rests on, and each
+part whose material gives no density, so the roll-up never reads as more complete than it
+is.
+
+Not yet built: layout datums, variants, a card per node with roll-up, and rebuilds keyed
+on content.
