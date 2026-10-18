@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Sixty-five pages, arranged by what you are trying to do. The [README](../README.md) is the
+Sixty-six pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -53,6 +53,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Performance budgets](performance-budgets.md) | An allocated limit, itemized contributors and a declared rule — a card of passing checks that still fails. |
 | [Margin ledger](margin-ledger.md) | Every applied conservatism attributed and multiplied out, and the double counts named. |
 | [Margins of safety](margin-of-safety.md) | The aerospace margin table: limit and ultimate kept apart, a cited factor set, the governing case of hundreds, as CSV, XLSX and a report section. |
+| [Structural hand methods](structural-hand-methods.md) | Laminates, random vibration and thin-cylinder buckling, each read from a public-domain NASA document and pinned to it. |
 | [Load combinations](load-combinations.md) | The governing combination named, including the uplift case a gravity-only check misses. |
 | [Design-space exploration](design-space-exploration.md) | An exact Pareto front, because every check is closed-form. |
 | [Typed repair feedback](repair-feedback.md) | The parameter and the value that fixes a failing check. |

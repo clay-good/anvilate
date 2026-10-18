@@ -161,3 +161,15 @@ def test_the_rule_must_be_declared_as_one():
     with pytest.raises(RefusalError, match="rule"):
         random_vibration_load(**_QUAL, natural_frequency=Quantity(magnitude=100.0, unit="Hz"),
                               quality_factor=10.0, rule="rss")  # type: ignore[arg-type]  # fmt: skip
+
+
+def test_the_hand_methods_page_quotes_the_levels_the_code_reproduces():
+    """docs/structural-hand-methods.md names four GEVS overall levels and the ASM D11 pair."""
+    from pathlib import Path
+
+    page = (Path(__file__).parents[1] / "docs" / "structural-hand-methods.md").read_text()
+    assert "14.1, 10.0, 6.8 and 4.4 Grms" in page
+    for spectrum, printed in ((_QUAL, 14.1), (_ACCEPT, 10.0), (_WORKMANSHIP, 6.8),
+                              (_HEAVY_WORKMANSHIP, 4.4)):  # fmt: skip
+        assert f"{psd_overall_grms(**spectrum):.1f}" == f"{printed:.1f}"
+    assert "prints D₁₁ as 65,220 where the exact figure is 65,500" in page
