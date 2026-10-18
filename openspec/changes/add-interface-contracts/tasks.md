@@ -26,5 +26,5 @@ joint checks).
 
 ## 4. Output
 
-- [ ] 4.1 Interface control table: CSV and report section
-- [ ] 4.2 A docs page for interfaces: the vocabulary, the table, how a connection is checked
+- [x] 4.1 Interface control table: CSV and report section
+- [x] 4.2 A docs page for interfaces: the vocabulary, the table, how a connection is checked

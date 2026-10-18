@@ -66,8 +66,17 @@ offer that is neither connected nor declared open with a reason, as `unconnected
 interfaces`, not evaluated. A kind that takes one partner and meets two is reported as a
 failure naming all three interfaces.
 
+## The interface control table
+
+Every placed product carries `placed.interfaces`: one row per connection, with the product
+that declares it, both interfaces, their kinds, the values each states (a pattern's hole
+count and face, a shaft's diameter), each item's owner (make, buy or reference, and its
+part number), and the connection's checks with their verdicts; then one row per interface
+declared open, with its reason. `to_csv()` writes it as CSV, with any cell a spreadsheet
+would run as a formula quoted, and `section()` as a report section.
+
 The same vocabulary is in the MCP server's `initialize` instructions. The published
 schema is the [product document](api/schemas/product-document.schema.json).
 
-Not yet built: interfaces bound to a catalog part's tagged features, joints on
-connections, and the interface control table.
+Not yet built: interfaces bound to a catalog part's tagged features, and joints on
+connections.

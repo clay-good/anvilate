@@ -546,6 +546,8 @@ product.product_tree
 product.parts_list
 product.PlacedBody
 product.NodeCard
+product.InterfaceRow
+product.InterfaceTable
 product.PlacedProduct
 product.BuildCache
 product.SummaryNode

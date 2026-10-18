@@ -45,6 +45,7 @@ from pydantic import ConfigDict, Field, computed_field, model_validator
 from ._models import (
     EMPTY_MAP,
     FrozenMap,
+    ItemCollection,
     Named,
     Provenance,
     StatableModel,
@@ -84,6 +85,8 @@ __all__ = [
     "parts_list",
     "PlacedBody",
     "NodeCard",
+    "InterfaceRow",
+    "InterfaceTable",
     "PlacedProduct",
     "BuildCache",
     "SummaryNode",
@@ -1064,6 +1067,83 @@ class NodeCard(StatableModel):
         return "\n".join(lines)
 
 
+class InterfaceRow(StatableModel):
+    """One row of the interface control table: a connection, or an interface left open.
+
+    ``node`` is the product that declares it; ``on`` and ``place`` are ``item.interface``
+    within it. Each side has its kind, the values its kind states, and its owner (the item's
+    make, buy or reference, and part number or description). ``checks`` are the
+    connection's entries as ``name: status``. An open row has ``reason`` and no ``place``.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    node: str = ""
+    on: Named
+    on_kind: Named
+    on_values: str
+    on_owner: Named
+    place: str | None = None
+    place_kind: str | None = None
+    place_values: str | None = None
+    place_owner: str | None = None
+    checks: tuple[str, ...] = ()
+    reason: str | None = None
+
+
+_TABLE_COLUMNS = ("product", "on", "on kind", "on values", "on owner", "place", "place kind",
+                  "place values", "place owner", "checks", "open reason")  # fmt: skip
+
+
+class InterfaceTable(ItemCollection, StatableModel):
+    """The interface control table: every connection and every open interface, by product."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    rows: tuple[InterfaceRow, ...]
+
+    def to_csv(self) -> str:
+        """The table as CSV, a header then one line per row; no cell reads as a formula."""
+        import csv
+        import io
+
+        from .margin_of_safety import _csv_safe
+
+        out = io.StringIO()
+        writer = csv.writer(out, lineterminator="\n")
+        writer.writerow(_TABLE_COLUMNS)
+        for row in self.rows:
+            cells = (row.node, row.on, row.on_kind, row.on_values, row.on_owner,
+                     row.place or "", row.place_kind or "", row.place_values or "",
+                     row.place_owner or "", "; ".join(row.checks), row.reason or "")  # fmt: skip
+            writer.writerow(
+                [_csv_safe(c, cell) for c, cell in zip(_TABLE_COLUMNS, cells, strict=True)]
+            )
+        return out.getvalue()
+
+    def section(self) -> str:
+        """The table as a Markdown report section: connections, then open interfaces."""
+
+        def cell(text: str) -> str:
+            return text.replace("|", "\\|")
+
+        header = "| Product | On | Kind | Values | Owner | Place | Kind | Values | Owner | Checks |"
+        lines = ["## Interface control table", "", header, "|" + " --- |" * 10]
+        for row in self.rows:
+            if row.place is not None:
+                lines.append(" | ".join([
+                    f"| {cell(row.node)}", cell(row.on), row.on_kind, cell(row.on_values),
+                    cell(row.on_owner), cell(row.place), row.place_kind or "",
+                    cell(row.place_values or ""), cell(row.place_owner or ""),
+                    cell("; ".join(row.checks) or "—"),
+                ]) + " |")  # fmt: skip
+        opened = [row for row in self.rows if row.place is None]
+        if opened:
+            lines += ["", "Left open:", ""]
+            lines += [f"- {row.node} {row.on} ({row.on_kind}): {row.reason}" for row in opened]
+        return "\n".join(lines)
+
+
 class PlacedProduct(StatableModel):
     """A product placed through its mates: its leaves, interference and mass roll-up.
 
@@ -1091,6 +1171,7 @@ class PlacedProduct(StatableModel):
     center_assumed: tuple[str, ...] = ()
     unused_parameters: tuple[str, ...] = ()
     card: NodeCard
+    interfaces: InterfaceTable = Field(default_factory=lambda: InterfaceTable(rows=()))
     rebuilt: int = Field(default=0, ge=0)
     reused: int = Field(default=0, ge=0)
 
@@ -1265,11 +1346,16 @@ class _Assembly:
     """A placed (sub-)product: a shape and features for ``_place``, and its leaves."""
 
     def __init__(
-        self, shape: Any, leaves: list[_Leaf], extra: dict[str, tuple[ScorecardEntry, ...]]
+        self,
+        shape: Any,
+        leaves: list[_Leaf],
+        extra: dict[str, tuple[ScorecardEntry, ...]],
+        tables: dict[str, tuple[InterfaceRow, ...]],
     ) -> None:
         self.shape, self.leaves, self.features = shape, leaves, ()
-        # The entries each product node owns beyond its interference: its connections'.
-        self.extra = extra
+        # The entries each product node owns beyond its interference: its connections'; and
+        # the interface-table rows for them, by the same node path.
+        self.extra, self.tables = extra, tables
 
 
 class BuildCache:
@@ -1297,7 +1383,13 @@ def _placed_leaves(
     library: Mapping[str, Product] | None,
     cache: BuildCache | None,
     root: Any = None,
-) -> tuple[list[_Leaf], int, int, dict[str, tuple[ScorecardEntry, ...]]]:
+) -> tuple[
+    list[_Leaf],
+    int,
+    int,
+    dict[str, tuple[ScorecardEntry, ...]],
+    dict[str, tuple[InterfaceRow, ...]],
+]:
     """Every leaf body placed where its mates put it, the items rebuilt and reused, and the
     connection entries each product node owns."""
     from .combination import _IDENTITY, PlacedPart, _place
@@ -1396,12 +1488,14 @@ def _placed_leaves(
 
         leaves: list[_Leaf] = []
         extra: dict[str, tuple[ScorecardEntry, ...]] = {}
+        tables: dict[str, tuple[InterfaceRow, ...]] = {}
         ground_first = sorted(current.instances, key=lambda i: i.name != current.ground)
         for instance in ground_first:
             definition = definitions[instance.item]
             path = f"{prefix}/{instance.name}"
             spec = None
             below: dict[str, tuple[ScorecardEntry, ...]] = {}
+            below_rows: dict[str, tuple[InterfaceRow, ...]] = {}
             if definition.kind in ("part", "placeholder", "component"):
                 key = _content(definition, shelf)
                 model = definition.component.model if definition.component is not None else None
@@ -1422,7 +1516,7 @@ def _placed_leaves(
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)
                 inner = built.leaves
-                below = built.extra
+                below, below_rows = built.extra, built.tables
             if instance.name == current.ground:
                 rotation, translation = _IDENTITY, (0.0, 0.0, 0.0)
             else:
@@ -1448,12 +1542,14 @@ def _placed_leaves(
                 where = _location(r, t)
                 leaves.extend(leaf.moved(label + leaf.path[len(path) :], where) for leaf in inner)
                 extra.update({label + key[len(path) :]: held for key, held in below.items()})
+                tables.update({label + key[len(path) :]: rows for key, rows in below_rows.items()})
         extra[prefix] = _connection_entries(current, derived, placed)
+        tables[prefix] = _interface_rows(current, extra[prefix])
         shape = Compound([leaf.shape for leaf in leaves])
-        return _Assembly(shape, leaves, extra)
+        return _Assembly(shape, leaves, extra, tables)
 
     top = assemble(product, product.name)
-    return top.leaves, len(rebuilt), len(reused), top.extra
+    return top.leaves, len(rebuilt), len(reused), top.extra, top.tables
 
 
 def place_product(
@@ -1476,7 +1572,7 @@ def place_product(
     """
     from .combination import _interference
 
-    leaves, rebuilt, reused, extra = _placed_leaves(product, library, cache, root)
+    leaves, rebuilt, reused, extra, tables = _placed_leaves(product, library, cache, root)
     interference = _provisional(_interference([(leaf.path, leaf.shape) for leaf in leaves]), leaves)
     holders = [leaf.path for leaf in leaves if leaf.placeholder]
     weighed = [(leaf.mass, _corner(leaf.com.center())) for leaf in leaves if leaf.mass is not None]
@@ -1506,6 +1602,13 @@ def place_product(
         center_assumed=tuple(leaf.path for leaf in leaves if leaf.assumed),
         unused_parameters=product.layout.unused if product.layout is not None else (),
         card=_card(product.name, leaves, extra),
+        interfaces=InterfaceTable(
+            rows=tuple(
+                row.model_copy(update={"node": node})
+                for node, rows in tables.items()
+                for row in rows
+            )
+        ),  # fmt: skip
         rebuilt=rebuilt,
         reused=reused,
     )
@@ -1562,6 +1665,42 @@ _COMPARED = Underived(
     kind=DerivationAbsence.LOOKUP,
     reason="the two interfaces' declared values compared as stated",
 )
+
+
+def _interface_rows(
+    current: Product, entries: tuple[ScorecardEntry, ...]
+) -> tuple[InterfaceRow, ...]:
+    """One row per connection, with its checks as named on the card, then one per open one."""
+    definitions = {d.id: d for d in current.definitions}
+    owners = {}
+    for instance in current.instances:
+        identity = definitions[instance.item].identity
+        owners[instance.name] = (f"{identity.source.value}, "
+                                 f"{identity.part_number or identity.description}")  # fmt: skip
+
+    def values(interface: Interface) -> str:
+        stated = [f"{name} {value}" for name, value in interface.parameters.items()]
+        if interface.holes:
+            stated.insert(0, f"{len(interface.holes)} holes on {interface.face}")
+        return ", ".join(stated) or (interface.face or interface.axis or "")
+
+    rows = []
+    for connection in current.connections:
+        on_item, on = current.interface_at(connection.on, "connections[].on")
+        place_item, place = current.interface_at(connection.place, "connections[].place")
+        pair = f"{connection.on} ~ {connection.place} "
+        checks = tuple(f"{e.name[len(pair):]}: {e.status.value}" for e in entries
+                       if e.name.startswith(pair))  # fmt: skip
+        rows.append(InterfaceRow(
+            on=connection.on, on_kind=on.kind, on_values=values(on), on_owner=owners[on_item],
+            place=connection.place, place_kind=place.kind, place_values=values(place),
+            place_owner=owners[place_item], checks=checks,
+        ))  # fmt: skip
+    for left in current.open_interfaces:
+        item, interface = current.interface_at(left.at, "open_interfaces[].at")
+        rows.append(InterfaceRow(on=left.at, on_kind=interface.kind, on_values=values(interface),
+                                 on_owner=owners[item], reason=left.reason))  # fmt: skip
+    return tuple(rows)
 
 
 def _connection_mates(current: Product) -> list[Mate]:
@@ -1697,7 +1836,7 @@ def write_product_step(
 
     tree = product_tree(product, library=library)
     nodes = {node.path: node for node in tree.walk()}
-    leaves, _rebuilt, _reused, _extra = _placed_leaves(product, library, cache)
+    leaves, _rebuilt, _reused, _extra, _tables = _placed_leaves(product, library, cache)
     bodies = []
     for leaf in leaves:
         node = nodes[leaf.path]

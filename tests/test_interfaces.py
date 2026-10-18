@@ -170,3 +170,24 @@ def test_the_docs_tables_are_the_vocabulary_and_the_compatibility_table():
     for a, b, agree in re.findall(r"^\| `(\w+)` with `(\w+)` \| ([^|]+) \|", page, re.M):
         pairs[(a, b)] = tuple(re.findall(r"`(\w+)`", agree))
     assert pairs == {pair: agree for pair, (agree, _checks) in COMPATIBLE.items()}
+
+
+def test_every_build_writes_an_interface_control_table():
+    document = _document()
+    fan_mount = {"name": "mount", "kind": "mounting_face", "face": "bottom"}
+    document["definitions"][1]["placeholder"]["interfaces"].append(fan_mount)
+    document["open_interfaces"] = [{"at": "motor.mount", "reason": "=held by the grille"}]
+    table = place_product(parse_product(document)).interfaces
+    connection, opened = table.rows
+    assert (connection.node, connection.on, connection.place) == (
+        "drive", "bracket.motor_mount", "motor.flange"
+    )
+    assert connection.on_values == "4 holes on top" and connection.on_owner == "make, bracket"
+    assert connection.place_owner == "buy, motor" and connection.checks == ("hole pattern: pass",)
+    assert opened.place is None and opened.reason == "=held by the grille"
+    csv_text = table.to_csv()
+    assert csv_text.splitlines()[0].startswith("product,on,on kind,on values,on owner,place")
+    assert "'=held by the grille" in csv_text  # a cell a spreadsheet would run is quoted
+    section = table.section()
+    assert "| drive | bracket.motor_mount | bolt_pattern | 4 holes on top |" in section
+    assert "- drive motor.mount (mounting_face): =held by the grille" in section
