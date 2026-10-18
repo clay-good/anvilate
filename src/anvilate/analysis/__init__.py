@@ -1038,6 +1038,9 @@ modules:
 - :mod:`~anvilate.analysis.random_vibration` — a declared breakpoint spectrum integrated
   to Grms on log-log segments, Miles' response at a mount's natural frequency, the 3σ
   peak, and its combination with a quasi-static load by a declared rule
+- :mod:`~anvilate.analysis.shell_buckling` — the NASA SP-8007 empirical knockdown factor
+  for thin cylinders in axial compression and bending, and the knocked-down design
+  buckling stress built on the classical one
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -3054,6 +3057,11 @@ from .sheetmetal import (
     sprung_bend_radius,
     stripping_force,
 )
+from .shell_buckling import (
+    CylinderLoading,
+    cylinder_design_buckling_stress,
+    sp8007_knockdown_factor,
+)
 from .shot_peening import (
     peening_coverage,
     peening_impact_coverage_rate,
@@ -3533,6 +3541,9 @@ __all__ = [
     "psd_level",
     "miles_response_grms",
     "random_vibration_load",
+    "CylinderLoading",
+    "sp8007_knockdown_factor",
+    "cylinder_design_buckling_stress",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

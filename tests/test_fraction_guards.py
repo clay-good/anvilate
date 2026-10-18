@@ -1745,8 +1745,10 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # and tests/test_laminate.py refuses NaN and infinity in every modulus, strength,
     # thickness and running load itself. 85 -> 88: psd_overall_grms, psd_level and
     # random_vibration_load take breakpoint sequences, and tests/test_random_vibration.py
-    # refuses a NaN and an infinity in them. Raise this only with such a test named.
-    assert len(unbuildable) <= 88, (
+    # refuses a NaN and an infinity in them. 88 -> 90: the two shell_buckling functions
+    # take a CylinderLoading, and tests/test_shell_buckling.py refuses a NaN and an
+    # infinite r/t. Raise this only with such a test named.
+    assert len(unbuildable) <= 90, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

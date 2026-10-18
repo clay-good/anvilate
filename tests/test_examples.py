@@ -9449,3 +9449,19 @@ def test_random_vibration_box_example():
     assert d["combined_absolute"] == pytest.approx(53.56, abs=0.005)
     assert d["peak_3_sigma_q25"] == pytest.approx(d["peak_3_sigma"] * (25 / 10) ** 0.5, rel=1e-12)
     _assert_narrates_computed("random_vibration_box.py", namespace)
+
+
+def test_thin_cylinder_knockdown_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "thin_cylinder_knockdown.py"))
+    d = namespace["thin_cylinder_knockdown"]()
+    # r/t = 500: γ 0.322 axial, 0.450 bending; r/t = 1000: γ 0.224.
+    assert d["classical_mpa"] == pytest.approx(90.3, abs=0.05)
+    assert d["gamma"] == pytest.approx(0.322, abs=5e-4)
+    assert d["design_mpa"] == pytest.approx(29.0, abs=0.05)
+    assert d["gamma_bending"] == pytest.approx(0.450, abs=5e-4)
+    assert d["design_bending_mpa"] == pytest.approx(40.6, abs=0.05)
+    assert d["gamma_thin"] == pytest.approx(0.224, abs=5e-4)
+    assert d["design_thin_mpa"] == pytest.approx(10.1, abs=0.05)
+    # thinner by half, weaker by about two thirds: the knockdown falls with r/t
+    assert d["design_thin_mpa"] / d["design_mpa"] == pytest.approx(0.35, abs=0.01)
+    _assert_narrates_computed("thin_cylinder_knockdown.py", namespace)

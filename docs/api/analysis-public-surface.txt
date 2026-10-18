@@ -147,6 +147,9 @@ random_vibration.psd_overall_grms
 random_vibration.psd_level
 random_vibration.miles_response_grms
 random_vibration.random_vibration_load
+shell_buckling.CylinderLoading
+shell_buckling.sp8007_knockdown_factor
+shell_buckling.cylinder_design_buckling_stress
 geotechnical.allowable_bearing_from_ultimate
 geotechnical.bearing_capacity_factors
 geotechnical.bearing_depth_factors
