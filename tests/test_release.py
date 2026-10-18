@@ -161,3 +161,63 @@ def test_the_docs_page_names_every_file_the_package_writes(tmp_path):
     written = {f.path for f in manifest.files} | {"manifest.json"}
     assert {"bom.csv", "bom.xlsx", "buy.csv", "manifest.json"} <= written
     assert any(p.startswith("parameters/") for p in written)
+
+
+def _pair(hole_x: float = 0.0, revision: str = "B"):
+    plate = parse_yaml((_ROOT / "examples" / "parts" / "mounting_plate.spec.yaml").read_text())
+    plate["element_params"]["holes"][0]["x"] = {"magnitude": hole_x, "unit": "mm"}
+    part = {"id": "plate", "spec": plate,
+            "identity": {"description": "plate", "source": "make", "part_number": "100-1",
+                         "revision": revision}}  # fmt: skip
+    top = {
+        **copy.deepcopy(part),
+        "id": "top",
+        "spec": parse_yaml((_ROOT / "examples" / "parts" / "mounting_plate.spec.yaml").read_text()),
+    }
+    top["identity"] = {**part["identity"], "part_number": "100-2", "revision": "B"}
+    return parse_product({
+        "name": "pair", "identity": {"description": "pair", "source": "make",
+                                     "part_number": "200-1", "revision": "A"},
+        "definitions": [part, top],
+        "instances": [{"name": "plate", "item": "plate"}, {"name": "top", "item": "top"}],
+        "ground": "plate", "mates": _seat("top", "plate"),
+    })  # fmt: skip
+
+
+def test_a_silent_change_cannot_be_released_under_its_old_revision(tmp_path):
+    baseline = export_package(_pair(), tmp_path / "rev-a", release=True)
+    plate = next(item for item in baseline.items if item.item == "plate")
+    assert plate.revision == "B" and "step/100-1_B.step" in plate.files
+    with pytest.raises(ReleaseRefused) as refused:
+        export_package(_pair(hole_x=5.0), tmp_path / "rev-b", release=True, baseline=baseline)
+    (blocker,) = refused.value.blockers
+    assert blocker == ("plate (100-1) changed under revision B: "
+                       "element_params.holes[0].x.magnitude 0.0 → 5.0")  # fmt: skip
+    revised = export_package(_pair(hole_x=5.0, revision="C"), tmp_path / "rev-c", release=True,
+                             baseline=baseline)  # fmt: skip
+    assert revised.kind == "release" and "step/100-1_C.step" in {f.path for f in revised.files}
+
+
+def test_unchanged_content_regenerates_identical_files(tmp_path):
+    first = export_package(_pair(), tmp_path / "one", release=True)
+    second = export_package(_pair(), tmp_path / "two", release=True, baseline=first)
+    assert [(f.path, f.sha256) for f in first.files] == [(f.path, f.sha256) for f in second.files]
+    assert (tmp_path / "one" / "manifest.json").read_bytes() == (
+        tmp_path / "two" / "manifest.json"
+    ).read_bytes()
+
+
+def test_a_product_is_compared_with_its_last_release(tmp_path):
+    from anvilate.changes import compare_products, compare_to_release
+
+    baseline = export_package(_pair(), tmp_path, release=True)
+    record = compare_to_release(_pair(hole_x=5.0), baseline)
+    items = {item.item: item for item in record.items}
+    plate = items["plate"]
+    assert plate.status == "changed" and plate.changes[0].startswith("element_params.holes[0].x")
+    assert plate.evidence == ("content changed under part number 100-1 revision B, as released",)
+    assert "step/100-1_B.step" in plate.affected_files and "bom.csv" in plate.affected_files
+    assert items["top"].status == "unchanged" and record.mass_before_kg is None
+    assert "the release records none to compare" in record.to_markdown()
+    classified = compare_products(_pair(), _pair(hole_x=5.0), baseline=baseline)
+    assert "step/100-1_B.step" in {i.item: i for i in classified.items}["plate"].affected_files

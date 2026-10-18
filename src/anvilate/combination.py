@@ -2215,6 +2215,12 @@ def _write_assembly(
                 subject="path",
                 action="report",
             )
+        # OCCT numbers each assembly occurrence from a counter that keeps counting across
+        # writes in one process, so the same assembly written twice differed in those ids
+        # alone. They are renumbered from 1 in file order: one content, one file.
+        counter = iter(range(1, 1 << 30))
+        usage = "NEXT_ASSEMBLY_USAGE_OCCURRENCE"
+        text = re.sub(rf"{usage}\('\d+'", lambda _m: f"{usage}('{next(counter)}'", text)
         staging.write_text(text, encoding="utf-8")
 
         reader = STEPCAFControl_Reader()

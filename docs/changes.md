@@ -49,6 +49,21 @@ class, flag, changes, evidence and paths, the unchanged items, checks newly fail
 newly passing, and the mass before and after. `reason` is yours to supply; a record without
 one says **reason missing** rather than leaving it blank. The JSON is the model's dump.
 
-Not yet built: comparison against a release manifest, affected files, the release refusal
-for changed content under an unchanged revision, cost deltas, and reading an existing STEP
-assembly as a reference item.
+## Against the last release
+
+A release's `manifest.json` records each item's part number, revision, content hash,
+parameters, and the package files that contain or reference it. Two uses:
+
+- `compare_to_release(product, read_manifest(folder))` compares a working product with that
+  release: each item added, removed, unchanged or changed, its changed parameters named,
+  and an item changed under the part number and revision it was released as says so.
+- `compare_products(released, working, baseline=manifest)` classifies as above, and each
+  changed item lists `affected_files`: the release's per-part STEP, the assembly STEP, the
+  BOM and the buy list it appears in.
+
+A release exported with `baseline=` is refused while an item's content changed under its
+released revision, naming it and what changed:
+`plate (100-1) changed under revision B: element_params.holes[0].x.magnitude 0.0 → 5.0`.
+Exporting unchanged content again writes byte-identical files, which CI holds.
+
+Not yet built: cost deltas, and reading an existing STEP assembly as a reference item.

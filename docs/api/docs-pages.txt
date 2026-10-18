@@ -13,7 +13,7 @@ analysis-interop.md | Declaring the part | example-highlights | -
 assembly-order.md | Deciding what the answer is worth | published-contracts | -
 building-services-screening.md | Screening by discipline | nothing | -
 calculation-reports.md | Start here | citations, evidence-bundle, example-highlights, failure-mode-coverage, headless-cli, margin-ledger, repair-feedback, requirements-ingestion | -
-changes.md | Start here | nothing | -
+changes.md | Start here | release-package | -
 check-dependencies.md | Deciding what the answer is worth | constraint-topology, example-highlights, optomechanics, published-contracts | -
 citations.md | Start here | quickstart | -
 cold-formed-steel.md | Screening by discipline | example-highlights | -

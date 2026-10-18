@@ -39,7 +39,7 @@ from .product import (
 )
 from .refusal import RefusalError, Remedy
 
-__all__ = ["ChangeError", "ItemChange", "ChangeRecord", "compare_products"]
+__all__ = ["ChangeError", "ItemChange", "ChangeRecord", "compare_products", "compare_to_release"]
 
 _SOURCE = "the two product revisions being compared"
 _VOLUME_MM3 = 1e-3
@@ -75,6 +75,8 @@ class ItemChange(StatableModel):
     flag: Literal["new_part_number", "new_revision"] | None = None
     evidence: tuple[str, ...] = ()
     where_used: tuple[str, ...] = Field(default=(), max_length=1024)
+    # The files of the baseline release that contain or reference the item.
+    affected_files: tuple[str, ...] = ()
 
 
 class ChangeRecord(StatableModel):
@@ -90,7 +92,7 @@ class ChangeRecord(StatableModel):
     items: tuple[ItemChange, ...]
     newly_failing: tuple[str, ...] = ()
     newly_passing: tuple[str, ...] = ()
-    mass_before_kg: float
+    mass_before_kg: float | None
     mass_after_kg: float
     reason: str | None = None
 
@@ -105,11 +107,17 @@ class ChangeRecord(StatableModel):
             "",
             f"Reason: {self.reason if self.reason else '**reason missing**'}",
             "",
-            f"Mass: {self.mass_before_kg:.4g} kg → {self.mass_after_kg:.4g} kg "
-            f"({self.mass_after_kg - self.mass_before_kg:+.4g} kg). Cost: not estimated.",
+            (
+                f"Mass: {self.mass_before_kg:.4g} kg → {self.mass_after_kg:.4g} kg "
+                f"({self.mass_after_kg - self.mass_before_kg:+.4g} kg)."
+                if self.mass_before_kg is not None
+                else f"Mass: {self.mass_after_kg:.4g} kg; the release records none to compare."
+            )
+            + " Cost: not estimated.",
             "",
-            "| Item | Part number | Status | Class | Flag | What changed | Evidence | Used at |",
-            "|" + " --- |" * 8,
+            "| Item | Part number | Status | Class | Flag | What changed | Evidence | Used at "
+            "| Files |",
+            "|" + " --- |" * 9,
         ]
         for item in self.changed():
             lines.append(
@@ -125,6 +133,7 @@ class ChangeRecord(StatableModel):
                         "; ".join(item.changes) or "—",
                         "; ".join(item.evidence) or "—",
                         ", ".join(item.where_used) or "—",
+                        ", ".join(item.affected_files) or "—",
                     )
                 )
                 + " |"
@@ -256,11 +265,14 @@ def compare_products(
     library_before: Mapping[str, Product] | None = None,
     library_after: Mapping[str, Product] | None = None,
     reason: str | None = None,
+    baseline: Any = None,
 ) -> ChangeRecord:
     """Compare two revisions of a product item by item, and classify each change.
 
     Items are matched by their definition id. Both revisions are placed, so geometry,
-    interfaces as built and verdicts are compared as the product checks them.
+    interfaces as built and verdicts are compared as the product checks them. ``baseline``
+    is the manifest of the release ``before`` was exported as; each changed item then names
+    the files of that release it reaches.
     """
     if not isinstance(before, Product) or not isinstance(after, Product):
         raise _refuse("before and after must each be a Product", subject="before")
@@ -356,6 +368,8 @@ def compare_products(
             classes=tuple(classes), flag=flag, evidence=evidence,
             where_used=tuple(_where_used(after, shelf_after, item)) if changes else (),
         ))  # fmt: skip
+    if baseline is not None:
+        items = _with_affected(items, baseline)
     moved = [i.item for i in items if i.status != "unchanged"]
     items.insert(0, ItemChange(
         item=after.name, part_number=product_tree(after, library=shelf_after).part_number,
@@ -400,3 +414,78 @@ def _geometry_delta(a: Any, b: Any) -> str:
         return ""
     sizes = " × ".join(f"{v:g}" for v in size_a) + " → " + " × ".join(f"{v:g}" for v in size_b)
     return f"geometry: volume {volume_a:.6g} → {volume_b:.6g} mm^3, envelope {sizes} mm"
+
+
+def _with_affected(items: list[ItemChange], baseline: Any) -> list[ItemChange]:
+    from .release import Manifest
+
+    if not isinstance(baseline, Manifest):
+        raise _refuse("baseline must be the Manifest of the release compared against",
+                      subject="baseline")  # fmt: skip
+    files = {item.item: item.files for item in baseline.items}
+    return [item.model_copy(update={"affected_files": files.get(item.item, ())})
+            if item.status != "unchanged" else item for item in items]  # fmt: skip
+
+
+def compare_to_release(
+    product: Product,
+    baseline: Any,
+    *,
+    library: Mapping[str, Product] | None = None,
+    reason: str | None = None,
+) -> ChangeRecord:
+    """Compare a working product with the manifest of its last release, item by item.
+
+    The release holds each item's content hash and parameters, not its geometry, so an item
+    is changed when its content differs, with its parameters named; an item changed under
+    the part number and revision it was released as says so. To classify the changes, keep
+    the released product document and use :func:`compare_products` with ``baseline``.
+    """
+    from .release import Manifest, _items
+
+    if not isinstance(product, Product):
+        raise _refuse("product must be a Product", subject="product")
+    if not isinstance(baseline, Manifest):
+        raise _refuse("baseline must be the Manifest of the last release", subject="baseline")
+    shelf = dict(library or {})
+    tree = product_tree(product, library=shelf)
+    now = {item.item: item for item in _items(product, shelf, tree)}
+    then = {item.item: item for item in baseline.items}
+    used = _occurrences(product, shelf)
+    changes: list[ItemChange] = []
+    for key in [*now, *(k for k in then if k not in now)]:
+        mine, released = now.get(key), then.get(key)
+        if released is None:
+            assert mine is not None
+            changes.append(ItemChange(item=key, part_number=mine.part_number, status="added",
+                                      where_used=tuple(used.get(key, ()))))  # fmt: skip
+            continue
+        if mine is None:
+            changes.append(ItemChange(item=key, part_number=released.part_number, status="removed",
+                                      affected_files=released.files))  # fmt: skip
+            continue
+        if mine.content == released.content:
+            changes.append(ItemChange(item=key, part_number=mine.part_number, status="unchanged"))
+            continue
+        keys = set(released.parameters) | set(mine.parameters)
+        lines = [
+            f"{k}: {released.parameters.get(k, 'absent')} → {mine.parameters.get(k, 'absent')}"
+            for k in sorted(keys)
+            if released.parameters.get(k) != mine.parameters.get(k)
+        ]
+        same = (mine.part_number, mine.revision) == (released.part_number, released.revision)
+        evidence = ((f"content changed under part number {mine.part_number} revision "
+                     f"{mine.revision or '-'}, as released",) if same else ())  # fmt: skip
+        changes.append(ItemChange(
+            item=key, part_number=mine.part_number, status="changed",
+            changes=tuple(lines) or ("content",), evidence=evidence,
+            where_used=tuple(used.get(key, ())), affected_files=released.files,
+        ))  # fmt: skip
+    placed = place_product(product, library=shelf)
+    return ChangeRecord(
+        before=f"{baseline.product} rev {baseline.revision}" if baseline.revision
+        else baseline.product,
+        after=_label(product), items=tuple(changes),
+        mass_before_kg=None, mass_after_kg=placed.mass_kg,
+        reason=reason.strip() if reason and reason.strip() else None,
+    )  # fmt: skip

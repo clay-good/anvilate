@@ -111,6 +111,7 @@ changes.ChangeError
 changes.ItemChange
 changes.ChangeRecord
 changes.compare_products
+changes.compare_to_release
 cli.EXIT_CODES
 cli.main
 cli.run
@@ -593,8 +594,10 @@ keepouts.keepout_label
 keepouts.write_keepout_step
 release.ReleaseRefused
 release.ManifestFile
+release.ManifestItem
 release.Manifest
 release.release_blockers
+release.read_manifest
 release.export_package
 release.verify_package
 review.DecisionOrigin

@@ -36,6 +36,11 @@ every STEP header carries the unvalidated watermark naming them.
 | `parameters/<part number>.csv` | each item's layout parameters, one column per variant | a native CAD design table |
 | `manifest.json` | the product, its revision, release or draft, the card's verdict, the blockers, and every file with its role and SHA-256 | `anvilate verify` |
 
+The manifest also lists each item with its part number, revision, content hash,
+parameters and files, which [change control](changes.md) compares against. Pass the last
+release's manifest as `baseline=` and a release is refused while an item changed under the
+revision it was released as. Unchanged content regenerates byte for byte.
+
 `anvilate verify out/stage` checks every file against the manifest and reports one that is
 missing or altered, by path and both hashes; it exits 1 when one is.
 

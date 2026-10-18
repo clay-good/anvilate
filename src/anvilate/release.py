@@ -34,7 +34,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field
 
-from ._models import Named, StatableModel
+from ._models import EMPTY_MAP, FrozenMap, Named, StatableModel
 from .product import (
     Product,
     ProductNode,
@@ -50,8 +50,10 @@ from .scorecard import CheckStatus
 __all__ = [
     "ReleaseRefused",
     "ManifestFile",
+    "ManifestItem",
     "Manifest",
     "release_blockers",
+    "read_manifest",
     "export_package",
     "verify_package",
 ]
@@ -88,8 +90,27 @@ class ManifestFile(StatableModel):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class ManifestItem(StatableModel):
+    """One item as released: its identity, its content's hash, its parameters, its files.
+
+    ``item`` is its definition id, ``owner/id`` inside a sub-product. ``content`` is the
+    digest of its definition's content (as a provisional number is); ``parameters`` its
+    stated values, path by path, so a later change can be named; ``files`` every file of
+    the package that contains or references it.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    item: Named
+    part_number: Named
+    revision: str | None
+    content: str = Field(pattern=r"^[0-9a-f]{64}$")
+    parameters: FrozenMap[str, str] = Field(default_factory=lambda: EMPTY_MAP)
+    files: tuple[str, ...] = ()
+
+
 class Manifest(StatableModel):
-    """What the package is: the product, release or draft, the verdict, and every file."""
+    """What the package is: the product, release or draft, the verdict, every item and file."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -100,6 +121,7 @@ class Manifest(StatableModel):
     blockers: tuple[str, ...] = ()
     variants: tuple[str, ...] = ()
     files: tuple[ManifestFile, ...] = Field(max_length=4096)
+    items: tuple[ManifestItem, ...] = Field(default=(), max_length=1024)
 
 
 def release_blockers(product: Product, placed: Any, tree: ProductNode) -> tuple[str, ...]:
@@ -125,12 +147,15 @@ def export_package(
     release: bool,
     library: Mapping[str, Product] | None = None,
     variants: bool = True,
+    baseline: Manifest | None = None,
 ) -> Manifest:
     """Write ``source`` (a Product, or a product document's path) into ``folder``.
 
     ``release`` asks for a release, refused with every blocker named while there is one;
     otherwise a draft is written. ``variants`` exports each declared variant's buy list
-    and parameter columns with the base product's.
+    and parameter columns with the base product's. ``baseline`` is the manifest of the last
+    release: an item whose content changed while its part number and revision did not is a
+    blocker, named with what changed.
     """
     from .export.gate import ExportAuthorization
 
@@ -142,7 +167,12 @@ def export_package(
     out = Path(folder)
     placed = place_product(product, library=shelf, root=root)
     tree = product_tree(product, library=shelf)
+    items = _items(product, shelf, tree)
     blockers = release_blockers(product, placed, tree)
+    if baseline is not None:
+        if not isinstance(baseline, Manifest):
+            raise _refuse("baseline must be the Manifest of the last release", subject="baseline")
+        blockers += tuple(_unrevised(baseline, items))
     if release and blockers:
         raise ReleaseRefused(blockers)
     authorization = (
@@ -175,6 +205,7 @@ def export_package(
         verdict=placed.card.status,
         blockers=blockers,
         variants=tuple(name for name, _p in chosen[1:]),
+        items=tuple(_with_files(item, files, product.name) for item in items),
         files=tuple(
             ManifestFile(path=p, role=role, sha256=_digest(out / p)) for p, role in sorted(files)
         ),  # fmt: skip
@@ -183,15 +214,71 @@ def export_package(
     return manifest
 
 
+def _items(
+    product: Product, shelf: Mapping[str, Product], tree: ProductNode
+) -> tuple[ManifestItem, ...]:
+    """Every item of the product and its sub-products, with its content and parameters."""
+    from .changes import _definitions, _occurrences, _parameters
+    from .product import _content
+
+    numbers = {node.path: node for node in tree.walk()}
+    used = _occurrences(product, shelf)
+    items = []
+    for key, definition in _definitions(product, shelf).items():
+        if key not in used:
+            continue
+        node = numbers[used[key][0]]
+        items.append(ManifestItem(
+            item=key, part_number=node.part_number, revision=node.revision,
+            content=_content(definition, shelf),
+            parameters={k: str(v) for k, v in _parameters(definition).items()},
+        ))  # fmt: skip
+    return tuple(items)
+
+
+def _with_files(item: ManifestItem, files: list[tuple[str, str]], product: str) -> ManifestItem:
+    """``item`` with every file of the package that contains or references it."""
+    number = _safe(item.part_number)
+    mine = [p for p, role in files
+            if role in ("bom", "buy list") or p == f"step/{_safe(product)}.step"
+            or p.startswith(f"step/{number}_") or p == f"parameters/{number}.csv"]  # fmt: skip
+    return item.model_copy(update={"files": tuple(sorted(mine))})
+
+
+def _unrevised(baseline: Manifest, items: tuple[ManifestItem, ...]) -> list[str]:
+    """Each item whose content changed under the part number and revision it was released as."""
+    released = {item.item: item for item in baseline.items}
+    blockers = []
+    for item in items:
+        before = released.get(item.item)
+        if before is None or before.content == item.content:
+            continue
+        if (before.part_number, before.revision) != (item.part_number, item.revision):
+            continue
+        keys = set(before.parameters) | set(item.parameters)
+        changed = sorted(k for k in keys if before.parameters.get(k) != item.parameters.get(k))
+        what = ", ".join(
+            f"{k} {before.parameters.get(k, 'absent')} → {item.parameters.get(k, 'absent')}"
+            for k in changed[:4]
+        )
+        blockers.append(f"{item.item} ({item.part_number}) changed under revision "
+                        f"{item.revision or '-'}: {what or 'its content'}")  # fmt: skip
+    return blockers
+
+
+def read_manifest(folder: Any) -> Manifest:
+    """The manifest of the package in ``folder``."""
+    path = Path(folder) / "manifest.json"
+    try:
+        return Manifest.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as failure:
+        raise _refuse(f"{path} cannot be read: {failure}", subject="folder") from failure
+
+
 def verify_package(folder: Any) -> tuple[str, ...]:
     """Every file the package's manifest lists that is missing or no longer matches it."""
     out = Path(folder)
-    try:
-        manifest = Manifest.model_validate_json((out / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError) as failure:
-        raise _refuse(
-            f"{out / 'manifest.json'} cannot be read: {failure}", subject="folder"
-        ) from failure
+    manifest = read_manifest(out)
     problems = []
     for listed in manifest.files:
         path = out / listed.path
