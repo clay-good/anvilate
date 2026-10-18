@@ -8,7 +8,7 @@ has not shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
-| `check` | one or more specs, or a directory | `--format`, `--show-work`, `--module` | every check passed, or passed with margin to spare |
+| `check` | one or more specs, or a directory; or one product document | `--format`, `--show-work`, `--module`, `--node` | every check passed, or passed with margin to spare |
 | `export` | one or more specs, or a directory; one spec for `step` or `3mf` | `--artifact`, `--format`, `--module`; for `step` and `3mf`: `--output`, `--unvalidated`, `--ap214`, `--force` | the bundle rolled up clean; for `step` or `3mf`, the file was written |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format`, `--module` | nothing got worse |
@@ -30,6 +30,8 @@ requires every command to have one and parses each example exactly as printed.
 anvilate check part.yaml
 anvilate check parts/            # every spec under a directory, recursively
 anvilate check a.yaml b.yaml
+anvilate check stage.product.yaml                        # a product's summary tree
+anvilate check stage.product.yaml --node stage/drive[2]  # one node's full card
 ```
 
 ```text
@@ -434,8 +436,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.61.0",
- "schema_version": "1.61.0", "command": "check", "status": "fail",
+{"schema": "urn:anvilate:schema:cli-output:1.62.0",
+ "schema_version": "1.62.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}

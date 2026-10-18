@@ -323,12 +323,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -617,12 +617,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -910,12 +910,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2417,12 +2417,12 @@
           "$ref": "#/$defs/Regression"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2557,12 +2557,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2606,12 +2606,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2760,12 +2760,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -2803,12 +2803,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -3027,12 +3027,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -3120,12 +3120,12 @@
           "$ref": "#/$defs/FetchProvenance"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -3406,12 +3406,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -4063,12 +4063,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -4843,6 +4843,51 @@
       "title": "NeedsSummary",
       "type": "object"
     },
+    "NodeCard": {
+      "description": "One node's card: the checks it owns, and its children's cards.\n\nA part owns its own card's checks, a placeholder owns one not-evaluated entry saying it\nstands in for an undetailed item, and a product owns the interference between its\nchildren. ``status`` is the worst of its own card and its children's verdicts, with\nnot evaluated never counted as a pass. A finding is held once, by the node that owns\nit; an ancestor fails by reference to it (:meth:`findings` lists them with their\nowners).",
+      "properties": {
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NodeCard"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ScorecardEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "part",
+            "product",
+            "placeholder"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus",
+          "readOnly": true
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "entries",
+        "status"
+      ],
+      "title": "NodeCard",
+      "type": "object"
+    },
     "Objective": {
       "description": "One quantity the study ranks designs by, and which direction is better.",
       "properties": {
@@ -5299,6 +5344,115 @@
       "title": "ProcessNote",
       "type": "object"
     },
+    "ProductCheckOutput": {
+      "additionalProperties": false,
+      "description": "``check`` on a product document: its summary tree, or one node's full card.",
+      "properties": {
+        "command": {
+          "const": "check",
+          "title": "Command",
+          "type": "string"
+        },
+        "node": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeCard"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "product": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProductSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "schema": {
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.62.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "command",
+        "status"
+      ],
+      "title": "ProductCheckOutput",
+      "type": "object"
+    },
+    "ProductSummary": {
+      "additionalProperties": false,
+      "description": "A bounded summary of a placed product: one line per node, worst first when cut.\n\n``omitted`` counts nodes left out to keep it within its bound; ``more`` says how to ask\nfor any node's full card by its path.",
+      "properties": {
+        "mass_kg": {
+          "title": "Mass Kg",
+          "type": "number"
+        },
+        "more": {
+          "title": "More",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/SummaryNode"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "omitted": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Omitted",
+          "type": "integer"
+        },
+        "rebuilt": {
+          "minimum": 0,
+          "title": "Rebuilt",
+          "type": "integer"
+        },
+        "reused": {
+          "minimum": 0,
+          "title": "Reused",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "nodes",
+        "more",
+        "mass_kg",
+        "rebuilt",
+        "reused"
+      ],
+      "title": "ProductSummary",
+      "type": "object"
+    },
     "ProductionMethod": {
       "description": "How the surface was produced — the index of the Marin surface-factor table.\n\n``POLISHED`` (mirror-polished or lapped) is the rotating-beam specimen's own surface\nand takes k_a = 1.0 by definition rather than by fit. ``MACHINED`` covers cold-drawn\nas well, as the published table does: they share a row.",
       "enum": [
@@ -5417,12 +5571,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -5541,12 +5695,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -6557,12 +6711,12 @@
           ]
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -6676,6 +6830,53 @@
         "provisional"
       ],
       "title": "StudyResult",
+      "type": "object"
+    },
+    "SummaryNode": {
+      "additionalProperties": false,
+      "description": "One node of a product summary: where it is, what it is, its verdict and why.\n\n``findings`` counts the entries this node itself holds that did not pass. ``governing``\nis the worst of them at a node that did not pass, or the paths below it that it fails\nby reference to.",
+      "properties": {
+        "findings": {
+          "minimum": 0,
+          "title": "Findings",
+          "type": "integer"
+        },
+        "governing": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Governing"
+        },
+        "part_number": {
+          "title": "Part Number",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "provisional": {
+          "title": "Provisional",
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus"
+        }
+      },
+      "required": [
+        "path",
+        "part_number",
+        "provisional",
+        "status",
+        "findings"
+      ],
+      "title": "SummaryNode",
       "type": "object"
     },
     "SurfaceFinish": {
@@ -7238,12 +7439,12 @@
           ]
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.61.0",
+          "const": "urn:anvilate:schema:cli-output:1.62.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.61.0",
+          "const": "1.62.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -7303,7 +7504,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:cli-output:1.61.0",
+  "$id": "urn:anvilate:schema:cli-output:1.62.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "anyOf": [
     {
@@ -7311,6 +7512,9 @@
     },
     {
       "$ref": "#/$defs/CheckOutput"
+    },
+    {
+      "$ref": "#/$defs/ProductCheckOutput"
     },
     {
       "$ref": "#/$defs/EvidenceBundleOutput"
@@ -7357,5 +7561,5 @@
   ],
   "description": "Every completed machine-readable Anvilate CLI result. Generated from anvilate._cli_output.CliOutput.",
   "title": "Anvilate CLI output",
-  "x-anvilate-version": "1.61.0"
+  "x-anvilate-version": "1.62.0"
 }

@@ -31,14 +31,15 @@ from .geometry import (
 )
 from .margin import MarginEntry, MarginKind
 from .needs import LEVERAGE_IS_NOT_IMPORTANCE
+from .product import NodeCard, ProductSummary
 from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.61.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.62.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.61.0"]
-SchemaVersion = Literal["1.61.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.62.0"]
+SchemaVersion = Literal["1.62.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -128,6 +129,17 @@ class CheckOutput(_WireModel):
     command: Literal["check"]
     status: CheckStatus
     specs: tuple[CheckedSpec, ...]
+
+
+class ProductCheckOutput(_WireModel):
+    """``check`` on a product document: its summary tree, or one node's full card."""
+
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["check"]
+    status: CheckStatus
+    product: ProductSummary | None = None
+    node: NodeCard | None = None
 
 
 class BuildArtifact(_WireModel):
@@ -416,6 +428,7 @@ class InterfacesOutput(_WireModel):
 CliOutput = (
     BuildOutput
     | CheckOutput
+    | ProductCheckOutput
     | EvidenceBundleOutput
     | DxfOutput
     | QifOutput

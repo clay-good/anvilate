@@ -82,6 +82,9 @@ __all__ = [
     "NodeCard",
     "PlacedProduct",
     "BuildCache",
+    "SummaryNode",
+    "ProductSummary",
+    "summarize_product",
     "place_product",
 ]
 
@@ -864,7 +867,8 @@ class NodeCard(StatableModel):
         def walk(card: NodeCard, depth: int) -> None:
             own = [e for e in card.entries if e.status is not CheckStatus.PASS]
             line = f"{'  ' * depth}{card.path}: {card.status.value}"
-            below = [path for path, _ in card.findings() if path != card.path]
+            below = [path for path, e in card.findings()
+                     if path != card.path and e.status is card.status]  # fmt: skip
             if below and not own:
                 owners = list(dict.fromkeys(below))
                 line += (
@@ -927,6 +931,124 @@ class PlacedProduct(StatableModel):
             f"interference {self.interference.status.value}; card {self.card.status.value}; "
             f"{self.rebuilt} of {self.rebuilt + self.reused} items built, {self.reused} reused"
         )
+
+
+class SummaryNode(StatableModel):
+    """One node of a product summary: where it is, what it is, its verdict and why.
+
+    ``findings`` counts the entries this node itself holds that did not pass. ``governing``
+    is the worst of them at a node that did not pass, or the paths below it that it fails
+    by reference to.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path: Named
+    part_number: Named
+    provisional: bool
+    status: CheckStatus
+    findings: int = Field(ge=0)
+    governing: str | None = None
+
+
+class ProductSummary(StatableModel):
+    """A bounded summary of a placed product: one line per node, worst first when cut.
+
+    ``omitted`` counts nodes left out to keep it within its bound; ``more`` says how to ask
+    for any node's full card by its path.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    status: CheckStatus
+    nodes: tuple[SummaryNode, ...]
+    omitted: int = Field(default=0, ge=0)
+    more: Provenance
+    mass_kg: float
+    rebuilt: int = Field(ge=0)
+    reused: int = Field(ge=0)
+
+    def __str__(self) -> str:
+        lines = [f"{self.name}: {self.status.value} — {self.mass_kg:.4g} kg; "
+                 f"{self.rebuilt} of {self.rebuilt + self.reused} items built"]  # fmt: skip
+        for node in self.nodes:
+            depth = node.path.count("/")
+            number = f"{node.part_number}{' (provisional)' if node.provisional else ''}"
+            line = f"{'  ' * depth}{node.path} [{number}] {node.status.value}"
+            if node.findings:
+                line += f", {node.findings} finding{'s' if node.findings != 1 else ''}"
+            if node.governing:
+                line += f" — {node.governing}"
+            lines.append(line)
+        if self.omitted:
+            lines.append(f"{self.omitted} node{'s' if self.omitted != 1 else ''} not shown, "
+                         "none worse than those shown")  # fmt: skip
+        lines.append(self.more)
+        return "\n".join(lines)
+
+
+def summarize_product(
+    placed: PlacedProduct, tree: ProductNode, *, limit: int = 60, more: str | None = None
+) -> ProductSummary:
+    """A bounded summary tree of ``placed``: path, part number, verdict and findings per node.
+
+    ``tree`` is :func:`product_tree` of the same product, for the part numbers. Within
+    ``limit`` nodes every node is shown in tree order; past it, the nodes on the way to a
+    finding are kept first and the rest counted in ``omitted``. ``more`` says how to ask for
+    a node's full card; it defaults to :meth:`NodeCard.find`.
+    """
+    if not isinstance(placed, PlacedProduct):
+        raise _refuse("placed must be a PlacedProduct from place_product", subject="placed")
+    if not isinstance(tree, ProductNode):
+        raise _refuse("tree must be a ProductNode from product_tree", subject="tree")
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        raise _refuse(f"limit is {limit!r}; a summary shows at least one node", subject="limit")
+    numbers = {node.path: node for node in tree.walk()}
+    numbers[placed.card.path] = tree
+    cards: list[NodeCard] = []
+
+    def walk(card: NodeCard) -> None:
+        cards.append(card)
+        for child in card.children:
+            walk(child)
+
+    walk(placed.card)
+    keep = cards
+    if len(cards) > limit:
+        ranked = sorted(range(len(cards)),
+                        key=lambda i: (_WORST_FIRST.index(cards[i].status), i))[:limit]  # fmt: skip
+        keep = [cards[i] for i in sorted(ranked)]
+    nodes = []
+    for card in keep:
+        own = [e for e in card.entries if e.status is not CheckStatus.PASS]
+        governing = None
+        if card.status is not CheckStatus.PASS:
+            if own:
+                worst = min(own, key=lambda e: _WORST_FIRST.index(e.status))
+                governing = f"{worst.name}: {worst.detail}"
+            else:
+                owners = list(dict.fromkeys(
+                    p for p, e in card.findings() if p != card.path and e.status is card.status
+                ))  # fmt: skip
+                governing = f"by reference to {', '.join(owners[:4])}" + (
+                    f" and {len(owners) - 4} more" if len(owners) > 4 else ""
+                )
+        node = numbers[card.path]
+        nodes.append(SummaryNode(
+            path=card.path, part_number=node.part_number, provisional=node.provisional,
+            status=card.status, findings=len(own), governing=governing,
+        ))  # fmt: skip
+    return ProductSummary(
+        name=placed.name,
+        status=placed.card.status,
+        nodes=tuple(nodes),
+        omitted=len(cards) - len(keep),
+        more=more or "any node's full card: NodeCard.find(path) on the placed product's card",
+        mass_kg=placed.mass_kg,
+        rebuilt=placed.rebuilt,
+        reused=placed.reused,
+    )
 
 
 class _Leaf:

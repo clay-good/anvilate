@@ -118,6 +118,14 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### CLI output 1.62.0: `check` reads a product document
+
+`anvilate check stage.product.yaml --format json` answers with `product`, the product's
+bounded summary tree: each node's path, part number, verdict, finding count and governing
+finding, with how many passing nodes were left out and how to ask for one. With
+`--node PATH` it answers with `node` instead, that node's full card. A spec's `check`
+result is unchanged.
+
 ### Sections: a tilt is stated whole, and an offset is a length
 
 Two rules on hand-built sections, both added the day the properties shipped. A

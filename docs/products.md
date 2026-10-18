@@ -155,6 +155,18 @@ it is chosen. It is a box, centred on its own origin.
 A hole or a centre of mass outside the envelope is refused. Any interference result that
 involves a placeholder says it is provisional and names the placeholders it rests on.
 
+## At the shell
+
+`anvilate check stage.product.yaml` places the product and prints its summary tree: each
+node's path, part number, verdict, finding count and governing finding. A failing node
+that owns no finding names the nodes it fails by reference to. Sub-products are read from
+the other `*.product.yaml` files in the same folder, by name. `--node stage/drive[2]`
+prints that node's full card instead. `--format json` answers with the same tree, and the
+exit code is the product's verdict, as for a spec.
+
+`summarize_product(placed, product_tree(product), limit=60)` is the same summary in
+Python. Past its bound it keeps the worst nodes and counts the rest.
+
 ## Rebuilding what changed
 
 Pass one `BuildCache` to successive `place_product(..., cache=cache)` calls. Each item is

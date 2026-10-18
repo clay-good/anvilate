@@ -121,3 +121,34 @@ def test_a_card_is_read_back_from_its_dump_unchanged():
 def test_a_path_not_in_the_tree_is_refused():
     with pytest.raises(ProductError, match="no node 'stage/drive\\[3\\]' under 'stage'"):
         _stage().card.find("stage/drive[3]")
+
+
+def test_a_summary_past_its_bound_keeps_the_worst_and_counts_the_rest():
+    from anvilate.product import product_tree, summarize_product
+
+    stage = parse_product({
+        "name": "stage",
+        "definitions": [_definition("base", placeholder=_box(400, 100, 10, 3.0)),
+                        _definition("drive", product="drive")],
+        "instances": [{"name": "base", "item": "base"},
+                      {"name": "drive", "item": "drive",
+                       "pattern": {"kind": "linear", "count": 2, "direction": "x",
+                                   "spacing": {"magnitude": 200, "unit": "mm"}}}],
+        "ground": "base",
+        "mates": _seat("drive", "base"),
+    })  # fmt: skip
+    library = {"drive": parse_product(_drive())}
+    placed = place_product(stage, library=library)
+    tree = product_tree(stage, library=library)
+    whole = summarize_product(placed, tree)
+    assert len(whole.nodes) == 10 and whole.omitted == 0
+    cut = summarize_product(placed, tree, limit=4)
+    # the three failing nodes, then the first not-evaluated one, in tree order
+    assert [n.path for n in cut.nodes] == ["stage", "stage/base", "stage/drive[1]",
+                                           "stage/drive[2]"]  # fmt: skip
+    assert cut.omitted == 6 and "6 nodes not shown, none worse than those shown" in str(cut)
+    root = cut.nodes[0]
+    assert root.governing == "by reference to stage/drive[1], stage/drive[2]"
+    assert root.part_number.startswith("PROV-") and root.provisional
+    with pytest.raises(ProductError, match="a summary shows at least one node"):
+        summarize_product(placed, tree, limit=0)

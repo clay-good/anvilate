@@ -488,6 +488,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="text for a person, json for a script that wants the whole card",
     )
     check.add_argument(
+        "--node",
+        metavar="PATH",
+        help="for a product document: print the full card of the node at this path, such as "
+        "stage/drive[2]/motor, rather than the summary tree",
+    )
+    check.add_argument(
         "--show-work",
         action="store_true",
         help="print each check's worked calculation — the formula, the values put into "
@@ -3650,6 +3656,79 @@ def _is_terminal(stream: object) -> bool:
     return bool(isatty()) if callable(isatty) else False
 
 
+def _product_document(paths: list[Path]) -> tuple[Path, dict[str, Any]] | None:
+    """The one product document ``paths`` names, or None when they name something else."""
+    import yaml
+
+    if len(paths) != 1 or not paths[0].is_file():
+        return None
+    try:
+        document = parse_yaml(paths[0].read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return None  # the spec path reports what it cannot read
+    if not isinstance(document, dict) or "anvilate_product" not in document:
+        return None
+    return paths[0], document
+
+
+def _check_product(
+    found: tuple[Path, dict[str, Any]], args: argparse.Namespace, *, out, err
+) -> int:
+    """``check`` on a product document: place it, and print its summary tree or one node.
+
+    Sub-products are read from the other ``*.product.yaml`` files beside it, by name.
+    """
+    import yaml
+
+    from .product import (
+        ProductError,
+        parse_product,
+        place_product,
+        product_tree,
+        summarize_product,
+    )
+
+    path, document = found
+    try:
+        product = parse_product(document)
+        library = {}
+        for sibling in sorted(path.parent.glob("*.product.y*ml")):
+            if sibling.resolve() == path.resolve():
+                continue
+            sub = parse_product(parse_yaml(sibling.read_text(encoding="utf-8")))
+            library[sub.name] = sub
+        placed = place_product(product, library=library)
+        tree = product_tree(product, library=library)
+    except (ProductError, yaml.YAMLError, OSError, UnicodeDecodeError) as refused:
+        print(f"anvilate check: {path}: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    if args.node is not None:
+        try:
+            card = placed.card.find(args.node)
+        except ProductError as refused:
+            print(f"anvilate check: {path}: {refused}", file=err)
+            return EXIT_BAD_REQUEST
+        if args.format == "json":
+            document = machine_document(
+                "check", {"status": card.status.value, "node": card.model_dump(mode="json")}
+            )
+            print(json.dumps(document, indent=2), file=out)
+        else:
+            print(card, file=out)
+        return EXIT_CODES[card.status]
+    summary = summarize_product(
+        placed, tree, more=f"any node's full card: anvilate check {path} --node PATH"
+    )
+    if args.format == "json":
+        document = machine_document(
+            "check", {"status": summary.status.value, "product": summary.model_dump(mode="json")}
+        )
+        print(json.dumps(document, indent=2), file=out)
+    else:
+        print(summary, file=out)
+    return EXIT_CODES[summary.status]
+
+
 def _check(args: argparse.Namespace, *, out, err) -> int:
     """``check``, over one spec or every spec under a directory.
 
@@ -3658,6 +3737,13 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     verdict across everything found — one failing part fails the run, which is what a merge
     gate needs.
     """
+    product = _product_document(args.spec)
+    if product is not None:
+        return _check_product(product, args, out=out, err=err)
+    if args.node is not None:
+        print("anvilate check: --node reads a node of a product document; "
+              f"{', '.join(str(p) for p in args.spec)} is not one", file=err)  # fmt: skip
+        return EXIT_BAD_REQUEST
     modules = _modules(args, err=err, command="check")
     if isinstance(modules, int):
         return modules
