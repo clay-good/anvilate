@@ -90,6 +90,8 @@ __all__ = [
     "Split",
     "Expansion",
     "Thermal",
+    "ChainLink",
+    "ProductChain",
     "Screening",
     "Product",
     "ProductNode",
@@ -113,7 +115,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.9.0"] = "1.9.0"
+PRODUCT_VERSION: Literal["1.10.0"] = "1.10.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -651,6 +653,70 @@ class Thermal(StatableModel):
         return self
 
 
+class ChainLink(StatableModel):
+    """One link of a stack-up chain across a product: a part's dimension or a connection.
+
+    A part link names its ``item`` and the ``dimension`` tag; the dimension's declared
+    tolerance is used, or, where the item declares none, the ISO 2768-1 general tolerance on
+    the ``nominal`` the link states. A connection link names the mate or connection and
+    the ± ``allowance`` it contributes, with its ``source``. ``direction`` is +1 when the
+    link growing widens the gap.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    item: Named | None = None
+    dimension: Named | None = None
+    nominal: Quantity | None = None
+    connection: Named | None = None
+    allowance: Quantity | None = None
+    source: Provenance | None = None
+    direction: Literal[1, -1] = 1
+
+    @model_validator(mode="after")
+    def _a_link(self) -> ChainLink:
+        part = self.item is not None and self.dimension is not None
+        joint = self.connection is not None and self.allowance is not None
+        if part == joint:
+            raise _refuse("a chain link is a part's dimension (item and dimension) or a "
+                          "connection's allowance (connection and allowance), one of them",
+                          subject="screening.chains[].links")  # fmt: skip
+        for name, value in (("nominal", self.nominal), ("allowance", self.allowance)):
+            if value is not None and not (value.has_dimension("[length]")
+                                          and value.magnitude >= 0):  # fmt: skip
+                raise _refuse(f"a chain link's {name} is {value}; it is a length",
+                              subject="screening.chains[].links")  # fmt: skip
+        if joint and self.source is None:
+            raise _refuse(f"the allowance of connection {self.connection} is not cited; "
+                          "state its source", subject="screening.chains[].links")  # fmt: skip
+        return self
+
+
+class ProductChain(StatableModel):
+    """A one-dimensional stack-up through a product's items and connections, and the band
+    its gap must land in; ``samples`` and ``seed`` add a seeded Monte Carlo run."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    links: tuple[ChainLink, ...] = Field(min_length=1, max_length=64)
+    required_min: Quantity
+    required_max: Quantity
+    samples: int | None = Field(default=None, ge=2, le=1_000_000)
+    seed: int | None = None
+
+    @model_validator(mode="after")
+    def _a_band(self) -> ProductChain:
+        if self.required_max.to("mm").magnitude < self.required_min.to("mm").magnitude:
+            raise _refuse(f"chain {self.name} requires a band whose maximum is below its "
+                          "minimum", subject="screening.chains[].required_max")  # fmt: skip
+        if (self.samples is None) != (self.seed is None):
+            raise _refuse(f"chain {self.name} states one of samples and seed; a Monte Carlo "
+                          "run takes both, so it repeats",
+                          subject="screening.chains[].seed")  # fmt: skip
+        return self
+
+
 class Screening(StatableModel):
     """What the product as a whole is held to.
 
@@ -671,6 +737,7 @@ class Screening(StatableModel):
     loads: tuple[ProductLoad, ...] = Field(default=(), max_length=256)
     splits: tuple[Split, ...] = Field(default=(), max_length=256)
     thermal: Thermal | None = None
+    chains: tuple[ProductChain, ...] = Field(default=(), max_length=64)
     # Items separated for service, which assembly economy never proposes merging.
     serviced: tuple[Named, ...] = Field(default=(), max_length=256)
 
@@ -706,9 +773,20 @@ class Product(StatableModel):
     # part's interfaces bound to its features, 1.5.0 a joint on a connection, and 1.6.0 a
     # reference assembly, 1.7.0 what the product as a whole is screened against, and 1.8.0
     # the loads it carries and declared splits, and 1.9.0 its thermal range and the items
-    # separated for service; an older document reads unchanged.
+    # separated for service, and 1.10.0 stack-up chains through its items; an older document
+    # reads unchanged.
     anvilate_product: Literal[
-        "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0"
+        "1.0.0",
+        "1.1.0",
+        "1.2.0",
+        "1.3.0",
+        "1.4.0",
+        "1.5.0",
+        "1.6.0",
+        "1.7.0",
+        "1.8.0",
+        "1.9.0",
+        "1.10.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

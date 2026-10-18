@@ -1,5 +1,92 @@
 {
   "$defs": {
+    "ChainLink": {
+      "additionalProperties": false,
+      "description": "One link of a stack-up chain across a product: a part's dimension or a connection.\n\nA part link names its ``item`` and the ``dimension`` tag; the dimension's declared\ntolerance is used, or, where the item declares none, the ISO 2768-1 general tolerance on\nthe ``nominal`` the link states. A connection link names the mate or connection and\nthe ± ``allowance`` it contributes, with its ``source``. ``direction`` is +1 when the\nlink growing widens the gap.",
+      "properties": {
+        "allowance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Connection"
+        },
+        "dimension": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dimension"
+        },
+        "direction": {
+          "default": 1,
+          "enum": [
+            1,
+            -1
+          ],
+          "title": "Direction",
+          "type": "integer"
+        },
+        "item": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item"
+        },
+        "nominal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "title": "ChainLink",
+      "type": "object"
+    },
     "CircularPattern": {
       "additionalProperties": false,
       "description": "``count`` instances spread ``angle_deg`` apart about one of the parent's axes.",
@@ -1129,6 +1216,65 @@
       "title": "PlaceholderHole",
       "type": "object"
     },
+    "ProductChain": {
+      "additionalProperties": false,
+      "description": "A one-dimensional stack-up through a product's items and connections, and the band\nits gap must land in; ``samples`` and ``seed`` add a seeded Monte Carlo run.",
+      "properties": {
+        "links": {
+          "items": {
+            "$ref": "#/$defs/ChainLink"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Links",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required_max": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "required_min": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "samples": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 2,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Samples"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed"
+        }
+      },
+      "required": [
+        "name",
+        "links",
+        "required_min",
+        "required_max"
+      ],
+      "title": "ProductChain",
+      "type": "object"
+    },
     "ProductLoad": {
       "additionalProperties": false,
       "description": "A load the product carries: on an item, as a force down or a mass under gravity.",
@@ -1244,6 +1390,15 @@
       "additionalProperties": false,
       "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection. ``loads`` are what the product carries, which travel down\nthrough the bodies they rest on to the floor; ``splits`` divide a body's load among\nmore supports than determine it, each with its basis.",
       "properties": {
+        "chains": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ProductChain"
+          },
+          "maxItems": 64,
+          "title": "Chains",
+          "type": "array"
+        },
         "loads": {
           "default": [],
           "items": {
@@ -1460,13 +1615,13 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.9.0",
+  "$id": "urn:anvilate:schema:product-document:1.10.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.9.0",
+      "default": "1.10.0",
       "enum": [
         "1.0.0",
         "1.1.0",
@@ -1477,7 +1632,8 @@
         "1.6.0",
         "1.7.0",
         "1.8.0",
-        "1.9.0"
+        "1.9.0",
+        "1.10.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -1598,5 +1754,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.9.0"
+  "x-anvilate-version": "1.10.0"
 }

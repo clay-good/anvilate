@@ -22,6 +22,7 @@ screening:
 | load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits` |
 | caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` |
 | thermal mismatch | for each connection between two catalog parts of different materials, \|α₁ − α₂\| · ΔT · span, the span between the outermost mated holes or across where they meet, against the declared slip, citing both coefficients | `thermal` |
+| stack-up chains | a 1D chain through items and connections, worst-case and root-sum-square, and a seeded Monte Carlo run when declared; judged on the worst case, with each link's share and the governing link | `chains` |
 | mobility | Grübler–Kutzbach, M = 6(n − 1 − j) + Σf, over bodies joined rigidly into links | declared joints |
 
 A body rests on the bodies whose tops meet its bottom over a shared plan area, and the
@@ -39,6 +40,10 @@ splits:
 Expansion coefficients are declared with their source, not looked up: the bundled
 materials carry none. A dissimilar connection with no range, or a material with no declared
 coefficient, is not evaluated, naming what is missing.
+
+A chain link is a part's dimension, by item and tag, or a connection's ± allowance with its
+source. A dimension the item declares no tolerance for takes the ISO 2768-1 general
+tolerance of its process on the nominal the link states, and the entry says so.
 
 `report.economy` is advisory and never changes the verdict: the part count, each bought
 designation with how many are used, and merge candidates, pairs of made parts joined without
@@ -61,6 +66,6 @@ coaxial hinges counts −9 and moves. Mates between two items that a declared jo
 read as part of that joint, not as welding them.
 
 Not yet built: accelerations and loads on interfaces, side connections in the load path,
-part screens other than a caster's fed their loads, cost roll-up, cross-item tolerance
-chains, swept clearance over joint ranges, the budget mechanism for mass and CG limits, and
+part screens other than a caster's fed their loads, cost roll-up, swept clearance over joint
+ranges, the budget mechanism for mass and CG limits, and
 fastener and tool counts.

@@ -247,6 +247,7 @@ def product_screening(
     entries += path_entries
     entries += _rated_from_path(product, shelf, steps)
     entries += _thermal(product, placed)
+    entries += _chains(product)
     approaches = _approaches(product, bodies)
     if declared is not None and declared.min_clearance is not None:
         entries.append(_clearance_entry(approaches, declared.min_clearance))
@@ -808,6 +809,94 @@ def _economy(product: Product, shelf: Mapping[str, Product], bodies: list[Any]) 
         note="fasteners and the tools they need are not counted: a product declares no "
         "fastener hardware yet",
     )  # fmt: skip
+
+
+def _chains(product: Product) -> list[ScorecardEntry]:
+    """Each declared stack-up through the product's items, judged on its worst case."""
+    from .spec import parse_spec
+    from .spec.ir import ChainAnalysis
+    from .tolerance import ResolvedTolerance, StackContributor, StackUp, general_tolerance
+
+    declared = product.screening.chains if product.screening is not None else ()
+    definitions = {d.id: d for d in product.definitions}
+    of = {i.name: definitions[i.item] for i in product.instances}
+    joints = {m.id for m in product.mates} | {f"{c.on}~{c.place}" for c in product.connections}
+    entries = []
+    for chain in declared:
+        contributors, notes = [], []
+        for index, link in enumerate(chain.links, start=1):
+            if link.connection is not None:
+                if link.connection not in joints:
+                    raise _refuse(f"chain {chain.name} link {index} names the connection "
+                                  f"{link.connection!r}, which the product does not have",
+                                  subject="product")  # fmt: skip
+                half = link.allowance.to("mm").magnitude  # type: ignore[union-attr]
+                band = ResolvedTolerance(
+                    nominal=Quantity(magnitude=0.0, unit="mm"),
+                    upper=Quantity(magnitude=half, unit="mm"),
+                    lower=Quantity(magnitude=-half, unit="mm"),
+                    label=f"±{half:g} mm", source=link.source,
+                )  # fmt: skip
+                contributors.append(StackContributor(name=link.connection, tolerance=band,
+                                                     direction=link.direction))  # fmt: skip
+                continue
+            item = str(link.item)
+            if item not in of:
+                raise _refuse(f"chain {chain.name} link {index} names '{item}', which is not an "
+                              f"item of '{product.name}'", subject="product")  # fmt: skip
+            definition = of[item]
+            spec = parse_spec(dict(definition.spec)) if definition.spec is not None else None
+            stated = {d.tag: d for d in spec.dimensions} if spec is not None else {}
+            name = f"{item}.{link.dimension}"
+            if link.dimension in stated:
+                band = stated[str(link.dimension)].resolve()
+            else:
+                if link.nominal is None:
+                    raise _refuse(
+                        f"chain {chain.name} link {index}: {item} declares no tolerance for "
+                        f"'{link.dimension}', and the link states no nominal to take the "
+                        "general tolerance on", subject="product",
+                    )  # fmt: skip
+                grade = spec.general_tolerance_class() if spec is not None else "m"
+                general = general_tolerance(link.nominal, grade)
+                dev = general.deviation.to("mm").magnitude
+                band = ResolvedTolerance(
+                    nominal=link.nominal, upper=Quantity(magnitude=dev, unit="mm"),
+                    lower=Quantity(magnitude=-dev, unit="mm"),
+                    label=f"±{dev:g} mm general", source=general.source,
+                )  # fmt: skip
+                notes.append(f"{name} takes the general tolerance ±{dev:g} mm "
+                             f"({general.source}), as the item declares none")  # fmt: skip
+            contributors.append(StackContributor(name=name, tolerance=band,
+                                                 direction=link.direction))  # fmt: skip
+        stack = StackUp(contributors=tuple(contributors))
+        analysis = ChainAnalysis(name=chain.name, required_min=chain.required_min,
+                                 required_max=chain.required_max, worst_case=stack.worst_case(),
+                                 rss=stack.rss())  # fmt: skip
+        detail = str(analysis)
+        governing = analysis.worst_case.contributions[0]
+        detail += f"; the worst case is governed by {governing.name} ({governing.share:.0%})"
+        low, high = (q.to("mm").magnitude for q in (analysis.rss.lower, analysis.rss.upper))
+        fits = "fits" if analysis.rss_passes else "does not fit"
+        detail += f"; RSS +{low:.3f} to +{high:.3f} mm, which {fits}"
+        shares = ", ".join(f"{c.name} {c.share:.0%}" for c in analysis.worst_case.contributions)
+        detail += f"; each link's share of the worst case: {shares}"
+        if chain.samples is not None and chain.seed is not None:
+            run = stack.monte_carlo(samples=chain.samples, seed=chain.seed)
+            mean, sigma = run.mean.to("mm").magnitude, run.std.to("mm").magnitude
+            detail += (f"; Monte Carlo over {run.samples} samples, seed {chain.seed}: mean "
+                       f"{mean:.4g} mm, σ {sigma:.3g} mm")  # fmt: skip
+        if notes:
+            detail += "; " + "; ".join(notes)
+        entries.append(ScorecardEntry(
+            name=f"stack-up: {chain.name}",
+            status=CheckStatus.PASS if analysis.worst_case_passes else CheckStatus.FAIL,
+            detail=detail,
+            underived=Underived(kind=DerivationAbsence.NUMERIC_RESULT,
+                                reason="the stack-up itself: a sum or root-sum-square over the "
+                                "chain's links, one term per link"),
+        ))  # fmt: skip
+    return entries
 
 
 ProductScreening.model_rebuild()

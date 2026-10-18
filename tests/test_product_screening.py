@@ -301,3 +301,65 @@ def test_assembly_economy_counts_parts_and_bought_items_and_offers_merges():
                          "motion, neither separated for service")  # fmt: skip
     same["screening"] = {"serviced": ["plate"]}
     assert product_screening(parse_product(same)).economy.merge_candidates == ()
+
+
+def _stacked(required: tuple[float, float], samples: int | None = None) -> dict:
+    """A 6 mm plate (±0.05 declared) seated on a 15 mm rail that declares no tolerance."""
+    plate = parse_yaml((_ROOT / "examples" / "parts" / "mounting_plate.spec.yaml").read_text())
+    band = {"type": "symmetric", "plus_minus": _q(0.05, "mm")}
+    plate["dimensions"] = [{"tag": "thickness", "nominal": _q(6, "mm"), "tolerance": band}]
+    chain = {"name": "carriage height", "required_min": _q(required[0], "mm"),
+             "required_max": _q(required[1], "mm"),
+             "links": [{"item": "rail", "dimension": "height", "nominal": _q(15, "mm")},
+                       {"connection": "plate-sit", "allowance": _q(0.02, "mm"),
+                        "source": "seating flatness, rail datasheet"},
+                       {"item": "plate", "dimension": "thickness"}]}  # fmt: skip
+    if samples is not None:
+        chain |= {"samples": samples, "seed": 7}
+    return {
+        "name": "axis",
+        "definitions": [_definition("rail", placeholder=_box(300, 20, 15, 1.0)),
+                        _definition("plate", spec=plate)],
+        "instances": [{"name": "rail", "item": "rail"}, {"name": "plate", "item": "plate"}],
+        "ground": "rail",
+        "mates": [{"id": "plate-sit", "kind": "face_to_face",
+                   "place": {"part": "plate", "face": "bottom"},
+                   "on": {"part": "rail", "face": "top"}}] + [
+            {"id": f"plate-{f}", "kind": "edge_flush", "place": {"part": "plate", "face": f},
+             "on": {"part": "rail", "face": f}} for f in ("left", "front")],
+        "screening": {"chains": [chain]},
+    }  # fmt: skip
+
+
+def test_a_chain_through_a_product_reports_worst_case_rss_and_the_governing_link():
+    from anvilate.tolerance import general_tolerance
+    from anvilate.units import Quantity
+
+    rail = general_tolerance(Quantity(magnitude=15, unit="mm")).deviation.to("mm").magnitude
+    worst = 0.05 + rail + 0.02
+    rss = math.sqrt(0.05**2 + rail**2 + 0.02**2)
+    passing = _named(product_screening(parse_product(_stacked((20.5, 21.5), samples=2000))),
+                     "stack-up: carriage height")  # fmt: skip
+    assert passing.status is CheckStatus.PASS
+    assert f"+{21 - worst:.3f} to +{21 + worst:.3f} mm" in passing.detail
+    assert f"RSS +{21 - rss:.3f} to +{21 + rss:.3f} mm, which fits" in passing.detail
+    assert "each link's share of the worst case: rail.height " in passing.detail
+    assert "governed by rail.height" in passing.detail
+    assert f"rail.height takes the general tolerance ±{rail:g} mm" in passing.detail
+    assert "Monte Carlo over 2000 samples, seed 7" in passing.detail
+    tight = _named(product_screening(parse_product(_stacked((20.9, 21.1)))),
+                   "stack-up: carriage height")  # fmt: skip
+    assert tight.status is CheckStatus.FAIL
+
+
+def test_a_chain_naming_what_the_product_lacks_is_refused():
+    from anvilate.product import ProductError
+
+    document = _stacked((20.5, 21.5))
+    document["screening"]["chains"][0]["links"][1]["connection"] = "glued"
+    with pytest.raises(ProductError, match="names the connection 'glued'"):
+        product_screening(parse_product(document))
+    document = _stacked((20.5, 21.5))
+    del document["screening"]["chains"][0]["links"][0]["nominal"]
+    with pytest.raises(ProductError, match="no nominal to take the general tolerance on"):
+        product_screening(parse_product(document))
