@@ -1044,6 +1044,9 @@ modules:
 - :mod:`~anvilate.analysis.preloaded_joint` — NASA-STD-5020B preloaded joints: preload
   bounds with the tightening method's uncertainty and relaxation, separation, ultimate and
   yield margins with separation-before-rupture decided, and slip
+- :mod:`~anvilate.analysis.crippling` — Gerard's closed-form crippling stress of formed
+  and extruded thin-walled sections by their corners and flanges (NACA TN 3784), refused
+  above each form's cutoff
 - :mod:`~anvilate.analysis.geotechnical` — soil mechanics closed forms: the Rankine
   active/passive earth-pressure coefficients and resultant thrust on a retaining wall
   (with the cohesive-soil active and passive pressures, the tension-crack depth, and the
@@ -1645,6 +1648,11 @@ from .creep import (
     larson_miller_parameter,
     larson_miller_rupture_life,
     larson_miller_temperature_limit,
+)
+from .crippling import (
+    CripplingSection,
+    CripplingStress,
+    gerard_crippling_stress,
 )
 from .curved_beam import (
     CurvedBeamStress,
@@ -3567,6 +3575,9 @@ __all__ = [
     "preload_bounds",
     "preloaded_joint_margins",
     "joint_slip_margin",
+    "CripplingSection",
+    "CripplingStress",
+    "gerard_crippling_stress",
     "bearing_capacity_factors",
     "bearing_depth_factors",
     "bearing_inclination_factors",

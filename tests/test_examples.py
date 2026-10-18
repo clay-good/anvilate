@@ -9481,3 +9481,41 @@ def test_preloaded_bracket_joint_example():
     assert d["slip_ratio"] == pytest.approx(0.1 * 8_934.75 / (1.4375 * 1_450), rel=1e-12)
     assert d["slip_ratio"] < d["slip_ratio_lubricated"] < d["slip_ratio_clean"] < 1
     _assert_narrates_computed("preloaded_bracket_joint.py", namespace)
+
+
+def test_z_stringer_crippling_example():
+    namespace = runpy.run_path(str(_EXAMPLES / "z_stringer_crippling.py"))
+    d = namespace["z_stringer_crippling"]()
+    assert d["stress_mpa"] == pytest.approx(142.2, abs=0.05)
+    assert d["ratio"] == pytest.approx(0.49, abs=0.005)
+    assert d["cutoff"] == pytest.approx(0.52, abs=0.005)
+    assert d["stress_hardened_mpa"] == pytest.approx(172.4, abs=0.05)
+    # β 3.3 -> 4.0 at the same parameter: the stress scales by exactly 4.0/3.3
+    assert d["stress_hardened_mpa"] / d["stress_mpa"] == pytest.approx(4.0 / 3.3, rel=1e-12)
+    _assert_narrates_computed("z_stringer_crippling.py", namespace)
+    # the docstring's stubbier section: flat corners refused, hardened corners inside
+    from anvilate.analysis import CripplingSection, gerard_crippling_stress
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(RefusalError, match="eq. 73"):
+        gerard_crippling_stress(
+            section=CripplingSection.FORMED_TWO_CORNER,
+            thickness=Quantity(magnitude=1.0, unit="mm"),
+            area=Quantity(magnitude=60.0, unit="mm**2"),
+            compressive_yield=Quantity(magnitude=290.0, unit="MPa"),
+            elastic_modulus=Quantity(magnitude=72_400.0, unit="MPa"),
+            count=2,
+            corner_yield_ratio=1.0,
+            web_width=Quantity(magnitude=30.0, unit="mm"),
+        )
+    inside = gerard_crippling_stress(
+        section=CripplingSection.FORMED_TWO_CORNER,
+        thickness=Quantity(magnitude=1.0, unit="mm"),
+        area=Quantity(magnitude=60.0, unit="mm**2"),
+        compressive_yield=Quantity(magnitude=290.0, unit="MPa"),
+        elastic_modulus=Quantity(magnitude=72_400.0, unit="MPa"),
+        count=2,
+        corner_yield_ratio=1.25,
+        web_width=Quantity(magnitude=30.0, unit="mm"),
+    )
+    assert inside.ratio < inside.cutoff
