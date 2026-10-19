@@ -296,6 +296,75 @@ def _face_tag(built: BuiltGeometry, face: Any) -> str:
     return "untagged face"
 
 
+def _thickness_map(built: BuiltGeometry) -> list[_Item]:
+    """The wall thickness under each planar face, measured on the solid.
+
+    From a point on the face, a ray inward along the face's normal gives the depth of
+    material beneath it, and twice the distance from the ray's midpoint to the nearest face
+    bounds it from the side, so a rim measures its width and not its height: the thickness is
+    the smaller, the diameter of the largest ball that fits there. Curved faces are not
+    sampled.
+    """
+    from OCP.BRep import BRep_Builder, BRep_Tool  # type: ignore[import-untyped]
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex  # type: ignore[import-untyped]
+    from OCP.BRepClass import BRepClass_FaceClassifier  # type: ignore[import-untyped]
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape  # type: ignore[import-untyped]
+    from OCP.BRepTools import BRepTools  # type: ignore[import-untyped]
+    from OCP.gp import gp_Dir, gp_Lin, gp_Pnt, gp_Pnt2d  # type: ignore[import-untyped]
+    from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector  # type: ignore[import-untyped]
+    from OCP.TopAbs import TopAbs_IN  # type: ignore[import-untyped]
+    from OCP.TopoDS import TopoDS_Compound  # type: ignore[import-untyped]
+
+    shape = built.shape
+    rays = IntCurvesFace_ShapeIntersector()
+    rays.Load(shape.wrapped, 1e-6)
+    boundary = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(boundary)
+    for face in shape.faces():
+        builder.Add(boundary, face.wrapped)
+    fractions = (0.5, 0.25, 0.75, 0.1, 0.9)
+    items = []
+    for face in shape.faces():
+        if face.geom_type.name != "PLANE":
+            continue
+        # A point on the face itself: a ring's centroid sits over its hole.
+        umin, umax, vmin, vmax = BRepTools.UVBounds_s(face.wrapped)
+        surface = BRep_Tool.Surface_s(face.wrapped)
+        on = next(
+            (
+                surface.Value(umin + fu * (umax - umin), vmin + fv * (vmax - vmin))
+                for fu in fractions
+                for fv in fractions
+                if BRepClass_FaceClassifier(
+                    face.wrapped,
+                    gp_Pnt2d(umin + fu * (umax - umin), vmin + fv * (vmax - vmin)),
+                    1e-7,
+                ).State()
+                == TopAbs_IN
+            ),
+            None,
+        )
+        if on is None:
+            continue
+        n = _unit(face.normal_at(face.center()))
+        eps = 1e-4
+        start = gp_Pnt(on.X() - n[0] * eps, on.Y() - n[1] * eps, on.Z() - n[2] * eps)
+        rays.Perform(gp_Lin(start, gp_Dir(-n[0], -n[1], -n[2])), 0.0, 1e9)
+        if rays.NbPnt() == 0:
+            continue
+        depth = min(rays.WParameter(i) for i in range(1, rays.NbPnt() + 1)) + eps
+        middle = gp_Pnt(
+            *(c - k * depth / 2 for c, k in zip((on.X(), on.Y(), on.Z()), n, strict=True))
+        )
+        side = BRepExtrema_DistShapeShape(
+            BRepBuilderAPI_MakeVertex(middle).Vertex(), boundary
+        ).Value()
+        where = tuple(round(c, 1) for c in (on.X(), on.Y(), on.Z()))
+        items.append(_Item(f"{_face_tag(built, face)} at {where}", min(depth, 2 * side)))
+    return items
+
+
 def _internal_radii(built: BuiltGeometry, tool: tuple[float, float, float]) -> list[_Item]:
     from build123d import Vector
 
@@ -580,9 +649,22 @@ def _findings(
             if len(walls) >= 2
             else []
         )
-        few = (None if len(walls) >= 2 else
-               f"it declares {len(walls)} wall thickness{'es' if len(walls) != 1 else ''} "
-               f"({', '.join(sorted(walls)) or 'none'}), and a ratio takes two")  # fmt: skip
+        few = None
+        wall_note = "; walls are read from the part's declared dimensions"
+        if len(walls) < 2:
+            # Fewer than two declared: the walls measured on the solid instead.
+            measured = _thickness_map(built)
+            if measured:
+                thick = max(measured, key=lambda i: i.value)
+                thin = min(measured, key=lambda i: i.value)
+                ratio_items = [_Item(f"thickest {thick.value:.3g} mm ({thick.where}) over "
+                                     f"thinnest {thin.value:.3g} mm ({thin.where})",
+                                     thick.value / thin.value)]  # fmt: skip
+                wall_note = "; walls are measured on the solid, under each planar face"
+            else:
+                few = (f"it declares {len(walls)} wall thickness"
+                       f"{'es' if len(walls) != 1 else ''} and has no planar face to measure "
+                       "one under")  # fmt: skip
         ribs: tuple[ScorecardEntry, ...] = ()
         if process is DfmProcess.INJECTION_MOLDING:
             rib_limit = profile.threshold("rib_ratio_max")
@@ -603,7 +685,7 @@ def _findings(
                    note="; curved faces other than cylinders about the pull are not measured"),
             _entry(built, "wall_ratio_max", profile.threshold("wall_ratio_max"), ratio_items,
                    label="wall thickness ratios",
-                   note="; walls are read from the part's declared dimensions", unmeasured=few,
+                   note=wall_note, unmeasured=few,
                    needs="a second wall thickness (wall, floor, thickness, lid_thickness, rib "
                    "or boss_wall), so the ratio has two to compare"),
             *ribs,

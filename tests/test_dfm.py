@@ -206,13 +206,32 @@ def test_a_rib_that_will_sink():
     assert "a rib of at most 1.5 mm meets the limit" in rib.detail
 
 
-def test_a_wall_ratio_with_one_wall_is_not_measured_and_not_passed():
-    enclosure = _part("enclosure")
-    lone = dataclasses.replace(enclosure, dimensions_mm={"wall": 3.0})
-    (_, walls) = screen_dfm(lone, default_profile(DfmProcess.DIE_CASTING),
+def test_walls_are_measured_on_the_solid_when_fewer_than_two_are_declared():
+    """A tray, 2 mm walls on x, 5 mm on y, a 4 mm floor: the thickness map reads each wall
+    under its face, a rim by its width and not its height, and the ratio is 5 / 2."""
+    from build123d import Box, Pos
+
+    tray = _solid(Box(40, 40, 10) - Pos(0, 0, 4) * Box(36, 30, 10), name="tray", wall=2.0)
+    (_, walls) = screen_dfm(tray, default_profile(DfmProcess.DIE_CASTING),
                             pull_direction=(0, 0, 1))  # fmt: skip
+    assert walls.status is CheckStatus.FAIL
+    assert walls.comparison.measured.magnitude == pytest.approx(2.5)
+    assert "thickest 5 mm" in walls.detail and "thinnest 2 mm" in walls.detail
+    assert "walls are measured on the solid" in walls.detail
+    even = _solid(Box(40, 40, 10) - Pos(0, 0, 2) * Box(36, 36, 10), name="even")
+    (_, walls) = screen_dfm(even, default_profile(DfmProcess.DIE_CASTING),
+                            pull_direction=(0, 0, 1))  # fmt: skip
+    assert walls.status is CheckStatus.PASS
+    assert walls.comparison.measured.magnitude == pytest.approx(1.0)
+
+
+def test_a_wall_ratio_with_nothing_to_measure_is_not_evaluated():
+    from build123d import Sphere
+
+    casting = default_profile(DfmProcess.DIE_CASTING)
+    (_, walls) = screen_dfm(_solid(Sphere(10), name="ball"), casting, pull_direction=(0, 0, 1))
     assert walls.status is CheckStatus.NOT_EVALUATED
-    assert "declares 1 wall thickness (wall), and a ratio takes two" in walls.detail
+    assert "has no planar face to measure one under" in walls.detail
 
 
 def test_a_short_flange_against_the_brake():

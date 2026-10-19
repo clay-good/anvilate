@@ -25,7 +25,7 @@ for entry in screen_dfm(built, profile, tool_direction=(0, 0, 1)):
 | Sheet metal | `hole_to_edge_min` | A hole's edge to the blank's edge, in thicknesses | 2 |
 | Sheet metal | `flange_length_min` | Each flange's length over thickness | 4 |
 | Injection molding | `draft_min` | Each face's angle to the pull: planar faces, and cylinders about the pull | 1° |
-| Injection molding | `wall_ratio_max` | The thickest declared wall over the thinnest | 2 |
+| Injection molding | `wall_ratio_max` | The thickest wall over the thinnest: the declared walls, or, where fewer than two are declared, the walls measured on the solid | 2 |
 | Injection molding | `rib_ratio_max` | The declared rib over the declared wall it stands on, so it does not sink | 0.6 |
 | Die casting | `draft_min` | As for molding | 1° |
 | Die casting | `wall_ratio_max` | As for molding | 2 |
@@ -59,10 +59,16 @@ shop cannot make as drawn, a fastener no tool reaches, an adjustment sealed away
 tolerance nobody can measure. Every other entry is physics, and keeps its verdict.
 
 A rule that cannot read its property off the part is not evaluated, naming what is missing,
-rather than passed: a wall ratio on a part declaring fewer than two walls, or a rib with no
-wall for it to stand on. A part with nothing of the kind to judge, such as no holes, passes
+rather than passed: a wall ratio on a part that declares fewer than two walls and has no
+planar face to measure one under, or a rib with no wall for it to stand on. A part with nothing of the kind to judge, such as no holes, passes
 and says there was nothing to judge.
 
-The wall ratio reads the walls the part declares. A wall-thickness map measured on the solid
-is not built yet, and neither are a turned part's sections judged on their own, weldments, undercuts, boss proportions,
-curved down-facing faces, or cost estimates.
+The wall ratio reads the walls the part declares, and where it declares fewer than two, the
+walls measured on the solid. Under each planar face, a ray inward gives the depth of
+material, and twice the distance from the ray's midpoint to the nearest face bounds it from
+the side, so a rim measures its width and not its height. A 40 × 40 × 10 tray with 2 mm
+walls on one axis, 5 mm on the other and a 4 mm floor measures 5 over 2, a ratio of 2.5.
+Curved faces are not sampled.
+
+Not built yet: a turned part's sections judged on their own, weldments, undercuts, boss
+proportions, curved down-facing faces, and cost estimates.

@@ -2,7 +2,7 @@
 
 ## 1. Measurement
 
-- [ ] 1.1 Measurements over the tagged B-Rep: internal radius, hole depth ratio, wall
+- [x] 1.1 Measurements over the tagged B-Rep: internal radius, hole depth ratio, wall
       thickness map, draft per face against a pull direction, overhang per face against a
       build direction, feature-to-bend and feature-to-edge distance
 - [x] 1.2 Process profile schema: thresholds with source or practice-default label;
