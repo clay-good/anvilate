@@ -432,3 +432,21 @@ def test_a_chain_naming_what_the_product_lacks_is_refused():
     del document["screening"]["chains"][0]["links"][0]["nominal"]
     with pytest.raises(ProductError, match="no nominal to take the general tolerance on"):
         product_screening(parse_product(document))
+
+
+def test_each_check_against_a_declared_limit_cites_that_limits_source():
+    """docs/product-screening.md's Cites column: the entry's reference is the source the
+    document declared with the limit, so a reader of the card sees what it was held to."""
+    limits = {"max_mass": ("lift limit", "kg", 10), "max_cg_height": ("transport", "mm", 500),
+              "min_tilt": ("tilt table", "degree", 5),
+              "min_clearance": ("service access", "mm", 1)}  # fmt: skip
+    screening = {key: {"value": _q(v, unit), "source": source}
+                 for key, (source, unit, v) in limits.items()}  # fmt: skip
+    report = product_screening(parse_product(_cart(screening, second_block=True)))
+    cited = {e.name: e.reference for e in report.entries}
+    assert cited["product mass"] == "lift limit"
+    assert cited["centre-of-mass height"] == "transport"
+    assert cited["tip-over"] == "tilt table"
+    assert cited["clearance"] == "service access"
+    thermal = _named(product_screening(parse_product(_bolted(0.5))), "thermal frame ~ plate")
+    assert thermal.reference == "service envelope"

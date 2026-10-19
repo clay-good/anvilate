@@ -432,6 +432,7 @@ def _tip_entry(top: NodeMass, placed: Any, limit: Any) -> ScorecardEntry:
         detail=f"the centre of mass, {height:.4g} mm above the footprint and {inside:.4g} mm "
         f"inside its {edge} edge, leaves it at {tilt:.3g} degrees of tilt, against "
         f"{required:g} ({limit.source})",
+        reference=limit.source,
         underived=_SUMMED,
     )  # fmt: skip
 
@@ -473,6 +474,7 @@ def _clearance_entry(approaches: tuple[ClosestApproach, ...], limit: Any) -> Sco
         return ScorecardEntry(
             name="clearance", status=CheckStatus.PASS, underived=_SUMMED,
             detail="every two items share a connection, so no pair is gauged",
+            reference=limit.source,
         )  # fmt: skip
     worst = approaches[0]
     short = [a for a in approaches if a.gap_mm < least]
@@ -483,7 +485,8 @@ def _clearance_entry(approaches: tuple[ClosestApproach, ...], limit: Any) -> Sco
         detail += f"; {len(short)} pairs are closer than that"
     return ScorecardEntry(name="clearance",
                           status=CheckStatus.FAIL if short else CheckStatus.PASS,
-                          detail=detail, underived=_SUMMED)  # fmt: skip
+                          detail=detail, underived=_SUMMED,
+                          reference=limit.source)  # fmt: skip
 
 
 def _mobility(product: Product, placed: Any) -> Mobility:
@@ -960,6 +963,7 @@ def _thermal(product: Product, placed: Any) -> list[ScorecardEntry]:
             detail=f"{growth:.3g} mm of differential growth over {span:.4g} mm {how} and "
             f"{rise:g} K, against {slip:g} mm of slip ({declared.source}); {ma} "
             f"{alpha_a * 1e6:.4g}e-6/K ({ea.source}), {mb} {alpha_b * 1e6:.4g}e-6/K ({eb.source})",
+            reference=declared.source,
             underived=_SUMMED,
         ))  # fmt: skip
     return entries

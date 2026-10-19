@@ -35,6 +35,6 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 - [ ] 4.2 Part count, unique fasteners, tool count, merge candidates (advisory)
       (part count, bought designations and merge candidates are built; fasteners and tools
       wait on fastener hardware in products)
-- [ ] 4.3 A docs page for product screening: each check, its method and its citation
+- [x] 4.3 A docs page for product screening: each check, its method and its citation
 - [x] 4.4 Mass maturity (estimated, calculated, measured) and growth allowance per
       maturity; budgets on predicted mass

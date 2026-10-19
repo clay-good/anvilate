@@ -13,20 +13,24 @@ screening:
   min_clearance: {value: {magnitude: 2, unit: mm}, source: service access}
 ```
 
-| Check | Method | Reads |
-| --- | --- | --- |
-| mass properties | per product node: mass, centre of mass, and inertia about it by the parallel-axis theorem, each body uniform over its own solid | each body's mass and solid |
-| mass growth | basic mass by maturity, plus the declared allowance for each: predicted mass | `mass_growth` |
-| product mass | a [budget](performance-budgets.md) whose terms are the bodies, summed worst case, each grown by its maturity's allowance: predicted mass against the limit, naming the governing body | `max_mass` |
-| centre-of-mass height | the centre of mass's height above the product's lowest point against the limit | `max_cg_height` |
-| tip-over | the tilt at which the centre of mass leaves the footprint (the plan rectangle of the bodies resting lowest), atan(inside ÷ height), about its nearest edge | `min_tilt` |
-| clearance | the least gap between every two items that share no mate or connection, and where it is; and over each joint's range, the least gap its moving item comes to ([interfaces](interfaces.md#joints)) | `min_clearance` |
-| load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits`, `vertical_acceleration` |
-| caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` |
-| thermal mismatch | for each connection between two catalog parts of different materials, \|α₁ − α₂\| · ΔT · span, the span between the outermost mated holes or across where they meet, against the declared slip, citing both coefficients | `thermal` |
-| stack-up chains | a 1D chain through items and connections, worst-case and root-sum-square, and a seeded Monte Carlo run when declared; judged on the worst case, with each link's share and the governing link | `chains` |
-| material needs | each declared need against the attribute each item's material declares, citing both; see [material compliance](material-compliance.md) | `materials`, `needs` |
-| mobility | Grübler–Kutzbach, M = 6(n − 1 − j) + Σf, over bodies joined rigidly into links | declared joints |
+| Check | Method | Reads | Cites |
+| --- | --- | --- | --- |
+| mass properties | per product node: mass, centre of mass, and inertia about it by the parallel-axis theorem, each body uniform over its own solid | each body's mass and solid | no limit; the parallel-axis theorem, each body's basis and maturity per contribution |
+| mass growth | basic mass by maturity, plus the declared allowance for each: predicted mass | `mass_growth` | `mass_growth.source`, ledgered as growth |
+| product mass | a [budget](performance-budgets.md) whose terms are the bodies, summed worst case, each grown by its maturity's allowance: predicted mass against the limit, naming the governing body | `max_mass` | `max_mass.source` |
+| centre-of-mass height | the centre of mass's height above the product's lowest point against the limit | `max_cg_height` | `max_cg_height.source` |
+| tip-over | the tilt at which the centre of mass leaves the footprint (the plan rectangle of the bodies resting lowest), atan(inside ÷ height), about its nearest edge | `min_tilt` | `min_tilt.source` |
+| clearance | the least gap between every two items that share no mate or connection, and where it is; and over each joint's range, the least gap its moving item comes to ([interfaces](interfaces.md#joints)) | `min_clearance` | `min_clearance.source` |
+| load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits`, `vertical_acceleration` | no limit (a support that would have to pull fails); a declared split's `basis` and `vertical_acceleration.source` in the detail |
+| caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` | the caster record's rating `source`, and the load-path entry it reads |
+| thermal mismatch | for each connection between two catalog parts of different materials, \|α₁ − α₂\| · ΔT · span, the span between the outermost mated holes or across where they meet, against the declared slip, citing both coefficients | `thermal` | `thermal.source` for the range and slip, and each coefficient's `source` in the detail |
+| stack-up chains | a 1D chain through items and connections, worst-case and root-sum-square, and a seeded Monte Carlo run when declared; judged on the worst case, with each link's share and the governing link | `chains` | each link's `source`, and ISO 2768-1 for a link with no declared tolerance; the required band declares no source yet |
+| material needs | each declared need against the attribute each item's material declares, citing both; see [material compliance](material-compliance.md) | `materials`, `needs` | each need's and each material attribute's source; see [material compliance](material-compliance.md) |
+| mobility | Grübler–Kutzbach, M = 6(n − 1 − j) + Σf, over bodies joined rigidly into links | declared joints | no limit; the Grübler–Kutzbach count, with its caveats |
+
+An entry held to a declared limit carries that limit's source as its reference, so the card
+names what each verdict was held against. The methods are rigid-body statics and mass
+properties, which cite no clause; the citation is the user's.
 
 A body rests on the bodies whose tops meet its bottom over a shared plan area, and the
 lowest rest on the floor. One support, two with the load over the line between them, or
