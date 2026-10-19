@@ -12,7 +12,8 @@ Depends on `add-product-structure`, `add-purchased-components`, `add-product-scr
 
 - [ ] 2.1 XCAF writer: hierarchy, product names = part numbers, unique instance names
       from paths, color per part, user-defined attributes, validation properties
-- [x] 2.2 Per-part files `<pn>_<rev>.step`; optional external-reference assembly
+- [ ] 2.2 Per-part files `<pn>_<rev>.step`; optional external-reference assembly
+      (the per-part files are built; the external-reference assembly is not)
 - [ ] 2.3 Import matrix in CI on the free CAD tiers: tree depth, names, colors survive
 
 ## 3. BOM
@@ -34,4 +35,4 @@ Depends on `add-product-structure`, `add-purchased-components`, `add-product-scr
 - [ ] 5.1 Assembly drawing per product node: views, exploded view, balloons, parts list
 - [ ] 5.2 One PDF package
 - [x] 5.3 Manifest with hashes; `anvilate verify` reports altered files
-- [ ] 5.4 A docs page for the release package: what lands where and which tool reads it
+- [x] 5.4 A docs page for the release package: what lands where and which tool reads it
