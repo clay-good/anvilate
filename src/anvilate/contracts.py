@@ -197,7 +197,7 @@ COMBINATION_SUMMARY_SCHEMA_VERSION = "1.0.0"
 # one node's full card when the call names a node.
 PRODUCT_SUMMARY_SCHEMA_VERSION = "1.2.0"
 # The product document itself: its version is the one ``anvilate_product`` states.
-PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.12.0"
+PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.13.0"
 NODE_CARD_SCHEMA_VERSION = "1.2.1"
 
 

@@ -1613,7 +1613,7 @@
     },
     "Screening": {
       "additionalProperties": false,
-      "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection. ``loads`` are what the product carries, which travel down\nthrough the bodies they rest on to the floor; ``splits`` divide a body's load among\nmore supports than determine it, each with its basis.",
+      "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth, as a budget whose terms are the bodies;\n``max_cg_height`` is the highest the centre of mass may sit above the product's lowest\npoint; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection. ``loads`` are what the product carries, which travel down\nthrough the bodies they rest on to the floor; ``splits`` divide a body's load among\nmore supports than determine it, each with its basis.",
       "properties": {
         "chains": {
           "default": [],
@@ -1652,6 +1652,17 @@
           "maxItems": 256,
           "title": "Materials",
           "type": "array"
+        },
+        "max_cg_height": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Limit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "max_mass": {
           "anyOf": [
@@ -1912,13 +1923,13 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.12.0",
+  "$id": "urn:anvilate:schema:product-document:1.13.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.12.0",
+      "default": "1.13.0",
       "enum": [
         "1.0.0",
         "1.1.0",
@@ -1932,7 +1943,8 @@
         "1.9.0",
         "1.10.0",
         "1.11.0",
-        "1.12.0"
+        "1.12.0",
+        "1.13.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -2053,5 +2065,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.12.0"
+  "x-anvilate-version": "1.13.0"
 }

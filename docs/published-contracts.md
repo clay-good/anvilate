@@ -129,6 +129,11 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.13.0: a centre-of-mass height limit
+
+`screening` gains `max_cg_height`: a length, with its source, that the centre of mass may sit
+at most above the product's lowest point. An older product document reads unchanged.
+
 ### Product document 1.12.0: unit prices
 
 A made part's or placeholder's definition, and a component record, gain `price`: an

@@ -85,6 +85,51 @@ def test_growth_by_maturity_and_a_mass_limit_on_the_predicted_mass():
     entry = _named(report, "product mass")
     assert entry.status is CheckStatus.PASS and "predicted" in entry.detail
     assert "provisional on cart/base" in entry.detail
+    # The same figure through the budget mechanism: each body a term, growth ledgered.
+    budget = report.mass_budget
+    assert budget.total == pytest.approx(report.rollup.predicted_kg)
+    assert budget.governing == ("cart/base",) and "governing: cart/base" in entry.detail
+    assert {m.authority for m in budget.margins} == {"program mass-growth policy"}
+    assert entry.comparison.measured.magnitude == pytest.approx(budget.total)
+    assert entry.reference == "lift limit"
+
+
+def test_a_mass_over_its_limit_fails_with_the_body_that_governs_it():
+    document = _cart({"max_mass": {"value": _q(2.2, "kg"), "source": "lift limit"}})
+    report = product_screening(parse_product(document))
+    entry = _named(report, "product mass")
+    assert entry.status is CheckStatus.FAIL
+    assert report.mass_budget.total == pytest.approx(2.5)
+    assert report.mass_budget.governing == ("cart/base",)
+    rooms = {c.name: c.headroom for c in report.mass_budget.contributors}
+    assert rooms == {"cart/base": None, "cart/block": None}  # a spent budget has no headroom
+    roomy = _cart({"max_mass": {"value": _q(3.0, "kg"), "source": "lift limit"}})
+    rooms = {
+        c.name: c.headroom for c in product_screening(parse_product(roomy)).mass_budget.contributors
+    }
+    assert rooms == pytest.approx({"cart/base": 2.5, "cart/block": 1.0})  # fmt: skip
+
+
+def test_the_centre_of_mass_height_against_its_limit():
+    column = {"name": "column",
+              "definitions": [_definition("body", placeholder=_box(100, 100, 200, 1.0))],
+              "instances": [{"name": "body", "item": "body"}], "ground": "body"}  # fmt: skip
+    for allowed, status in ((120, CheckStatus.PASS), (80, CheckStatus.FAIL)):
+        column["screening"] = {"max_cg_height": {"value": _q(allowed, "mm"),
+                                                 "source": "transport spec"}}  # fmt: skip
+        entry = _named(product_screening(parse_product(column)), "centre-of-mass height")
+        assert entry.status is status
+        assert "is 100 mm above the lowest point" in entry.detail
+        assert entry.comparison.measured.magnitude == pytest.approx(100)
+
+
+def test_a_centre_of_mass_height_limit_is_a_length():
+    column = {"name": "column",
+              "definitions": [_definition("body", placeholder=_box(100, 100, 200, 1.0))],
+              "instances": [{"name": "body", "item": "body"}], "ground": "body",
+              "screening": {"max_cg_height": {"value": _q(5, "kg"), "source": "x"}}}  # fmt: skip
+    with pytest.raises(ValueError, match="max_cg_height"):
+        parse_product(column)
 
 
 def test_the_tilt_at_which_the_centre_of_mass_leaves_the_footprint():

@@ -8,6 +8,7 @@ predicted to weigh, how far it can tilt, how close its items come, and how it ca
 screening:
   mass_growth: {estimated: 0.15, calculated: 0.05, source: program mass-growth policy}
   max_mass: {value: {magnitude: 40, unit: kg}, source: two-person lift}
+  max_cg_height: {value: {magnitude: 600, unit: mm}, source: transport spec}
   min_tilt: {value: {magnitude: 8, unit: degree}, source: transport spec}
   min_clearance: {value: {magnitude: 2, unit: mm}, source: service access}
 ```
@@ -16,7 +17,8 @@ screening:
 | --- | --- | --- |
 | mass properties | per product node: mass, centre of mass, and inertia about it by the parallel-axis theorem, each body uniform over its own solid | each body's mass and solid |
 | mass growth | basic mass by maturity, plus the declared allowance for each: predicted mass | `mass_growth` |
-| product mass | predicted mass against the limit | `max_mass` |
+| product mass | a [budget](performance-budgets.md) whose terms are the bodies, summed worst case, each grown by its maturity's allowance: predicted mass against the limit, naming the governing body | `max_mass` |
+| centre-of-mass height | the centre of mass's height above the product's lowest point against the limit | `max_cg_height` |
 | tip-over | the tilt at which the centre of mass leaves the footprint (the plan rectangle of the bodies resting lowest), atan(inside ÷ height), about its nearest edge | `min_tilt` |
 | clearance | the least gap between every two items that share no mate or connection, and where it is; and over each joint's range, the least gap its moving item comes to ([interfaces](interfaces.md#joints)) | `min_clearance` |
 | load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits` |
@@ -75,6 +77,13 @@ Each body's mass states its basis and maturity:
 | a purchased component | declared by its record | measured |
 | a placeholder | a placeholder's estimate | estimated |
 
+`report.mass_budget` is that budget evaluated: each body's share and headroom (how much it
+could grow, the rest held, before the limit is spent), and the growth allowances as
+[margin-ledger](margin-ledger.md) entries rather than mass. The centre-of-mass height is a
+weighted mean, not a sum, so it is a limit of its own and not a budget. A cart of a 2 kg
+base and a 0.5 kg block against 3 kg leaves the base 2.5 kg of headroom and the block
+1.0 kg; against 2.2 kg it fails, the base governing, and neither has headroom.
+
 A body with no mass leaves every node above it unweighed, naming it, and the mass check not
 evaluated. Every figure resting on a placeholder names it as provisional.
 
@@ -84,5 +93,4 @@ coaxial hinges counts −9 and moves. Mates between two items that a declared jo
 read as part of that joint, not as welding them.
 
 Not yet built: accelerations and loads on interfaces, side connections in the load path,
-part screens other than a caster's fed their loads, the budget mechanism for mass and CG limits, and
-fastener and tool counts.
+part screens other than a caster's fed their loads, and fastener and tool counts.

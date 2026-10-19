@@ -17,9 +17,9 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 ## 2. Roll-ups
 
 - [x] 2.1 Mass, center of mass, inertia per node with basis per contribution
-- [ ] 2.2 Mass and CG limits through the budget mechanism; tip-over angle entry
-      (a mass limit on predicted mass and the tip-over entry are built; the budget
-      mechanism is not used yet)
+- [x] 2.2 Mass and CG limits through the budget mechanism; tip-over angle entry
+      (the mass limit is a budget over the bodies with growth by maturity; the CG height
+      is a weighted mean, so it is a direct limit, not a budget)
 - [x] 2.3 Cost roll-up; incomplete totals labeled
 
 ## 3. Geometry across items

@@ -45,7 +45,7 @@ interfaces.md | Start here | product-screening, products | -
 lifting-devices.md | Screening by discipline | example-highlights | -
 load-combinations.md | Deciding what the answer is worth | example-highlights | -
 machinery-screening.md | Screening by discipline | combinations | -
-margin-ledger.md | Deciding what the answer is worth | calculation-reports, example-highlights, headless-cli, performance-budgets, published-contracts | -
+margin-ledger.md | Deciding what the answer is worth | calculation-reports, example-highlights, headless-cli, performance-budgets, product-screening, published-contracts | -
 margin-of-safety.md | Deciding what the answer is worth | README, structural-hand-methods | -
 masonry-screening.md | Screening by discipline | nothing | -
 material-compliance.md | Start here | product-screening | -
@@ -53,7 +53,7 @@ mcp-registry-release.md | Driving it from an agent | README | -
 mcp-tool-contracts.md | Driving it from an agent | agent-mcp-integration, example-highlights, published-contracts, spec-screening | -
 optomechanics.md | Screening by discipline | nothing | -
 parts-catalog.md | Start here | README, agent-mcp-integration, combinations, headless-cli, machinery-screening | -
-performance-budgets.md | Deciding what the answer is worth | example-highlights, margin-ledger, optomechanics, published-contracts, spec-screening | -
+performance-budgets.md | Deciding what the answer is worth | example-highlights, margin-ledger, optomechanics, product-screening, published-contracts, spec-screening | -
 pressure-equipment.md | Screening by discipline | example-highlights, industrial-covers | -
 process-piping.md | Screening by discipline | example-highlights | -
 product-screening.md | Start here | components, material-compliance | -

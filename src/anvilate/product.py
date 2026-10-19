@@ -121,7 +121,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.12.0"] = "1.12.0"
+PRODUCT_VERSION: Literal["1.13.0"] = "1.13.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -868,7 +868,9 @@ class Screening(StatableModel):
     """What the product as a whole is held to.
 
     ``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on
-    the predicted mass, basic plus growth; ``min_tilt`` is the tilt the centre of mass must
+    the predicted mass, basic plus growth, as a budget whose terms are the bodies;
+    ``max_cg_height`` is the highest the centre of mass may sit above the product's lowest
+    point; ``min_tilt`` is the tilt the centre of mass must
     stay inside the footprint up to; ``min_clearance`` the least gap between any two items
     that share no connection. ``loads`` are what the product carries, which travel down
     through the bodies they rest on to the floor; ``splits`` divide a body's load among
@@ -879,6 +881,7 @@ class Screening(StatableModel):
 
     mass_growth: MassGrowth | None = None
     max_mass: Limit | None = None
+    max_cg_height: Limit | None = None
     min_tilt: Limit | None = None
     min_clearance: Limit | None = None
     loads: tuple[ProductLoad, ...] = Field(default=(), max_length=256)
@@ -894,6 +897,7 @@ class Screening(StatableModel):
     def _dimensions(self) -> Screening:
         stated = (
             ("max_mass", self.max_mass, "[mass]"),
+            ("max_cg_height", self.max_cg_height, "[length]"),
             ("min_tilt", self.min_tilt, "[]"),
             ("min_clearance", self.min_clearance, "[length]"),
         )
@@ -929,7 +933,8 @@ class Product(StatableModel):
     # the loads it carries and declared splits, and 1.9.0 its thermal range and the items
     # separated for service, and 1.10.0 stack-up chains through its items, and 1.11.0 its
     # materials and what they must withstand, and 1.12.0 a unit price on a part or a
-    # component record; an older document reads unchanged.
+    # component record, and 1.13.0 a limit on the centre of mass's height; an older document
+    # reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -944,6 +949,7 @@ class Product(StatableModel):
         "1.10.0",
         "1.11.0",
         "1.12.0",
+        "1.13.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

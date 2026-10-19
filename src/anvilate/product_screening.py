@@ -30,9 +30,25 @@ from typing import Any, Literal
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel
+from .budget import (
+    Budget,
+    BudgetResult,
+    CombinationRule,
+    Contributor,
+    ContributorBasis,
+    GrowthAllowance,
+    LimitBasis,
+)
 from .derivation import DerivationAbsence, Underived
 from .product import Product, _placed_leaves, _refuse, place_product
-from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+from .scorecard import (
+    CheckStatus,
+    Comparison,
+    LimitSense,
+    Need,
+    ScorecardEntry,
+    ValueSource,
+)
 from .units import Quantity
 
 __all__ = [
@@ -144,6 +160,7 @@ class ProductScreening(StatableModel):
     contributions: tuple[MassContribution, ...]
     nodes: tuple[NodeMass, ...]
     rollup: MassRollup | None = None
+    mass_budget: BudgetResult | None = None
     approaches: tuple[ClosestApproach, ...] = Field(default=(), max_length=4096)
     mobility: Mobility
     load_path: tuple[LoadStep, ...] = ()
@@ -244,8 +261,12 @@ def product_screening(
     declared = product.screening
     rollup = _rollup(contributions, declared)
     top = nodes[0]
+    budget = None
     if declared is not None and declared.max_mass is not None:
-        entries.append(_mass_entry(top, rollup, declared.max_mass))
+        entry, budget = _mass_entry(top, contributions, rollup, declared)
+        entries.append(entry)
+    if declared is not None and declared.max_cg_height is not None:
+        entries.append(_cg_height_entry(top, placed, declared.max_cg_height))
     if declared is not None and declared.min_tilt is not None:
         entries.append(_tip_entry(top, placed, declared.min_tilt))
     steps, path_entries = _load_path(product, placed)
@@ -262,7 +283,8 @@ def product_screening(
         entries.append(_clearance_entry(approaches, declared.min_clearance))
     return ProductScreening(
         name=product.name, contributions=tuple(contributions), nodes=tuple(nodes),
-        rollup=rollup, approaches=approaches, mobility=_mobility(product, placed),
+        rollup=rollup, mass_budget=budget, approaches=approaches,
+        mobility=_mobility(product, placed),
         load_path=tuple(steps),
         economy=_economy(product, shelf, bodies),
         cost_lines=tuple(cost_lines), costs=tuple(costs),
@@ -297,22 +319,92 @@ def _rollup(contributions: list[MassContribution], declared: Any) -> MassRollup 
                       lines=tuple(lines), source=growth.source)  # fmt: skip
 
 
-def _mass_entry(top: NodeMass, rollup: MassRollup | None, limit: Any) -> ScorecardEntry:
-    allowed = limit.value.to("kg").magnitude
+_MASS_SOURCES = {
+    "computed": "computed from its geometry and density",
+    "declared": "declared by its component record",
+    "placeholder": "a placeholder's estimate",
+}
+
+
+def _mass_budget(contributions: list[MassContribution], declared: Any) -> BudgetResult:
+    """The product's mass as a budget: each body one term of its maturity, summed.
+
+    A declared growth allowance becomes a ``GrowthAllowance`` per maturity, one plus its
+    fraction, so the result ledgers the growth as growth instead of folding it into a mass.
+    """
+    growth = declared.mass_growth
+    # Called only once every body has a mass, and a body with a mass has a maturity.
+    terms = tuple(
+        Contributor(name=c.path, value=Quantity(magnitude=c.mass_kg or 0.0, unit="kg"),
+                    source=_MASS_SOURCES[c.basis], basis=ContributorBasis(c.maturity or ""))
+        for c in contributions
+    )  # fmt: skip
+    present = {c.maturity for c in contributions}
+    allowances = () if growth is None else tuple(
+        GrowthAllowance(basis=ContributorBasis(m), factor=1.0 + float(getattr(growth, m)),
+                        authority=growth.source)
+        for m in ("estimated", "calculated", "measured") if m in present
+    )  # fmt: skip
+    return Budget(
+        name="product mass", quantity="predicted mass" if growth is not None else "mass",
+        limit=declared.max_mass.value, limit_basis=LimitBasis.REQUIREMENT,
+        limit_source=declared.max_mass.source, rule=CombinationRule.WORST_CASE,
+        contributors=terms, growth=allowances,
+    ).evaluate()  # fmt: skip
+
+
+def _mass_entry(
+    top: NodeMass,
+    contributions: list[MassContribution],
+    rollup: MassRollup | None,
+    declared: Any,
+) -> tuple[ScorecardEntry, BudgetResult | None]:
+    limit = declared.max_mass
     if top.mass_kg is None:
         return ScorecardEntry(
             name="product mass", status=CheckStatus.NOT_EVALUATED,
             detail=f"no total: {', '.join(top.missing)} carries no mass",
             needs=(_need("definitions[].spec", "a mass for every item", "[mass]", ("kg",)),),
-        )  # fmt: skip
+        ), None  # fmt: skip
+    result = _mass_budget(contributions, declared)
     mass = rollup.predicted_kg if rollup is not None else top.mass_kg
     basis = (f"predicted {mass:.4g} kg (basic {rollup.basic_kg:.4g} + growth "
              f"{rollup.growth_kg:.4g}, {rollup.source})" if rollup is not None
              else f"{mass:.4g} kg with no growth allowance declared")  # fmt: skip
+    governing = " and ".join(result.governing)
+    held = f"; provisional on {', '.join(top.provisional)}" if top.provisional else ""
+    entry = result.to_entry()
+    detail = f"{basis} against {limit.value} ({limit.source}); governing: {governing}{held}"
+    return entry.model_copy(update={"name": "product mass", "detail": detail}), result
+
+
+def _cg_height_entry(top: NodeMass, placed: Any, limit: Any) -> ScorecardEntry:
+    """The centre of mass's height above the lowest point of the product, against a limit.
+
+    A weighted mean, not a sum, so it is a limit of its own rather than a budget's terms.
+    """
+    if top.center_of_mass_mm is None:
+        return ScorecardEntry(
+            name="centre-of-mass height", status=CheckStatus.NOT_EVALUATED,
+            detail="no centre of mass: " + ", ".join(top.missing),
+            needs=(_need("definitions[].spec", "a mass for every item", "[mass]", ("kg",)),),
+        )  # fmt: skip
+    floor = min(body.box_min_mm[2] for body in placed.bodies)
+    height = top.center_of_mass_mm[2] - floor
+    allowed = limit.value.to("mm").magnitude
     held = f"; provisional on {', '.join(top.provisional)}" if top.provisional else ""
     return ScorecardEntry(
-        name="product mass", status=CheckStatus.PASS if mass <= allowed else CheckStatus.FAIL,
-        detail=f"{basis} against {allowed:g} kg ({limit.source}){held}", underived=_SUMMED,
+        name="centre-of-mass height",
+        status=CheckStatus.PASS if height <= allowed else CheckStatus.FAIL,
+        detail=f"the centre of mass is {height:.4g} mm above the lowest point of the product, "
+        f"against {limit.value} ({limit.source}){held}",
+        reference=limit.source,
+        underived=_SUMMED,
+        comparison=Comparison(
+            measured=Quantity(magnitude=height, unit="mm"), limit=limit.value,
+            sense=LimitSense.AT_MOST, measured_label="centre-of-mass height",
+            limit_label="allowed",
+        ),
     )  # fmt: skip
 
 
