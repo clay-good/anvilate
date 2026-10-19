@@ -19,6 +19,7 @@ for entry in screen_dfm(built, profile, tool_direction=(0, 0, 1)):
 | --- | --- | --- | --- |
 | CNC milling | `internal_radius_min` | Every concave fillet about the tool axis, and every sharp concave edge along it (radius 0) | 1 mm |
 | CNC milling | `hole_depth_ratio_max` | Each drilled feature's depth over its diameter | 10 |
+| CNC turning | `slenderness_max` | The length along the spindle over the largest diameter across it, for a part held at one end; the spindle lies along x, y or z | 4 |
 | Sheet metal | `bend_radius_ratio_min` | Inside bend radius over thickness | 1 |
 | Sheet metal | `hole_to_bend_min` | A hole's edge to the nearest bend line, in thicknesses | 2.5 |
 | Sheet metal | `hole_to_edge_min` | A hole's edge to the blank's edge, in thicknesses | 2 |
@@ -57,5 +58,5 @@ shop cannot make as drawn, a fastener no tool reaches, an adjustment sealed away
 tolerance nobody can measure. Every other entry is physics, and keeps its verdict.
 
 The wall ratio reads the walls the part declares. A wall-thickness map measured on the solid
-is not built yet, and neither are turning, weldments, undercuts, rib and boss proportions,
+is not built yet, and neither are a turned part's sections judged on their own, weldments, undercuts, rib and boss proportions,
 curved down-facing faces, or cost estimates.

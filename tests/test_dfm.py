@@ -200,6 +200,31 @@ def test_a_short_flange_against_the_brake():
     assert flange.status is CheckStatus.FAIL and "flange_c 25 mm" in flange.detail
 
 
+# --- CNC turning ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("height", "status"), [(60, CheckStatus.PASS), (100, CheckStatus.FAIL)])
+def test_a_turned_part_is_judged_on_its_length_over_its_diameter(height, status):
+    from build123d import Cylinder
+
+    turning = default_profile(DfmProcess.CNC_TURNING)
+    (slender,) = screen_dfm(_solid(Cylinder(10, height), name="pin"), turning,
+                            tool_direction=(0, 0, 1))  # fmt: skip
+    assert slender.status is status
+    assert slender.comparison.measured.magnitude == pytest.approx(height / 20)
+    assert "a practice default" in slender.detail
+    if status is CheckStatus.FAIL:
+        assert f"length {height:g} mm over diameter 20 mm" in slender.detail
+
+
+def test_a_spindle_axis_off_the_coordinate_axes_is_refused():
+    from build123d import Cylinder
+
+    with pytest.raises(RefusalError, match="lies along x, y or z"):
+        screen_dfm(_solid(Cylinder(10, 60)), default_profile(DfmProcess.CNC_TURNING),
+                   tool_direction=(1, 1, 0))  # fmt: skip
+
+
 def test_a_card_separates_manufacturability_from_physics_and_keeps_both_verdicts():
     """validation-gauntlet: a DFM failure sits beside the physics checks, and a reader can
     filter one kind from the other. The filter is the failure-mode catalogue's own

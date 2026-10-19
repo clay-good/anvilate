@@ -10,7 +10,8 @@
 
 ## 2. Rule packs
 
-- [ ] 2.1 CNC milling and turning
+- [x] 2.1 CNC milling and turning
+      (milling: internal corner radius, hole depth ratio; turning: slenderness)
 - [ ] 2.2 Sheet metal
 - [ ] 2.3 Injection molding
 - [ ] 2.4 Die casting

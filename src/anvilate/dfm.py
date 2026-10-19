@@ -20,6 +20,8 @@ What is measured, on the solid itself:
   inside the material only when the edge is concave. A corner across the tool axis, where
   a wall meets the floor a flat end mill cuts, takes no cutter radius and is not judged.
 - **Hole depth ratio** (CNC milling): each drilled feature's depth over its diameter.
+- **Slenderness** (CNC turning): the part's length along the spindle over its largest
+  diameter across it, for a part held at one end.
 - **Bend radius and hole-to-bend, hole-to-edge distances** (sheet metal): from the
   developed flat profile, in thicknesses.
 - **Draft** (injection molding): every face's angle to the pull direction; a planar face
@@ -85,6 +87,7 @@ class DfmProcess(StrEnum):
     """The processes a profile describes."""
 
     CNC_MILLING = "cnc_milling"
+    CNC_TURNING = "cnc_turning"
     SHEET_METAL = "sheet_metal"
     INJECTION_MOLDING = "injection_molding"
     DIE_CASTING = "die_casting"
@@ -102,6 +105,11 @@ _RULES: dict[str, tuple[str, LimitSense, str]] = {
         "dimensionless",
         LimitSense.AT_MOST,
         "the deepest hole, in diameters, the shop drills",
+    ),
+    "slenderness_max": (
+        "dimensionless",
+        LimitSense.AT_MOST,
+        "the longest part, in diameters, turned held at one end with no tailstock or steady",
     ),
     "bend_radius_ratio_min": (
         "dimensionless",
@@ -140,6 +148,7 @@ _RULES: dict[str, tuple[str, LimitSense, str]] = {
 _DEFAULTS: dict[tuple[DfmProcess, str], float] = {
     (DfmProcess.CNC_MILLING, "internal_radius_min"): 1.0,
     (DfmProcess.CNC_MILLING, "hole_depth_ratio_max"): 10.0,
+    (DfmProcess.CNC_TURNING, "slenderness_max"): 4.0,
     (DfmProcess.SHEET_METAL, "bend_radius_ratio_min"): 1.0,
     (DfmProcess.SHEET_METAL, "hole_to_bend_min"): 2.5,
     (DfmProcess.SHEET_METAL, "hole_to_edge_min"): 2.0,
@@ -377,10 +386,10 @@ def screen_dfm(
 ) -> tuple[ScorecardEntry, ...]:
     """The DFM findings for a built part under ``profile``, one entry per rule.
 
-    ``tool_direction`` (CNC milling), ``pull_direction`` (injection molding) and
-    ``build_direction`` (additive) are the axis the cutter turns about, the direction the
-    tool opens, and the direction the part grows; each process refuses a call without the
-    one it needs.
+    ``tool_direction`` (CNC milling and turning), ``pull_direction`` (injection molding) and
+    ``build_direction`` (additive) are the axis the cutter or the spindle turns about, the
+    direction the tool opens, and the direction the part grows; each process refuses a call
+    without the one it needs. A turned part's spindle axis lies along x, y or z.
     """
     entries = _findings(
         built,
@@ -423,6 +432,23 @@ def _findings(
                    label="internal corner radii"),
             _entry(built, "hole_depth_ratio_max", depth, holes,
                    label="hole depth-to-diameter ratios"),
+        )  # fmt: skip
+    if process is DfmProcess.CNC_TURNING:
+        spindle = _vector(tool_direction, "tool_direction")
+        along = [i for i in range(3) if abs(spindle[i]) > 0.999]
+        if not along:
+            raise _refusal(f"a turned part's spindle axis lies along x, y or z; got {spindle}",
+                           subject="tool_direction", source="the turning setup")  # fmt: skip
+        box = built.shape.bounding_box()
+        size = (box.size.X, box.size.Y, box.size.Z)
+        length = size[along[0]]
+        diameter = max(size[i] for i in range(3) if i != along[0])
+        items = [_Item(f"length {length:g} mm over diameter {diameter:g} mm", length / diameter)]
+        return (
+            _entry(built, "slenderness_max", profile.threshold("slenderness_max"), items,
+                   label="length-to-diameter ratios",
+                   note="; the diameter is the largest across the spindle axis, so a stepped "
+                   "shaft's thinner sections are not judged on their own"),
         )  # fmt: skip
     if process is DfmProcess.SHEET_METAL:
         profile_flat = built.profile
