@@ -31,9 +31,13 @@ What is measured, on the solid itself:
 :func:`profile_for` picks the pack from the process a spec declares. A rule that cannot
 read its property off the part (a wall ratio over fewer than two declared walls) is not
 evaluated, naming what is missing, rather than passed.
-- **Overhang** (additive): every down-facing planar face's angle above horizontal against
-  the build direction, skipping faces on the build plate. Curved down-facing faces are
-  not measured, and the report says so.
+- **Overhang** (additive, material extrusion): every down-facing planar face's angle above
+  horizontal against the build direction, skipping faces on the build plate. Curved
+  down-facing faces are not measured, and the report says so.
+- **Wall thickness** (material extrusion, powder bed fusion; molding and casting where
+  the part declares fewer than two walls): the material under each planar face, the
+  diameter of the largest ball that fits there. Powder bed fusion has no overhang rule:
+  the powder holds an overhang up.
 
 Findings are :class:`~anvilate.scorecard.ScorecardEntry` objects, one per rule, naming
 the faces or features at fault and the measured value against the limit; a bend also
@@ -100,6 +104,7 @@ class DfmProcess(StrEnum):
     INJECTION_MOLDING = "injection_molding"
     DIE_CASTING = "die_casting"
     ADDITIVE = "additive"
+    POWDER_BED_FUSION = "powder_bed_fusion"
 
 
 # rule: (unit, the sense that passes, what it is) — one meaning per rule, whatever process.
@@ -150,6 +155,11 @@ _RULES: dict[str, tuple[str, LimitSense, str]] = {
         LimitSense.AT_MOST,
         "the thickest declared wall over the thinnest, for even filling",
     ),
+    "wall_min": (
+        "mm",
+        LimitSense.AT_LEAST,
+        "the thinnest wall the process builds, measured under each planar face",
+    ),
     "overhang_min": (
         "degree",
         LimitSense.AT_LEAST,
@@ -172,6 +182,8 @@ _DEFAULTS: dict[tuple[DfmProcess, str], float] = {
     (DfmProcess.DIE_CASTING, "draft_min"): 1.0,
     (DfmProcess.DIE_CASTING, "wall_ratio_max"): 2.0,
     (DfmProcess.ADDITIVE, "overhang_min"): 45.0,
+    (DfmProcess.ADDITIVE, "wall_min"): 0.8,
+    (DfmProcess.POWDER_BED_FUSION, "wall_min"): 0.7,
 }  # fmt: skip
 
 
@@ -239,8 +251,9 @@ def default_profile(process: DfmProcess) -> ProcessProfile:
     )
 
 
-# The process a spec declares, and the pack it reads. FDM and SLS share the additive pack;
-# grinding, wire EDM and reaming are finishing operations with no pack of their own.
+# The process a spec declares, and the pack it reads. FDM is material extrusion (the
+# additive pack) and SLS powder bed fusion; grinding, wire EDM and reaming are finishing
+# operations with no pack of their own.
 _PACKS = {
     "cnc_milling": DfmProcess.CNC_MILLING,
     "cnc_turning": DfmProcess.CNC_TURNING,
@@ -248,7 +261,7 @@ _PACKS = {
     "injection_molding": DfmProcess.INJECTION_MOLDING,
     "die_casting": DfmProcess.DIE_CASTING,
     "fdm": DfmProcess.ADDITIVE,
-    "sls": DfmProcess.ADDITIVE,
+    "sls": DfmProcess.POWDER_BED_FUSION,
 }
 
 
@@ -690,6 +703,15 @@ def _findings(
                    "or boss_wall), so the ratio has two to compare"),
             *ribs,
         )  # fmt: skip
+    thickness = _thickness_map(built)
+    walls = _entry(built, "wall_min", profile.threshold("wall_min"), thickness,
+                   label="measured wall thicknesses",
+                   unmeasured=None if thickness else "it has no planar face to measure under",
+                   needs="a part with a planar face, or the wall checked by hand")  # fmt: skip
+    if process is DfmProcess.POWDER_BED_FUSION:
+        # The powder holds an overhang up as it builds: polymer powder bed fusion needs no
+        # support, so its pack judges walls only.
+        return (walls,)
     up = _vector(build_direction, "build_direction")
     overhang = profile.threshold("overhang_min")
     heights = [_dot(_point(v), up) for v in built.shape.vertices()]
@@ -713,4 +735,5 @@ def _findings(
     return (
         _entry(built, "overhang_min", overhang, items, label="down-facing face angles",
                note="; curved down-facing faces are not measured"),
+        walls,
     )  # fmt: skip

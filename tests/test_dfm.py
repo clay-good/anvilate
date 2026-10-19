@@ -141,9 +141,9 @@ def test_an_undrafted_box_fails_and_a_drafted_one_passes():
 def test_an_upside_down_enclosure_has_a_floor_to_support():
     enclosure = _part("enclosure")
     profile = default_profile(DfmProcess.ADDITIVE)
-    (upright,) = screen_dfm(enclosure, profile, build_direction=(0, 0, 1))
+    (upright, _) = screen_dfm(enclosure, profile, build_direction=(0, 0, 1))
     assert upright.status is CheckStatus.PASS
-    (flipped,) = screen_dfm(enclosure, profile, build_direction=(0, 0, -1))
+    (flipped, _) = screen_dfm(enclosure, profile, build_direction=(0, 0, -1))
     # built rim-down, the inside of the floor faces straight down: 0° above horizontal
     assert flipped.status is CheckStatus.FAIL
     assert flipped.comparison.measured.magnitude == pytest.approx(0.0, abs=1e-9)
@@ -270,6 +270,20 @@ def test_a_spindle_axis_off_the_coordinate_axes_is_refused():
                    tool_direction=(1, 1, 0))  # fmt: skip
 
 
+def test_a_wall_thinner_than_the_printer_builds_fails_and_powder_needs_no_support():
+    from build123d import Box, Pos
+
+    # 0.5 mm walls on x, 2 mm on y, a 2 mm floor
+    shell = _solid(Box(20, 20, 10) - Pos(0, 0, 2) * Box(19, 16, 10), name="shell")
+    (wall,) = screen_dfm(shell, default_profile(DfmProcess.POWDER_BED_FUSION))
+    assert wall.status is CheckStatus.FAIL
+    assert wall.comparison.measured.magnitude == pytest.approx(0.5)
+    assert "a practice default" in wall.detail
+    (_, extruded_wall) = screen_dfm(shell, default_profile(DfmProcess.ADDITIVE),
+                                    build_direction=(0, 0, 1))  # fmt: skip
+    assert extruded_wall.status is CheckStatus.FAIL
+
+
 def test_a_card_separates_manufacturability_from_physics_and_keeps_both_verdicts():
     """validation-gauntlet: a DFM failure sits beside the physics checks, and a reader can
     filter one kind from the other. The filter is the failure-mode catalogue's own
@@ -295,7 +309,8 @@ def test_the_pack_is_chosen_by_the_process_the_spec_declares():
     from anvilate.dfm import profile_for
     from anvilate.spec import ManufacturingProcess
 
-    assert profile_for(ManufacturingProcess.SLS).process is DfmProcess.ADDITIVE
+    assert profile_for(ManufacturingProcess.SLS).process is DfmProcess.POWDER_BED_FUSION
+    assert profile_for(ManufacturingProcess.FDM).process is DfmProcess.ADDITIVE
     assert profile_for("cnc_turning").process is DfmProcess.CNC_TURNING
     spec = load_spec_yaml((_PARTS / "mounting_plate.spec.yaml").read_text())
     assert profile_for(spec.manufacturing.process).process.value == str(spec.manufacturing.process)

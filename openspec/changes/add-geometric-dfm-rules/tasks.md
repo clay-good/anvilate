@@ -18,7 +18,8 @@
       (draft, wall ratio, rib ratio; undercuts are not detected yet)
 - [x] 2.4 Die casting
       (draft and wall ratio)
-- [ ] 2.5 Additive: material extrusion, powder bed fusion
+- [x] 2.5 Additive: material extrusion, powder bed fusion
+      (extrusion: overhang and wall; powder bed fusion: wall)
 - [ ] 2.6 Weldments: torch access, single-side distortion warning
 
 ## 3. Reporting

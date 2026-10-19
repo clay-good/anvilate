@@ -29,7 +29,9 @@ for entry in screen_dfm(built, profile, tool_direction=(0, 0, 1)):
 | Injection molding | `rib_ratio_max` | The declared rib over the declared wall it stands on, so it does not sink | 0.6 |
 | Die casting | `draft_min` | As for molding | 1° |
 | Die casting | `wall_ratio_max` | As for molding | 2 |
-| Additive | `overhang_min` | Each down-facing planar face's angle above horizontal, off the build plate | 45° |
+| Additive (material extrusion) | `wall_min` | The thinnest wall measured on the solid | 0.8 mm |
+| Powder bed fusion | `wall_min` | As for material extrusion; the powder holds an overhang up, so there is no overhang rule | 0.7 mm |
+| Additive (material extrusion) | `overhang_min` | Each down-facing planar face's angle above horizontal, off the build plate | 45° |
 
 The corner rule judges only corners along the tool axis. Where a wall meets the floor that
 a flat end mill cuts, the corner is sharp by design and needs no cutter radius. A sharp
