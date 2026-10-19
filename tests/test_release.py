@@ -174,7 +174,7 @@ def test_the_docs_page_names_every_file_the_package_writes(tmp_path):
               "laser/<part number>_<revision>.dxf", "laser/cut-list.csv", "print/plate.3mf",
               "step/<part number>_<revision>.step", "step/<product>.step",
               "parameters/<part number>.csv", "drawings/<part number>_<revision>.svg",
-              "drawings/package.pdf"}  # fmt: skip
+              "drawings/<part number>_<revision>-exploded.svg", "drawings/package.pdf"}  # fmt: skip
     assert named == shapes
     written = {f.path for f in manifest.files} | {"manifest.json"}
     assert {"bom.csv", "bom.xlsx", "buy.csv", "manifest.json"} <= written
@@ -341,10 +341,11 @@ def test_each_product_node_has_a_drawing_whose_balloons_are_the_boms_find_number
     for row in rows:
         by_parent.setdefault(row["parent part number"], set()).add(row["find number"])
     for path in drawings:
-        svg = (tmp_path / path).read_text(encoding="utf-8")
         number = path.removeprefix("drawings/").rsplit("_", 1)[0]
-        balloons = set(re.findall(r'data-balloon="([^"]+)"', svg))
-        assert balloons == by_parent[number], path
+        for sheet in (path, path.replace(".svg", "-exploded.svg")):
+            svg = (tmp_path / sheet).read_text(encoding="utf-8")
+            balloons = set(re.findall(r'data-balloon="([^"]+)"', svg))
+            assert balloons == by_parent[number], sheet
     top = next(p for p in drawings if p.startswith(f"drawings/{rows[0]['parent part number']}_"))
     assert set(re.findall(r'data-balloon="([^"]+)"', (tmp_path / top).read_text())) == {
         "1",
@@ -366,7 +367,8 @@ def test_the_drawings_are_gathered_into_one_pdf_marked_like_the_package(tmp_path
     assert roles["drawings/package.pdf"] == "drawing package"
     pdf = tmp_path / "drawings" / "package.pdf"
     sheets = [p for p, role in roles.items() if role == "assembly drawing"]
-    assert sum(1 for _ in extract_pages(str(pdf))) == len(sheets) == 2
+    # each node's assembled sheet and its exploded one
+    assert sum(1 for _ in extract_pages(str(pdf))) == 2 * len(sheets) == 4
     with pdf.open("rb") as handle:
         (info,) = PDFDocument(PDFParser(handle)).info
     assert info["ANVILATE_EXPORT_STATUS"] == b"UNVALIDATED"

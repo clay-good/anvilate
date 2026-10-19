@@ -558,21 +558,61 @@ def _assembly_drawings(
             continue
         described = (node.description if len(node.description) <= 48
                      else node.description[:47].rstrip() + "…")  # fmt: skip
-        svg, _height = render_assembly(
-            bodies,
-            name=f"{node.part_number} revision {node.revision or '-'}",
-            lines=[described, *status],
-            parts_list=rows,
-            marks=marks,
-            width_px=1100,
-        )
-        name = f"drawings/{_safe(node.part_number)}_{_safe(node.revision or '-')}.svg"
-        _write(out, name, svg, files, "assembly drawing")
-        sheets.append(svg)
+        stem = f"drawings/{_safe(node.part_number)}_{_safe(node.revision or '-')}"
+        for exploded in (False, True):
+            svg, _height = render_assembly(
+                _exploded(bodies) if exploded else bodies,
+                name=f"{node.part_number} revision {node.revision or '-'}"
+                + (" exploded" if exploded else ""),
+                lines=[described, *status],
+                parts_list=rows,
+                marks=marks,
+                width_px=1100,
+                dimensions=not exploded,
+            )
+            role = "exploded assembly drawing" if exploded else "assembly drawing"
+            _write(out, f"{stem}{'-exploded' if exploded else ''}.svg", svg, files, role)
+            sheets.append(svg)
     if sheets:
         package = svgs_to_pdf(sheets, title=f"{tree.part_number} {tree.description}",
                               metadata=authorization.metadata())  # fmt: skip
         _write(out, "drawings/package.pdf", package, files, "drawing package")
+
+
+# The gap between tiers in an exploded view, as a share of the assembly's largest extent.
+_EXPLODED = 0.15
+
+
+def _exploded(bodies: list[tuple[str, Any, bool]]) -> list[tuple[str, Any, bool]]:
+    """``bodies`` drawn apart upward: items whose bottoms sit at one height are a tier, and
+    each tier is lifted one gap above the tier below it, so what stacks comes apart and what
+    stands side by side stays in place. Every body of one item moves together, so a
+    sub-product comes off whole."""
+    from build123d import Location
+
+    def low(shapes: list[Any]) -> float:
+        return min(s.bounding_box().min.Z for s in shapes)
+
+    everything = [shape for _label, shape, _envelope in bodies]
+    size = max(
+        max(tuple(s.bounding_box().max)[i] for s in everything)
+        - min(tuple(s.bounding_box().min)[i] for s in everything)
+        for i in range(3)
+    )
+    bottoms = {
+        label: low([shape for name, shape, _envelope in bodies if name == label])
+        for label in dict.fromkeys(label for label, _shape, _envelope in bodies)
+    }
+    tiers: list[float] = []
+    for bottom in sorted(bottoms.values()):
+        if not tiers or bottom - tiers[-1] > 1.0:  # within a millimetre is the same tier
+            tiers.append(bottom)
+    lift = {
+        label: _EXPLODED * size * max(i for i, t in enumerate(tiers) if bottom - t >= -1.0)
+        for label, bottom in bottoms.items()
+    }
+    return [(label, shape.moved(Location((0, 0, lift[label]))), envelope)
+            for label, shape, envelope in bodies]  # fmt: skip
 
 
 def _bom_rows(
