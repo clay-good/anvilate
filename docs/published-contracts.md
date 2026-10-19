@@ -129,6 +129,12 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.14.0: the acceleration the load path is carried at
+
+`screening` gains `vertical_acceleration`: an acceleration, gravity included and acting
+down, with its source. Weights and loads given as a mass are carried at it; a load given as
+a force is not scaled. An older product document reads unchanged.
+
 ### Product document 1.13.0: a centre-of-mass height limit
 
 `screening` gains `max_cg_height`: a length, with its source, that the centre of mass may sit

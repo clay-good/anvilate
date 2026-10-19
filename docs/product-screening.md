@@ -21,7 +21,7 @@ screening:
 | centre-of-mass height | the centre of mass's height above the product's lowest point against the limit | `max_cg_height` |
 | tip-over | the tilt at which the centre of mass leaves the footprint (the plan rectangle of the bodies resting lowest), atan(inside ÷ height), about its nearest edge | `min_tilt` |
 | clearance | the least gap between every two items that share no mate or connection, and where it is; and over each joint's range, the least gap its moving item comes to ([interfaces](interfaces.md#joints)) | `min_clearance` |
-| load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits` |
+| load path | each body's load (declared loads and its own weight) carried down to the bodies it rests on, and from the lowest to the floor, by ΣFz, ΣMx and ΣMy at each body | `loads`, `splits`, `vertical_acceleration` |
 | caster load | each caster's rating against the load the path brings it, naming the load-path entry it reads | a `caster` component's `load_rating` |
 | thermal mismatch | for each connection between two catalog parts of different materials, \|α₁ − α₂\| · ΔT · span, the span between the outermost mated holes or across where they meet, against the declared slip, citing both coefficients | `thermal` |
 | stack-up chains | a 1D chain through items and connections, worst-case and root-sum-square, and a seeded Monte Carlo run when declared; judged on the worst case, with each link's share and the governing link | `chains` |
@@ -38,6 +38,16 @@ split, with its basis, divides it instead:
 ```yaml
 splits:
   - {body: cart/frame, basis: measured at the four wheels, shares: {cart/caster1: 0.25, ...}}
+```
+
+A declared `vertical_acceleration`, gravity included and acting down, is what the path is
+carried at: each body's weight and each load given as a mass are m·a rather than m·g, and a
+load given as a force is carried as stated. At `{magnitude: 2, unit: g0}` the cart's 63 kg
+puts twice its at-rest load on each caster, and a 100 N hand on the plate adds
+100 N, not 200.
+
+```yaml
+vertical_acceleration: {value: {magnitude: 2, unit: g0}, source: transport shock}
 ```
 
 Expansion coefficients are declared with their source, not looked up: the bundled
@@ -92,5 +102,5 @@ zero or negative, and for any two joint axes that are parallel or coincident: a 
 coaxial hinges counts −9 and moves. Mates between two items that a declared joint joins are
 read as part of that joint, not as welding them.
 
-Not yet built: accelerations and loads on interfaces, side connections in the load path,
+Not yet built: lateral accelerations, loads on interfaces, side connections in the load path,
 part screens other than a caster's fed their loads, and fastener and tool counts.

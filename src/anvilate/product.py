@@ -121,7 +121,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.13.0"] = "1.13.0"
+PRODUCT_VERSION: Literal["1.14.0"] = "1.14.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -874,7 +874,9 @@ class Screening(StatableModel):
     stay inside the footprint up to; ``min_clearance`` the least gap between any two items
     that share no connection. ``loads`` are what the product carries, which travel down
     through the bodies they rest on to the floor; ``splits`` divide a body's load among
-    more supports than determine it, each with its basis.
+    more supports than determine it, each with its basis. ``vertical_acceleration`` is the
+    acceleration the load path is carried at, gravity included and acting down: each body's
+    weight and each load given as a mass are carried at m·a rather than m·g.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -885,6 +887,7 @@ class Screening(StatableModel):
     min_tilt: Limit | None = None
     min_clearance: Limit | None = None
     loads: tuple[ProductLoad, ...] = Field(default=(), max_length=256)
+    vertical_acceleration: Limit | None = None
     splits: tuple[Split, ...] = Field(default=(), max_length=256)
     thermal: Thermal | None = None
     chains: tuple[ProductChain, ...] = Field(default=(), max_length=64)
@@ -898,6 +901,7 @@ class Screening(StatableModel):
         stated = (
             ("max_mass", self.max_mass, "[mass]"),
             ("max_cg_height", self.max_cg_height, "[length]"),
+            ("vertical_acceleration", self.vertical_acceleration, "[acceleration]"),
             ("min_tilt", self.min_tilt, "[]"),
             ("min_clearance", self.min_clearance, "[length]"),
         )
@@ -933,8 +937,8 @@ class Product(StatableModel):
     # the loads it carries and declared splits, and 1.9.0 its thermal range and the items
     # separated for service, and 1.10.0 stack-up chains through its items, and 1.11.0 its
     # materials and what they must withstand, and 1.12.0 a unit price on a part or a
-    # component record, and 1.13.0 a limit on the centre of mass's height; an older document
-    # reads unchanged.
+    # component record, and 1.13.0 a limit on the centre of mass's height, and 1.14.0 the
+    # vertical acceleration its load path is carried at; an older document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -950,6 +954,7 @@ class Product(StatableModel):
         "1.11.0",
         "1.12.0",
         "1.13.0",
+        "1.14.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

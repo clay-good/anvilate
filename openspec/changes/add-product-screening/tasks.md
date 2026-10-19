@@ -6,7 +6,8 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 ## 1. Load path
 
 - [ ] 1.1 Product loads and accelerations on items and interfaces
-      (loads on items are built; accelerations and loads on interfaces are not)
+      (loads on items and a vertical acceleration are built; lateral accelerations and
+      loads on interfaces are not)
 - [x] 1.2 Rigid-body equilibrium over determinate paths; connection forces with their
       equilibrium
 - [x] 1.3 Indeterminacy named with redundant connections; downstream not evaluated;

@@ -259,6 +259,30 @@ def test_a_payload_reaches_the_casters_through_a_determinate_path():
     assert "reads 'load path cart/caster3'" in rated["cart/caster3 caster load"].detail
 
 
+def test_a_vertical_acceleration_scales_weights_and_masses_and_not_forces():
+    g = 9.80665
+    still = product_screening(parse_product(_carted(_THREE, ("right", "back"))))
+    document = _carted(_THREE, ("right", "back"))
+    document["screening"]["vertical_acceleration"] = {"value": _q(2, "g0"),
+                                                      "source": "transport shock"}  # fmt: skip
+    document["screening"]["loads"].append({"item": "plate", "force": _q(100, "N"),
+                                           "source": "hand on the plate"})  # fmt: skip
+    shaken = product_screening(parse_product(document))
+    frame = {s.body: s for s in shaken.load_path}["cart/frame"]
+    assert frame.carries_n == pytest.approx(63 * 2 * g + 100)
+    before = {r.support: r.force_n for r in {s.body: s for s in still.load_path}["cart/frame"]
+              .reactions}  # fmt: skip
+    assert sum(r.force_n for r in frame.reactions) == pytest.approx(sum(before.values()) * 2 + 100)
+    assert "weights at 2 g (transport shock)" in _named(shaken, "load path cart/frame").detail
+    caster = {s.body: s for s in shaken.load_path}["cart/caster1"]
+    assert caster.carries_n == pytest.approx(
+        next(r.force_n for r in frame.reactions if r.support == "cart/caster1") + 0.6 * 2 * g
+    )
+    with pytest.raises(ValueError, match="vertical_acceleration"):
+        document["screening"]["vertical_acceleration"]["value"] = _q(2, "N")
+        parse_product(document)
+
+
 def test_a_load_outside_the_supports_lifts_one_off():
     report = product_screening(parse_product(_carted(_THREE, ("left", "front"))))
     frame = _named(report, "load path cart/frame")

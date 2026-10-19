@@ -595,11 +595,14 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
     declared = product.screening
     bodies = list(placed.bodies)
     floor = min(b.box_min_mm[2] for b in bodies)
+    accel = declared.vertical_acceleration if declared is not None else None
+    a = _G if accel is None else accel.value.to("m/s**2").magnitude
+    at = "" if accel is None else f", weights at {a / _G:.4g} g ({accel.source}),"
     incoming: dict[str, list[tuple[float, float, float, str]]] = {b.path: [] for b in bodies}
     for body in bodies:
         if body.mass_kg is not None and body.mass_kg > 0:
             x, y, _z = body.center_of_mass_mm
-            incoming[body.path].append((body.mass_kg * _G, x, y, "its own weight"))
+            incoming[body.path].append((body.mass_kg * a, x, y, "its own weight"))
     for load in declared.loads if declared is not None else ():
         base = f"{product.name}/{load.item}"
         held = [b for b in bodies if b.path == base or b.path.startswith((base + "/", base + "["))]
@@ -608,7 +611,7 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
                           f"'{product.name}'", subject="product")  # fmt: skip
         target = held[0]
         force = (load.force.to("N").magnitude if load.force is not None
-                 else load.mass.to("kg").magnitude * _G)  # type: ignore[union-attr]  # fmt: skip
+                 else load.mass.to("kg").magnitude * a)  # type: ignore[union-attr]  # fmt: skip
         cx = (target.box_min_mm[0] + target.box_max_mm[0]) / 2
         cy = (target.box_min_mm[1] + target.box_max_mm[1]) / 2
         incoming[target.path].append((force, cx, cy, f"the load on {load.item} ({load.source})"))
@@ -660,7 +663,7 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
                               status=status, note=note))  # fmt: skip
         carried = "; ".join(f"{r.force_n:.4g} N to {r.support} at ({r.at_mm[0]:g}, "
                             f"{r.at_mm[1]:g})" for r in reactions)  # fmt: skip
-        detail = (f"{body.path} carries {total:.4g} N acting at ({xw:.4g}, {yw:.4g}) mm"
+        detail = (f"{body.path} carries {total:.4g} N{at} acting at ({xw:.4g}, {yw:.4g}) mm"
                   + (f": {carried}; ΣFz, ΣMx and ΣMy balance" if reactions else "")
                   + (f"; {note}" if note else ""))  # fmt: skip
         entries.append(ScorecardEntry(
