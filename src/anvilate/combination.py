@@ -2074,6 +2074,19 @@ def write_step_assembly(built: BuiltCombination, path: Any, *, authorization: An
     )
 
 
+# Eight colors far enough apart to tell neighbouring parts by, as linear RGB in [0, 1].
+_PALETTE = (
+    (0.122, 0.467, 0.706),
+    (1.0, 0.498, 0.055),
+    (0.173, 0.627, 0.173),
+    (0.839, 0.153, 0.157),
+    (0.580, 0.404, 0.741),
+    (0.549, 0.337, 0.294),
+    (0.890, 0.467, 0.761),
+    (0.498, 0.498, 0.498),
+)
+
+
 def _write_assembly(
     name: str,
     bodies: Sequence[tuple[str, str, Any, Any]],
@@ -2081,10 +2094,15 @@ def _write_assembly(
     *,
     authorization: Any,
     description: str,
+    instance_names: Sequence[str] | None = None,
+    colored: bool = False,
 ) -> Any:
     """Write ``bodies`` — (key, product name, solid, location) — as one named STEP assembly.
 
-    Bodies sharing a key are one product placed once per body.
+    Bodies sharing a key are one product placed once per body. ``instance_names``, one per
+    body, names each occurrence (a product's paths); otherwise an occurrence is its product's
+    name and a count. ``colored`` gives each product a color of its own from a fixed palette,
+    in order of first appearance, so the parts read apart in CAD.
     """
     import re
     from pathlib import Path
@@ -2093,6 +2111,10 @@ def _write_assembly(
     from OCP.IFSelect import IFSelect_ReturnStatus  # type: ignore[import-untyped]
     from OCP.Interface import Interface_Static  # type: ignore[import-untyped]
     from OCP.Message import Message, Message_Gravity  # type: ignore[import-untyped]
+    from OCP.Quantity import (  # type: ignore[import-untyped]
+        Quantity_Color,
+        Quantity_TypeOfColor,
+    )
     from OCP.STEPCAFControl import (  # type: ignore[import-untyped]
         STEPCAFControl_Controller,
         STEPCAFControl_Reader,
@@ -2108,7 +2130,10 @@ def _write_assembly(
     from OCP.TDocStd import TDocStd_Document  # type: ignore[import-untyped]
     from OCP.TopLoc import TopLoc_Location  # type: ignore[import-untyped]
     from OCP.XCAFApp import XCAFApp_Application  # type: ignore[import-untyped]
-    from OCP.XCAFDoc import XCAFDoc_DocumentTool  # type: ignore[import-untyped]
+    from OCP.XCAFDoc import (  # type: ignore[import-untyped]
+        XCAFDoc_ColorType,
+        XCAFDoc_DocumentTool,
+    )
     from OCP.XSControl import XSControl_WorkSession  # type: ignore[import-untyped]
 
     from . import geometry
@@ -2136,6 +2161,8 @@ def _write_assembly(
         prototypes: dict[str, Any] = {}
         instances = 0
 
+        colors = XCAFDoc_DocumentTool.ColorTool_s(document.Main())
+
         def component(key: str, product: str, solid: Any, where: Any) -> None:
             nonlocal instances
             if key not in prototypes:
@@ -2152,6 +2179,11 @@ def _write_assembly(
                     wrapped = BRepBuilderAPI_Transform(bare, own.Transformation(), True).Shape()
                 prototypes[key] = tool.AddShape(wrapped, False)
                 named(prototypes[key], product)
+                if colored:
+                    r, g, b = _PALETTE[(len(prototypes) - 1) % len(_PALETTE)]
+                    colors.SetColor(prototypes[key],
+                                    Quantity_Color(r, g, b, Quantity_TypeOfColor.Quantity_TOC_RGB),
+                                    XCAFDoc_ColorType.XCAFDoc_ColorGen)  # fmt: skip
                 products.append(product)
             placed = tool.AddComponent(
                 assembly,
@@ -2159,7 +2191,8 @@ def _write_assembly(
                 TopLoc_Location(where.wrapped.Transformation()),
             )
             instances += 1
-            named(placed, f"{product} {instances}")
+            named(placed, f"{product} {instances}" if instance_names is None
+                  else instance_names[instances - 1])  # fmt: skip
 
         for key, product, solid, where in bodies:
             component(key, product, solid, where)

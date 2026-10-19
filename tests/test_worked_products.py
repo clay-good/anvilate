@@ -71,6 +71,26 @@ def test_a_worked_product_exports_one_component_per_body(name, tmp_path):
     assert text.count("PRODUCT('") == len(items) + 1
 
 
+def test_each_occurrence_is_named_by_its_path_and_each_product_colored_apart(tmp_path):
+    import re
+
+    product = parse_product(
+        parse_yaml((_PRODUCTS / "linear_stage.product.yaml").read_text(encoding="utf-8"))
+    )
+    placed = place_product(product)
+    authorization = authorize_export(placed.card.flattened(), override=True)
+    text = write_product_step(product, tmp_path / "s.step", authorization=authorization).read_text(
+        encoding="utf-8"
+    )
+    occurrences = re.findall(r"NEXT_ASSEMBLY_USAGE_OCCURRENCE\('\d+',\s*'((?:[^']|'')*)'", text)
+    where = sorted(o.rpartition(" @ ")[2] for o in occurrences)
+    assert where == sorted(b.path.partition("/")[2].replace("/", ".") for b in placed.bodies)
+    assert all("/" not in o for o in occurrences)
+    colours = set(re.findall(r"COLOUR_RGB\('[^']*',([^)]*)\)", text))
+    items = {instance.item for instance in product.instances}
+    assert len(colours) == min(len(items), 8)
+
+
 def test_the_long_stage_variant_still_clears_its_motor():
     stage = parse_product(parse_yaml((_PRODUCTS / "linear_stage.product.yaml").read_text()))
     placed = place_product(resolve_variant(stage, "long"))

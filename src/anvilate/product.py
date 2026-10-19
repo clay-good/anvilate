@@ -2662,11 +2662,13 @@ def write_product_step(
 
     Every occurrence of an item is a component placed where its mates put it, so a drive
     used twice is one product placed twice. Each product is named by its part number and
-    description, provisional numbers included. ``authorization`` is the export gate's
-    verdict on the product's card (:meth:`NodeCard.flattened`); a product resting on
-    placeholders is not evaluated, so it is written only watermarked unvalidated. A
-    reference item is never written: it is what the product is checked against. ``root`` is
-    the folder the product's files (a reference, a vendor model) are read from.
+    description, provisional numbers included, and colored apart from the others; each
+    occurrence is named by that and its path, such as ``C-1 caster @ caster2``.
+    ``authorization`` is the export gate's verdict on the product's card
+    (:meth:`NodeCard.flattened`); a product resting on placeholders is not evaluated, so it
+    is written only watermarked unvalidated. A reference item is never written: it is what
+    the product is checked against. ``root`` is the folder the product's files (a
+    reference, a vendor model) are read from.
     """
     from build123d import Location
 
@@ -2678,18 +2680,25 @@ def write_product_step(
         product, library, cache, root
     )
     bodies = []
+    paths = []
     for leaf in leaves:
         if leaf.kind == "reference":
             continue  # an existing assembly the product is checked against, never made
         node = nodes[leaf.path]
-        bodies.append((leaf.key, f"{node.part_number} {node.description}", leaf.built,
+        name = f"{node.part_number} {node.description}"
+        bodies.append((leaf.key, name, leaf.built,
                        leaf.where if leaf.where is not None else Location()))  # fmt: skip
+        # The product's name first, as a CAD tree shows it, then where it is. No slash: a
+        # reader builds its own paths from these names with one.
+        paths.append(f"{name} @ {leaf.path.partition('/')[2].replace('/', '.')}")
     return _write_assembly(
         product.name,
         bodies,
         path,
         authorization=authorization,
         description="Anvilate product: an assembly of its items, each placed by its mates",
+        instance_names=paths,
+        colored=True,
     )
 
 

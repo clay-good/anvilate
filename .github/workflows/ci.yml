@@ -319,6 +319,20 @@ jobs:
             ./stepcode/build/bin/p21read_sdai_ap242 "$name.assembly.step" | tee "$name.assembly.txt"
             test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$name.assembly.txt")" -eq 2
           done
+      - name: Every worked product's STEP assembly reads with no errors and no warnings
+        run: |
+          set -euo pipefail
+          # A product assembly also carries a color per part and an occurrence named by each
+          # path, entities a combination's assembly does not, so it is read on its own.
+          for document in examples/products/*.product.yaml; do
+            name=$(basename "$document" .product.yaml)
+            anvilate combine "$document" --output "$name.product.step" \
+              || anvilate combine "$document" --output "$name.product.step" --unvalidated \
+              || [ $? -eq 2 ]
+            test -s "$name.product.step"
+            ./stepcode/build/bin/p21read_sdai_ap242 "$name.product.step" | tee "$name.product.txt"
+            test "$(grep -cE '^[[:space:]]*0[[:space:]]+ERRORS[[:space:]]+0[[:space:]]+WARNINGS' "$name.product.txt")" -eq 2
+          done
       - name: A STEP file carrying semantic PMI reads with no errors and no warnings
         run: |
           set -euo pipefail
