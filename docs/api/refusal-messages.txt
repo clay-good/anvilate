@@ -1225,7 +1225,7 @@ _a_declaration: material {self.material} declares {unknown}; the attributes read
 _a_declaration: material {self.material}'s {attribute} is {stated.value}; it is {problem}
 _typed: material need {name} is {need.value}; it is {problem}
 _typed: sterilization temperature is {self.sterilization.temperature}; it is a temperature with its unit
-_dimensions: screening {name} is {limit.value}; it is a non-negative {'angle' if dimension == '[]' else dimension}
+_dimensions: screening {name} is {limit.value}; it is a finite, non-negative {'angle' if dimension == '[]' else dimension}
 _dimensions: materials {repeated} are declared twice; each is declared once
 interface_at: '{reference}' names '{item}', which is not an instance of '{self.name}'
 interface_at: '{item}' offers no interface '{name}' ({', '.join(offered[item]) or 'it offers none'})

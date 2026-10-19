@@ -459,3 +459,45 @@ def test_each_check_against_a_declared_limit_cites_that_limits_source():
     assert cited["clearance"] == "service access"
     thermal = _named(product_screening(parse_product(_bolted(0.5))), "thermal frame ~ plate")
     assert thermal.reference == "service envelope"
+
+
+@pytest.mark.parametrize(
+    ("field", "unit"),
+    [("max_mass", "kg"), ("max_cg_height", "mm"), ("min_tilt", "degree"),
+     ("min_clearance", "mm"), ("vertical_acceleration", "g0")],
+)  # fmt: skip
+@pytest.mark.parametrize("value", [float("inf"), float("nan"), -1.0])
+def test_a_screening_limit_is_finite_and_not_negative(field, unit, value):
+    """An infinite clearance passed every pair, an infinite mass limit crashed inside its
+    budget, and an infinite acceleration carried infinite loads: each is refused when the
+    document is read, naming the field."""
+    from anvilate.refusal import RefusalError
+
+    document = _cart({field: {"value": _q(value, unit), "source": "x"}})
+    with pytest.raises((RefusalError, ValueError), match=f"screening.{field}|{field}"):
+        parse_product(document)
+
+
+def test_every_number_a_screening_declares_is_finite():
+    """The nested declarations too: an infinite slip passed every connection, and an
+    infinite load or chain nominal reached the arithmetic. Each opts into the finite rule
+    every requirement model follows (`states_requirements`)."""
+    inf = float("inf")
+    alpha = {"material": "A", "coefficient": _q(1e-5, "1/K"), "source": "x"}
+    thermal = {"range": _q(60, "K"), "slip": _q(0.5, "mm"), "source": "x",
+               "coefficients": [alpha]}  # fmt: skip
+    link = {"item": "base", "dimension": "h", "nominal": _q(1, "mm")}
+    chain = {"name": "c", "required_min": _q(0, "mm"), "required_max": _q(1, "mm"), "links": [link]}
+    cases = [
+        {"thermal": {**thermal, "range": _q(inf, "K")}},
+        {"thermal": {**thermal, "slip": _q(inf, "mm")}},
+        {"thermal": {**thermal, "coefficients": [{**thermal["coefficients"][0],
+                                                  "coefficient": _q(inf, "1/K")}]}},
+        {"loads": [{"item": "base", "force": _q(inf, "N"), "source": "x"}]},
+        {"loads": [{"item": "base", "mass": _q(inf, "kg"), "source": "x"}]},
+        {"chains": [{**chain, "required_max": _q(inf, "mm")}]},
+        {"chains": [{**chain, "links": [{**link, "nominal": _q(inf, "mm")}]}]},
+    ]  # fmt: skip
+    for screening in cases:
+        with pytest.raises(ValueError, match="not a number a document can state"):
+            parse_product(_cart(screening))

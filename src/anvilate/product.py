@@ -579,6 +579,7 @@ class Limit(StatableModel):
     """A declared limit on the product as a whole, and where it comes from."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     value: Quantity
     source: Provenance
@@ -588,6 +589,7 @@ class ProductLoad(StatableModel):
     """A load the product carries: on an item, as a force down or a mass under gravity."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     item: Named
     force: Quantity | None = None
@@ -613,6 +615,7 @@ class Split(StatableModel):
     """How a body's load divides among more supports than determine it, and on what basis."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     body: Named
     shares: FrozenMap[str, float]
@@ -633,6 +636,7 @@ class Expansion(StatableModel):
     """A material's coefficient of thermal expansion, as the declaration read it, cited."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     material: Named
     coefficient: Quantity
@@ -653,6 +657,7 @@ class Thermal(StatableModel):
     expansion coefficients of its materials, each cited."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     range: Quantity
     slip: Quantity
@@ -681,6 +686,7 @@ class ChainLink(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     item: Named | None = None
     dimension: Named | None = None
@@ -715,6 +721,7 @@ class ProductChain(StatableModel):
     ``seed`` add a seeded Monte Carlo run."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     links: tuple[ChainLink, ...] = Field(min_length=1, max_length=64)
@@ -883,6 +890,9 @@ class Screening(StatableModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    # Every number here is a limit, a load or a band the product is held to, so finite.
+    states_requirements = True
+
     mass_growth: MassGrowth | None = None
     max_mass: Limit | None = None
     max_cg_height: Limit | None = None
@@ -908,10 +918,14 @@ class Screening(StatableModel):
             ("min_clearance", self.min_clearance, "[length]"),
         )
         for name, limit, dimension in stated:
+            # Finite as well: an infinite clearance passed every pair, an infinite mass limit
+            # crashed its budget, and an infinite acceleration carried infinite loads.
             if limit is not None and not (
-                limit.value.has_dimension(dimension) and limit.value.magnitude >= 0
+                limit.value.has_dimension(dimension)
+                and math.isfinite(limit.value.magnitude)
+                and limit.value.magnitude >= 0
             ):
-                raise _refuse(f"screening {name} is {limit.value}; it is a non-negative "
+                raise _refuse(f"screening {name} is {limit.value}; it is a finite, non-negative "
                               f"{'angle' if dimension == '[]' else dimension}",
                               subject=f"screening.{name}")  # fmt: skip
         ids = [m.material for m in self.materials]
