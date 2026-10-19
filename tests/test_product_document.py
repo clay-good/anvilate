@@ -123,3 +123,53 @@ def test_two_different_sub_products_under_one_name_are_refused(tmp_path):
     top = _write(tmp_path / "stage.product.yaml", stage)
     with pytest.raises(ProductError, match="two different sub-products are named 'drive'"):
         load_product(top)
+
+
+def _reachable_models(root):
+    import inspect
+    import typing
+
+    from pydantic import BaseModel
+
+    found: list[type] = []
+
+    def walk(annotation):
+        for argument in typing.get_args(annotation):
+            walk(argument)
+        if (inspect.isclass(annotation) and issubclass(annotation, BaseModel)
+                and annotation not in found):  # fmt: skip
+            found.append(annotation)
+            for field in annotation.model_fields.values():
+                walk(field.annotation)
+
+    walk(root)
+    return found
+
+
+def test_every_model_a_product_document_reaches_states_requirements():
+    """A product document is written outside this library, so every number in it is finite:
+    an infinite caster rating passed every load, an infinite placeholder mass reached the
+    roll-up, an infinite clearance passed every pair. The finite rule is opt-in per model
+    and the walk trusts a sub-model to have checked itself, so the whole reachable graph
+    opts in, and a model added to the document later cannot skip it."""
+    from anvilate.product import Product
+    from anvilate.units import Quantity
+
+    models = [m for m in _reachable_models(Product) if m is not Quantity]
+    assert len(models) >= 40
+    assert [m.__name__ for m in models if not m.states_requirements] == []
+
+
+def test_an_infinite_rating_or_placeholder_mass_is_refused():
+    from anvilate.product import parse_product
+
+    inf = {"magnitude": float("inf"), "unit": "kg"}
+    document = {
+        "name": "box",
+        "definitions": [{"id": "body", "identity": {"description": "body", "source": "make"},
+                         "placeholder": {"envelope": [{"magnitude": 10, "unit": "mm"}] * 3,
+                                         "mass": inf, "reason": "not drawn yet"}}],
+        "instances": [{"name": "body", "item": "body"}], "ground": "body",
+    }  # fmt: skip
+    with pytest.raises(ValueError, match="not a number a document can state"):
+        parse_product(document)

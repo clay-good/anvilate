@@ -107,6 +107,7 @@ class Interface(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     kind: str
@@ -186,6 +187,7 @@ class PartInterface(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     kind: str

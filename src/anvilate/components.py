@@ -92,6 +92,7 @@ class SupplierNumber(StatableModel):
     """Where to buy it: a supplier and that supplier's part number."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     supplier: Named
     number: Named
@@ -101,6 +102,7 @@ class Rating(StatableModel):
     """One rating the component is sold with, and the datasheet line it was read from."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     value: Quantity
@@ -111,6 +113,7 @@ class Demand(StatableModel):
     """What the product asks of a component, and where that requirement came from."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     value: Quantity
@@ -125,6 +128,7 @@ class VendorModel(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     file: Named
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -138,6 +142,7 @@ class Price(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     amount: float = Field(gt=0, allow_inf_nan=False)
     currency: str = Field(pattern=r"^[A-Z]{3}$")
@@ -155,6 +160,7 @@ class ComponentRecord(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     manufacturer: Named
     part_number: Named

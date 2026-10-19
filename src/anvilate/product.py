@@ -151,6 +151,7 @@ class ItemIdentity(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     part_number: Named | None = None
     revision: Named | None = None
@@ -166,6 +167,7 @@ class PlaceholderHole(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     tag: Named
     x: Quantity
@@ -184,6 +186,7 @@ class Placeholder(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     envelope: tuple[Quantity, Quantity, Quantity]
     mass: Quantity
@@ -235,6 +238,7 @@ class Reference(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     file: Named
     clearance: Quantity | None = None
@@ -259,6 +263,7 @@ class Definition(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     id: Named
     identity: ItemIdentity
@@ -336,6 +341,7 @@ class LinearPattern(StatableModel):
     """``count`` instances ``spacing`` apart along one of the parent's axes."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     kind: Literal["linear"] = "linear"
     count: int = Field(ge=2, le=256)
@@ -347,6 +353,7 @@ class CircularPattern(StatableModel):
     """``count`` instances spread ``angle_deg`` apart about one of the parent's axes."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     kind: Literal["circular"] = "circular"
     count: int = Field(ge=2, le=256)
@@ -362,6 +369,7 @@ class Instance(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     item: Named
@@ -398,6 +406,7 @@ class LayoutParameter(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     value: Quantity
@@ -419,6 +428,7 @@ class LayoutDatum(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     kind: Literal["point", "axis", "plane"]
@@ -449,6 +459,7 @@ class Layout(StatableModel):
     """The product's driving parameters and datums, read by name and never itself a part."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     parameters: tuple[LayoutParameter, ...] = Field(default=(), max_length=256)
     datums: tuple[LayoutDatum, ...] = Field(default=(), max_length=256)
@@ -468,6 +479,7 @@ class Variant(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     name: Named
     parameters: FrozenMap[str, Quantity] = Field(default_factory=lambda: EMPTY_MAP)
@@ -487,6 +499,7 @@ class Joint(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     kind: Literal["rigid", "revolute", "linear", "cylindrical", "ball"]
     range: tuple[Quantity, Quantity] | None = None
@@ -522,6 +535,7 @@ class Connection(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     on: Named
     place: Named
@@ -552,6 +566,7 @@ class OpenInterface(StatableModel):
     """An interface left unconnected on purpose, as ``item.interface``, and why."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     at: Named
     reason: Provenance
@@ -568,6 +583,7 @@ class MassGrowth(StatableModel):
     """The growth allowance a mass carries by its maturity, as fractions, and their source."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     estimated: float = Field(default=0.0, ge=0, le=1)
     calculated: float = Field(default=0.0, ge=0, le=1)
@@ -747,6 +763,7 @@ class Cited(StatableModel):
     """A declared value and the source it was read from."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     value: Quantity | float | str
     source: Provenance
@@ -756,6 +773,7 @@ class Substance(StatableModel):
     """One substance in a material: its CAS number, its name, its mass fraction."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     cas: str = Field(pattern=r"^\d{2,7}-\d{2}-\d$")
     name: Named
@@ -772,6 +790,7 @@ class MaterialDeclaration(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     material: Named
     plastic: bool = False
@@ -831,6 +850,7 @@ class Sterilization(StatableModel):
     """A sterilization the material must survive: the method, its temperature, the source."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     method: Named
     temperature: Quantity
@@ -848,6 +868,7 @@ class MaterialNeeds(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     items: tuple[Named, ...] = ()
     service_temperature: Cited | None = None
@@ -945,6 +966,7 @@ class Product(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     # 1.1.0 adds a definition's component and demands, 1.2.0 a component's vendor model and
     # drafted state, 1.3.0 interfaces, connections and open interfaces, and 1.4.0 a catalog

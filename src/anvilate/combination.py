@@ -129,6 +129,7 @@ class MateEnd(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     part: Named
     face: Literal["top", "bottom", "left", "right", "front", "back"] | None = None
@@ -152,6 +153,7 @@ class Mate(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
 
     id: Named
     kind: Literal["face_to_face", "edge_flush", "hole_pattern", "shaft_in_bore"]
