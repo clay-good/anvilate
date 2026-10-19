@@ -1443,7 +1443,7 @@
     },
     "ProductChain": {
       "additionalProperties": false,
-      "description": "A one-dimensional stack-up through a product's items and connections, and the band\nits gap must land in; ``samples`` and ``seed`` add a seeded Monte Carlo run.",
+      "description": "A one-dimensional stack-up through a product's items and connections, and the band\nits gap must land in, with ``source`` saying where the band comes from; ``samples`` and\n``seed`` add a seeded Monte Carlo run.",
       "properties": {
         "links": {
           "items": {
@@ -1489,6 +1489,18 @@
           ],
           "default": null,
           "title": "Seed"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
         }
       },
       "required": [
@@ -1934,13 +1946,13 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.14.0",
+  "$id": "urn:anvilate:schema:product-document:1.15.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
   "properties": {
     "anvilate_product": {
-      "default": "1.14.0",
+      "default": "1.15.0",
       "enum": [
         "1.0.0",
         "1.1.0",
@@ -1956,7 +1968,8 @@
         "1.11.0",
         "1.12.0",
         "1.13.0",
-        "1.14.0"
+        "1.14.0",
+        "1.15.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -2077,5 +2090,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.14.0"
+  "x-anvilate-version": "1.15.0"
 }

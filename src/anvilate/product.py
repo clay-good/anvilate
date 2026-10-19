@@ -121,7 +121,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.14.0"] = "1.14.0"
+PRODUCT_VERSION: Literal["1.15.0"] = "1.15.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -711,7 +711,8 @@ class ChainLink(StatableModel):
 
 class ProductChain(StatableModel):
     """A one-dimensional stack-up through a product's items and connections, and the band
-    its gap must land in; ``samples`` and ``seed`` add a seeded Monte Carlo run."""
+    its gap must land in, with ``source`` saying where the band comes from; ``samples`` and
+    ``seed`` add a seeded Monte Carlo run."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -719,6 +720,7 @@ class ProductChain(StatableModel):
     links: tuple[ChainLink, ...] = Field(min_length=1, max_length=64)
     required_min: Quantity
     required_max: Quantity
+    source: Provenance | None = None
     samples: int | None = Field(default=None, ge=2, le=1_000_000)
     seed: int | None = None
 
@@ -938,7 +940,8 @@ class Product(StatableModel):
     # separated for service, and 1.10.0 stack-up chains through its items, and 1.11.0 its
     # materials and what they must withstand, and 1.12.0 a unit price on a part or a
     # component record, and 1.13.0 a limit on the centre of mass's height, and 1.14.0 the
-    # vertical acceleration its load path is carried at; an older document reads unchanged.
+    # vertical acceleration its load path is carried at, and 1.15.0 a chain band's source; an
+    # older document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -955,6 +958,7 @@ class Product(StatableModel):
         "1.12.0",
         "1.13.0",
         "1.14.0",
+        "1.15.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

@@ -1087,10 +1087,13 @@ def _chains(product: Product) -> list[ScorecardEntry]:
                        f"{mean:.4g} mm, σ {sigma:.3g} mm")  # fmt: skip
         if notes:
             detail += "; " + "; ".join(notes)
+        detail += (f"; the band is from {chain.source}" if chain.source is not None
+                   else "; the band states no source")  # fmt: skip
         entries.append(ScorecardEntry(
             name=f"stack-up: {chain.name}",
             status=CheckStatus.PASS if analysis.worst_case_passes else CheckStatus.FAIL,
             detail=detail,
+            reference=chain.source,
             underived=Underived(kind=DerivationAbsence.NUMERIC_RESULT,
                                 reason="the stack-up itself: a sum or root-sum-square over the "
                                 "chain's links, one term per link"),

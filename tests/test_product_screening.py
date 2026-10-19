@@ -419,6 +419,15 @@ def test_a_chain_through_a_product_reports_worst_case_rss_and_the_governing_link
     tight = _named(product_screening(parse_product(_stacked((20.9, 21.1)))),
                    "stack-up: carriage height")  # fmt: skip
     assert tight.status is CheckStatus.FAIL
+    assert tight.reference is None and tight.detail.endswith("; the band states no source")
+
+
+def test_a_chains_band_cites_its_source():
+    document = _stacked((20.5, 21.5))
+    document["screening"]["chains"][0]["source"] = "carriage drawing 300-4, note 2"
+    entry = _named(product_screening(parse_product(document)), "stack-up: carriage height")
+    assert entry.reference == "carriage drawing 300-4, note 2"
+    assert entry.detail.endswith("; the band is from carriage drawing 300-4, note 2")
 
 
 def test_a_chain_naming_what_the_product_lacks_is_refused():

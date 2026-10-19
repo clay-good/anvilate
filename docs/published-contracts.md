@@ -129,6 +129,11 @@ to `bolted_connection/1.0.0` is not told its contract moved because a pump duty 
 field. What none of it does is move `SPEC_SCHEMA_VERSION`, which is the coupling the tag
 exists to avoid.
 
+### Product document 1.15.0: a chain band's source
+
+A stack-up chain gains an optional `source` for its required band, which its entry cites;
+a chain without one reads unchanged and its entry says the band states no source.
+
 ### Product document 1.14.0: the acceleration the load path is carried at
 
 `screening` gains `vertical_acceleration`: an acceleration, gravity included and acting
