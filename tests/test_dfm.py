@@ -105,9 +105,12 @@ def test_a_hole_too_close_to_a_bend():
     near = dataclasses.replace(bracket.profile, circles=((a + 5.0, 0.0, 4.0),))
     built = dataclasses.replace(bracket, profile=near)
     (_, to_bend, to_edge, _) = screen_dfm(built, default_profile(DfmProcess.SHEET_METAL))
-    # edge of a Ø4 hole 5 mm from the bend: 3 mm, 1.5 thicknesses, under 2.5
+    # edge of a Ø4 hole 5 mm from the bend: 3 mm, less the 2 mm inside radius, 0.5
+    # thicknesses, under 2.5; the hole needs 2.5 × 2 + 2 = 7 mm
     assert to_bend.status is CheckStatus.FAIL
-    assert to_bend.comparison.measured.magnitude == pytest.approx(1.5, abs=1e-9)
+    assert to_bend.comparison.measured.magnitude == pytest.approx(0.5, abs=1e-9)
+    assert "a hole edge needs 7 mm from a bend line" in to_bend.detail
+    assert "3 mm from its nearest bend line" in to_bend.detail
     # 18 mm from the blank's long edge (y = ±20): 9 thicknesses
     assert to_edge.status is CheckStatus.PASS
     assert to_edge.comparison.measured.magnitude == pytest.approx(9.0, abs=1e-9)
@@ -125,11 +128,11 @@ def test_an_undrafted_box_fails_and_a_drafted_one_passes():
     from build123d import Rectangle, extrude
 
     enclosure = _part("enclosure")
-    (draft, _) = screen_dfm(enclosure, default_profile(DfmProcess.INJECTION_MOLDING),
+    (draft, *_) = screen_dfm(enclosure, default_profile(DfmProcess.INJECTION_MOLDING),
                             pull_direction=(0, 0, 1))  # fmt: skip
     assert draft.status is CheckStatus.FAIL and draft.comparison.measured.magnitude == 0.0
     tapered = _solid(extrude(Rectangle(40, 30), amount=20, taper=2), name="tapered")
-    (draft, _) = screen_dfm(tapered, default_profile(DfmProcess.INJECTION_MOLDING),
+    (draft, *_) = screen_dfm(tapered, default_profile(DfmProcess.INJECTION_MOLDING),
                             pull_direction=(0, 0, 1))  # fmt: skip
     assert draft.status is CheckStatus.PASS
     assert draft.comparison.measured.magnitude == pytest.approx(2.0, abs=1e-6)
@@ -189,6 +192,29 @@ def test_die_casting_reads_draft_and_wall_uniformity():
     assert walls.comparison.measured.magnitude == pytest.approx(2.5)  # 5/2
 
 
+def test_a_rib_that_will_sink():
+    """The spec's scenario: a 2.5 mm rib on a 2.5 mm wall against 0.6 fails, naming the
+    1.5 mm rib that meets it."""
+    enclosure = _part("enclosure")
+    ribbed = dataclasses.replace(enclosure, dimensions_mm={**enclosure.dimensions_mm,
+                                                           "wall": 2.5, "rib": 2.5})  # fmt: skip
+    (_, _, rib) = screen_dfm(ribbed, default_profile(DfmProcess.INJECTION_MOLDING),
+                             pull_direction=(0, 0, 1))  # fmt: skip
+    assert rib.status is CheckStatus.FAIL
+    assert rib.comparison.measured.magnitude == pytest.approx(1.0)
+    assert "rib 2.5 mm on a 2.5 mm wall" in rib.detail
+    assert "a rib of at most 1.5 mm meets the limit" in rib.detail
+
+
+def test_a_wall_ratio_with_one_wall_is_not_measured_and_not_passed():
+    enclosure = _part("enclosure")
+    lone = dataclasses.replace(enclosure, dimensions_mm={"wall": 3.0})
+    (_, walls) = screen_dfm(lone, default_profile(DfmProcess.DIE_CASTING),
+                            pull_direction=(0, 0, 1))  # fmt: skip
+    assert walls.status is CheckStatus.NOT_EVALUATED
+    assert "declares 1 wall thickness (wall), and a ratio takes two" in walls.detail
+
+
 def test_a_short_flange_against_the_brake():
     bracket = _part("sheet_metal_bracket")  # flanges 30, 50, 25 at t = 2: 15, 25, 12.5
     profile = default_profile(DfmProcess.SHEET_METAL)
@@ -244,3 +270,15 @@ def test_a_card_separates_manufacturability_from_physics_and_keeps_both_verdicts
     assert card.physics() == physics.entries
     assert [e.status for e in card.physics()] == [e.status for e in physics.entries]
     assert physics.manufacturability() == ()
+
+
+def test_the_pack_is_chosen_by_the_process_the_spec_declares():
+    from anvilate.dfm import profile_for
+    from anvilate.spec import ManufacturingProcess
+
+    assert profile_for(ManufacturingProcess.SLS).process is DfmProcess.ADDITIVE
+    assert profile_for("cnc_turning").process is DfmProcess.CNC_TURNING
+    spec = load_spec_yaml((_PARTS / "mounting_plate.spec.yaml").read_text())
+    assert profile_for(spec.manufacturing.process).process.value == str(spec.manufacturing.process)
+    with pytest.raises(RefusalError, match="no DFM rule pack reads the process 'grinding'"):
+        profile_for(ManufacturingProcess.GRINDING)

@@ -21,11 +21,12 @@ for entry in screen_dfm(built, profile, tool_direction=(0, 0, 1)):
 | CNC milling | `hole_depth_ratio_max` | Each drilled feature's depth over its diameter | 10 |
 | CNC turning | `slenderness_max` | The length along the spindle over the largest diameter across it, for a part held at one end; the spindle lies along x, y or z | 4 |
 | Sheet metal | `bend_radius_ratio_min` | Inside bend radius over thickness | 1 |
-| Sheet metal | `hole_to_bend_min` | A hole's edge to the nearest bend line, in thicknesses | 2.5 |
+| Sheet metal | `hole_to_bend_min` | A hole's edge to the nearest bend line less the inside radius, in thicknesses: the edge needs that many thicknesses plus the radius | 2.5 |
 | Sheet metal | `hole_to_edge_min` | A hole's edge to the blank's edge, in thicknesses | 2 |
 | Sheet metal | `flange_length_min` | Each flange's length over thickness | 4 |
 | Injection molding | `draft_min` | Each face's angle to the pull: planar faces, and cylinders about the pull | 1° |
 | Injection molding | `wall_ratio_max` | The thickest declared wall over the thinnest | 2 |
+| Injection molding | `rib_ratio_max` | The declared rib over the declared wall it stands on, so it does not sink | 0.6 |
 | Die casting | `draft_min` | As for molding | 1° |
 | Die casting | `wall_ratio_max` | As for molding | 2 |
 | Additive | `overhang_min` | Each down-facing planar face's angle above horizontal, off the build plate | 45° |
@@ -57,6 +58,11 @@ A card holding both kinds is read apart with `card.manufacturability()` and
 shop cannot make as drawn, a fastener no tool reaches, an adjustment sealed away, a
 tolerance nobody can measure. Every other entry is physics, and keeps its verdict.
 
+A rule that cannot read its property off the part is not evaluated, naming what is missing,
+rather than passed: a wall ratio on a part declaring fewer than two walls, or a rib with no
+wall for it to stand on. A part with nothing of the kind to judge, such as no holes, passes
+and says there was nothing to judge.
+
 The wall ratio reads the walls the part declares. A wall-thickness map measured on the solid
-is not built yet, and neither are a turned part's sections judged on their own, weldments, undercuts, rib and boss proportions,
+is not built yet, and neither are a turned part's sections judged on their own, weldments, undercuts, boss proportions,
 curved down-facing faces, or cost estimates.

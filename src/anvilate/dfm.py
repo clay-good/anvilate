@@ -26,6 +26,11 @@ What is measured, on the solid itself:
   developed flat profile, in thicknesses.
 - **Draft** (injection molding): every face's angle to the pull direction; a planar face
   or a cylinder about the pull axis with less than the profile's draft is reported.
+- **Rib ratio** (injection molding): the declared rib over the declared wall it stands on.
+
+:func:`profile_for` picks the pack from the process a spec declares. A rule that cannot
+read its property off the part (a wall ratio over fewer than two declared walls) is not
+evaluated, naming what is missing, rather than passed.
 - **Overhang** (additive): every down-facing planar face's angle above horizontal against
   the build direction, skipping faces on the build plate. Curved down-facing faces are
   not measured, and the report says so.
@@ -53,7 +58,9 @@ from .scorecard import (
     CheckStatus,
     Comparison,
     LimitSense,
+    Need,
     ScorecardEntry,
+    ValueSource,
 )
 from .units import Quantity, require_finite
 
@@ -62,6 +69,7 @@ __all__ = [
     "DfmThreshold",
     "ProcessProfile",
     "default_profile",
+    "profile_for",
     "screen_dfm",
 ]
 
@@ -119,7 +127,7 @@ _RULES: dict[str, tuple[str, LimitSense, str]] = {
     "hole_to_bend_min": (
         "dimensionless",
         LimitSense.AT_LEAST,
-        "a hole's edge to a bend line, in thicknesses",
+        "a hole's edge to a bend line less the inside bend radius, in thicknesses",
     ),
     "hole_to_edge_min": (
         "dimensionless",
@@ -132,6 +140,11 @@ _RULES: dict[str, tuple[str, LimitSense, str]] = {
         "the shortest flange the brake forms, in thicknesses",
     ),
     "draft_min": ("degree", LimitSense.AT_LEAST, "the least draft on a face along the pull"),
+    "rib_ratio_max": (
+        "dimensionless",
+        LimitSense.AT_MOST,
+        "a rib's thickness over the nominal wall it stands on, so it does not sink",
+    ),
     "wall_ratio_max": (
         "dimensionless",
         LimitSense.AT_MOST,
@@ -155,6 +168,7 @@ _DEFAULTS: dict[tuple[DfmProcess, str], float] = {
     (DfmProcess.SHEET_METAL, "flange_length_min"): 4.0,
     (DfmProcess.INJECTION_MOLDING, "draft_min"): 1.0,
     (DfmProcess.INJECTION_MOLDING, "wall_ratio_max"): 2.0,
+    (DfmProcess.INJECTION_MOLDING, "rib_ratio_max"): 0.6,
     (DfmProcess.DIE_CASTING, "draft_min"): 1.0,
     (DfmProcess.DIE_CASTING, "wall_ratio_max"): 2.0,
     (DfmProcess.ADDITIVE, "overhang_min"): 45.0,
@@ -223,6 +237,33 @@ def default_profile(process: DfmProcess) -> ProcessProfile:
             if p is process
         ),
     )
+
+
+# The process a spec declares, and the pack it reads. FDM and SLS share the additive pack;
+# grinding, wire EDM and reaming are finishing operations with no pack of their own.
+_PACKS = {
+    "cnc_milling": DfmProcess.CNC_MILLING,
+    "cnc_turning": DfmProcess.CNC_TURNING,
+    "sheet_metal": DfmProcess.SHEET_METAL,
+    "injection_molding": DfmProcess.INJECTION_MOLDING,
+    "die_casting": DfmProcess.DIE_CASTING,
+    "fdm": DfmProcess.ADDITIVE,
+    "sls": DfmProcess.ADDITIVE,
+}
+
+
+def profile_for(process: Any) -> ProcessProfile:
+    """The practice-default profile for the process a spec declares (``manufacturing.process``).
+
+    Refused, naming the processes that have a pack, for one that has none.
+    """
+    name = str(getattr(process, "value", process))
+    pack = _PACKS.get(name)
+    if pack is None:
+        raise _refusal(f"no DFM rule pack reads the process '{name}'; packs exist for "
+                       f"{', '.join(sorted(_PACKS))}", subject="process",
+                       source="the spec's manufacturing.process")  # fmt: skip
+    return default_profile(pack)
 
 
 # --- measuring the solid -------------------------------------------------------------------
@@ -328,6 +369,8 @@ def _entry(
     *,
     label: str,
     note: str = "",
+    unmeasured: str | None = None,
+    needs: str = "",
 ) -> ScorecardEntry:
     unit, sense, meaning = _RULES[rule]
     basis = "a practice default" if threshold.practice_default else threshold.source
@@ -336,6 +379,14 @@ def _entry(
         reason=f"measured on the built solid of {built.pattern}: {meaning}",
     )
     name = f"DFM {rule.replace('_', ' ')}: {built.name}"
+    if unmeasured is not None:
+        # Not a pass: the rule could not read its property off this part, which is not the
+        # same as the part having none of it to judge.
+        detail = f"{label} not measured on {built.name}: {unmeasured}"
+        need = Need(declaration="element_params.wall", takes=needs, dimension="[length]",
+                    units=("mm",), sources=(ValueSource.USER,))  # fmt: skip
+        return ScorecardEntry(name=name, status=CheckStatus.NOT_EVALUATED, underived=reason,
+                              detail=detail, needs=(need,))  # fmt: skip
     if not items:
         return ScorecardEntry(name=name, status=CheckStatus.PASS, underived=reason,
                               detail=f"no {label} to judge on {built.name}{note}")  # fmt: skip
@@ -460,14 +511,16 @@ def _findings(
         bend = profile.threshold("bend_radius_ratio_min")
         to_bend = profile.threshold("hole_to_bend_min")
         to_edge = profile.threshold("hole_to_edge_min")
-        ratio = dims.get("inside_radius", 0.0) / t
+        inside = dims.get("inside_radius", 0.0)
+        ratio = inside / t
         radius_items = [_Item("every bend (inside radius over thickness)", ratio)]
         bend_items, edge_items = [], []
         outline = [(x, y) for x, y, _ in profile_flat.outline]
         edges = list(zip(outline, outline[1:] + outline[:1], strict=False))
         for x, y, d in profile_flat.circles:
             gap = min(_segment_distance((x, y), a, b) for a, b in profile_flat.bends) - d / 2
-            bend_items.append(_Item(f"hole Ø{d:g} at ({x:g}, {y:g}) to its nearest bend", gap / t))
+            bend_items.append(_Item(f"hole Ø{d:g} at ({x:g}, {y:g}), {gap:.3g} mm from its "
+                                    "nearest bend line", (gap - inside) / t))  # fmt: skip
             if edges:
                 edge = min(_segment_distance((x, y), a, b) for a, b in edges) - d / 2
                 edge_items.append(_Item(f"hole Ø{d:g} at ({x:g}, {y:g}) to the blank's edge",
@@ -483,7 +536,9 @@ def _findings(
                    label="bend radius ratios",
                    note=f"; an inside_radius of {target:g} mm meets the limit"),
             _entry(built, "hole_to_bend_min", to_bend, bend_items,
-                   label="hole-to-bend distances over thickness"),
+                   label="hole-to-bend distances over thickness",
+                   note=f"; a hole edge needs {to_bend.value * t + inside:g} mm from a bend line "
+                   f"({to_bend.value:g} thicknesses plus the {inside:g} mm inside radius)"),
             _entry(built, "hole_to_edge_min", to_edge, edge_items,
                    label="hole-to-edge distances over thickness",
                    note="; arcs in the outline are measured as their chords"),
@@ -525,12 +580,33 @@ def _findings(
             if len(walls) >= 2
             else []
         )
+        few = (None if len(walls) >= 2 else
+               f"it declares {len(walls)} wall thickness{'es' if len(walls) != 1 else ''} "
+               f"({', '.join(sorted(walls)) or 'none'}), and a ratio takes two")  # fmt: skip
+        ribs: tuple[ScorecardEntry, ...] = ()
+        if process is DfmProcess.INJECTION_MOLDING:
+            rib_limit = profile.threshold("rib_ratio_max")
+            rib, wall = dims.get("rib"), dims.get("wall")
+            rib_items = ([_Item(f"rib {rib:g} mm on a {wall:g} mm wall", rib / wall)]
+                         if rib is not None and wall else [])  # fmt: skip
+            ribs = (
+                _entry(built, "rib_ratio_max", rib_limit, rib_items,
+                       label="rib-to-wall ratios",
+                       note=(f"; a rib of at most {rib_limit.value * wall:g} mm meets the limit"
+                             if rib is not None and wall else ""),
+                       unmeasured=("it declares a rib and no wall for it to stand on"
+                                   if rib is not None and not wall else None),
+                       needs="the nominal wall thickness the rib stands on"),
+            )  # fmt: skip
         return (
             _entry(built, "draft_min", draft, items, label="face drafts",
                    note="; curved faces other than cylinders about the pull are not measured"),
             _entry(built, "wall_ratio_max", profile.threshold("wall_ratio_max"), ratio_items,
                    label="wall thickness ratios",
-                   note="; walls are read from the part's declared dimensions"),
+                   note="; walls are read from the part's declared dimensions", unmeasured=few,
+                   needs="a second wall thickness (wall, floor, thickness, lid_thickness, rib "
+                   "or boss_wall), so the ratio has two to compare"),
+            *ribs,
         )  # fmt: skip
     up = _vector(build_direction, "build_direction")
     overhang = profile.threshold("overhang_min")

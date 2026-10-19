@@ -12,9 +12,12 @@
 
 - [x] 2.1 CNC milling and turning
       (milling: internal corner radius, hole depth ratio; turning: slenderness)
-- [ ] 2.2 Sheet metal
-- [ ] 2.3 Injection molding
-- [ ] 2.4 Die casting
+- [x] 2.2 Sheet metal
+      (bend radius, hole-to-bend with the inside radius, hole-to-edge, flange length)
+- [x] 2.3 Injection molding
+      (draft, wall ratio, rib ratio; undercuts are not detected yet)
+- [x] 2.4 Die casting
+      (draft and wall ratio)
 - [ ] 2.5 Additive: material extrusion, powder bed fusion
 - [ ] 2.6 Weldments: torch access, single-side distortion warning
 

@@ -435,6 +435,7 @@ dfm.DfmProcess
 dfm.DfmThreshold
 dfm.ProcessProfile
 dfm.default_profile
+dfm.profile_for
 dfm.screen_dfm
 fracture_control.ConditionState
 fracture_control.FractureCondition
