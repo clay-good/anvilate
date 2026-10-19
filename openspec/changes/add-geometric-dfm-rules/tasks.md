@@ -20,7 +20,7 @@
 ## 3. Reporting
 
 - [x] 3.1 Findings with tag, value, limit, lever; repair-loop hint form
-- [ ] 3.2 Manufacturability filter on the scorecard; physics verdicts unaffected
+- [x] 3.2 Manufacturability filter on the scorecard; physics verdicts unaffected
 
 ## 4. Cost
 

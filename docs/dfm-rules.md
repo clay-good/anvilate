@@ -50,6 +50,12 @@ too tight also says the `inside_radius` that meets the limit. The screen reads a
 solid, so it does not yet emit a typed repair hint into the part's spec. These findings are manufacturability
 findings. They sit beside the physics verdicts and change none of them.
 
+A card holding both kinds is read apart with `card.manufacturability()` and
+`card.physics()`. A manufacturability finding is an entry that addresses a failure mode the
+[catalogue](failure-mode-coverage.md) says is normally found in production: a feature the
+shop cannot make as drawn, a fastener no tool reaches, an adjustment sealed away, a
+tolerance nobody can measure. Every other entry is physics, and keeps its verdict.
+
 The wall ratio reads the walls the part declares. A wall-thickness map measured on the solid
 is not built yet, and neither are turning, weldments, undercuts, rib and boss proportions,
 curved down-facing faces, or cost estimates.

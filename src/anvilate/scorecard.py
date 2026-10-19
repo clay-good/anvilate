@@ -15,6 +15,7 @@ openspec/specs/validation-gauntlet/).
 from __future__ import annotations
 
 from enum import StrEnum
+from functools import cache
 from math import isnan
 from typing import Annotated
 
@@ -852,6 +853,14 @@ def _refuse_contradictions(entry: ScorecardEntry) -> None:
         )
 
 
+@cache
+def _production_modes() -> frozenset[str]:
+    """The catalogued modes normally found in production, the manufacturability findings."""
+    from .failure_modes import DEFAULT_CATALOG, DiscoveryStage
+
+    return frozenset(m.id for m in DEFAULT_CATALOG.modes if m.stage is DiscoveryStage.PRODUCTION)
+
+
 class Scorecard(ItemCollection, StatableModel):
     """A collection of check entries with a rolled-up overall status.
 
@@ -989,6 +998,22 @@ class Scorecard(ItemCollection, StatableModel):
             previous_utilization=before.utilization,
             current_utilization=after.utilization,
         )
+
+    def manufacturability(self) -> tuple[ScorecardEntry, ...]:
+        """The findings about making the part rather than whether it holds.
+
+        An entry that addresses a failure mode the catalogue says is normally found in
+        production: a feature the shop cannot make as drawn, a fastener no tool reaches, a
+        tolerance nobody can measure. They sit beside the physics checks and change none of
+        their verdicts; :meth:`physics` is every other entry.
+        """
+        production = _production_modes()
+        return tuple(e for e in self.entries if production.intersection(e.addresses))
+
+    def physics(self) -> tuple[ScorecardEntry, ...]:
+        """Every entry but the manufacturability findings: strength, stiffness and the rest."""
+        production = _production_modes()
+        return tuple(e for e in self.entries if not production.intersection(e.addresses))
 
     def not_evaluated(self) -> tuple[ScorecardEntry, ...]:
         """The checks that could not run — the gaps, never silently passed."""

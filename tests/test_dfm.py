@@ -198,3 +198,24 @@ def test_a_short_flange_against_the_brake():
     deep_die = profile.override("flange_length_min", 15.0, source="shop: 30 mm V-die")
     flange = screen_dfm(bracket, deep_die)[-1]
     assert flange.status is CheckStatus.FAIL and "flange_c 25 mm" in flange.detail
+
+
+def test_a_card_separates_manufacturability_from_physics_and_keeps_both_verdicts():
+    """validation-gauntlet: a DFM failure sits beside the physics checks, and a reader can
+    filter one kind from the other. The filter is the failure-mode catalogue's own
+    classification: a mode normally found in production."""
+    from anvilate.scorecard import Scorecard
+    from anvilate.screening import screen_spec
+
+    spec = load_spec_yaml((_PARTS / "mounting_plate.spec.yaml").read_text())
+    physics = screen_spec(spec)
+    tight = default_profile(DfmProcess.CNC_MILLING).override(
+        "internal_radius_min", 500.0, source="a test limit no corner meets"
+    )
+    findings = screen_dfm(build_spec(spec), tight, tool_direction=(0, 0, 1))
+    assert any(f.status is CheckStatus.FAIL for f in findings)
+    card = Scorecard(entries=(*physics.entries, *findings))
+    assert card.manufacturability() == tuple(findings)
+    assert card.physics() == physics.entries
+    assert [e.status for e in card.physics()] == [e.status for e in physics.entries]
+    assert physics.manufacturability() == ()
