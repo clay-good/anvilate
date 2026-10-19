@@ -44,7 +44,9 @@ import os
 import re
 import sys
 from collections.abc import Mapping
+from contextvars import ContextVar
 from copy import deepcopy
+from dataclasses import dataclass
 from enum import StrEnum
 from functools import cache
 from pathlib import Path
@@ -170,7 +172,7 @@ _LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
 # itself at every version, including the one where the tool surface should have moved and
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
-_SPEC_REF = "urn:anvilate:schema:design-spec:1.21.0"
+_SPEC_REF = "urn:anvilate:schema:design-spec:1.22.0"
 # 1.6.0 adds a counterbore locator kind and its required through diameter.
 # 1.5.0 adds an optional concentric circular locator: a confirmed pilot bore or boss with
 # its diameter and axial extent. Existing interface contracts remain valid unchanged.
@@ -214,7 +216,7 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.29.0"
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.30.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
@@ -898,8 +900,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "the fields seed.missing names and build it. A spec value "
                 "taken from a file cites it in the spec's sources (field, origin, file, "
                 "sha256, locator): measured_from_file for these numbers, agent_read for "
-                "one you read off a picture or PDF yourself. Leave confirmed_by empty; "
-                "that is the engineer's to fill."
+                "one you read off a picture or PDF yourself. Never fill confirmed_by: "
+                "the engineer confirms through the form their client shows, or `anvilate "
+                "confirm` at a terminal."
             ),
             input_schema=_object_schema(
                 {
@@ -1074,6 +1077,51 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
     return issues
 
 
+def _property_names(node: Any, at: str) -> list[tuple[str, str]]:
+    """Every property name declared under ``node``, with where, outside embedded ``$defs``.
+
+    The embedded contracts are the published documents (the Design Spec carries
+    ``confirmed_by``, which a person writes into their own file at the shell); what a tool's
+    own input declares is the rest.
+    """
+    found: list[tuple[str, str]] = []
+    if isinstance(node, Mapping):
+        for key, value in node.items():
+            if key == "$defs":
+                continue
+            if key == "properties" and isinstance(value, Mapping):
+                for name, child in value.items():
+                    found.append((str(name), f"{at}.{name}"))
+                    found.extend(_property_names(child, f"{at}.{name}"))
+            else:
+                found.extend(_property_names(value, at))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_property_names(item, at))
+    return found
+
+
+def _person_only_argument_issues(catalog: tuple[ToolDefinition, ...] | None = None) -> list[str]:
+    """Tool inputs that could carry a confirmation only a person may give.
+
+    A confirmation of an agent's reading, an unvalidated export, a review, an exception and
+    a dataset consent are the person's (:mod:`anvilate.confirmation`). An input property
+    named for one would let the agent supply it, so the catalog may declare none, at any
+    depth of a tool's own input schema.
+    """
+    from .confirmation import PERSON_ONLY_ARGUMENT_NAMES
+
+    issues = []
+    for tool in catalog if catalog is not None else tool_catalog():
+        for name, where in _property_names(tool.input_schema, tool.name):
+            if name.lower() in PERSON_ONLY_ARGUMENT_NAMES:
+                issues.append(
+                    f"{where} would let the caller supply a person-only confirmation; it is "
+                    "asked of the person through elicitation, never taken as an argument"
+                )
+    return issues
+
+
 def catalog_issues() -> list[str]:
     """Everything wrong with the tool catalog, as a list of complaints.
 
@@ -1085,6 +1133,7 @@ def catalog_issues() -> list[str]:
     """
     issues: list[str] = []
     catalog = tool_catalog()
+    issues.extend(_person_only_argument_issues(catalog))
     names = [tool.name for tool in catalog]
     duplicates = sorted({name for name in names if names.count(name) > 1})
     if duplicates:
@@ -1600,6 +1649,361 @@ def _task_params(request_id: Any, request: Mapping[str, Any]) -> tuple[str | Non
     return task_id, None
 
 
+# --- Person-only confirmations: asked of the person, never taken from the arguments ---
+#
+# Over the 2026-07-28 revision a server asks the user something by answering the call with
+# an InputRequiredResult (`resultType: "input_required"`) whose `inputRequests` carry
+# `elicitation/create` forms; the client shows them and retries the call with
+# `inputResponses` and the `requestState` it was handed (basic/patterns/mrtr). That keeps
+# this handler stateless. An older client asks for elicitation in `initialize` and expects a
+# server-to-client request on the stream instead; `serve_stdio` bridges the two, so the
+# handlers below only ever speak the new shape.
+
+_CLIENT_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities"
+_CLIENT_INFO = "io.modelcontextprotocol/clientInfo"
+# How long a requestState is honoured. Past it the person is asked again, which is the worst
+# a stale or tampered state can cause here.
+_STATE_SECONDS = 15 * 60
+# Sealing key for requestState, fresh per process. A retry served by another process cannot
+# verify it, and the person is asked again; nothing else depends on the key.
+_STATE_KEY = os.urandom(32)
+
+
+@dataclass(frozen=True)
+class _CallContext:
+    """What one tools/call brought besides its arguments: who relays, what they answered.
+
+    A plain record and not a model: it holds no invariant to re-validate, and it is built
+    once per call from values already checked by the caller.
+    """
+
+    tool: str
+    can_elicit: bool
+    client: str
+    responses: Mapping[str, Any] | None = None
+    state: str | None = None
+
+
+# The context of the call being served, set and reset by `handle_request` around a handler.
+_CALL_VAR: ContextVar[_CallContext | None] = ContextVar("anvilate_mcp_call", default=None)
+
+
+def _call() -> _CallContext | None:
+    return _CALL_VAR.get()
+
+
+class _InputRequired(Exception):  # noqa: N818 - it is a result, not an error
+    """Raised by a handler that needs the person's answer before it can finish the call."""
+
+    def __init__(self, requests: Mapping[str, Any], state: str) -> None:
+        super().__init__("input required")
+        self.requests = dict(requests)
+        self.state = state
+
+
+def _client_meta(params: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    metadata = params.get("_meta")
+    value = metadata.get(key) if isinstance(metadata, Mapping) else None
+    return value if isinstance(value, Mapping) else {}
+
+
+def _client_can_elicit(params: Mapping[str, Any]) -> bool:
+    """Whether this request declares form-mode elicitation; an empty object means form."""
+    elicitation = _client_meta(params, _CLIENT_CAPABILITIES).get("elicitation")
+    return isinstance(elicitation, Mapping) and (not elicitation or "form" in elicitation)
+
+
+def _client_label(params: Mapping[str, Any]) -> str:
+    info = _client_meta(params, _CLIENT_INFO)
+    name, version = info.get("name"), info.get("version")
+    if isinstance(name, str) and name.strip():
+        if isinstance(version, str) and version.strip():
+            return f"{name.strip()} {version.strip()}"[:200]
+        return name.strip()[:200]
+    return "an MCP client that did not name itself"
+
+
+def _sealed(payload: Mapping[str, Any]) -> str:
+    import base64
+    import hmac
+
+    body = base64.urlsafe_b64encode(canonical_json(dict(payload)).encode("utf-8")).decode()
+    mac = hmac.new(_STATE_KEY, body.encode("ascii"), "sha256").hexdigest()
+    return f"{body}.{mac}"
+
+
+def _unsealed(state: object, tool: str, kind: str) -> Mapping[str, Any] | None:
+    """The payload of a requestState this process sealed for ``tool`` and ``kind``, or None.
+
+    Attacker-controlled input by the protocol's own rule, so anything that does not verify,
+    has lapsed, or was sealed for another call is treated as no answer at all.
+    """
+    import base64
+    import hmac
+    import time
+
+    if not isinstance(state, str) or state.count(".") != 1:
+        return None
+    body, mac = state.split(".")
+    expected = hmac.new(_STATE_KEY, body.encode("ascii"), "sha256").hexdigest()
+    if not hmac.compare_digest(mac, expected):
+        return None
+    try:
+        payload = parse_json(base64.urlsafe_b64decode(body.encode("ascii")))
+    except (ValueError, TypeError):
+        return None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("tool") != tool
+        or payload.get("kind") != kind
+        or not isinstance(payload.get("expires"), (int, float))
+        or payload["expires"] < time.time()
+        or not isinstance(payload.get("asked"), dict)
+    ):
+        return None
+    return payload
+
+
+def _ask(kind: str, asked: Mapping[str, tuple[str, Mapping[str, Any]]]) -> _InputRequired:
+    """An InputRequiredResult asking each ``(subject, form)`` in ``asked``, keyed by its key."""
+    import time
+
+    context = _call()
+    payload = {
+        "tool": context.tool,
+        "kind": kind,
+        "expires": int(time.time()) + _STATE_SECONDS,
+        "asked": {key: subject for key, (subject, _) in asked.items()},
+    }
+    requests = {
+        key: {"method": "elicitation/create", "params": {"mode": "form", **form}}
+        for key, (_, form) in asked.items()
+    }
+    return _InputRequired(requests, _sealed(payload))
+
+
+def _answers(kind: str) -> dict[str, Mapping[str, Any]]:
+    """The person's answers to this call's earlier questions of ``kind``, by subject."""
+    context = _call()
+    payload = _unsealed(context.state, context.tool, kind) if context is not None else None
+    if payload is None or not isinstance(context.responses, Mapping):
+        return {}
+    answers: dict[str, Mapping[str, Any]] = {}
+    for key, subject in payload["asked"].items():
+        response = context.responses.get(key)
+        if isinstance(response, Mapping) and isinstance(subject, str):
+            answers[subject] = response
+    return answers
+
+
+def _accepted(response: Mapping[str, Any], box: str) -> str | None:
+    """The name a person gave when they accepted and ticked ``box``, else None."""
+    content = response.get("content")
+    if response.get("action") != "accept" or not isinstance(content, Mapping):
+        return None
+    name = content.get("name")
+    if content.get(box) is not True or not isinstance(name, str) or not name.strip():
+        return None
+    return name.strip()[:200]
+
+
+def _form(message: str, box: str, box_title: str) -> dict[str, Any]:
+    return {
+        "message": message,
+        "requestedSchema": {
+            "type": "object",
+            "properties": {
+                box: {"type": "boolean", "title": box_title, "default": False},
+                "name": {
+                    "type": "string",
+                    "title": "Your name",
+                    "description": "Recorded with today's date as the person who answered",
+                    "minLength": 1,
+                    "maxLength": 200,
+                },
+            },
+            "required": [box, "name"],
+        },
+    }
+
+
+def _value_text(value: Any) -> str:
+    if isinstance(value, Mapping) and {"magnitude", "unit"} <= set(value):
+        return f"{value['magnitude']} {value['unit']}"
+    if isinstance(value, Mapping) and "value" in value:
+        return _value_text(value["value"])
+    return json.dumps(value) if not isinstance(value, str) else value
+
+
+def _refuse_unbacked(spec: Any, operation: str) -> None:
+    """Refuse a document whose confirmations the agent wrote rather than a person's channel."""
+    from .confirmation import unbacked_confirmations
+
+    unbacked = unbacked_confirmations(spec)
+    if unbacked:
+        raise _InvalidArguments(
+            [
+                f"spec.sources: {field} carries a confirmation no person's channel recorded"
+                for field in unbacked
+            ],
+            operation=operation,
+            remedies=(
+                "remove confirmed_by, confirmed_on, confirmed_via and confirmed_through from "
+                f"the sources for {', '.join(unbacked)}: a confirmation is the person's, and "
+                "reaches Anvilate through the form their MCP client shows, `anvilate confirm` "
+                "typed at a terminal, or a confirmation file in the output folder",
+            ),
+        )
+
+
+def _confirm_drafts(spec: Any) -> Any:
+    """``spec`` with recorded confirmations applied, asking the person for the rest.
+
+    Asked only of a client that declared elicitation, and never about a reading the person
+    already declined, so a refusal to confirm is not a loop. An accepted, ticked form with a
+    name is recorded as an elicitation through the named client; anything else is a decline.
+    Without elicitation the readings stay drafts, and the card says how to confirm them.
+    """
+    from datetime import date
+
+    from .confirmation import (
+        ConfirmationChannel,
+        ConfirmationRecord,
+        PersonOnlyConfirmation,
+        apply_confirmations,
+        draft_value_subject,
+        record_confirmation,
+        record_decline,
+        was_declined,
+    )
+
+    spec = apply_confirmations(spec)
+    context = _call()
+    if context is None or not context.can_elicit:
+        return spec
+    pending = {
+        draft_value_subject(spec, source.field): source
+        for source in spec.sources
+        if source.origin == "agent_read" and source.confirmed_by is None
+    }
+    pending = {subject: s for subject, s in pending.items() if not was_declined(subject)}
+    if not pending:
+        return spec
+    answers = _answers("draft_value")
+    for subject, response in answers.items():
+        if subject not in pending:
+            continue
+        name = _accepted(response, "correct")
+        if name is None:
+            record_decline(subject, client=context.client, on=date.today())
+        else:
+            record_confirmation(
+                ConfirmationRecord(
+                    confirms=PersonOnlyConfirmation.DRAFT_VALUE,
+                    subject=subject,
+                    person=name,
+                    on=date.today(),
+                    via=ConfirmationChannel.ELICITATION,
+                    client=context.client,
+                )
+            )
+        del pending[subject]
+    if pending:
+        document = spec.model_dump(mode="json")
+        asked = {}
+        from .confirmation import _value_in
+
+        for index, (subject, source) in enumerate(pending.items()):
+            value = _value_text(_value_in(document, source.field))
+            where = f" ({source.locator})" if source.locator else ""
+            asked[f"draft-{index}"] = (
+                subject,
+                _form(
+                    f"Your agent read {source.field} as {value} from {source.file}{where}. "
+                    "Confirm it only if you have checked it against the file yourself. "
+                    f"Anvilate records your name, today's date, and that the answer came "
+                    f"through {context.client}.",
+                    "correct",
+                    "I checked this value against the file and it is correct",
+                ),
+            )
+        raise _ask("draft_value", asked)
+    return apply_confirmations(spec)
+
+
+def _confirmed_export(spec: Any, artifact: str, unmet: str) -> Any:
+    """The person's confirmation to write ``artifact`` unvalidated, or a refusal naming how.
+
+    A recorded or filed confirmation is used as it is. A client that declared elicitation is
+    asked, once. Otherwise the call is refused naming the shell command and the file form.
+    """
+    from datetime import date
+
+    from .confirmation import (
+        ConfirmationChannel,
+        ConfirmationRecord,
+        PersonOnlyConfirmation,
+        confirmation_file_form,
+        export_subject,
+        find_confirmation,
+        record_confirmation,
+        record_decline,
+        was_declined,
+    )
+
+    subject = export_subject(spec, artifact)
+    found = find_confirmation(subject, PersonOnlyConfirmation.UNVALIDATED_EXPORT)
+    if found is not None:
+        return found
+    context = _call()
+    if context is not None and context.can_elicit and not was_declined(subject):
+        response = _answers("unvalidated_export").get(subject)
+        if response is None:
+            raise _ask(
+                "unvalidated_export",
+                {
+                    "export-0": (
+                        subject,
+                        _form(
+                            f"The {artifact} file for {spec.name} cannot be written as "
+                            f"validated: {unmet}. Write it anyway, marked unvalidated in the "
+                            f"file? Anvilate records your name, today's date, and that the "
+                            f"answer came through {context.client}.",
+                            "write_unvalidated",
+                            "Write it marked unvalidated",
+                        ),
+                    )
+                },
+            )
+        name = _accepted(response, "write_unvalidated")
+        if name is not None:
+            record = ConfirmationRecord(
+                confirms=PersonOnlyConfirmation.UNVALIDATED_EXPORT,
+                subject=subject,
+                person=name,
+                on=date.today(),
+                via=ConfirmationChannel.ELICITATION,
+                client=context.client,
+            )
+            record_confirmation(record)
+            return record
+        record_decline(subject, client=context.client, on=date.today())
+        raise _Unavailable(
+            f"export_artifact did not write {artifact}: {unmet}, and the person declined to "
+            "write it unvalidated through the form. They can still confirm it with a "
+            "confirmation file; "
+            + confirmation_file_form(PersonOnlyConfirmation.UNVALIDATED_EXPORT, subject)
+        )
+    if context is not None and context.can_elicit:
+        raise _Unavailable(
+            f"export_artifact did not write {artifact}: {unmet}. The person declined to write "
+            "it unvalidated through a form earlier and is not asked again. They can still run "
+            "`anvilate build --unvalidated` at the shell, or "
+            + confirmation_file_form(PersonOnlyConfirmation.UNVALIDATED_EXPORT, subject)
+        )
+    raise _no_override(artifact, unmet, subject)
+
+
 def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
     """One JSON-RPC request to one JSON-RPC response, with no state between calls.
 
@@ -1802,8 +2206,29 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"indistinguishable from a real one",
             remedies=[f"use the {tool.name} capability or alternative named in this error"],
         )
+    responses = params.get("inputResponses")
+    context = _CallContext(
+        tool=tool.name,
+        can_elicit=_client_can_elicit(params),
+        client=_client_label(params),
+        responses=responses if isinstance(responses, Mapping) else None,
+        state=params.get("requestState") if isinstance(params.get("requestState"), str) else None,
+    )
+    token = _CALL_VAR.set(context)
     try:
         structured = handler(arguments)
+    except _InputRequired as needed:
+        # Not an error: the call stops here and the client retries it with the person's
+        # answers. Only a client that declared elicitation is ever sent one.
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "resultType": "input_required",
+                "inputRequests": needed.requests,
+                "requestState": needed.state,
+            },
+        }
     except _InvalidArguments as refusal:
         return _error(
             request_id,
@@ -1846,6 +2271,8 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             f"in anvilate rather than a problem with the request; the server is still up and "
             f"the call did not complete",
         )
+    finally:
+        _CALL_VAR.reset(token)
     wrong = result_issues(tool, structured)
     if wrong:
         return _error(
@@ -2015,8 +2442,23 @@ def _compile_spec(arguments: Mapping[str, Any]) -> dict[str, Any]:
         # document it could not even attempt, and it still belongs in `errors` rather than
         # crashing the loop that called it.
         return {"errors": [_reason(failure)]}
+    from .confirmation import apply_confirmations, unbacked_confirmations
     from .screening import _compile_findings
 
+    unbacked = unbacked_confirmations(spec)
+    if unbacked:
+        return {
+            "errors": [
+                f"sources: {field} carries a confirmation no person's channel recorded"
+                for field in unbacked
+            ],
+            "remedies": [
+                "remove the confirmation from those sources: a confirmation is the person's, "
+                "and reaches Anvilate through the form their MCP client shows, `anvilate "
+                "confirm` typed at a terminal, or a confirmation file in the output folder"
+            ],
+        }
+    spec = apply_confirmations(spec)
     problems, remedies = _compile_findings(spec, _MODULES) if _MODULES else _compile_findings(spec)
     if problems:
         return {"errors": problems, "remedies": remedies}
@@ -2043,6 +2485,8 @@ def _build_part(arguments: Mapping[str, Any]) -> dict[str, Any]:
         ) from failure
     except (ValueError, TypeError, KeyError) as failure:
         raise _InvalidArguments([f"spec: {_reason(failure)}"], operation="build_part") from failure
+    _refuse_unbacked(spec, "build_part")
+    spec = _confirm_drafts(spec)
     try:
         built = build_spec(spec)
     except (GeometryUnavailable, UnsupportedGeometry) as failure:
@@ -2451,6 +2895,8 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         raise _InvalidArguments(
             [f"spec: {_reason(failure)}"], operation="run_validation"
         ) from failure
+    _refuse_unbacked(spec, "run_validation")
+    spec = _confirm_drafts(spec)
     card = screen_spec(spec, **_screening_options(spec)).model_dump(mode="json")
     # The card is returned *and* published: returned because it is closed-form and the answer
     # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
@@ -2487,11 +2933,23 @@ def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
         ) from unknown
 
 
-def _no_override(artifact: str, unmet: str) -> _Unavailable:
+def _no_override(artifact: str, unmet: str, subject: str) -> _Unavailable:
+    """The refusal to write past a failing gate when no person has confirmed it.
+
+    The agent cannot grant the override: no argument carries one. A client that shows forms
+    is asked instead (`_confirmed_export`), and every other client is told the two things a
+    person can do.
+    """
+    from .confirmation import PersonOnlyConfirmation, confirmation_file_form
+
     return _Unavailable(
         f"export_artifact cannot write {artifact}: {unmet}. This surface grants no "
-        "override. The evidence bundle and the part sheet are written whatever the verdict "
-        "and carry it; `anvilate build --unvalidated` at the shell writes a watermarked file"
+        "override of its own; writing it unvalidated is the person's decision, and this "
+        "client did not declare the elicitation forms that would ask them. The evidence "
+        "bundle and the part sheet are written whatever the verdict and carry it. A person "
+        "can run `anvilate build --unvalidated` at the shell, or "
+        + confirmation_file_form(PersonOnlyConfirmation.UNVALIDATED_EXPORT, subject)
+        + ", and call export_artifact again"
     )
 
 
@@ -2579,15 +3037,20 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
         ) from unknown
     except GeometryUnavailable as failure:
         raise _Unavailable(str(failure)) from failure
+    from .confirmation import apply_confirmations
+
+    spec = apply_confirmations(spec)
     card = screen_spec(spec, **_screening_options(spec))
+    confirmation = None
     try:
         authorization = authorize_export(card)
     except ExportRefused as refused:
         # A part no screen exists for can never pass, and refusing its file would mean the
         # catalog's drawn parts could not be taken into CAD at all. It is written with the
-        # unvalidated mark instead. A part with a check that failed is still refused.
+        # unvalidated mark instead. A part with a check that failed is written only when a
+        # person confirms it, through a channel the agent does not hold.
         if not _drawn_and_not_checked(spec, card):
-            raise _no_override(artifact, refused.unmet) from refused
+            confirmation = _confirmed_export(spec, artifact, refused.unmet)
         authorization = authorize_export(card, override=True)
     stem = safe_stem(built.name)
     try:
@@ -2615,7 +3078,13 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
         raise _InvalidArguments([f"subject: {failure}"], operation="export_artifact") from failure
     file = write_output(name, data)
     result = {"format": artifact, "sha256": file["sha256"], "file": file}
-    if not authorization.validated:
+    if confirmation is not None:
+        result["validated"] = False
+        result["note"] = (
+            f"{name} does not pass its checks and was written marked unvalidated, "
+            f"{confirmation}. Say so when you hand it over"
+        )
+    elif not authorization.validated:
         result["validated"] = False
         waiting = [source.field for source in spec.sources if not source.confirmed]
         result["note"] = (
@@ -2714,10 +3183,12 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     from .attestation import EnvironmentBOM
     from .export.qif import export_qif_results
 
+    confirmation = None
     try:
         authorization = authorize_export(card)
     except ExportRefused as refused:
-        raise _no_override(artifact, refused.unmet) from refused
+        confirmation = _confirmed_export(spec, artifact, refused.unmet)
+        authorization = authorize_export(card, override=True)
     text = export_qif_results(
         sections,
         part_name=spec.name,
@@ -2727,7 +3198,14 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
         authorization=authorization,
     )
     file = write_output(f"{stem}.qif", text.encode("utf-8"))
-    return {"format": artifact, "sha256": file["sha256"], "file": file}
+    result = {"format": artifact, "sha256": file["sha256"], "file": file}
+    if confirmation is not None:
+        result["validated"] = False
+        result["note"] = (
+            f"{stem}.qif reports a card that does not pass and was written marked "
+            f"unvalidated, {confirmation}. Say so when you hand it over"
+        )
+    return result
 
 
 def _cancelled_fea_result() -> dict[str, Any]:
@@ -2840,48 +3318,186 @@ _DISPATCH: dict[str, Any] = {
 }
 
 
+def _with_initialized_capabilities(
+    request: Any, capabilities: Mapping[str, Any], client: Mapping[str, Any]
+) -> Any:
+    """``request`` carrying what an older client declared once, in initialize, per request.
+
+    Before 2026-07-28 a client declared its capabilities and identity in ``initialize`` only.
+    The handler reads them from each request's ``_meta``, as the current revision sends them,
+    so the stream supplies them where the request does not. Only elicitation is carried:
+    the Tasks extension is never inferred for a client that could not declare it.
+    """
+    if (
+        not isinstance(request, Mapping)
+        or request.get("method") != "tools/call"
+        or not isinstance(request.get("params"), Mapping)
+    ):
+        return request
+    params = dict(request["params"])
+    metadata = dict(params["_meta"]) if isinstance(params.get("_meta"), Mapping) else {}
+    if _CLIENT_CAPABILITIES not in metadata and "elicitation" in capabilities:
+        metadata[_CLIENT_CAPABILITIES] = {"elicitation": capabilities["elicitation"]}
+    if _CLIENT_INFO not in metadata and client:
+        metadata[_CLIENT_INFO] = dict(client)
+    if not metadata:
+        return request
+    return {**request, "params": {**params, "_meta": metadata}}
+
+
+# How many times one call may come back asking the person before the stream gives up on it.
+_MAX_INPUT_ROUNDS = 4
+
+
 def serve_stdio(stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
     """Read newline-delimited JSON-RPC from ``stdin`` and write responses to ``stdout``.
 
     The whole transport: one message per line in, one per line out, flushed each time so a
     client blocked on a read is not waiting on a buffer. Every message is handled by
-    :func:`handle_request`, which holds no state. The loop keeps one fact, the protocol
-    revision initialize negotiated, and a client that restarts the process initializes again.
+    :func:`handle_request`, which holds no state. The loop keeps what initialize negotiated:
+    the protocol revision, and, for a client older than 2026-07-28, the elicitation
+    capability and client identity it declared there and nowhere else.
+
+    **An older client is asked the way its revision asks.** When a call comes back
+    ``input_required`` and the client's revision predates that result type, the loop sends
+    each request in it as a server-to-client ``elicitation/create`` with its own id, reads
+    until every answer is in (holding any other message that arrives meanwhile, to serve
+    after), and retries the call itself with the answers. The client sees one response to
+    its one call, as its revision expects. A newer client receives the result as it is.
 
     A line that is not JSON is answered with a parse error and the loop continues, because
     a stream is not a session: one client sending rubbish must not take the server down for
     the message after it. A notification produces no line at all, which is what the
     protocol requires and what a client waiting for one response per request depends on.
     """
+    from collections import deque
+
     source = sys.stdin if stdin is None else stdin
     sink = sys.stdout if stdout is None else stdout
-    # The one thing a stream remembers: the protocol revision its initialize settled on, so
-    # every later result is shaped the way that client's revision defines one.
+    lines = iter(source)
+    held: deque[Any] = deque()
+    # The facts a stream remembers from initialize, so every later result is shaped the way
+    # that client's revision defines one and an older client's capabilities reach the handler.
     revision = PROTOCOL_REVISION
-    for line in source:
-        line = line.strip()
-        if not line:
-            continue
+    capabilities: Mapping[str, Any] = {}
+    client: Mapping[str, Any] = {}
+    asked = 0
+    # A line that arrived while waiting for an answer and was not JSON, held to be answered
+    # with a parse error in its turn. Not `None`, which is what a line reading `null` decodes to.
+    unparseable = object()
+
+    def send(message: Mapping[str, Any]) -> None:
+        sink.write(json.dumps(message) + "\n")
+        sink.flush()
+
+    def read() -> Any:
+        """The next decoded message, a held one first; a ValueError for a line that is not JSON."""
+        if held:
+            return held.popleft()
+        for line in lines:
+            line = line.strip()
+            if line:
+                return parse_json(line)
+        raise EOFError
+
+    def answers(requests: Mapping[str, Any]) -> dict[str, Any] | None:
+        """Each input request sent as a server request and its answer read, or None at EOF."""
+        nonlocal asked
+        waiting: dict[str, str] = {}
+        for key, request in requests.items():
+            asked += 1
+            server_id = f"anvilate-input-{asked}"
+            waiting[server_id] = key
+            send({"jsonrpc": "2.0", "id": server_id, **dict(request)})
+        collected: dict[str, Any] = {}
+        unrelated: list[Any] = []
         try:
-            request = parse_json(line)
+            while waiting:
+                try:
+                    message = read()
+                except ValueError:
+                    unrelated.append(unparseable)
+                    continue
+                reply_to = message.get("id") if isinstance(message, Mapping) else None
+                if isinstance(reply_to, str) and reply_to in waiting and "method" not in message:
+                    key = waiting.pop(reply_to)
+                    result = message.get("result")
+                    # A client that errors on the request has not relayed an answer.
+                    collected[key] = result if isinstance(result, Mapping) else {"action": "cancel"}
+                else:
+                    unrelated.append(message)
+        except EOFError:
+            return None
+        finally:
+            held.extend(unrelated)
+        return collected
+
+    while True:
+        try:
+            request = read()
+        except EOFError:
+            break
         except ValueError as bad:  # malformed, or nested past what the reader follows
-            response: dict[str, Any] | None = _error(None, PARSE_ERROR, f"invalid JSON: {bad}")
-        else:
-            # No non-object check here any more: `handle_request` holds it, so every
-            # transport gets it rather than only the one that remembered to write it.
-            response = handle_request(request)
-            if (
-                isinstance(request, Mapping)
-                and request.get("method") == "initialize"
-                and isinstance(response, dict)
-                and "result" in response
-            ):
-                revision = response.get("result", {}).get("protocolVersion", revision)
+            send(_error(None, PARSE_ERROR, f"invalid JSON: {bad}"))
+            continue
+        if request is unparseable:  # held while waiting on an answer, and not JSON
+            send(_error(None, PARSE_ERROR, "invalid JSON received while waiting for an answer"))
+            continue
+        # No non-object check here any more: `handle_request` holds it, so every transport
+        # gets it rather than only the one that remembered to write it.
+        if revision < "2026-07-28":
+            request = _with_initialized_capabilities(request, capabilities, client)
+        response = handle_request(request)
+        if (
+            isinstance(request, Mapping)
+            and request.get("method") == "initialize"
+            and isinstance(response, dict)
+            and "result" in response
+        ):
+            revision = response.get("result", {}).get("protocolVersion", revision)
+            declared = (
+                (request.get("params") or {}) if isinstance(request.get("params"), Mapping) else {}
+            )
+            capabilities = (
+                declared.get("capabilities")
+                if isinstance(declared.get("capabilities"), Mapping)
+                else {}
+            )
+            client = (
+                declared.get("clientInfo")
+                if isinstance(declared.get("clientInfo"), Mapping)
+                else {}
+            )
+        rounds = 0
+        while (
+            revision < "2026-07-28"
+            and isinstance(response, dict)
+            and isinstance(response.get("result"), Mapping)
+            and response["result"].get("resultType") == "input_required"
+        ):
+            rounds += 1
+            if rounds > _MAX_INPUT_ROUNDS:
+                response = _error(
+                    request.get("id"),
+                    INTERNAL_ERROR,
+                    "the call asked the person for input more times than the stream allows "
+                    "and did not complete",
+                )
+                break
+            result = response["result"]
+            collected = answers(result.get("inputRequests") or {})
+            if collected is None:
+                return
+            params = {
+                **dict(request.get("params") or {}),
+                "inputResponses": collected,
+                "requestState": result.get("requestState"),
+            }
+            response = handle_request({**request, "params": params})
         response = _for_revision(response, revision)
         if response is None:
             continue
-        sink.write(json.dumps(response) + "\n")
-        sink.flush()
+        send(response)
 
 
 # Third-party modules this server process was started with (`anvilate-mcp --module PATH`).

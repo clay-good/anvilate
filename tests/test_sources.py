@@ -258,6 +258,26 @@ def test_the_server_looks_for_sources_in_its_context_folders(tmp_path):
     from anvilate.mcp import handle_request
 
     _path, document = _beside(tmp_path)
+    # Over MCP the document comes from the agent, so its `confirmed_by` counts only when the
+    # person's own channel recorded the same confirmation (add-person-confirmation).
+    from anvilate.confirmation import (
+        ConfirmationChannel,
+        ConfirmationRecord,
+        PersonOnlyConfirmation,
+        draft_value_subject,
+        record_confirmation,
+    )
+
+    spec = _spec(document)
+    record_confirmation(
+        ConfirmationRecord(
+            confirms=PersonOnlyConfirmation.DRAFT_VALUE,
+            subject=draft_value_subject(spec, "element_params.width"),
+            person=_CONFIRMED["confirmed_by"],
+            on=_CONFIRMED["confirmed_on"],
+            via=ConfirmationChannel.TERMINAL,
+        )
+    )
 
     def names() -> list[str]:
         reply = handle_request(

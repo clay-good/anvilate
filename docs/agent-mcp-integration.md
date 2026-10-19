@@ -190,7 +190,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 protocol: 2026-07-28
 server: anvilate
 tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, build_combination, list_context, read_cad_file, describe_part
-compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.21.0"}
+compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.22.0"}
 ```
 
 **Read the `$ref`, not the property name.** A tool that consumes a spec or returns a
@@ -297,10 +297,15 @@ one to use meanwhile. Fields are matched as the spec writes them, so the file ha
 measure as the same catalog part.
 
 The two origins are written in the document with underscores, as the example shows. An
-agent's reading becomes a confirmed value when the engineer adds who confirmed it and on
-what date to its source: the two fields are named confirmed-by and confirmed-on, with
-underscores. That is the engineer's act. An agent must not fill it in for them, and a
-confirmation without a named person is refused.
+agent's reading becomes a confirmed value when the engineer confirms it, and that is the
+engineer's act. Over MCP the agent cannot make it: a spec arriving with confirmed-by filled
+in is refused by field name unless the engineer's own confirmation already backs it. A
+client that shows forms asks the engineer directly; otherwise the engineer runs
+`anvilate confirm` at a terminal with the result's subject handle, or writes a confirmation
+file. Each confirmation records the channel it came through. See
+[person confirmation](person-confirmation.md). At the shell, the engineer's own spec file
+may carry the confirmed-by and confirmed-on fields, and a confirmation without a named
+person is refused.
 
 When the server can find a cited file in its context folders (or `anvilate check` finds it
 beside the spec), it hashes it. A file that has changed since the value was taken from it
