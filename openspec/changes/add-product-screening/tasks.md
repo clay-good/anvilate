@@ -13,7 +13,8 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 - [x] 1.3 Indeterminacy named with redundant connections; downstream not evaluated;
       declared splits accepted with basis
 - [ ] 1.4 Part screens fed interface loads as dependent entries
-      (a caster's rating reads its load-path entry; other part screens do not yet)
+      (a caster's and a linear guide's rating read their load-path entry; bearings need an
+      axis their record lacks; catalog parts' own screens are not fed yet)
 
 ## 2. Roll-ups
 

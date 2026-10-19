@@ -56,7 +56,7 @@ with its line, and nothing else.
 | --- | --- | --- | --- |
 | `ball_bearing`, `roller_bearing` | `dynamic_load_rating` | `equivalent_load`, `speed`, `required_life` | basic rating life in hours, L10 = (C/P)^p with p = 3 or 10/3, against the required life |
 | `motor`, `coupling` | `rated_torque` | `torque` | rated torque against the torque it must deliver |
-| `linear_guide` | `stroke`, `dynamic_load_rating` | `stroke`, `load` | stroke, and load against the rating |
+| `linear_guide` | `stroke`, `dynamic_load_rating` | `stroke`, `load` | stroke, and load against the rating, which product screening's load path supplies |
 | `gas_spring` | `force` | `force` | force against the force it must hold |
 | `caster` | `load_rating` | `load` | load rating against the load it carries, which product screening's load path supplies |
 

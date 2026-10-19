@@ -745,10 +745,19 @@ def _solve(
     return CheckStatus.PASS, "", forces
 
 
+# The families whose rating reads the load a body carries down the vertical path, by the
+# demand that load is and the entry it feeds. A body on the path passes its load through
+# its bottom contact, normal to the face it rests on: the rated direction of a caster and of
+# a guide's carriage on a rail lying on its support. A bearing's load is radial or axial by
+# an axis its record does not state, so it is not fed a share it might not carry that way.
+_PATH_RATED = {"caster": ("load", "caster load"), "linear_guide": ("load", "guide load")}
+
+
 def _rated_from_path(
     product: Product, shelf: Mapping[str, Product], steps: list[LoadStep]
 ) -> list[ScorecardEntry]:
-    """Each purchased component on the load path, checked with the load it carries."""
+    """Each purchased component on the load path whose rating reads that load, checked
+    with the load it carries."""
     from .changes import _definitions, _occurrences
     from .components import Demand, _rating_entries
 
@@ -759,23 +768,24 @@ def _rated_from_path(
     for step in steps:
         definition = by_path.get(step.body)
         record = definition.component if definition is not None else None
-        if record is None or record.family != "caster":
+        if record is None or record.family not in _PATH_RATED:
             continue
+        demand_name, check = _PATH_RATED[record.family]
         name = f"load path {step.body}"
         if step.status is CheckStatus.NOT_EVALUATED:
             entries.append(ScorecardEntry(
-                name=f"{step.body} caster load", status=CheckStatus.NOT_EVALUATED,
+                name=f"{step.body} {check}", status=CheckStatus.NOT_EVALUATED,
                 detail=f"reads '{name}', which is not evaluated: {step.note}",
-                needs=(_need("screening.splits", "the share of the load this caster carries",
-                             "[]", ()),),
+                needs=(_need("screening.splits", f"the share of the load this "
+                             f"{record.family.replace('_', ' ')} carries", "[]", ()),),
             ))  # fmt: skip
             continue
-        demand = Demand(name="load", value=Quantity(magnitude=step.carries_n, unit="N"),
+        demand = Demand(name=demand_name, value=Quantity(magnitude=step.carries_n, unit="N"),
                         source=f"'{name}'")  # fmt: skip
         for entry in _rating_entries(record, (demand,)):
-            if entry.name == "caster load":
+            if entry.name == check:
                 entries.append(entry.model_copy(update={
-                    "name": f"{step.body} caster load",
+                    "name": f"{step.body} {check}",
                     "detail": f"{entry.detail}; reads '{name}'",
                 }))  # fmt: skip
     return entries

@@ -283,6 +283,24 @@ def test_a_vertical_acceleration_scales_weights_and_masses_and_not_forces():
         parse_product(document)
 
 
+def test_a_linear_guide_on_the_path_is_checked_against_the_share_it_carries():
+    """The same three supports as guide carriages rated at 400 N: each reads its load-path
+    share as the guide's load, and the verdicts are the casters' verdicts."""
+    from test_components import _record
+
+    document = _carted(_THREE, ("right", "back"))
+    ratings = {"stroke": _q(300, "mm"), "dynamic_load_rating": _q(400, "N")}
+    envelope = [_q(60, "mm"), _q(60, "mm"), _q(100, "mm")]
+    guide = _record("linear_guide", ratings, envelope=envelope, mass=_q(0.6, "kg"))
+    document["definitions"][1]["component"] = guide.model_dump(mode="json")
+    report = product_screening(parse_product(document))
+    rated = {e.name: e for e in report.entries if e.name.endswith("guide load")}
+    assert rated["cart/caster3 guide load"].status is CheckStatus.FAIL
+    assert rated["cart/caster1 guide load"].status is CheckStatus.PASS
+    assert "reads 'load path cart/caster3'" in rated["cart/caster3 guide load"].detail
+    assert not any(e.name.endswith("caster load") for e in report.entries)
+
+
 def test_a_load_outside_the_supports_lifts_one_off():
     report = product_screening(parse_product(_carted(_THREE, ("left", "front"))))
     frame = _named(report, "load path cart/frame")
