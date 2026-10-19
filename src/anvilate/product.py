@@ -2699,6 +2699,7 @@ def write_product_step(
         description="Anvilate product: an assembly of its items, each placed by its mates",
         instance_names=paths,
         colored=True,
+        validated=True,
     )
 
 

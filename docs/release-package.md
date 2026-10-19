@@ -39,7 +39,7 @@ places.
 | `laser/<part number>_<revision>.dxf`, `laser/cut-list.csv` | a profile-cut part's flat profile at 1:1 on cut layers; the cut list of part number, material, thickness and quantity | the laser, waterjet or sheet-metal shop |
 | `print/plate.3mf` | every printed part on one plate, each placed as many times as the product uses it | a slicer |
 | `step/<part number>_<revision>.step` | any other part, watermarked | CAD, the shop its process names |
-| `step/<product>.step` | the assembly, one named product per item, each in a color of its own, and each occurrence named by its product and its path (`R-15 rail @ rail[1]`) | CAD |
+| `step/<product>.step` | the assembly, one named product per item, each in a color of its own, and each occurrence named by its product and its path (`R-15 rail @ rail[1]`), and each product's volume, surface area and centroid as geometric validation properties a CAD import can check itself against | CAD |
 | `parameters/<part number>.csv` | each item's layout parameters, one column per variant | a native CAD design table |
 | `manifest.json` | the product, its revision, release or draft, the card's verdict, the blockers, and every file with its role and SHA-256 | `anvilate verify` |
 
@@ -73,4 +73,5 @@ export_package(product, "out", release=False, profiles=[erp])     # adds bom-erp
 BOM does not carry is refused, naming it.
 
 Not yet built: assembly drawings and the PDF package, external-reference assemblies,
-user-defined attributes and validation properties in the STEP, and the CAD import matrix.
+user-defined attributes in the STEP (the bundled kernel's writer has no metadata mode), and
+the CAD import matrix.

@@ -91,6 +91,28 @@ def test_each_occurrence_is_named_by_its_path_and_each_product_colored_apart(tmp
     assert len(colours) == min(len(items), 8)
 
 
+def test_each_products_volume_is_written_as_a_validation_property(tmp_path):
+    """A CAD package reading the file can check it got the solid that was written: each
+    product's volume, area and centroid go out as geometric validation properties, and the
+    volumes agree with the solids read back from the same file."""
+    import re
+
+    from build123d import import_step
+
+    product = parse_product(
+        parse_yaml((_PRODUCTS / "linear_stage.product.yaml").read_text(encoding="utf-8"))
+    )
+    authorization = authorize_export(place_product(product).card.flattened(), override=True)
+    path = write_product_step(product, tmp_path / "s.step", authorization=authorization)
+    flat = re.sub(r"\s+", "", path.read_text(encoding="utf-8"))
+    written = sorted(float(v) for v in re.findall(r"VOLUME_MEASURE\(([^)]*)\)", flat))
+    items = {instance.item for instance in product.instances}
+    assert len(written) == len(items)
+    assert flat.count("'geometricvalidationproperty','centroid'") == len(items)
+    read = {round(solid.volume, 1) for solid in import_step(str(path)).solids()}
+    assert {round(v, 1) for v in written} == read
+
+
 def test_the_long_stage_variant_still_clears_its_motor():
     stage = parse_product(parse_yaml((_PRODUCTS / "linear_stage.product.yaml").read_text()))
     placed = place_product(resolve_variant(stage, "long"))

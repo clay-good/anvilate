@@ -2096,18 +2096,23 @@ def _write_assembly(
     description: str,
     instance_names: Sequence[str] | None = None,
     colored: bool = False,
+    validated: bool = False,
 ) -> Any:
     """Write ``bodies`` — (key, product name, solid, location) — as one named STEP assembly.
 
     Bodies sharing a key are one product placed once per body. ``instance_names``, one per
     body, names each occurrence (a product's paths); otherwise an occurrence is its product's
     name and a count. ``colored`` gives each product a color of its own from a fixed palette,
-    in order of first appearance, so the parts read apart in CAD.
+    in order of first appearance, so the parts read apart in CAD. ``validated`` writes each
+    product's volume, surface area and centroid as STEP geometric validation properties, so
+    a CAD package that reads the file can check it got the same solid.
     """
     import re
     from pathlib import Path
 
     from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform  # type: ignore[import-untyped]
+    from OCP.BRepGProp import BRepGProp  # type: ignore[import-untyped]
+    from OCP.GProp import GProp_GProps  # type: ignore[import-untyped]
     from OCP.IFSelect import IFSelect_ReturnStatus  # type: ignore[import-untyped]
     from OCP.Interface import Interface_Static  # type: ignore[import-untyped]
     from OCP.Message import Message, Message_Gravity  # type: ignore[import-untyped]
@@ -2131,8 +2136,11 @@ def _write_assembly(
     from OCP.TopLoc import TopLoc_Location  # type: ignore[import-untyped]
     from OCP.XCAFApp import XCAFApp_Application  # type: ignore[import-untyped]
     from OCP.XCAFDoc import (  # type: ignore[import-untyped]
+        XCAFDoc_Area,
+        XCAFDoc_Centroid,
         XCAFDoc_ColorType,
         XCAFDoc_DocumentTool,
+        XCAFDoc_Volume,
     )
     from OCP.XSControl import XSControl_WorkSession  # type: ignore[import-untyped]
 
@@ -2179,6 +2187,14 @@ def _write_assembly(
                     wrapped = BRepBuilderAPI_Transform(bare, own.Transformation(), True).Shape()
                 prototypes[key] = tool.AddShape(wrapped, False)
                 named(prototypes[key], product)
+                if validated:
+                    props = GProp_GProps()
+                    BRepGProp.VolumeProperties_s(wrapped, props)
+                    XCAFDoc_Volume.Set_s(prototypes[key], props.Mass())
+                    XCAFDoc_Centroid.Set_s(prototypes[key], props.CentreOfMass())
+                    surface = GProp_GProps()
+                    BRepGProp.SurfaceProperties_s(wrapped, surface)
+                    XCAFDoc_Area.Set_s(prototypes[key], surface.Mass())
                 if colored:
                     r, g, b = _PALETTE[(len(prototypes) - 1) % len(_PALETTE)]
                     colors.SetColor(prototypes[key],
@@ -2207,6 +2223,7 @@ def _write_assembly(
                 printer.SetTraceLevel(Message_Gravity.Message_Fail)
             writer = STEPCAFControl_Writer(XSControl_WorkSession(), False)
             writer.SetNameMode(True)
+            writer.SetPropsMode(validated)
             done = writer.Transfer(document, STEPControl_StepModelType.STEPControl_AsIs)
             if not done or writer.Write(str(staging)) != IFSelect_ReturnStatus.IFSelect_RetDone:
                 raise _refuse(

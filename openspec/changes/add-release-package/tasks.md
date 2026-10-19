@@ -12,8 +12,8 @@ Depends on `add-product-structure`, `add-purchased-components`, `add-product-scr
 
 - [ ] 2.1 XCAF writer: hierarchy, product names = part numbers, unique instance names
       from paths, color per part, user-defined attributes, validation properties
-      (names, instance names from paths and a color per part are built; attributes and
-      validation properties are not)
+      (names, instance names from paths, a color per part and validation properties are
+      built; user-defined attributes are not: the bundled OCCT writer has no metadata mode)
 - [ ] 2.2 Per-part files `<pn>_<rev>.step`; optional external-reference assembly
       (the per-part files are built; the external-reference assembly is not)
 - [ ] 2.3 Import matrix in CI on the free CAD tiers: tree depth, names, colors survive
