@@ -183,6 +183,28 @@ def test_the_docs_table_names_every_familys_ratings_and_demands():
     assert rows == checked
 
 
+def test_the_docs_page_names_every_source_a_record_requires():
+    """'Citing a datasheet' claims every stated value carries its source: the page's table
+    is held to the Provenance fields the record, its ratings and its demands declare."""
+    from pathlib import Path
+
+    from anvilate.components import ComponentRecord, Demand, Price, Rating
+
+    page = (Path(__file__).resolve().parents[1] / "docs" / "components.md").read_text()
+    section = page.split("## Citing a datasheet")[1].split("\n## ")[0]
+    # Keyed on the name: `Provenance` is an annotated `str`, so its annotation is `str`.
+    sources = [
+        (model.__name__, name)
+        for model in (ComponentRecord, Rating, Demand, Price)
+        for name, field in model.model_fields.items()
+        if (name == "source" or name.endswith("_source")) and field.is_required()
+    ]
+    assert len(sources) == 5, sources
+    for model_name, name in sources:
+        assert f"`{name}`" in section, (model_name, name)
+    assert "`date`" in section
+
+
 def _vendor_step(folder):
     """A 57 × 57 × 76 motor body with four 5 mm blind holes, 10 deep, in its bottom face."""
     build123d = pytest.importorskip("build123d")

@@ -27,4 +27,4 @@ Depends on `add-product-structure`, `add-interface-contracts`, and the STEP read
 ## 4. Sourcing
 
 - [x] 4.1 Unsourced marking; release export blocked on unsourced components
-- [ ] 4.2 A docs page for components: writing a record, citing a datasheet, using a vendor model
+- [x] 4.2 A docs page for components: writing a record, citing a datasheet, using a vendor model

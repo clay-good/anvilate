@@ -33,6 +33,23 @@ A component definition is bought, and only a component states `demands`. Its `ho
 a `hole_pattern` mate the way a placeholder's do, so the motor is placed by its own bolt
 pattern.
 
+## Citing a datasheet
+
+Every value a record states carries its source, and the record is refused without it:
+
+| Value | Its source |
+| --- | --- |
+| `envelope` | `envelope_source` |
+| `mass` | `mass_source` |
+| each of `ratings` | that rating's `source` |
+| `price` | its `source` and `date` |
+| each of `demands` | that demand's `source`, where the requirement came from |
+
+A source says where a reader can find the number again: the document, its revision, and the
+page, table or drawing note, such as `datasheet rev C p.2, torque table`. A source is never
+blank and never a catalog copied into the record: state the values the product uses, each
+with its line, and nothing else.
+
 ## What each family is checked for
 
 | Family | Ratings the record states | Demands the product states | Check |
