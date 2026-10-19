@@ -26,7 +26,7 @@ import re
 from collections.abc import Sequence
 from html import escape
 from math import isfinite
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from pydantic import ConfigDict, computed_field
 
@@ -507,6 +507,7 @@ class CalculationReport(StatableModel):
         views: Sequence[tuple[str, bytes]] = (),
         views_absent: str | None = None,
         views_note: str | None = None,
+        authorization: Any = None,
     ) -> str:
         """The report as a self-contained HTML document (no external assets).
 
@@ -518,8 +519,11 @@ class CalculationReport(StatableModel):
         shape. ``views_note`` sits under the drawings: what they show in numbers, such as
         the dimensions measured off the built solid. A sheet also states the overall verdict
         and the governing check above the drawings, since the reader of a one-page sheet
-        looks at the top of it first. With none of these, the document is byte-identical to
-        the report.
+        looks at the top of it first. ``authorization`` is the export's
+        :class:`~anvilate.export.gate.ExportAuthorization`: its watermark goes in the head as
+        metadata and at the top of the page, so a sheet handed over in a draft says it is
+        unvalidated and why, as the draft's STEP and DXF files do. With none of these, the
+        document is byte-identical to the report.
         """
         drawn = bool(views) or views_absent is not None or views_note is not None
         out: list[str] = [
@@ -528,11 +532,19 @@ class CalculationReport(StatableModel):
             "<head>",
             '<meta charset="utf-8">',
             f"<title>{escape(self.title)}</title>",
+            *(
+                f'<meta name="{escape(key)}" content="{escape(value)}">'
+                for key, value in (authorization.metadata() if authorization is not None else ())
+            ),
             "<style>",
             _STYLESHEET + ("\n" + _VIEWS_STYLESHEET if drawn else ""),
             "</style>",
             "</head>",
             "<body>",
+            *(
+                f'<p class="watermark" style="{_WATERMARK_STYLE}">{escape(line)}</p>'
+                for line in (authorization.watermark() if authorization is not None else ())
+            ),
             f"<h1>{escape(self.title)}</h1>",
         ]
         header_rows = self._header_rows()
@@ -1056,6 +1068,9 @@ def report_from_record(record: dict) -> CalculationReport:
 # old red and green were nearly the same luminance and ran together for a deuteranope; the
 # old amber failed contrast outright. The status word is always printed as well, so colour
 # is never the only carrier of the verdict.
+# Inline, so a report written without a watermark keeps its stylesheet byte for byte.
+_WATERMARK_STYLE = "font-weight: bold; border: 2px solid currentColor; padding: 4px 8px"
+
 _STYLESHEET = """
 :root {
   color-scheme: light dark;

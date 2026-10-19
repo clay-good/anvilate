@@ -37,6 +37,11 @@ def test_a_placeholder_blocks_release_and_a_draft_is_written_marked(tmp_path):
     assert manifest.kind == "draft" and manifest.blockers == blockers
     step = (tmp_path / "draft" / "step" / "linear-stage.step").read_text()
     assert "ANVILATE_EXPORT_STATUS=UNVALIDATED" in step and "is a placeholder" in step
+    (drawing,) = [f.path for f in manifest.files if f.role == "part drawing"]
+    sheet = (tmp_path / "draft" / drawing).read_text()
+    assert '<meta name="ANVILATE_EXPORT_STATUS" content="UNVALIDATED">' in sheet
+    assert '<p class="watermark"' in sheet and ">UNVALIDATED EXPORT" in sheet
+    assert "is a placeholder" in sheet
     roles = {f.path: f.role for f in manifest.files}
     assert roles["bom.csv"] == "bom" and roles["buy.csv"] == "buy list"
     assert roles["step/linear-stage.step"] == "assembly step"
@@ -119,6 +124,9 @@ def test_a_released_product_is_marked_validated_and_each_part_is_named_by_number
     assert (
         "ANVILATE_EXPORT_STATUS=VALIDATED" in (tmp_path / "machined" / "100-1_B.step").read_text()
     )
+    sheet = (tmp_path / "machined" / "100-1_B.html").read_text()
+    assert '<meta name="ANVILATE_EXPORT_STATUS" content="VALIDATED">' in sheet
+    assert "UNVALIDATED" not in sheet and '<p class="watermark"' in sheet
 
 
 def test_a_file_edited_after_export_is_reported_by_path_and_both_hashes(tmp_path):

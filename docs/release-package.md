@@ -23,7 +23,10 @@ A **release** is refused, naming every blocking path, while any of these hold:
 | a part number is provisional | `stage/rail has the provisional part number PROV-…` |
 
 A **draft** is written at any time. Its manifest says `draft` and lists the blockers, and
-every STEP header carries the unvalidated watermark naming them.
+every file carries the unvalidated watermark naming them: in each STEP header, each profile
+DXF's header, the print plate's metadata, and at the top of each drawing sheet (and in its
+`<meta name="ANVILATE_EXPORT_STATUS">`). A release's files carry `VALIDATED` in the same
+places.
 
 ## What lands where
 

@@ -486,7 +486,7 @@ def _route_parts(
         written[definition.id] = path.relative_to(out).as_posix()
         files.append((written[definition.id], "part step"))
         if folder == "machined":
-            sheet = part_sheet(spec, screen_spec(spec)).html
+            sheet = part_sheet(spec, screen_spec(spec), authorization=authorization).html
             _write(out, f"machined/{stem}.html", sheet, files, "part drawing")
     if plate:
         _write(out, "print/plate.3mf", render_plate_3mf(objects=plate, authorization=authorization),

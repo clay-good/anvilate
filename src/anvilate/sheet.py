@@ -26,8 +26,11 @@ class PartSheet:
     not_drawn: str | None
 
 
-def part_sheet(spec: Any, card: Scorecard) -> PartSheet:
+def part_sheet(spec: Any, card: Scorecard, *, authorization: Any = None) -> PartSheet:
     """The sheet for ``spec`` and the card it was screened to.
+
+    ``authorization``, when the sheet is exported, puts its watermark on the page: a
+    release package's draft says so on every drawing.
 
     The checks do not need the drawing, so a part that cannot be drawn still gets its sheet,
     saying why rather than leaving a gap where the drawing would be.
@@ -59,5 +62,7 @@ def part_sheet(spec: Any, card: Scorecard) -> PartSheet:
         unit_system=spec.units.value if spec.units else None,
         sections=tuple(ReportSection(entry=entry) for entry in card.entries),
     )
-    html = report.to_html(views=views, views_absent=absent, views_note=note)
+    html = report.to_html(
+        views=views, views_absent=absent, views_note=note, authorization=authorization
+    )
     return PartSheet(html=html, views=len(views), not_drawn=absent)

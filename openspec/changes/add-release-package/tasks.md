@@ -4,9 +4,9 @@ Depends on `add-product-structure`, `add-purchased-components`, `add-product-scr
 
 ## 1. Gate
 
-- [ ] 1.1 Release refusal naming every blocking path (failing card, placeholder,
+- [x] 1.1 Release refusal naming every blocking path (failing card, placeholder,
       unsourced, provisional number); draft marking in all file metadata and drawings
-      (the refusal and the STEP and manifest marking are built; drawings are not)
+      (part drawing sheets carry the watermark; assembly drawings take it in 5.1)
 
 ## 2. STEP
 
