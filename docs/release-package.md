@@ -41,6 +41,7 @@ places.
 | `step/<part number>_<revision>.step` | any other part, watermarked | CAD, the shop its process names |
 | `step/<product>.step` | the assembly, one named product per item, each in a color of its own, and each occurrence named by its product and its path (`R-15 rail @ rail[1]`), and each product's volume, surface area and centroid as geometric validation properties a CAD import can check itself against | CAD |
 | `drawings/<part number>_<revision>.svg` | each product's and sub-product's assembly drawing: four views, a balloon on each find number of that level's BOM, the parts list, the part number and revision, and UNVALIDATED on a draft; a sub-product is one balloon on its parent's sheet | review, the shop floor |
+| `drawings/package.pdf` | every assembly drawing on its own landscape page, as vectors, with the export watermark in the file's properties | printing, review |
 | `parameters/<part number>.csv` | each item's layout parameters, one column per variant | a native CAD design table |
 | `manifest.json` | the product, its revision, release or draft, the card's verdict, the blockers, and every file with its role and SHA-256 | `anvilate verify` |
 
@@ -73,6 +74,6 @@ export_package(product, "out", release=False, profiles=[erp])     # adds bom-erp
 `level: dotted` writes `1.2.1`, the find numbers down the tree. A profile naming a field the
 BOM does not carry is refused, naming it.
 
-Not yet built: exploded assembly views and the PDF package, external-reference assemblies,
+Not yet built: exploded assembly views, part sheets in the PDF package, external-reference assemblies,
 user-defined attributes in the STEP (the bundled kernel's writer has no metadata mode), and
 the CAD import matrix.

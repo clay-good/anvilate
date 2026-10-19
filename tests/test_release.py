@@ -173,7 +173,8 @@ def test_the_docs_page_names_every_file_the_package_writes(tmp_path):
               "machined/<part number>_<revision>.step", ".html",
               "laser/<part number>_<revision>.dxf", "laser/cut-list.csv", "print/plate.3mf",
               "step/<part number>_<revision>.step", "step/<product>.step",
-              "parameters/<part number>.csv", "drawings/<part number>_<revision>.svg"}  # fmt: skip
+              "parameters/<part number>.csv", "drawings/<part number>_<revision>.svg",
+              "drawings/package.pdf"}  # fmt: skip
     assert named == shapes
     written = {f.path for f in manifest.files} | {"manifest.json"}
     assert {"bom.csv", "bom.xlsx", "buy.csv", "manifest.json"} <= written
@@ -350,3 +351,26 @@ def test_each_product_node_has_a_drawing_whose_balloons_are_the_boms_find_number
         "2",
         "3",
     }
+
+
+def test_the_drawings_are_gathered_into_one_pdf_marked_like_the_package(tmp_path):
+    """release-package 5.2: every assembly drawing on its own page of one PDF, its
+    properties carrying the export watermark."""
+    from pdfminer.high_level import extract_pages
+    from pdfminer.pdfdocument import PDFDocument
+    from pdfminer.pdfparser import PDFParser
+
+    stage, drive = _drives()
+    manifest = export_package(stage, tmp_path, release=False, library={"drive": drive})
+    roles = {f.path: f.role for f in manifest.files}
+    assert roles["drawings/package.pdf"] == "drawing package"
+    pdf = tmp_path / "drawings" / "package.pdf"
+    sheets = [p for p, role in roles.items() if role == "assembly drawing"]
+    assert sum(1 for _ in extract_pages(str(pdf))) == len(sheets) == 2
+    with pdf.open("rb") as handle:
+        (info,) = PDFDocument(PDFParser(handle)).info
+    assert info["ANVILATE_EXPORT_STATUS"] == b"UNVALIDATED"
+    again = export_package(stage, tmp_path / "again", release=False, library={"drive": drive})
+    assert {f.path: f.sha256 for f in again.files}["drawings/package.pdf"] == {
+        f.path: f.sha256 for f in manifest.files
+    }["drawings/package.pdf"]

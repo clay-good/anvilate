@@ -522,13 +522,17 @@ def _assembly_drawings(
     parts list, and the node's part number and revision.
 
     A sub-product is one balloon on its parent's drawing and is detailed on its own sheet.
-    A draft's drawings say it is unvalidated, as its other files do.
+    A draft's drawings say it is unvalidated, as its other files do. Every sheet is also
+    gathered, in tree order, into ``drawings/package.pdf``, whose properties carry the
+    export watermark.
     """
+    from .export.svg_pdf import svgs_to_pdf
     from .projection import render_assembly
 
     status = (["VALIDATED"] if authorization.validated
               else ["UNVALIDATED: a draft, not a release"])  # fmt: skip
     drawn: set[str] = set()
+    sheets: list[bytes] = []
     for node in tree.walk():
         # One sheet per product, however often it is placed: the first occurrence draws it.
         if node.kind != "product" or not node.children or node.definition in drawn:
@@ -564,6 +568,11 @@ def _assembly_drawings(
         )
         name = f"drawings/{_safe(node.part_number)}_{_safe(node.revision or '-')}.svg"
         _write(out, name, svg, files, "assembly drawing")
+        sheets.append(svg)
+    if sheets:
+        package = svgs_to_pdf(sheets, title=f"{tree.part_number} {tree.description}",
+                              metadata=authorization.metadata())  # fmt: skip
+        _write(out, "drawings/package.pdf", package, files, "drawing package")
 
 
 def _bom_rows(
