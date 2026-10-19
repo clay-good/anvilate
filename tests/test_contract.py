@@ -3421,6 +3421,7 @@ _PAGES_WHOSE_NUMBERS_ARE_EXTERNAL = frozenset(
         "valid-is-not-correct.md",  # an arXiv identifier and that paper's own figures
         "research/2026-07-27-capability-research.md",  # other projects' published figures
         "research/2026-07-27-capability-research-wave-2.md",  # likewise
+        "research/2026-10-19-capability-research-wave-3.md",  # likewise
     }
 )
 

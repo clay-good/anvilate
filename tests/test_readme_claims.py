@@ -355,6 +355,7 @@ _PAGES_THE_README_DOES_NOT_INDEX = frozenset(
         "research/2026-07-27-capability-research-wave-2.md",
         "research/2026-10-17-multi-part-products.md",
         "research/2026-10-17-industry-depth.md",
+        "research/2026-10-19-capability-research-wave-3.md",
         # The index itself. The README links it, and it links everything else; requiring it
         # to be reachable by the same rule as a content page would be circular.
         "README.md",
