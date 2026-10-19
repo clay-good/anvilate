@@ -578,7 +578,8 @@ def render_assembly(
 ) -> tuple[bytes, int]:
     """A combination on one image: four views, each body in its own tone, and a parts list.
 
-    ``bodies`` are ``(label, solid, is_envelope)`` in the order they are numbered.
+    ``bodies`` are ``(label, solid, is_envelope)`` in the order they are numbered; bodies
+    sharing a label share a tone.
     ``marks`` put a numbered balloon on a body: ``(number, index into bodies)``.
     ``parts_list`` are the rows printed under the views, one per line of the bill of
     materials, so the numbers in the picture can be read off beside it.
@@ -590,14 +591,16 @@ def render_assembly(
     shape = Compound(children=[solid for _label, solid, _envelope in bodies])
     tags: dict[str, list[Any]] = {}
     palettes: dict[str, tuple[str, str, str]] = {}
-    designed = 0
-    for index, (_label, solid, envelope) in enumerate(bodies):
+    # One tone per label: a product's item placed four times is one item, balloon and all.
+    tones: dict[str, tuple[str, str, str]] = {}
+    for index, (label, solid, envelope) in enumerate(bodies):
         tags[str(index)] = list(solid.faces())
         if envelope:
             palettes[str(index)] = ENVELOPE_PALETTE
         else:
-            palettes[str(index)] = ASSEMBLY_PALETTES[designed % len(ASSEMBLY_PALETTES)]
-            designed += 1
+            if label not in tones:
+                tones[label] = ASSEMBLY_PALETTES[len(tones) % len(ASSEMBLY_PALETTES)]
+            palettes[str(index)] = tones[label]
     balloons = [(label, str(index)) for label, index in marks]
     views_px = max(64, round(width_px * 0.75))
     header = max(40.0, views_px * 0.12)

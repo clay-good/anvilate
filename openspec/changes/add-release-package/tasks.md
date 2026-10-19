@@ -35,6 +35,7 @@ Depends on `add-product-structure`, `add-purchased-components`, `add-product-scr
 ## 5. Drawings and manifest
 
 - [ ] 5.1 Assembly drawing per product node: views, exploded view, balloons, parts list
+      (views, balloons by BOM find number, parts list and title are built; exploded is not)
 - [ ] 5.2 One PDF package
 - [x] 5.3 Manifest with hashes; `anvilate verify` reports altered files
 - [x] 5.4 A docs page for the release package: what lands where and which tool reads it

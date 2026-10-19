@@ -38,6 +38,7 @@ from ._models import EMPTY_MAP, FrozenMap, Named, StatableModel, each_one
 from .product import (
     Product,
     ProductNode,
+    _placed_leaves,
     load_product,
     place_product,
     product_tree,
@@ -253,6 +254,8 @@ def export_package(
         chosen += [(f"{product.name}-{v.name}", resolve_variant(product, v.name))
                    for v in product.variants]  # fmt: skip
     step_files, unrouted = _route_parts(product, shelf, tree, out, authorization, files)
+    leaves = _placed_leaves(product, shelf, None, root)[0]
+    _assembly_drawings(tree, leaves, out, authorization, files)
     rows, dotted = _bom_rows(product, shelf, tree, placed, step_files)
     _write(out, "bom.csv", _csv(BOM_COLUMNS, rows), files, "bom")
     _write(out, "bom.xlsx", _xlsx(rows), files, "bom")
@@ -496,6 +499,73 @@ def _route_parts(
     return written, unrouted
 
 
+def _found(node: ProductNode) -> list[tuple[int, list[ProductNode]]]:
+    """Each distinct item under ``node`` with its find number, in BOM order.
+
+    One numbering, read by the BOM and by the assembly drawing's balloons, so the two cannot
+    disagree about what a number means.
+    """
+    grouped: dict[str, list[ProductNode]] = {}
+    for child in node.children:
+        grouped.setdefault(child.definition, []).append(child)
+    return list(enumerate(grouped.values(), start=1))
+
+
+def _assembly_drawings(
+    tree: ProductNode,
+    leaves: Sequence[Any],
+    out: Path,
+    authorization: Any,
+    files: list[tuple[str, str]],
+) -> None:
+    """One assembly drawing per product node: four views, a balloon per find number, the
+    parts list, and the node's part number and revision.
+
+    A sub-product is one balloon on its parent's drawing and is detailed on its own sheet.
+    A draft's drawings say it is unvalidated, as its other files do.
+    """
+    from .projection import render_assembly
+
+    status = (["VALIDATED"] if authorization.validated
+              else ["UNVALIDATED: a draft, not a release"])  # fmt: skip
+    drawn: set[str] = set()
+    for node in tree.walk():
+        # One sheet per product, however often it is placed: the first occurrence draws it.
+        if node.kind != "product" or not node.children or node.definition in drawn:
+            continue
+        drawn.add(node.definition)
+        bodies: list[tuple[str, Any, bool]] = []
+        marks: list[tuple[str, int]] = []
+        rows: list[str] = []
+        for find, children in _found(node):
+            first_body = len(bodies)
+            for child in children:
+                bodies += [
+                    (str(find), leaf.shape, bool(leaf.placeholder))
+                    for leaf in leaves
+                    if leaf.kind != "reference"
+                    and (leaf.path == child.path or leaf.path.startswith(child.path + "/"))
+                ]
+            if len(bodies) > first_body:
+                marks.append((str(find), first_body))
+            first = children[0]
+            rows.append(f"{find}  {first.part_number}  {first.description}  x{len(children)}")
+        if not bodies:
+            continue
+        described = (node.description if len(node.description) <= 48
+                     else node.description[:47].rstrip() + "…")  # fmt: skip
+        svg, _height = render_assembly(
+            bodies,
+            name=f"{node.part_number} revision {node.revision or '-'}",
+            lines=[described, *status],
+            parts_list=rows,
+            marks=marks,
+            width_px=1100,
+        )
+        name = f"drawings/{_safe(node.part_number)}_{_safe(node.revision or '-')}.svg"
+        _write(out, name, svg, files, "assembly drawing")
+
+
 def _bom_rows(
     product: Product,
     shelf: Mapping[str, Product],
@@ -514,11 +584,9 @@ def _bom_rows(
     dotted: list[str] = []
 
     def walk(node: ProductNode, level: int, prefix: str) -> None:
-        grouped: dict[str, list[ProductNode]] = {}
-        for child in node.children:
-            grouped.setdefault(child.definition, []).append(child)
-        for find, (definition_id, children) in enumerate(grouped.items(), start=1):
+        for find, children in _found(node):
             first = children[0]
+            definition_id = first.definition
             definition = owners[definition_id]
             spec = dict(definition.spec) if definition.spec is not None else {}
             component = definition.component

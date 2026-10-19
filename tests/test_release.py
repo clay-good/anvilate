@@ -73,7 +73,7 @@ def test_a_parameter_table_has_a_column_per_variant(tmp_path):
                      "linear-stage-long": "520"}]  # fmt: skip
 
 
-def test_a_purchased_motor_is_summed_across_every_drive(tmp_path):
+def _drives():
     motor = _record("motor", {"rated_torque": {"magnitude": 1.26, "unit": "N*m"}})
     bought = {"id": "motor", "identity": {"description": "motor", "source": "buy",
                                           "part_number": "M-1"},
@@ -96,6 +96,11 @@ def test_a_purchased_motor_is_summed_across_every_drive(tmp_path):
         "ground": "base",
         "mates": [*_seat("drive", "base"), *_seat("spare", "base")],
     })  # fmt: skip
+    return stage, drive
+
+
+def test_a_purchased_motor_is_summed_across_every_drive(tmp_path):
+    stage, drive = _drives()
     export_package(stage, tmp_path, release=False, library={"drive": drive})
     (line,) = _rows(tmp_path / "buy.csv")
     assert line["designation"] == "Acme motor-1" and line["quantity"] == "5"
@@ -168,11 +173,12 @@ def test_the_docs_page_names_every_file_the_package_writes(tmp_path):
               "machined/<part number>_<revision>.step", ".html",
               "laser/<part number>_<revision>.dxf", "laser/cut-list.csv", "print/plate.3mf",
               "step/<part number>_<revision>.step", "step/<product>.step",
-              "parameters/<part number>.csv"}  # fmt: skip
+              "parameters/<part number>.csv", "drawings/<part number>_<revision>.svg"}  # fmt: skip
     assert named == shapes
     written = {f.path for f in manifest.files} | {"manifest.json"}
     assert {"bom.csv", "bom.xlsx", "buy.csv", "manifest.json"} <= written
     assert any(p.startswith("parameters/") for p in written)
+    assert any(p.startswith("drawings/") and p.endswith(".svg") for p in written)
 
 
 def _pair(hole_x: float = 0.0, revision: str = "B"):
@@ -318,3 +324,29 @@ def test_a_profile_naming_a_field_the_bom_does_not_carry_is_refused():
 
     with pytest.raises(ValueError, match="asks for 'colour', which the BOM does not carry"):
         ColumnProfile.model_validate({"name": "x", "columns": [{"field": "colour", "header": "C"}]})
+
+
+def test_each_product_node_has_a_drawing_whose_balloons_are_the_boms_find_numbers(tmp_path):
+    """release-package 5.1: a drawing per product and sub-product, a sub-product one balloon
+    on its parent's sheet, and every balloon a find number of the BOM at that level."""
+    import re
+
+    stage, drive = _drives()
+    manifest = export_package(stage, tmp_path, release=False, library={"drive": drive})
+    drawings = sorted(f.path for f in manifest.files if f.role == "assembly drawing")
+    assert len(drawings) == 2  # the stage and its drive
+    rows = _rows(tmp_path / "bom.csv")
+    by_parent: dict[str, set[str]] = {}
+    for row in rows:
+        by_parent.setdefault(row["parent part number"], set()).add(row["find number"])
+    for path in drawings:
+        svg = (tmp_path / path).read_text(encoding="utf-8")
+        number = path.removeprefix("drawings/").rsplit("_", 1)[0]
+        balloons = set(re.findall(r'data-balloon="([^"]+)"', svg))
+        assert balloons == by_parent[number], path
+    top = next(p for p in drawings if p.startswith(f"drawings/{rows[0]['parent part number']}_"))
+    assert set(re.findall(r'data-balloon="([^"]+)"', (tmp_path / top).read_text())) == {
+        "1",
+        "2",
+        "3",
+    }
