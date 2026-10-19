@@ -66,6 +66,14 @@ a field. Both artifacts come out of the models themselves, in serialization mode
 published contract is what Anvilate *writes*, and a schema built from the input side would
 describe the coercions pydantic accepts rather than the document a consumer receives.
 
+A model that contains itself (the node card's `children`) is published with the model at
+the root, referring to itself as `#`. pydantic's own form, a root `$ref` into a recursive
+`$defs` entry, is valid 2020-12, but Ajv, which the TypeScript MCP SDK compiles every
+`outputSchema` with, overflowed its stack on it, so `tools/list` failed for those clients.
+node-card 1.2.1 has the fixed shape and accepts the same documents as 1.2.0.
+`test_no_embedded_schema_roots_on_a_recursive_def` keeps the old shape out of every tool
+definition.
+
 ## The gate has two halves, and the second one is the point
 
 Drift is the obvious failure: a model changes, the artifact does not, and the schema

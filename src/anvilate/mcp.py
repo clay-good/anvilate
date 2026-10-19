@@ -223,7 +223,7 @@ _CONTEXT_INVENTORY_REF = "urn:anvilate:schema:context-inventory:1.0.0"
 _CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.2.0"
 _COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
 _PRODUCT_SUMMARY_REF = "urn:anvilate:schema:product-summary:1.2.0"
-_NODE_CARD_REF = "urn:anvilate:schema:node-card:1.2.0"
+_NODE_CARD_REF = "urn:anvilate:schema:node-card:1.2.1"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A

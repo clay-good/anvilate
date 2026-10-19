@@ -267,53 +267,6 @@
       "title": "Need",
       "type": "object"
     },
-    "NodeCard": {
-      "description": "One node's card: the checks it owns, and its children's cards.\n\nA part owns its own card's checks, a placeholder owns one not-evaluated entry saying it\nstands in for an undetailed item, and a product owns the interference between its\nchildren. ``status`` is the worst of its own card and its children's verdicts, with\nnot evaluated never counted as a pass. A finding is held once, by the node that owns\nit; an ancestor fails by reference to it (:meth:`findings` lists them with their\nowners).",
-      "properties": {
-        "children": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/NodeCard"
-          },
-          "title": "Children",
-          "type": "array"
-        },
-        "entries": {
-          "items": {
-            "$ref": "#/$defs/ScorecardEntry"
-          },
-          "title": "Entries",
-          "type": "array"
-        },
-        "kind": {
-          "enum": [
-            "part",
-            "product",
-            "placeholder",
-            "component",
-            "reference"
-          ],
-          "title": "Kind",
-          "type": "string"
-        },
-        "path": {
-          "title": "Path",
-          "type": "string"
-        },
-        "status": {
-          "$ref": "#/$defs/CheckStatus",
-          "readOnly": true
-        }
-      },
-      "required": [
-        "path",
-        "kind",
-        "entries",
-        "status"
-      ],
-      "title": "NodeCard",
-      "type": "object"
-    },
     "Quantity": {
       "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
       "properties": {
@@ -688,10 +641,52 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:node-card:1.2.0",
-  "$ref": "#/$defs/NodeCard",
+  "$id": "urn:anvilate:schema:node-card:1.2.1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate node card: one node of a placed product, the checks it owns and its children's cards, with its status the worst of them; not evaluated is never a pass. Generated from anvilate.product.NodeCard.",
-  "title": "node-card",
-  "x-anvilate-version": "1.2.0"
+  "properties": {
+    "children": {
+      "default": [],
+      "items": {
+        "$ref": "#"
+      },
+      "title": "Children",
+      "type": "array"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/ScorecardEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "kind": {
+      "enum": [
+        "part",
+        "product",
+        "placeholder",
+        "component",
+        "reference"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "path": {
+      "title": "Path",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/CheckStatus",
+      "readOnly": true
+    }
+  },
+  "required": [
+    "path",
+    "kind",
+    "entries",
+    "status"
+  ],
+  "title": "NodeCard",
+  "type": "object",
+  "x-anvilate-version": "1.2.1"
 }

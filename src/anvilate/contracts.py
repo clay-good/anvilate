@@ -198,7 +198,7 @@ COMBINATION_SUMMARY_SCHEMA_VERSION = "1.0.0"
 PRODUCT_SUMMARY_SCHEMA_VERSION = "1.2.0"
 # The product document itself: its version is the one ``anvilate_product`` states.
 PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.12.0"
-NODE_CARD_SCHEMA_VERSION = "1.2.0"
+NODE_CARD_SCHEMA_VERSION = "1.2.1"
 
 
 def _artifact(
@@ -217,7 +217,7 @@ def _artifact(
     a *user* writes — a pack element's `element_params` — is published in validation mode,
     because its reader is someone checking their own input against it.
     """
-    schema = model.model_json_schema(mode=mode, ref_template="#/$defs/{model}")
+    schema = _root_inlined(model.model_json_schema(mode=mode, ref_template="#/$defs/{model}"))
     return {
         "$schema": JSON_SCHEMA_DIALECT,
         "$id": f"{_BASE_ID}:{name.replace('/', ':')}:{version}",
@@ -231,6 +231,32 @@ def _artifact(
         "x-anvilate-version": version,
         **{key: value for key, value in schema.items() if key != "description"},
     }
+
+
+def _root_inlined(schema: dict[str, Any]) -> dict[str, Any]:
+    """A recursive model's schema with the model at the root, referring to itself as ``#``.
+
+    pydantic writes a self-referencing model as ``{"$ref": "#/$defs/NodeCard"}`` with the
+    recursion inside ``$defs``. Valid 2020-12, and Ajv — the validator the TypeScript MCP SDK
+    compiles every ``outputSchema`` with — overflows its stack on it once the schema is
+    embedded in a tool definition under its ``$id``, so ``tools/list`` itself threw for every
+    such client. The same model at the root, recursing through ``#``, validates the same
+    instances and compiles.
+    """
+    ref = schema.get("$ref")
+    if not isinstance(ref, str) or not ref.startswith("#/$defs/") or len(schema) != 2:
+        return schema
+    defs = dict(schema["$defs"])
+    root = defs.pop(ref.removeprefix("#/$defs/"))
+
+    def pointed(node: Any) -> Any:
+        if isinstance(node, dict):
+            return {k: "#" if k == "$ref" and v == ref else pointed(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [pointed(value) for value in node]
+        return node
+
+    return pointed({**root, **({"$defs": defs} if defs else {})})
 
 
 def spec_json_schema() -> dict[str, Any]:
@@ -909,6 +935,8 @@ def schema_issues(schema: dict[str, Any]) -> list[str]:
     refs: list[str] = []
     _collect_refs(schema, refs)
     for ref in sorted(set(refs)):
+        if ref == "#":
+            continue  # the document itself: a recursive model at the root (`_root_inlined`)
         if not ref.startswith("#/$defs/"):
             issues.append(f"the schema references {ref!r}, which is not an internal $def")
         elif ref.removeprefix("#/$defs/") not in definitions:

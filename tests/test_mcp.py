@@ -2869,6 +2869,69 @@ def test_every_tool_schema_compiles_offline_from_its_own_definition():
                 resolver.lookup(ref)  # raises Unresolvable for a reference nothing embeds
 
 
+def _recursive_defs(schema: dict) -> list[str]:
+    """The ``$defs`` entries of ``schema`` that reach themselves through ``#/$defs/`` refs."""
+    import json
+    import re
+
+    defs = schema.get("$defs", {})
+    edges = {
+        name: set(re.findall(r'"\$ref": "#/\$defs/([^"]+)"', json.dumps(body)))
+        for name, body in defs.items()
+    }
+
+    def reaches(start: str, goal: str, seen: set[str]) -> bool:
+        for nxt in edges.get(start, ()):
+            if nxt == goal or (nxt not in seen and reaches(nxt, goal, seen | {nxt})):
+                return True
+        return False
+
+    return sorted(name for name in edges if reaches(name, name, {name}))
+
+
+def test_no_embedded_schema_roots_on_a_recursive_def():
+    """The node card's ``children`` referred to ``#/$defs/NodeCard`` from inside that same
+    definition. Valid 2020-12 — and Ajv, which the TypeScript MCP SDK compiles every
+    ``outputSchema`` with during ``tools/list``, overflowed its stack on it once embedded
+    under its ``$id``: listing tools threw for every such client, and the weekly conformance
+    job went red (``Maximum call stack size exceeded``). Recursion goes through ``#``, the
+    model at the root (`contracts._root_inlined`)."""
+    from anvilate.mcp import wire_definitions
+
+    def resources(node):  # type: ignore[no-untyped-def]
+        if isinstance(node, dict):
+            if "$defs" in node:
+                yield node
+            for value in node.values():
+                yield from resources(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from resources(value)
+
+    for tool in wire_definitions():
+        for label in ("inputSchema", "outputSchema"):
+            for resource in resources(tool.get(label, {})):
+                # Recursion between `$defs` entries is fine (the design spec's budgets
+                # compile); a root that is only a `$ref` into a recursive entry is not.
+                root = str(resource.get("$ref", "")).removeprefix("#/$defs/")
+                assert root not in _recursive_defs(resource), (
+                    tool["name"],
+                    label,
+                    resource.get("$id"),
+                    root,
+                )
+
+
+def test_the_recursion_detector_sees_the_shape_that_broke_tools_list():
+    """The gate above against the released node card it was written for."""
+    broken = _released("node-card-1.2.0.json")
+    assert broken["$ref"] == "#/$defs/NodeCard"
+    assert _recursive_defs(broken) == ["NodeCard"]
+    fixed = _released("node-card-1.2.1.json")
+    assert "$ref" not in fixed and _recursive_defs(fixed) == []
+    assert fixed["properties"]["children"]["items"] == {"$ref": "#"}
+
+
 def test_no_published_identifier_is_a_location():
     """Every schema `$id` is a URN, and so is every `$ref` between published schemas."""
     import json
