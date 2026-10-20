@@ -351,8 +351,27 @@ def test_a_part_resting_on_a_reading_is_written_marked_unvalidated_over_mcp(tmp_
         and "element_params.diameter" in body["note"]
     )
     assert "UNVALIDATED" in Path(body["file"]["path"]).read_text(encoding="utf-8", errors="replace")
-    # Confirmed, the same part exports as validated and says nothing.
+    # Confirmed, the same part exports as validated and says nothing. Over MCP the document's
+    # confirmation counts only once the person's own channel recorded it
+    # (add-person-confirmation), so the person confirms it at a terminal first.
+    from anvilate.confirmation import (
+        ConfirmationChannel,
+        ConfirmationRecord,
+        PersonOnlyConfirmation,
+        draft_value_subject,
+        record_confirmation,
+    )
+
     document["sources"] = [_read("element_params.diameter", **_CONFIRMED)]
+    record_confirmation(
+        ConfirmationRecord(
+            confirms=PersonOnlyConfirmation.DRAFT_VALUE,
+            subject=draft_value_subject(_spec(document), "element_params.diameter"),
+            person=_CONFIRMED["confirmed_by"],
+            on=_CONFIRMED["confirmed_on"],
+            via=ConfirmationChannel.TERMINAL,
+        )
+    )
     built = call("build_part", {"spec": document})["result"]["structuredContent"]["subject"]
     body = call("export_artifact", {"subject": built, "format": "step"})["result"][
         "structuredContent"
