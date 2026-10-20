@@ -233,6 +233,15 @@ A definition gains `component`, a purchased component's record, and `demands`, w
 product asks of it; a node's `kind` may be `component`. Product summary 1.1.0, node card
 1.1.0 and CLI output 1.64.0 move with it. A 1.0.0 product document reads unchanged.
 
+### Design Spec 1.22.0: a confirmation says how it arrived
+
+A source gains `confirmed_via` (`elicitation`, `interactive_terminal` or
+`confirmation_file`) and `confirmed_through`, the MCP client and version that relayed an
+elicitation, required with that channel and refused with any other. A source confirmed in
+the document with neither is the person's own file at the shell, and over MCP it is refused
+unless a recorded confirmation backs it. Evidence bundle 1.30.0 and CLI output 1.67.0 move
+with the spec they carry. See [person confirmation](person-confirmation.md).
+
 ### Design Spec 1.21.0: a part declares its duty cycle
 
 `duty_cycle` holds a `life` (a time, a distance or a number of cycles, with its source),

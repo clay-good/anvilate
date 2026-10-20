@@ -39,7 +39,7 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `export_artifact` | pipeline | `subject`, `format` | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 676 characters | 2 s | export, combination |
 | `build_combination` | combination | `combination`, `library` (optional), `node` (optional) | `combination`, `scorecard`, `subject`, `product`, `node` | yes | 939 characters | 15 s | combination |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
-| `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 791 characters | 10 s | context |
+| `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 854 characters | 10 s | context |
 | `describe_part` | catalog lookup | `element_type` (optional) | `catalog` | no | 378 characters | 1 s | check, draw, export |
 
 ## The journeys
@@ -63,6 +63,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | `build` | build an audited Design Spec geometry pattern as STEP or 3MF | `--ap214`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |
 | `check` | compile a spec document and screen it, printing the scorecard | `--format`, `--module`, `--node`, `--show-work` |
 | `combine` | place several parts by the features they share, and check where they meet | `--exploded`, `--force`, `--output`, `--picture`, `--unvalidated` |
+| `confirm` | confirm, at this terminal, values your agent read off a picture or a PDF | none |
 | `diff` | compare two spec documents and the verdicts they screen to | `--format`, `--module` |
 | `doctor` | check which Anvilate runtime capabilities are ready | `--format` |
 | `export` | write a downstream artifact from a screened spec | `--ap214`, `--artifact`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |

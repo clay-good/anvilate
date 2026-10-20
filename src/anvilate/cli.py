@@ -6,8 +6,10 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Eleven of the eleven are backed today**; a twelfth command, ``verify``, comes from the
-attestation capability. ``parts`` lists what a spec can declare, ``read`` measures a CAD
+**Twelve of the twelve are backed today**; a thirteenth command, ``verify``, comes from
+the attestation capability. ``confirm`` is where a person confirms, at a terminal, the
+values an agent read off a picture. ``parts`` lists what a spec can declare,
+``read`` measures a CAD
 file or lists a folder of them, ``combine`` places several parts by the features they
 share, ``doctor`` reports which optional runtimes are present,
 ``fetch`` is where a user consents to downloading a dataset Anvilate may not ship, and
@@ -248,6 +250,7 @@ _COMMAND_EXAMPLES = {
     "view": "anvilate view part.yaml",
     "doctor": "anvilate doctor --format json",
     "fetch": "anvilate fetch aisc-shapes --consent",
+    "confirm": "anvilate confirm sha256:" + "0" * 64,
     "parts": "anvilate parts mounting_plate",
     "read": "anvilate read drawings/plate.dxf --unit mm",
     "combine": "anvilate combine bracket_on_plate.combination.yaml --output bracket.step",
@@ -695,6 +698,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render the result"
     )
 
+    confirm = commands.add_parser(
+        "confirm",
+        help="confirm, at this terminal, values your agent read off a picture or a PDF",
+        description="Show each value an agent read from a picture, a scan or a PDF in the "
+        "screening or build the handle names, and record the ones you confirm, with your name "
+        "and today's date, as typed at an interactive terminal. The MCP server reads the record "
+        "on its next call. It runs only at an interactive terminal, because a confirmation is "
+        "the person's and not the agent's. Exit 0 means every listed value was confirmed; 2 "
+        "means some remain drafts; 3 means no terminal, or a handle the store does not hold.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['confirm']}",
+    )
+    confirm.add_argument(
+        "subject",
+        help="the subject handle a run_validation or build_part result returned",
+    )
+
     build = commands.add_parser(
         "build",
         help="build an audited Design Spec geometry pattern as STEP or 3MF",
@@ -866,6 +885,8 @@ def run(
             code = _combine(args, out=command_out, err=command_err)
         elif args.command == "fetch":
             code = _fetch(args, out=command_out, err=command_err)
+        elif args.command == "confirm":
+            code = _confirm(args, out=command_out, err=command_err)
         elif args.command == "view":
             code = _view(args, out=command_out, err=command_err)
         else:
@@ -935,6 +956,7 @@ def _requested_command(arguments: list[str]) -> str:
         "parts",
         "read",
         "view",
+        "confirm",
         *_UNBUILT,
     }
     return next((argument for argument in arguments if argument in commands), "anvilate")
@@ -1416,6 +1438,91 @@ def _dataset_recipe(name: str):
 
     module, attribute = _DATASETS[name]
     return getattr(import_module(module), attribute)
+
+
+def _at_a_terminal() -> bool:
+    """Whether a person could be typing: both ends of this process are a terminal."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _confirm(args: argparse.Namespace, *, out, err) -> int:
+    """``confirm``: the terminal channel for a person-only confirmation of agent readings.
+
+    The handle names a screening or a build the MCP server published, so the person sees the
+    exact values the agent sent, read from the subject store. Each confirmed value is recorded
+    as typed at an interactive terminal, keyed by the value and the file it was read from, so
+    the server's next call finds it. The command refuses to run without a terminal: an agent
+    running it through a pipe is the case this channel exists to tell apart.
+    """
+    from datetime import date
+
+    from .confirmation import (
+        ConfirmationChannel,
+        ConfirmationRecord,
+        PersonOnlyConfirmation,
+        _value_in,
+        apply_confirmations,
+        draft_value_subject,
+        record_confirmation,
+    )
+    from .spec import parse_spec
+    from .store import UnknownSubject, subject_store
+
+    if not _at_a_terminal():
+        print(
+            "anvilate confirm: this runs only at an interactive terminal, because a "
+            "confirmation is the person's. Run it yourself in a terminal, or write a "
+            "confirmation file in the MCP server's output folder",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+    try:
+        record = subject_store().resolve(args.subject)
+        spec = parse_spec(record["spec"] if "spec" in record else record)
+    except (UnknownSubject, ValueError, TypeError, KeyError) as unknown:
+        print(f"anvilate confirm: {unknown.args[0] if unknown.args else unknown}", file=err)
+        return EXIT_BAD_REQUEST
+    spec = apply_confirmations(spec)
+    waiting = [s for s in spec.sources if s.origin == "agent_read" and s.confirmed_by is None]
+    if not waiting:
+        print(f"{spec.name}: no value read by an agent is waiting for a confirmation", file=out)
+        return EXIT_OK
+    document = spec.model_dump(mode="json")
+    print(
+        f"{spec.name}: {len(waiting)} value(s) an agent read from a file. Confirm a value only "
+        "if you have checked it against the file yourself.",
+        file=out,
+    )
+    name = input("Your name: ").strip()
+    if not name:
+        print("anvilate confirm: a confirmation names the person; nothing recorded", file=err)
+        return EXIT_NOT_EVALUATED
+    confirmed = 0
+    for source in waiting:
+        where = f", {source.locator}" if source.locator else ""
+        value = _value_in(document, source.field)
+        shown = (
+            f"{value['magnitude']} {value['unit']}"
+            if isinstance(value, dict) and {"magnitude", "unit"} <= set(value)
+            else value
+        )
+        print(f"  {source.field} = {shown}, read from {source.file}{where}", file=out)
+        if input("  Is this value correct? Type yes to confirm: ").strip().lower() != "yes":
+            print("  left as a draft", file=out)
+            continue
+        record_confirmation(
+            ConfirmationRecord(
+                confirms=PersonOnlyConfirmation.DRAFT_VALUE,
+                subject=draft_value_subject(spec, source.field),
+                person=name[:200],
+                on=date.today(),
+                via=ConfirmationChannel.TERMINAL,
+            )
+        )
+        confirmed += 1
+        print(f"  confirmed by {name[:200]} at this terminal", file=out)
+    print(f"{confirmed} of {len(waiting)} confirmed", file=out)
+    return EXIT_OK if confirmed == len(waiting) else EXIT_NOT_EVALUATED
 
 
 def _fetch(args: argparse.Namespace, *, out, err) -> int:

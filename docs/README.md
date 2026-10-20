@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Seventy-five pages, arranged by what you are trying to do. The [README](../README.md) is the
+Seventy-six pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -97,6 +97,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Publishing the MCP server](mcp-registry-release.md) | Version, publish, authenticate, and retry the official registry release. |
 | [The agent skill](agent-skill.md) | What correct use looks like, bound to the library by CI. |
 | [The published contracts](published-contracts.md) | Spec IR and scorecard as JSON Schema 2020-12. |
+| [Person confirmation](person-confirmation.md) | The decisions only the engineer may make, how the agent's client asks them, and what each channel can and cannot prove. |
 | [Agent-driving evals](agent-driving-evals.md) | Whether a given MCP agent can drive this, measured. |
 | [A valid spec can still be the wrong spec](valid-is-not-correct.md) | Why schema validity is not correctness. |
 

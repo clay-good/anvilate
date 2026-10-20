@@ -16,6 +16,7 @@ has not shipped exits 4 naming that gap.
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--limit`, `--fit`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by`; kept one release as the same thing: `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
 | `doctor` | no arguments | `--format` | nothing you can change is wrong (a capability this release does not build is listed as not shipped) |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
+| `confirm` | the subject handle an MCP result returned | none | every value an agent read was confirmed at this interactive terminal |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
 | `combine` | a combination document, or a product document | `--output`, `--picture`, `--exploded`, `--unvalidated`, `--force` | the combination's or product's card passes |
 | `read` | a CAD file, or a folder | `--against`, `--material`, `--unit` | the file was measured, or the folder listed |
@@ -436,8 +437,8 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.66.0",
- "schema_version": "1.66.0", "command": "check", "status": "fail",
+{"schema": "urn:anvilate:schema:cli-output:1.67.0",
+ "schema_version": "1.67.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
             "scorecard": {"entries": ["..."]}}]}

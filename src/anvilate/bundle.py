@@ -725,10 +725,26 @@ class BundleSections(RevalidatedModel):
                 *self.citations_block(),
                 *self.carbon_block(),
                 *self.datasets_block(),
+                *self.confirmations_block(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
             ]
         )
+
+    def confirmations_block(self) -> tuple[str, ...]:
+        """How each agent reading the spec rests on was confirmed; nothing when there is none.
+
+        Each reading with its channel, and a line saying whether any confirmation is attested
+        to a person by the channel it came through. An answer relayed by an MCP client, a
+        file in the output folder and a confirmation written into the document are each
+        recorded as what they are, so a reviewer holding only this document can tell an
+        engineer at a terminal from a form somebody answered.
+        """
+        if self.spec is None:
+            return ()
+        from .confirmation import confirmations_disclosure
+
+        return confirmations_disclosure(self.spec)
 
     def datasets_block(self) -> tuple[str, ...]:
         """The bundled tables pinned by version and digest; nothing when none are recorded."""

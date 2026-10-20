@@ -73,6 +73,11 @@ _TASK_METADATA_NONDETERMINISM = {
         # (and every bundle citing it) uses that stored date, so no output varies by rerun.
         "date.today()",
     ),
+    # A form's requestState: a per-process sealing key and a short expiry, so a stale or
+    # forged answer is asked again. And the date a person answered or declined, recorded in
+    # the confirmation ledger as the date of their act. None reaches a bundle digest except
+    # through the spec's own confirmed_on, which is the person's date, as it is at the shell.
+    "mcp.py": ("os.urandom(32)", "time.time()", "date.today()"),
     "_mcp_tasks.py": (
         "datetime.now(UTC)",
         "secrets.token_hex(32)",

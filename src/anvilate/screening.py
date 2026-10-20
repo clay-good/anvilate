@@ -178,7 +178,9 @@ _NEEDS_A_CONFIRMATION = Need(
     declaration="sources[].confirmed_by",
     takes=(
         "the name of the person who checked each agent-read value against its source file, "
-        "with sources[].confirmed_on, the date they did"
+        "with sources[].confirmed_on, the date they did. Over MCP it arrives through the form "
+        "the client shows the person, `anvilate confirm` typed at a terminal, or a "
+        "confirmation file in the output folder, never from the agent"
     ),
     sources=(ValueSource.USER,),
 )
