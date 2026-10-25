@@ -1230,6 +1230,14 @@ class SourceReference(_Base):
     rests on it, and nothing exports as validated until ``confirmed_by`` names the person
     who checked it and ``confirmed_on`` the date. A confirmation is a person's act. It is
     never filled in by the agent that made the reading.
+
+    ``confirmed_via`` says how the confirmation reached Anvilate, because the channel is
+    what decides how much it attests: ``interactive_terminal`` is ``anvilate confirm`` typed
+    at a terminal, ``confirmation_file`` is a file in the output folder whose writer
+    Anvilate cannot see, and ``elicitation`` is a form the user's MCP client showed and
+    answered, named in ``confirmed_through``, which proves what the client relayed and not
+    who answered. Absent, the confirmation was written into the document itself, which is
+    the person's own file at the shell and is refused over MCP unless a record backs it.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -1241,6 +1249,8 @@ class SourceReference(_Base):
     locator: str | None = None
     confirmed_by: Named | None = None
     confirmed_on: date | None = None
+    confirmed_via: Literal["elicitation", "interactive_terminal", "confirmation_file"] | None = None
+    confirmed_through: Named | None = None
 
     @model_validator(mode="after")
     def _a_confirmation_names_a_person_and_a_date(self) -> SourceReference:
@@ -1250,6 +1260,27 @@ class SourceReference(_Base):
                 f"the source for '{self.field}' is confirmed without {missing}; a "
                 "confirmation names the person who checked the value and the date they did",
                 subject=f"sources[].{missing}",
+                source=_CONFIRMATION_SOURCE,
+            )
+        if self.confirmed_via is not None and self.confirmed_by is None:
+            raise _ir_refusal(
+                f"the source for '{self.field}' names a confirmation channel and no "
+                "confirmation; confirmed_via says how a confirmation arrived, so it comes "
+                "with confirmed_by and confirmed_on",
+                subject="sources[].confirmed_via",
+                source=_CONFIRMATION_SOURCE,
+            )
+        if (self.confirmed_via == "elicitation") != (self.confirmed_through is not None):
+            raise _ir_refusal(
+                f"the source for '{self.field}' "
+                + (
+                    "was answered through an elicitation and names no client; "
+                    "confirmed_through names the client and version that relayed it"
+                    if self.confirmed_via == "elicitation"
+                    else "names a client in confirmed_through without an elicitation; only "
+                    "an elicitation passes through a client"
+                ),
+                subject="sources[].confirmed_through",
                 source=_CONFIRMATION_SOURCE,
             )
         for part in self.field.split("."):
@@ -1270,13 +1301,21 @@ class SourceReference(_Base):
     def __str__(self) -> str:
         how = "measured from" if self.origin == "measured_from_file" else "read by an agent from"
         where = f", {self.locator}" if self.locator else ""
-        state = (
-            f"; confirmed by {self.confirmed_by} on {self.confirmed_on}"
-            if self.confirmed_by is not None
-            else ""
-            if self.origin == "measured_from_file"
-            else "; unconfirmed"
-        )
+        if self.confirmed_by is None:
+            state = "" if self.origin == "measured_from_file" else "; unconfirmed"
+        elif self.confirmed_via == "elicitation":
+            # The client relayed an answer; it cannot show who gave it, so neither can this.
+            state = (
+                f"; answered through {self.confirmed_through} on {self.confirmed_on}, "
+                f"naming {self.confirmed_by}"
+            )
+        else:
+            channel = {
+                "interactive_terminal": " at an interactive terminal",
+                "confirmation_file": " in a confirmation file",
+                None: "",
+            }[self.confirmed_via]
+            state = f"; confirmed by {self.confirmed_by} on {self.confirmed_on}{channel}"
         return f"{self.field}: {how} {self.file}{where}{state}"
 
 
@@ -1300,11 +1339,13 @@ class SourceReference(_Base):
 # 1.18.0 carbon, the embodied-carbon inputs and their budget. 1.19.0 changes no field:
 # the schema's identifier became a URN (urn:anvilate:schema:design-spec:1.19.0). 1.20.0 adds
 # sources, the file each value came from, and the origins measured_from_file and agent_read.
-# 1.21.0 adds duty_cycle, the life, events and S-N curve a fatigue screen reads. All
-# additive, which is what lets an older 1.x spec load unchanged — and it comes back saying
+# 1.21.0 adds duty_cycle, the life, events and S-N curve a fatigue screen reads. 1.22.0
+# adds a source's confirmed_via and confirmed_through, the channel a confirmation came
+# through and the client that relayed an elicitation. All additive, which is what lets an
+# older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.21.0"
+SCHEMA_VERSION = "1.22.0"
 
 
 class DesignSpec(_Base):
