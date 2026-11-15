@@ -519,3 +519,225 @@ def test_every_number_a_screening_declares_is_finite():
     for screening in cases:
         with pytest.raises(ValueError, match="not a number a document can state"):
             parse_product(_cart(screening))
+
+
+# --- A split that is a solve, not a guess ----------------------------------------------
+#
+# The load path refuses to divide a load among more supports than determine it, and that
+# refusal is right when nothing is declared. It is also where the work stops for every
+# real frame: four legs under a skid is four supports, and four is more than three. A
+# frame declared over the product's connections turns the guess into a solve.
+
+
+def _skid_frame(loads):
+    """A four-legged skid: two beams and two cross members on four legs."""
+    from anvilate.frame import (
+        Frame,
+        FrameMaterial,
+        FrameMember,
+        FrameNode,
+        FrameSection,
+        Freedom,
+        Support,
+    )
+    from anvilate.units import Quantity
+
+    q = Quantity.parse
+    section = FrameSection(
+        name="s",
+        area=q("5e-3 m**2"),
+        second_moment_y=q("10e-6 m**4"),
+        second_moment_z=q("100e-6 m**4"),
+        torsion_constant=q("1e-6 m**4"),
+        source="a declared section, for this case",
+    )
+    material = FrameMaterial(
+        name="steel",
+        elastic_modulus=q("200 GPa"),
+        shear_modulus=q("77 GPa"),
+        source="a declared elastic steel, for this case",
+    )
+
+    def node(name, x, y, z):
+        return FrameNode(name=name, x=q(f"{x} mm"), y=q(f"{y} mm"), z=q(f"{z} mm"))
+
+    def member(name, start, end):
+        return FrameMember(name=name, start=start, end=end, section=section, material=material)
+
+    nodes = (
+        node("a", 0, 0, 0),
+        node("b", 2000, 0, 0),
+        node("c", 0, 1000, 0),
+        node("d", 2000, 1000, 0),
+        node("fa", 0, 0, -500),
+        node("fb", 2000, 0, -500),
+        node("fc", 0, 1000, -500),
+        node("fd", 2000, 1000, -500),
+    )
+    members = (
+        member("beam1", "a", "b"),
+        member("beam2", "c", "d"),
+        member("cross1", "a", "c"),
+        member("cross2", "b", "d"),
+        member("leg_a", "fa", "a"),
+        member("leg_b", "fb", "b"),
+        member("leg_c", "fc", "c"),
+        member("leg_d", "fd", "d"),
+    )
+    return Frame(
+        name="skid",
+        nodes=nodes,
+        members=members,
+        supports=tuple(
+            Support(node=name, restrained=tuple(Freedom)) for name in ("fa", "fb", "fc", "fd")
+        ),
+        node_loads=loads,
+    )
+
+
+def _legs() -> dict[str, str]:
+    return {f"skid/leg_{k}": f"f{k}" for k in "abcd"}
+
+
+def test_a_four_legged_skid_divides_its_load_by_the_solve():
+    """Four equal corner loads divide evenly, which is the case statics could have had."""
+    from anvilate.frame import NodeLoad, solve_frame
+    from anvilate.product_screening import frame_split
+    from anvilate.units import Quantity
+
+    q = Quantity.parse
+    even = tuple(NodeLoad(node=n, fz=q("-10 kN")) for n in "abcd")
+    split = frame_split(body="skid/deck", solution=solve_frame(_skid_frame(even)), supports=_legs())
+    assert set(split.shares) == set(_legs())
+    for share in split.shares.values():
+        assert share == pytest.approx(0.25)
+    assert sum(split.shares.values()) == pytest.approx(1.0)
+    assert "direct stiffness" in split.basis and "out of balance" in split.basis
+
+
+def test_a_biased_load_divides_unevenly_which_is_the_point_of_solving_it():
+    """The figure statics on four supports cannot give.
+
+    A load biased to one corner puts 40% of it into that leg and a fifth into each of the
+    others. Nothing short of a solve distinguishes that from the even quarter a reader
+    would otherwise assume, and the leg is sized on the difference.
+    """
+    from anvilate.frame import NodeLoad, solve_frame
+    from anvilate.product_screening import frame_split
+    from anvilate.units import Quantity
+
+    q = Quantity.parse
+    biased = (
+        NodeLoad(node="a", fz=q("-16 kN")),
+        NodeLoad(node="b", fz=q("-8 kN")),
+        NodeLoad(node="c", fz=q("-8 kN")),
+        NodeLoad(node="d", fz=q("-8 kN")),
+    )
+    split = frame_split(
+        body="skid/deck", solution=solve_frame(_skid_frame(biased)), supports=_legs()
+    )
+    assert split.shares["skid/leg_a"] == pytest.approx(0.398, abs=0.002)
+    assert split.shares["skid/leg_b"] == pytest.approx(0.200, abs=0.002)
+    assert sum(split.shares.values()) == pytest.approx(1.0)
+
+
+def test_a_leg_the_solve_puts_in_uplift_is_refused_not_given_a_share():
+    """A share of a load a support does not carry reads as a load path it is not on.
+
+    40 kN on one corner of this skid lifts the diagonally opposite leg: the solve says
+    −11 N there. A normalised share would quietly turn that into a positive fraction.
+    """
+    from anvilate.frame import NodeLoad, solve_frame
+    from anvilate.product_screening import frame_split
+    from anvilate.units import Quantity
+
+    solution = solve_frame(_skid_frame((NodeLoad(node="a", fz=Quantity.parse("-40 kN")),)))
+    assert solution.reaction("fd").fz < 0
+    with pytest.raises(ValueError, match="being pulled or carries nothing"):
+        frame_split(body="skid/deck", solution=solution, supports=_legs())
+
+
+def test_a_split_names_the_frame_node_it_could_not_find():
+    from anvilate.frame import NodeLoad, solve_frame
+    from anvilate.product_screening import frame_split
+    from anvilate.units import Quantity
+
+    solution = solve_frame(
+        _skid_frame(tuple(NodeLoad(node=n, fz=Quantity.parse("-10 kN")) for n in "abcd"))
+    )
+    with pytest.raises(ValueError, match="which is not a supported node"):
+        frame_split(
+            body="skid/deck",
+            solution=solution,
+            supports={"skid/leg_a": "fa", "skid/leg_b": "nowhere"},
+        )
+    # And a split of one support is the load path's own arithmetic, not a declaration.
+    with pytest.raises(ValueError, match="a split divides a load among supports"):
+        frame_split(body="skid/deck", solution=solution, supports={"skid/leg_a": "fa"})
+
+
+def test_one_placeholder_named_as_a_string_is_refused_not_spelled_out():
+    """A string iterates over its characters, so one name would read as five placeholders."""
+    from anvilate.frame import NodeLoad, solve_frame
+    from anvilate.product_screening import frame_split
+    from anvilate.units import Quantity
+
+    solution = solve_frame(
+        _skid_frame(tuple(NodeLoad(node=n, fz=Quantity.parse("-10 kN")) for n in "abcd"))
+    )
+    with pytest.raises(ValueError, match="placeholders is a sequence of str"):
+        frame_split(
+            body="skid/deck", solution=solution, supports=_legs(), placeholders="leg_d"
+        )
+
+
+def test_a_placeholders_assumed_stiffness_is_named_in_the_basis():
+    """The basis is what the load path prints, so an assumption has to be in it."""
+    from anvilate.frame import NodeLoad, solve_frame
+    from anvilate.product_screening import PLACEHOLDER_STIFFNESS_NOTE, frame_split
+    from anvilate.units import Quantity
+
+    solution = solve_frame(
+        _skid_frame(tuple(NodeLoad(node=n, fz=Quantity.parse("-10 kN")) for n in "abcd"))
+    )
+    plain = frame_split(body="skid/deck", solution=solution, supports=_legs())
+    assumed = frame_split(
+        body="skid/deck",
+        solution=solution,
+        supports=_legs(),
+        placeholders=("leg_c", "leg_d"),
+    )
+    assert PLACEHOLDER_STIFFNESS_NOTE.format(items="leg_c, leg_d") in assumed.basis
+    assert "assumed stiffness" not in plain.basis
+
+
+def test_a_declared_split_is_attributed_on_every_entry_below_it():
+    """A number that rests on an assumption says so wherever it is read.
+
+    The split's basis used to appear on the body it divided and nowhere else, so a reader
+    following the load down to a caster met the assumption once, at the top, where it is
+    easy to read as applying only there.
+    """
+    four = _THREE + (("left", "back"),)
+    split = {
+        "body": "cart/frame",
+        "basis": "the frame 'cart' solved by first-order linear elastic direct stiffness",
+        "shares": {f"cart/caster{k}": 0.25 for k in range(1, 5)},
+    }
+    report = product_screening(parse_product(_carted(four, ("right", "back"), split)))
+    divided = _named(report, "load path cart/frame")
+    assert divided.status is CheckStatus.PASS and "divided as declared" in divided.detail
+    for k in range(1, 5):
+        caster = _named(report, f"load path cart/caster{k}")
+        assert "it carries a share assumed above it" in caster.detail
+        assert "direct stiffness" in caster.detail
+    # The plate is ABOVE the split, so it carries no assumption and says nothing.
+    assert "share assumed above it" not in _named(report, "load path cart/plate").detail
+
+
+def test_a_determinate_path_attributes_nothing_because_there_is_nothing_to_attribute():
+    """The attack on the check above: a path with no declared split must stay silent."""
+    report = product_screening(parse_product(_carted(_THREE, ("right", "back"))))
+    for step in report.load_path:
+        entry = _named(report, f"load path {step.body}")
+        assert "share assumed above it" not in entry.detail

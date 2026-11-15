@@ -693,6 +693,8 @@ product_screening.CostLine
 product_screening.NodeCost
 product_screening.ProductScreening
 product_screening.product_screening
+product_screening.PLACEHOLDER_STIFFNESS_NOTE
+product_screening.frame_split
 profile.Applicability
 profile.SuppliedValue
 profile.Profile

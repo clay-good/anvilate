@@ -44,6 +44,38 @@ splits:
   - {body: cart/frame, basis: measured at the four wheels, shares: {cart/caster1: 0.25, ...}}
 ```
 
+**A split can be a solve rather than a guess.** Four legs under a skid is four supports,
+and four is more than three, so the refusal above is where the work stops for every real
+frame. Declare a frame over the product's connections (see
+[frame analysis](frame-analysis.md)), solve it, and `frame_split` turns its reactions into
+the split:
+
+```python
+from anvilate.frame import solve_frame
+from anvilate.product_screening import frame_split
+
+split = frame_split(
+    body="skid/deck",
+    solution=solve_frame(frame),
+    supports={"skid/leg_a": "fa", "skid/leg_b": "fb", "skid/leg_c": "fc", "skid/leg_d": "fd"},
+    placeholders=("leg_d",),      # members whose stiffness is an assumption
+)
+```
+
+The shares are the vertical reactions, normalised. A load biased to one corner of a
+four-legged skid puts **39.8%** into that leg and about a fifth into each of the others —
+the figure statics on four supports cannot give, and the one the leg is sized on. Three
+things are refused rather than returned: a node the frame does not support, a leg the
+solve puts into **uplift** (a share of a load it does not carry would read as a load path
+it is not on), and a split naming fewer than two supports, which the load path works out
+for itself.
+
+The `basis` names the frame, the analysis it was, how well the solve closed, and any
+member resting on a placeholder's assumed stiffness. **That basis is printed on every
+entry below the split**, not only on the body it divided: a reader following a number
+down to a caster meets the assumption at each step rather than once at the top, where it
+is easy to read as applying only there.
+
 A declared `vertical_acceleration`, gravity included and acting down, is what the path is
 carried at: each body's weight and each load given as a mass are m·a rather than m·g, and a
 load given as a force is carried as stated. At `{magnitude: 2, unit: g0}` the cart's 63 kg

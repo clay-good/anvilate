@@ -72,3 +72,31 @@ stated rather than a tolerance guessed at.
 A frame with no `item` on any member is `NOT_EVALUATED`. Nobody claimed anything, and
 agreement is a different fact — reporting it as a pass would make the check vacuous for
 exactly the frames that have never been held to a build.
+
+## The split that is a solve
+
+`add-product-screening` refuses an indeterminate load path, and that refusal is right
+when nothing is declared. It is also where the work stops for every real frame: four legs
+under a skid is four supports, and four is more than three.
+
+`frame_split` turns a solved frame's reactions into the `Split` the load path already
+knows how to read. The shares are the vertical reactions, normalised; the basis names the
+frame, the analysis it was, how well the solve closed, and any member resting on a
+placeholder's assumed stiffness.
+
+Three things are refused rather than returned:
+
+- **A node the frame does not support.** A share can only come from a support the frame
+  has, and the refusal lists the ones it does.
+- **A leg the solve puts into uplift.** A negative vertical reaction normalised into a
+  positive fraction reads as a load path the leg is not on. Found while writing the test:
+  40 kN on one corner of a four-legged skid lifts the diagonally opposite leg by 11 N.
+- **A split naming fewer than two supports.** The load path determines one or two for
+  itself, and a declared share there would override arithmetic with a restatement.
+
+A mechanism needs no guard: `solve_frame` raises rather than returning a solution.
+
+**Attribution flows down, not just at the split.** The basis used to print on the body it
+divided and nowhere else, so a reader following the load to a caster met the assumption
+once, at the top, where it is easy to read as applying only there. Every body below a
+split now carries the bases above it on its own entry.

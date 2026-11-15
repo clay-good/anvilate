@@ -23,13 +23,13 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import Named, Provenance, StatableModel
+from ._models import Named, Provenance, StatableModel, each_one
 from .budget import (
     Budget,
     BudgetResult,
@@ -40,7 +40,8 @@ from .budget import (
     LimitBasis,
 )
 from .derivation import DerivationAbsence, Underived
-from .product import Product, _placed_leaves, _refuse, place_product
+from .frame import FrameSolution
+from .product import Product, Split, _placed_leaves, _refuse, place_product
 from .scorecard import (
     CheckStatus,
     Comparison,
@@ -65,6 +66,8 @@ __all__ = [
     "NodeCost",
     "ProductScreening",
     "product_screening",
+    "PLACEHOLDER_STIFFNESS_NOTE",
+    "frame_split",
 ]
 
 Basis = Literal["computed", "declared", "placeholder", "missing"]
@@ -620,6 +623,11 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
         incoming[target.path].append((force, cx, cy, f"the load on {load.item} ({load.source})"))
     splits = {split.body: split for split in (declared.splits if declared is not None else ())}
     unknown: set[str] = set()
+    # The basis a body's load came through, and every basis above it. A share that came
+    # from a declared split — a frame solve, say — is an assumption, and a reader
+    # following a number down is entitled to meet it at each step rather than once at the
+    # top, where it is easy to read as applying only there.
+    inherited: dict[str, list[str]] = {body.path: [] for body in bodies}
     steps: list[LoadStep] = []
     entries: list[ScorecardEntry] = []
     for body in sorted(bodies, key=lambda b: -b.box_max_mm[2]):
@@ -656,19 +664,31 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
             Reaction(support=path, force_n=round(f, 6), at_mm=(round(x, 3), round(y, 3)))
             for (path, x, y, _o), f in zip(supports, forces or [0.0] * len(supports), strict=True)
         ) if forces is not None else ()  # fmt: skip
+        passed_on = list(inherited[body.path])
+        split = splits.get(body.path)
+        if split is not None and forces is not None:
+            passed_on.append(f"{body.path} divided as declared ({split.basis})")
         for reaction in reactions:
             if reaction.support != "the floor":
                 incoming[reaction.support].append(
                     (reaction.force_n, reaction.at_mm[0], reaction.at_mm[1], body.path)
                 )
+                for basis in passed_on:
+                    if basis not in inherited[reaction.support]:
+                        inherited[reaction.support].append(basis)
         steps.append(LoadStep(body=body.path, carries_n=round(total, 6),
                               at_mm=(round(xw, 3), round(yw, 3)), reactions=reactions,
                               status=status, note=note))  # fmt: skip
         carried = "; ".join(f"{r.force_n:.4g} N to {r.support} at ({r.at_mm[0]:g}, "
                             f"{r.at_mm[1]:g})" for r in reactions)  # fmt: skip
+        upstream_note = (
+            "; it carries a share assumed above it — " + "; ".join(inherited[body.path])
+            if inherited[body.path]
+            else ""
+        )
         detail = (f"{body.path} carries {total:.4g} N{at} acting at ({xw:.4g}, {yw:.4g}) mm"
                   + (f": {carried}; ΣFz, ΣMx and ΣMy balance" if reactions else "")
-                  + (f"; {note}" if note else ""))  # fmt: skip
+                  + (f"; {note}" if note else "") + upstream_note)  # fmt: skip
         entries.append(ScorecardEntry(
             name=f"load path {body.path}", status=status, detail=detail,
             underived=_SUMMED if status is not CheckStatus.NOT_EVALUATED else None,
@@ -1112,3 +1132,98 @@ def _chains(product: Product) -> list[ScorecardEntry]:
 
 
 ProductScreening.model_rebuild()
+
+
+#: What the basis says about a member whose section is an assumed stiffness rather than a
+#: measured one. Named here because it is repeated into every split the solve produces,
+#: and a reader following a number down has to meet it at each step.
+PLACEHOLDER_STIFFNESS_NOTE = "resting on the assumed stiffness of {items}, which no drawing backs"
+
+_FRAME_SPLIT_SOURCE = (
+    "the frame declared over the product's connections, and the reactions its solve produced"
+)
+
+
+def frame_split(
+    *,
+    body: str,
+    solution: FrameSolution,
+    supports: Mapping[str, str],
+    placeholders: Sequence[str] = (),
+) -> Split:
+    """The share of one body's load each of its supports carries, from a frame solve.
+
+    A product's load path refuses to guess: a body held by more supports than determine
+    it is indeterminate, and the existing refusal names them and stops. That refusal is
+    right when nothing is declared, and it is also where the work stops for every real
+    frame — four legs under a skid is four supports, and four is more than three.
+
+    With a frame declared over the product's connections, the share is not a guess but a
+    solve. ``supports`` maps each support's body path, as the load path names it, to the
+    frame node whose reaction carries it. The shares are the vertical reactions,
+    normalised, and the :class:`~anvilate.product.Split` they come back in carries a
+    basis naming the frame, the analysis it was, how well the solve closed, and any
+    member whose stiffness is a placeholder's assumption. The load path prints that basis
+    on every entry below the split, so an assumed stiffness is visible on each number
+    that rests on it rather than once at the top.
+
+    Refused rather than returned:
+
+    - **A node with no reaction.** A share can only come from a support the frame has.
+    - **Uplift, or nothing to divide.** A negative or zero vertical reaction is a support
+      that is being pulled or is doing nothing, and a share of a load it does not carry
+      would read as a load path it is not on.
+
+    A frame that did not stand up cannot reach here: :func:`~anvilate.frame.solve_frame`
+    raises :class:`~anvilate.frame.MechanismFound` rather than returning a solution, so
+    there is no mechanism case to guard.
+    - **One support.** A split of one is not a split; the load path determines that case
+      itself and a declared share would override arithmetic with a restatement.
+    """
+    # A single member name is a string, and a string iterates over its characters: one
+    # placeholder named "leg_d" would read as five. `each_one` is the library's one answer
+    # to that mistake, and it names the parameter.
+    placeholders = each_one(placeholders, str, named="placeholders")
+    if len(supports) < 2:
+        raise _refuse(
+            f"a split of '{body}' names {len(supports)} support(s); a split divides a load "
+            f"among supports the equilibrium does not determine, and the load path works "
+            f"one or two out for itself",
+            subject="supports",
+        )
+    carried: dict[str, float] = {}
+    for support, node in supports.items():
+        try:
+            reaction = solution.reaction(node)
+        except KeyError:
+            raise _refuse(
+                f"'{support}' is mapped to the frame node '{node}', which is not a "
+                f"supported node of this solution; its supported nodes are "
+                f"{', '.join(sorted(r.node for r in solution.reactions))}",
+                subject="supports",
+            ) from None
+        if reaction.fz <= 0.0:
+            raise _refuse(
+                f"the frame's reaction at '{node}' is {reaction.fz:.4g} N vertically, so "
+                f"'{support}' is being pulled or carries nothing; a share of a load it does "
+                f"not carry reads as a load path it is not on",
+                subject="supports",
+            )
+        carried[support] = reaction.fz
+    total = sum(carried.values())
+    shares = {support: force / total for support, force in carried.items()}
+    # The last share takes the rounding, so the shares add to one exactly: Split refuses a
+    # set that does not, and three thirds written to six places do not.
+    last = max(shares, key=lambda support: shares[support])
+    shares[last] = 1.0 - sum(value for support, value in shares.items() if support != last)
+    assumed = (
+        "; " + PLACEHOLDER_STIFFNESS_NOTE.format(items=", ".join(sorted(placeholders)))
+        if placeholders
+        else ""
+    )
+    basis = (
+        f"the frame '{solution.frame}' solved by {solution.method}, closing to "
+        f"{solution.residual:.3g} N out of balance over {solution.free_degrees} free "
+        f"degrees{assumed}"
+    )
+    return Split(body=body, shares=shares, basis=basis)
