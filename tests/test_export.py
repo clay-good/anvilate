@@ -44,9 +44,9 @@ def test_audited_base_plate_dxf_is_centered_semantic_and_deterministic():
     doc = ezdxf.read(StringIO(first.decode("utf-8")))
     outline = list(doc.modelspace().query("LWPOLYLINE"))
     assert len(outline) == 1 and outline[0].dxf.layer == "OUTLINE"
-    assert list(outline[0].get_points("xy")) == pytest.approx(
-        [(-150, -120), (150, -120), (150, 120), (-150, 120)]
-    )
+    # pytest 9.2 refuses nested approx, so compare the points flattened.
+    flat = [c for point in outline[0].get_points("xy") for c in point]
+    assert flat == pytest.approx([-150, -120, 150, -120, 150, 120, -150, 120])
 
 
 def test_audited_annular_cover_dxf_separates_profile_and_bore():
