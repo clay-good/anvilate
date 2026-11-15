@@ -146,7 +146,11 @@ from .threads import (
     default_thread_table,
 )
 from .timber import (
+    MAX_CONNECTION_LOAD_DURATION,
     NDS_APPLICABLE_FACTORS,
+    NDS_CONNECTION_FACTORS,
+    ConnectionDesignValue,
+    ConnectionLoad,
     SizeClassification,
     TimberDesignValue,
     TimberProperty,
@@ -174,7 +178,11 @@ __all__ = [
     "UnknownEditionDifferenceError",
     "compare_editions",
     "default_edition_differences",
+    "MAX_CONNECTION_LOAD_DURATION",
     "NDS_APPLICABLE_FACTORS",
+    "NDS_CONNECTION_FACTORS",
+    "ConnectionDesignValue",
+    "ConnectionLoad",
     "SizeClassification",
     "TimberDesignValue",
     "TimberProperty",

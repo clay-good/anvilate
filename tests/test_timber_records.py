@@ -17,7 +17,11 @@ import pytest
 from pydantic import ValidationError
 
 from anvilate.standards.timber import (
+    MAX_CONNECTION_LOAD_DURATION,
     NDS_APPLICABLE_FACTORS,
+    NDS_CONNECTION_FACTORS,
+    ConnectionDesignValue,
+    ConnectionLoad,
     SizeClassification,
     TimberDesignValue,
     TimberProperty,
@@ -198,7 +202,128 @@ def test_every_timber_record_refusal_site_is_structured():
         if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
             unstructured.append(node.exc)
 
-    assert len(structured) == 5
+    assert len(structured) == 16
     assert unstructured == []
     for call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
+# --- NDS Table 11.3.1: the connection row, and the two footnotes under it ---------------
+
+
+def _connection(**kwargs) -> ConnectionDesignValue:
+    defaults = {
+        "standard": "NDS",
+        "edition": "2018",
+        "table": "Table 12.2A",
+        "fastener": "1/2 in lag screw in Douglas Fir-Larch",
+        "load": ConnectionLoad.WITHDRAWAL,
+        "value": Q("437 lbf/inch"),
+    }
+    return ConnectionDesignValue(**{**defaults, **kwargs})
+
+
+def test_the_connection_table_covers_every_kind_of_value_it_names():
+    """A row added to the enum and not to the table would key-error at the worst moment."""
+    assert set(NDS_CONNECTION_FACTORS) == set(ConnectionLoad)
+    for load, factors in NDS_CONNECTION_FACTORS.items():
+        assert {"C_D", "C_M", "C_t"} <= factors, load
+
+
+def test_the_group_action_and_geometry_factors_are_not_on_the_withdrawal_row():
+    """The absence Table 11.3.1 states and a chain composed by hand loses.
+
+    Both factors describe fasteners sharing a load across a shear plane. A fastener pulled
+    straight out has no shear plane, so applying them is not a conservative extra — it
+    reduces the value for a mechanism that is not acting.
+    """
+    lateral = NDS_CONNECTION_FACTORS[ConnectionLoad.LATERAL]
+    withdrawal = NDS_CONNECTION_FACTORS[ConnectionLoad.WITHDRAWAL]
+    assert {"C_g", "C_Delta", "C_di"} <= lateral
+    assert not {"C_g", "C_Delta", "C_di"} & withdrawal
+    for factor in ("C_g", "C_Delta", "C_di"):
+        with pytest.raises(ValueError, match="does not apply"):
+            _connection().adjusted({factor: 0.9})
+    # And the lateral row takes all three without complaint.
+    assert _connection(load=ConnectionLoad.LATERAL, value=Q("141 lbf"), table="Table 12J").adjusted(
+        {"C_g": 0.9, "C_Delta": 0.8, "C_di": 1.1}
+    ).to("lbf").magnitude == pytest.approx(141 * 0.9 * 0.8 * 1.1)
+
+
+def test_the_load_duration_factor_is_capped_at_the_connections_own_ceiling():
+    """Footnote 1, and the sharpest difference between a member and its connection.
+
+    NDS Table 2.3.2 gives C_D = 2.0 for an impact load, and `nds_load_duration_factor`
+    returns it. The connection joining that member takes 1.6. One load case, two factors,
+    and the chain a spreadsheet copies across from the member overstates the connection
+    by 25%.
+    """
+    from anvilate.analysis import LoadDuration, nds_load_duration_factor
+
+    member = nds_load_duration_factor(LoadDuration.IMPACT)
+    assert member == 2.0 > MAX_CONNECTION_LOAD_DURATION
+    with pytest.raises(ValueError, match="caps C_D at 1.6"):
+        _connection().adjusted({"C_D": member})
+    # The ceiling itself is allowed, which is the bound the refusal turns on.
+    assert _connection().adjusted({"C_D": MAX_CONNECTION_LOAD_DURATION}).to(
+        "lbf/inch"
+    ).magnitude == pytest.approx(437 * 1.6)
+
+
+def test_the_wet_service_factor_is_refused_on_a_toe_nail_in_withdrawal():
+    """Footnote 2, and it turns on a declaration the number cannot carry."""
+    plain, toe = _connection(), _connection(toe_nailed=True)
+    assert plain.adjusted({"C_M": 0.7}).to("lbf/inch").magnitude == pytest.approx(437 * 0.7)
+    with pytest.raises(ValueError, match="footnote 2"):
+        toe.adjusted({"C_M": 0.7})
+    # The toe-nail factor itself still applies, and so does every other factor on the row.
+    assert toe.adjusted({"C_tn": 0.67, "C_D": 1.0}).to("lbf/inch").magnitude == pytest.approx(
+        437 * 0.67
+    )
+    # A lateral toe-nail does take C_M: footnote 2 is about withdrawal only.
+    assert _connection(load=ConnectionLoad.LATERAL, value=Q("141 lbf"), toe_nailed=True).adjusted(
+        {"C_M": 0.7}
+    ).to("lbf").magnitude == pytest.approx(141 * 0.7)
+
+
+def test_a_withdrawal_value_and_a_lateral_one_cannot_be_swapped():
+    """W is per inch of penetration and Z is a force; the number does not say which."""
+    with pytest.raises(ValidationError, match=r"\[force\] / \[length\]"):
+        _connection(value=Q("437 lbf"))
+    with pytest.raises(ValidationError, match=r"a Z value is a \[force\]"):
+        _connection(load=ConnectionLoad.LATERAL, value=Q("437 lbf/inch"))
+
+
+def test_withdrawal_capacity_is_the_adjusted_value_times_the_penetration():
+    record = _connection()
+    assert record.withdrawal_capacity(Q("4 inch"), {"C_D": 1.6}).to("lbf").magnitude == (
+        pytest.approx(437 * 1.6 * 4)
+    )
+    # It is the one step between a table and a force, and it needs a withdrawal table.
+    with pytest.raises(ValueError, match="already a force"):
+        _connection(load=ConnectionLoad.LATERAL, value=Q("141 lbf")).withdrawal_capacity(
+            Q("4 inch"), {}
+        )
+    for bad in (Q("4 lbf"), 4.0, Quantity(magnitude=float("nan"), unit="inch"), Q("0 inch")):
+        with pytest.raises(ValueError, match="penetration"):
+            record.withdrawal_capacity(bad, {})
+
+
+def test_a_head_pull_through_value_is_not_a_toe_nail():
+    with pytest.raises(ValidationError, match="not a toe-nail condition"):
+        _connection(load=ConnectionLoad.PULL_THROUGH, value=Q("150 lbf"), toe_nailed=True)
+
+
+def test_a_connection_record_says_which_fastener_and_which_table():
+    for field in ("table", "fastener"):
+        with pytest.raises(ValidationError, match=f"must state its {field}"):
+            _connection(**{field: "   "})
+    assert "1/2 in lag screw" in str(_connection())
+    assert "toe-nailed" in str(_connection(toe_nailed=True))
+    assert "toe-nailed" not in str(_connection())
+
+
+def test_a_connection_factor_is_positive_and_finite():
+    for bad in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="positive and finite"):
+            _connection().adjusted({"C_M": bad})

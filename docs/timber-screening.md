@@ -287,6 +287,7 @@ for reference design values.
 | The dowel bearing strength formulas | AWC TR12 Appendix A Table A1, bundled |
 | Hankinson at an angle to the grain | bundled |
 | Reduction terms R_d per mode | yours, from the NDS |
+| Which factors apply to Z, W and W_H | NDS Table 11.3.1, bundled |
 | Group action C_g and geometry C_Δ | derived — see below |
 | End, edge and spacing minimums | yours, as multiples of D from the cited table |
 | Withdrawal, metal connector plates | out of scope |
@@ -342,6 +343,36 @@ zone and the spacing shrinks, so both factors fall. The row's effective fastener
 shows a 15-inch row where six 3/4 in bolts are worth 5.70 bolts, the seventh makes the
 row 3.9% weaker, and the eighth is not permitted. An engineer short of capacity adds a
 fastener and gets less than they started with.
+
+## The connection's own factor chain
+
+A connection's reference value takes a different chain from a member's, and
+`ConnectionDesignValue` is the record that knows which. It carries a lateral value Z (a
+force), a withdrawal value W (a force **per inch of penetration**) or a head pull-through
+value W_H, and `adjusted()` refuses what NDS Table 11.3.1 does not list for that row:
+
+```python
+from anvilate.standards import ConnectionDesignValue, ConnectionLoad
+from anvilate.units import Quantity
+
+screw = ConnectionDesignValue(
+    standard="NDS", edition="2018", table="Table 12.2A",
+    fastener="1/2 in lag screw in Douglas Fir-Larch",
+    load=ConnectionLoad.WITHDRAWAL, value=Quantity.parse("437 lbf/inch"),
+)
+screw.withdrawal_capacity(Quantity.parse("4 inch"), {"C_D": 1.6})  # 2796.8 lbf
+```
+
+Three refusals, each a rule the table states and a chain composed by hand loses:
+
+| Rule | Where | Why it bites |
+| --- | --- | --- |
+| **No C_g and no C_Δ on a withdrawal value** | Table 11.3.1 | Both describe fasteners sharing a load across a shear plane; a fastener pulled straight out has none. |
+| **C_D is capped at 1.6 for a connection** | footnote 1 | The member it joins takes 2.0 under an impact load. One load case, two factors — and copying the member's chain across overstates the connection by 25%. |
+| **No C_M on a toe-nail in withdrawal** | footnote 2, §12.5.4.1 | The tabulated toe-nail value already accounts for the condition, so applying it counts wet wood twice. |
+
+The values themselves are yours, as the member tables are: the reference Z and W, and the
+six factors Table 11.3.1 lists that are table lookups rather than equations.
 
 ## Examples
 
