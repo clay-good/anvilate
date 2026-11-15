@@ -2,7 +2,7 @@
   "name": "anvilate",
   "private": true,
   "dependencies": {
-    "openlore": "^2.1.5"
+    "openlore": "^3.6.0"
   },
   "devDependencies": {
     "@fission-ai/openspec": "^1.5.0"
