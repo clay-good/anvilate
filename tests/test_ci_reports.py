@@ -11,7 +11,6 @@ import json
 from pathlib import Path
 
 import pytest
-from tests.cli_output import run_cli
 
 from anvilate.ci import (
     SARIF_RESULT_LIMIT,
@@ -43,6 +42,7 @@ from anvilate.scorecard import (
     ScorecardEntry,
     ValueSource,
 )
+from cli_output import run_cli
 
 _YAML = """\
 anvilate_spec: "1.22.0"
