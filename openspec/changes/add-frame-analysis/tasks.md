@@ -14,7 +14,7 @@ Builds on the member-force ingestion in `src/anvilate/interop.py` and the load p
 
 - [x] 2.1 Direct stiffness, 3D, first order; mechanism detection naming the free mode
 - [x] 2.2 Equilibrium residual on reactions
-- [ ] 2.3 Declared second-order (P-Δ) analysis with the method named
+- [x] 2.3 Declared second-order (P-Δ) analysis with the method named
 - [x] 2.4 Member force records produced with Anvilate's declared convention; station forces
 
 ## 3. Downstream

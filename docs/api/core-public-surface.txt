@@ -396,6 +396,7 @@ frame.NodeLoad
 frame.MemberLoad
 frame.Frame
 frame.AnalysisBasis
+frame.METHODS
 frame.NodeDisplacement
 frame.Reaction
 frame.MemberEndForces

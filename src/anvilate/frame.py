@@ -61,6 +61,7 @@ __all__ = [
     "MemberLoad",
     "Frame",
     "AnalysisBasis",
+    "METHODS",
     "NodeDisplacement",
     "Reaction",
     "MemberEndForces",
@@ -731,6 +732,12 @@ class FrameSolution(StatableModel):
 
     frame: Named
     basis: AnalysisBasis
+    #: The analysis in words. The codes mean different things by "second order", so the
+    #: solution says which one this was rather than leaving a reader to infer it.
+    method: str = "first-order linear elastic direct stiffness"
+    #: How many times the system was solved. One under first order; more under P-Delta,
+    #: and a reader watching that number climb is watching a frame approach its limit.
+    passes: int = 1
     displacements: tuple[NodeDisplacement, ...]
     reactions: tuple[Reaction, ...]
     member_forces: tuple[MemberEndForces, ...]
@@ -766,26 +773,62 @@ class FrameSolution(StatableModel):
         return max(self.displacements, key=lambda d: d.translation.magnitude)
 
     def __str__(self) -> str:
+        passes = "" if self.passes == 1 else f" in {self.passes} passes"
         return (
             f"{self.frame} [{self.basis.value}]: {len(self.member_forces)} members solved "
-            f"over {self.free_degrees} free degrees of freedom, equilibrium residual "
-            f"{self.residual:.3g} N"
+            f"over {self.free_degrees} free degrees of freedom{passes}, equilibrium "
+            f"residual {self.residual:.3g} N ({self.method})"
         )
 
 
 # --- the solve ---------------------------------------------------------------------
 
 
-def solve_frame(frame: Frame) -> FrameSolution:
-    """Solve a frame by direct stiffness, first order, three-dimensional, linear elastic.
+#: How many times the second-order solve may re-solve before it gives up. A sway frame
+#: well below its elastic critical load converges in three or four; one that does not
+#: converge in this many is at or past that load, and saying so is the answer.
+_MAX_PDELTA_PASSES = 25
+
+#: Convergence of the second-order solve: the largest relative change in any member's
+#: axial force between two passes.
+_PDELTA_TOLERANCE = 1e-9
+
+#: The method each basis is, named on the solution so a reader never has to ask which
+#: second-order analysis was run — the codes mean different things by the phrase.
+METHODS: dict[AnalysisBasis, str] = {
+    AnalysisBasis.FIRST_ORDER: "first-order linear elastic direct stiffness",
+    AnalysisBasis.SECOND_ORDER: (
+        "P-Delta by consistent geometric stiffness, iterated on the member axial forces "
+        "to convergence"
+    ),
+}
+
+
+def solve_frame(frame: Frame, *, basis: AnalysisBasis = AnalysisBasis.FIRST_ORDER) -> FrameSolution:
+    """Solve a frame by direct stiffness, three-dimensional, linear elastic.
+
+    First order by default. ``basis=AnalysisBasis.SECOND_ORDER`` asks for P-Delta — the
+    geometric stiffness of each member built from its own axial force and the whole
+    solved again until those forces stop moving — and **it is a declaration on purpose**.
+    A code's member check amplifies first-order forces (AISC 360 Appendix 8, EN 1993-1-1
+    §5.2), so running second order silently and then applying the amplifier would double
+    count. Whichever was run is named on the solution and on every force record.
 
     Raises :class:`MechanismFound` naming the free freedom when the frame has one, rather
-    than returning the numbers a regularised matrix would produce.
+    than returning the numbers a regularised matrix would produce. Under second order
+    that includes a frame driven past its elastic critical load: the softened matrix
+    stops being positive definite, which is the buckling this analysis can see.
     """
     if not isinstance(frame, Frame):
         raise _refuse(
             f"solve_frame takes a Frame; got {type(frame).__name__}",
             subject="frame",
+            source=_SOLVE_SOURCE,
+        )
+    if basis not in METHODS:
+        raise _refuse(
+            f"basis is one of {sorted(b.value for b in METHODS)}; got {basis!r}",
+            subject="basis",
             source=_SOLVE_SOURCE,
         )
     index = {node.name: position for position, node in enumerate(frame.nodes)}
@@ -796,33 +839,139 @@ def solve_frame(frame: Frame) -> FrameSolution:
     for support in frame.supports:
         base = index[support.node] * _DOF
         held.update(base + freedom.index for freedom in support.restrained)
+    free = [position for position in range(size) if position not in held]
 
-    stiffness = [[0.0] * size for _ in range(size)]
-    loads = [0.0] * size
-    geometry: dict[str, _Geometry] = {}
+    geometry = {member.name: _geometry_of(member, points) for member in frame.members}
     distributed = {load.member: load.vector for load in frame.member_loads}
+    locals_by_member = {
+        member.name: _member_matrices(member, geometry[member.name], frame, distributed)
+        for member in frame.members
+    }
 
+    loads = [0.0] * size
     for member in frame.members:
-        shape = _geometry_of(member, points)
-        geometry[member.name] = shape
-        local_k, local_load = _member_matrices(member, shape, frame, distributed)
-        global_k = _congruent(shape.rotation, local_k)
-        dofs = _member_dofs(member, index)
-        for row, i in enumerate(dofs):
-            krow = stiffness[i]
-            grow = global_k[row]
-            for column, j in enumerate(dofs):
-                krow[j] += grow[column]
+        _, local_load = locals_by_member[member.name]
         if any(local_load):
-            for position, value in zip(dofs, _to_global(shape.rotation, local_load), strict=True):
+            dofs = _member_dofs(member, index)
+            rotation = geometry[member.name].rotation
+            for position, value in zip(dofs, _to_global(rotation, local_load), strict=True):
                 loads[position] += value
-
     for load in frame.node_loads:
         base = index[load.node] * _DOF
         for offset, value in enumerate(load.vector):
             loads[base + offset] += value
 
-    free = [position for position in range(size) if position not in held]
+    axial: dict[str, float] = {member.name: 0.0 for member in frame.members}
+    passes = 1 if basis is AnalysisBasis.FIRST_ORDER else _MAX_PDELTA_PASSES
+    stiffness: list[list[float]] = []
+    displacement: list[float] = []
+    solved = 0
+    for _attempt in range(passes):
+        solved += 1
+        stiffness = _assemble(frame, index, geometry, locals_by_member, axial, size, basis)
+        displacement = _displacements(frame, stiffness, loads, free, size, index)
+        moved = {
+            member.name: _end_forces(
+                member,
+                geometry[member.name],
+                displacement,
+                index,
+                locals_by_member[member.name],
+            ).axial.magnitude
+            for member in frame.members
+        }
+        if basis is AnalysisBasis.FIRST_ORDER:
+            break
+        scale = max((abs(value) for value in moved.values()), default=0.0) or 1.0
+        shift = max(abs(moved[name] - axial[name]) for name in moved)
+        axial = moved
+        if shift / scale <= _PDELTA_TOLERANCE:
+            break
+    else:
+        raise _refuse(
+            f"the second-order solve of '{frame.name}' did not settle in "
+            f"{_MAX_PDELTA_PASSES} passes; the member forces are still moving, which is "
+            f"what a frame at or past its elastic critical load does. Reduce the load, "
+            f"stiffen the frame, or read the first-order forces and amplify them by the "
+            f"code's own factor",
+            subject="basis",
+            source=_SOLVE_SOURCE,
+        )
+
+    reactions = tuple(
+        _reaction(support, stiffness, displacement, loads, index, size)
+        for support in frame.supports
+    )
+    member_forces = tuple(
+        _end_forces(
+            member,
+            geometry[member.name],
+            displacement,
+            index,
+            locals_by_member[member.name],
+            basis=basis,
+        )
+        for member in frame.members
+    )
+    return FrameSolution(
+        frame=frame.name,
+        basis=basis,
+        method=METHODS[basis],
+        passes=solved,
+        displacements=tuple(
+            NodeDisplacement(
+                node=node.name,
+                ux=displacement[index[node.name] * _DOF + 0],
+                uy=displacement[index[node.name] * _DOF + 1],
+                uz=displacement[index[node.name] * _DOF + 2],
+                rx=displacement[index[node.name] * _DOF + 3],
+                ry=displacement[index[node.name] * _DOF + 4],
+                rz=displacement[index[node.name] * _DOF + 5],
+            )
+            for node in frame.nodes
+        ),
+        reactions=reactions,
+        member_forces=member_forces,
+        residual=_residual(frame, reactions, loads, index, size),
+        free_degrees=len(free),
+    )
+
+
+def _assemble(
+    frame: Frame,
+    index: dict[str, int],
+    geometry: dict[str, _Geometry],
+    locals_by_member: dict[str, tuple[list[list[float]], list[float]]],
+    axial: dict[str, float],
+    size: int,
+    basis: AnalysisBasis,
+) -> list[list[float]]:
+    """The global stiffness, with each member's geometric term under second order."""
+    stiffness = [[0.0] * size for _ in range(size)]
+    for member in frame.members:
+        shape = geometry[member.name]
+        local_k = locals_by_member[member.name][0]
+        if basis is AnalysisBasis.SECOND_ORDER and axial[member.name] != 0.0:
+            geometric = _geometric_stiffness(axial[member.name], shape.length, member.section)
+            local_k = [[local_k[i][j] + geometric[i][j] for j in range(12)] for i in range(12)]
+        global_k = _congruent(shape.rotation, local_k)
+        dofs = _member_dofs(member, index)
+        for row, i in enumerate(dofs):
+            krow, grow = stiffness[i], global_k[row]
+            for column, j in enumerate(dofs):
+                krow[j] += grow[column]
+    return stiffness
+
+
+def _displacements(
+    frame: Frame,
+    stiffness: list[list[float]],
+    loads: list[float],
+    free: list[int],
+    size: int,
+    index: dict[str, int],
+) -> list[float]:
+    """Solve the restrained system, naming the free mode when there is one."""
     reduced = [[stiffness[i][j] for j in free] for i in free]
     right = [loads[i] for i in free]
     try:
@@ -837,56 +986,31 @@ def solve_frame(frame: Frame) -> FrameSolution:
                 detail="no path of stiffness reaches this freedom",
             )
         ) from None
-
     displacement = [0.0] * size
     for position, value in zip(free, answer, strict=True):
         displacement[position] = value
+    return displacement
 
-    reactions: list[Reaction] = []
-    for support in frame.supports:
-        base = index[support.node] * _DOF
-        carried = [0.0] * _DOF
-        for offset in range(_DOF):
-            row = stiffness[base + offset]
-            carried[offset] = (
-                sum(row[j] * displacement[j] for j in range(size)) - loads[base + offset]
-            )
-        reactions.append(
-            Reaction(
-                node=support.node,
-                fx=carried[0],
-                fy=carried[1],
-                fz=carried[2],
-                mx=carried[3],
-                my=carried[4],
-                mz=carried[5],
-            )  # fmt: skip
-        )
 
-    member_forces = tuple(
-        _end_forces(member, geometry[member.name], displacement, index, frame, distributed)
-        for member in frame.members
-    )
-    return FrameSolution(
-        frame=frame.name,
-        basis=AnalysisBasis.FIRST_ORDER,
-        displacements=tuple(
-            NodeDisplacement(
-                node=node.name,
-                ux=displacement[index[node.name] * _DOF + 0],
-                uy=displacement[index[node.name] * _DOF + 1],
-                uz=displacement[index[node.name] * _DOF + 2],
-                rx=displacement[index[node.name] * _DOF + 3],
-                ry=displacement[index[node.name] * _DOF + 4],
-                rz=displacement[index[node.name] * _DOF + 5],
-            )
-            for node in frame.nodes
-        ),
-        reactions=tuple(reactions),
-        member_forces=member_forces,
-        residual=_residual(frame, reactions, loads, index, size),
-        free_degrees=len(free),
-    )
+def _reaction(
+    support: Support,
+    stiffness: list[list[float]],
+    displacement: list[float],
+    loads: list[float],
+    index: dict[str, int],
+    size: int,
+) -> Reaction:
+    base = index[support.node] * _DOF
+    carried = [
+        sum(stiffness[base + offset][j] * displacement[j] for j in range(size))
+        - loads[base + offset]
+        for offset in range(_DOF)
+    ]
+    return Reaction(
+        node=support.node,
+        fx=carried[0], fy=carried[1], fz=carried[2],
+        mx=carried[3], my=carried[4], mz=carried[5],
+    )  # fmt: skip
 
 
 class _Geometry:
@@ -1052,6 +1176,45 @@ def _member_matrices(
     return local_k, local_load
 
 
+def _geometric_stiffness(axial: float, length: float, section: FrameSection) -> list[list[float]]:
+    """The consistent geometric stiffness of a frame element, local axes, tension positive.
+
+    An axial force changes a member's lateral stiffness: tension stiffens it, compression
+    softens it, and in a sway frame the compression in the columns is most of what makes
+    a second-order analysis differ from a first-order one. This is the standard
+    consistent matrix — ``6/5``, ``L/10``, ``2L²/15`` and ``−L²/30`` on the bending
+    pairs, scaled by ``P/L``.
+
+    The sign asymmetry between the two bending planes is the same one the elastic matrix
+    has, and for the same reason: ``θy = −dw/dx`` where ``θz = +dv/dx``.
+    """
+    a = section.area.to("m**2").magnitude
+    j = section.torsion_constant.to("m**4").magnitude
+    scale = axial / length
+    kg = [[0.0] * 12 for _ in range(12)]
+    # The torsional term, which a planar formulation drops and a space frame needs.
+    twist = axial * j / (a * length)
+    kg[3][3] = kg[9][9] = twist
+    kg[3][9] = kg[9][3] = -twist
+    shear, couple = 1.2 * scale, axial / 10.0
+    bending, carry = 2.0 * axial * length / 15.0, -axial * length / 30.0
+
+    kg[1][1] = kg[7][7] = shear
+    kg[1][7] = kg[7][1] = -shear
+    kg[1][5] = kg[5][1] = kg[1][11] = kg[11][1] = couple
+    kg[7][5] = kg[5][7] = kg[7][11] = kg[11][7] = -couple
+    kg[5][5] = kg[11][11] = bending
+    kg[5][11] = kg[11][5] = carry
+
+    kg[2][2] = kg[8][8] = shear
+    kg[2][8] = kg[8][2] = -shear
+    kg[2][4] = kg[4][2] = kg[2][10] = kg[10][2] = -couple
+    kg[8][4] = kg[4][8] = kg[8][10] = kg[10][8] = couple
+    kg[4][4] = kg[10][10] = bending
+    kg[4][10] = kg[10][4] = carry
+    return kg
+
+
 def _congruent(rotation: list[list[float]], local: list[list[float]]) -> list[list[float]]:
     """``Tᵀ k T`` for the block-diagonal T built from one 3x3 rotation, four times over.
 
@@ -1143,17 +1306,24 @@ def _end_forces(
     shape: _Geometry,
     displacement: list[float],
     index: dict[str, int],
-    frame: Frame,
-    distributed: dict[str, tuple[float, float, float]],
+    matrices: tuple[list[list[float]], list[float]],
+    *,
+    basis: AnalysisBasis = AnalysisBasis.FIRST_ORDER,
 ) -> MemberEndForces:
-    """``k_local · u_local − fixed-end forces``, which is the member's own equilibrium."""
+    """``k_local · u_local − fixed-end forces``, which is the member's own equilibrium.
+
+    The **elastic** stiffness, not the elastic plus geometric one, even under a
+    second-order solve: the geometric term is how the displacements were found, and the
+    force in the member is still what its own elasticity carries at those displacements.
+    Adding it here would count the P-Delta effect twice in the number a check reads.
+    """
     dofs = _member_dofs(member, index)
     local_u = _to_local(shape.rotation, [displacement[position] for position in dofs])
-    local_k, local_load = _member_matrices(member, shape, frame, distributed)
+    local_k, local_load = matrices
     forces = [sum(local_k[i][j] * local_u[j] for j in range(12)) - local_load[i] for i in range(12)]
     return MemberEndForces(
         member=member.name,
-        basis=AnalysisBasis.FIRST_ORDER,
+        basis=basis,
         axial_start=forces[0], shear_y_start=forces[1], shear_z_start=forces[2],
         torsion_start=forces[3], moment_y_start=forces[4], moment_z_start=forces[5],
         axial_end=forces[6], shear_y_end=forces[7], shear_z_end=forces[8],

@@ -849,3 +849,117 @@ def test_the_docs_page_quotes_the_cap_and_the_closed_forms_it_claims():
     pinned = " ".join(cells for _case, cells in cases)
     for expected in ("PL/4", "PL³/48EI", "wL²/8", "5wL/8", "PL/8", "0.1wL²", "Ph³/3EI"):
         assert expected in pinned, f"the page no longer claims {expected}"
+
+
+# --- second order ---------------------------------------------------------------------
+
+
+def _sway_column(height: float, lateral: float, axial: float) -> Frame:
+    return Frame(
+        name="sway column",
+        nodes=(_node("base", 0, 0, 0), _node("tip", 0, 0, height)),
+        members=(
+            FrameMember(
+                name="col", start="base", end="tip", section=_section(), material=_material()
+            ),
+        ),
+        supports=(Support(node="base", restrained=ALL_SIX),),
+        node_loads=(NodeLoad(node="tip", fx=_q(lateral, "N"), fz=_q(-axial, "N")),),
+    )
+
+
+def test_second_order_is_a_declaration_and_first_order_is_what_you_get_otherwise():
+    """Running P-Delta silently and then applying a code's amplifier would double count."""
+    frame = _sway_column(4.0, 10.0e3, 200.0e3)
+    default = solve_frame(frame)
+    asked = solve_frame(frame, basis=AnalysisBasis.SECOND_ORDER)
+
+    assert default.basis is AnalysisBasis.FIRST_ORDER
+    assert asked.basis is AnalysisBasis.SECOND_ORDER
+    assert default.method != asked.method
+    assert "P-Delta" in asked.method
+    assert all(force.basis is AnalysisBasis.SECOND_ORDER for force in asked.member_forces)
+    assert asked.passes > default.passes
+    # The whole point: the two answers differ, and by a lot under this axial load.
+    assert abs(asked.displacement("tip").ux) > 2 * abs(default.displacement("tip").ux)
+
+
+def test_the_second_order_base_moment_is_exactly_h_times_h_plus_p_times_delta():
+    """The defining relation of P-Delta, and an exact one for a single cantilever.
+
+    This is the test that says the geometric stiffness is right rather than merely
+    bigger: the base moment has to be the first-order moment plus the axial load times
+    the deflection the solve itself produced.
+    """
+    height, lateral, axial = 4.0, 10.0e3, 200.0e3
+    solution = solve_frame(_sway_column(height, lateral, axial), basis=AnalysisBasis.SECOND_ORDER)
+    sway = abs(solution.displacement("tip").ux)
+    assert abs(solution.reaction("base").my) == pytest.approx(
+        lateral * height + axial * sway, rel=1e-6
+    )
+
+
+def test_a_tensile_axial_load_stiffens_the_same_column():
+    """Tension positive is not a convention here, it is a direction the answer moves in."""
+    height, lateral, axial = 4.0, 10.0e3, 200.0e3
+    pushed = solve_frame(_sway_column(height, lateral, axial), basis=AnalysisBasis.SECOND_ORDER)
+    pulled = solve_frame(_sway_column(height, lateral, -axial), basis=AnalysisBasis.SECOND_ORDER)
+    plain = solve_frame(_sway_column(height, lateral, 0.0))
+
+    assert abs(pushed.displacement("tip").ux) > abs(plain.displacement("tip").ux)
+    assert abs(pulled.displacement("tip").ux) < abs(plain.displacement("tip").ux)
+
+
+def test_the_member_force_under_second_order_is_the_elastic_one_at_those_displacements():
+    """The geometric term is how the displacements were found, not what the member carries.
+
+    Adding it to the recovery as well would count the P-Delta effect twice in the one
+    number a member check reads.
+    """
+    solution = solve_frame(_sway_column(4.0, 10.0e3, 200.0e3), basis=AnalysisBasis.SECOND_ORDER)
+    # The axial force is still the applied one; only the moments moved.
+    assert solution.forces("col").axial.magnitude == pytest.approx(-200.0e3, rel=1e-6)
+
+
+def test_a_column_driven_past_its_critical_load_is_refused_rather_than_answered():
+    """A softened matrix that stops being positive definite is the buckling it can see."""
+    height = 4.0
+    critical = math.pi**2 * E_PA * IY_M4 / (4 * height**2)
+    with pytest.raises((MechanismFound, RefusalError)):
+        solve_frame(
+            _sway_column(height, 1.0e3, 4.0 * critical),
+            basis=AnalysisBasis.SECOND_ORDER,
+        )
+
+
+def test_a_basis_that_is_not_one_of_the_two_is_refused():
+    with pytest.raises(RefusalError, match="basis is one of"):
+        solve_frame(_sway_column(4.0, 1.0e3, 0.0), basis="third order")  # type: ignore[arg-type]
+
+
+def test_second_order_agrees_with_pynites_own_p_delta():
+    """An independently written implementation of the same analysis."""
+    height, lateral, axial = 4.0, 10.0e3, 200.0e3
+    ours = solve_frame(_sway_column(height, lateral, axial), basis=AnalysisBasis.SECOND_ORDER)
+    FEModel3D = pytest.importorskip(
+        "Pynite", reason="PyNiteFEA is the referee and is in the dev extra"
+    ).FEModel3D
+    model = FEModel3D()
+    model.add_material("steel", E_PA, G_PA, 0.3, 7850.0)
+    model.add_section("section", AREA_M2, IY_M4, IZ_M4, J_M4)
+    model.add_node("base", 0, 0, 0)
+    model.add_node("tip", 0, 0, height)
+    model.add_member("col", "base", "tip", "steel", "section")
+    model.def_support("base", True, True, True, True, True, True)
+    model.add_node_load("tip", "FX", lateral)
+    model.add_node_load("tip", "FZ", -axial)
+    model.analyze_PDelta(check_stability=False)
+
+    assert ours.displacement("tip").ux == pytest.approx(model.nodes["tip"].DX["Combo 1"], rel=1e-6)
+
+
+def test_every_basis_names_a_method_and_the_table_is_total():
+    from anvilate.frame import METHODS
+
+    assert set(METHODS) == set(AnalysisBasis)
+    assert all(text.strip() for text in METHODS.values())

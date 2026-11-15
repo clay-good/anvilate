@@ -27,6 +27,17 @@ B1/B2, EN 1993-1-1 §5.2). Solving P-Δ silently and then applying the code's am
 would double count, so the basis travels on every force record and the check is told
 which it has.
 
+```python
+solve_frame(frame, basis=AnalysisBasis.SECOND_ORDER)
+```
+
+builds each member's geometric stiffness from its own axial force and re-solves until
+those forces stop moving. The base moment of a swaying cantilever then comes out exactly
+`Hh + PΔ`, which is the defining relation and the test that says the geometric term is
+right rather than merely bigger. A frame driven past its elastic critical load is
+refused: the softened matrix stops being positive definite, which is the buckling this
+analysis can see.
+
 **A mechanism is named, never solved around.** A frame with a free mode has no unique
 answer. `solve_frame` raises `MechanismFound` naming the node and the freedom that moves
 under no stiffness, instead of the numbers a regularised matrix would return.
@@ -80,8 +91,8 @@ suite:
 | Three-span continuous beam, uniform load | support moments `0.1wL²`, reactions `0.4wL` and `1.1wL` |
 | Cantilever column, lateral tip load | `Ph³/3EI` and the base moment |
 
-Then **Pynite** (MIT, an independently written solver) solves a portal frame and a space
-frame with torsion, and the two agree to nine significant figures. It is in the dev
+Then **Pynite** (MIT, an independently written solver) solves a portal frame, a space
+frame with torsion and the P-Delta column, and the two agree to nine significant figures. It is in the dev
 extra, so CI always has it; the closed-form cases run without it.
 
 Two mistakes the referee caught, both recorded in the code where they were made: the
