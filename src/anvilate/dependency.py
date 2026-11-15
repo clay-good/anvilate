@@ -32,7 +32,7 @@ from ._models import EMPTY_MAP, FrozenMap, ItemCollection, Named, StatableModel,
 from .margin import MarginEntry
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
-from .units import Quantity
+from .units import Quantity, render
 
 _REGISTRY_SOURCE = "the check registry declaring each check's id, outputs, and consumptions"
 _DIMENSION_SOURCE = "the upstream check's declared output dimension in the check registry"
@@ -382,7 +382,11 @@ class ChainLink(StatableModel):
     parameter: Named
 
     def __str__(self) -> str:
-        return f"{self.upstream}.{self.output} = {self.value}"
+        # `render(pretty=True)`, not the quantity's own `str`: this line goes into a
+        # check's detail, which the terminal, the calculation report and the evidence
+        # bundle all print, and `N*m` is how the machine writes a moment. No chain had
+        # carried a moment before the frame solver did, so nothing had shown it.
+        return f"{self.upstream}.{self.output} = {render(self.value, pretty=True)}"
 
 
 class ChainRun(StatableModel):

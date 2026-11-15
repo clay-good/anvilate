@@ -136,6 +136,14 @@ definite, so every beam-only case still passes), and a released end whose *stiff
 condensed and whose *fixed-end load* was not (which left a hinge carrying `wL²/12`, the
 number a fixed end carries).
 
+## Worked end to end
+
+[`examples/skid_frame_solved.py`](../examples/skid_frame_solved.py): a skid whose four
+legs under two tied longitudinals are one redundancy more than statics can resolve. The
+solve says the loaded longitudinal takes about ten times the bending of the far one, the
+member checks run on those moments and say so, and the skid fails on strength while
+passing serviceability.
+
 ## Out of scope
 
 Plates and shells. Dynamics. Nonlinear material. Buckling eigenvalues. Anything that

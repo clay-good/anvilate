@@ -27,7 +27,7 @@ Builds on the member-force ingestion in `src/anvilate/interop.py` and the load p
 ## 4. Proof
 
 - [x] 4.1 Closed-form verification cases pinned; Pynite as optional referee in tests
-- [ ] 4.2 The skid frame example (`examples/skid_frame_document.py`) declares a frame and
+- [x] 4.2 The skid frame example (`examples/skid_frame_document.py`) declares a frame and
       its members are screened on solved forces
 - [x] 4.3 A docs page for frame analysis: what is solved, what is declared, what the
       external doorway is still for

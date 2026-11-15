@@ -9652,3 +9652,35 @@ def test_conveyor_bearing_maintenance_example_schedules_and_names_what_it_misses
     assert d["items_without_a_life_basis"] == 3.0
     assert d["spares_over_service_life"] == math.ceil(10 * 4_000 / d["interval_hours"])
     _assert_narrates_computed("conveyor_bearing_maintenance.py", namespace)
+
+
+def test_skid_frame_solved_example_screens_members_on_forces_nobody_typed():
+    """The case that was not possible before: an indeterminate load path, solved.
+
+    Four legs under two tied longitudinals is one redundancy more than statics can
+    resolve, so every assertion here is on a number the solve produced rather than on one
+    the example's author knew.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "skid_frame_solved.py"))
+    card, d = namespace["screen_skid"](), namespace["skid_numbers"]()
+
+    # It fails on strength and passes serviceability, which is the pair worth separating.
+    assert card.status is CheckStatus.FAIL
+    assert d["governing_safety_factor"] < namespace["REQUIRED_SAFETY_FACTOR"]
+    deflection = next(e for e in card.entries if e.name.endswith("deflection"))
+    assert deflection.status is CheckStatus.PASS
+
+    # Every bending entry ran on a solved moment and says so.
+    from anvilate.dependency import COMPUTED_FROM
+
+    bending = [e for e in card.entries if e.name.endswith(" bending")]
+    assert len(bending) == len(namespace["BEAMS"])
+    assert all(COMPUTED_FROM in entry.detail for entry in bending)
+    assert all("moment_y" in entry.detail for entry in bending)
+
+    # The redundancy is the point: the loaded longitudinal carries far more than the far
+    # one, and no hand split would have said by how much.
+    assert d["mid_span_moment_knm"] > 10.0
+    assert d["heaviest_leg_kn"] == pytest.approx(20.6, abs=0.5)
+    assert d["equilibrium_residual_n"] < 1e-6
+    _assert_narrates_computed("skid_frame_solved.py", namespace)
