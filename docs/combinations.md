@@ -126,6 +126,19 @@ flush faces.
 
 ![portal frame](combinations/portal_frame.png)
 
+### A guardrail run
+
+Two pipe posts, a top rail across their tops and a midrail between them, all one `tube`
+element: the posts run along `z` and the rails along `x` (`axis: x`). The far post goes
+under the rail's far end and so reaches the same floor as the first, and the midrail is
+held 462.55 mm under the top rail by a `face_to_face` mate with an offset, which puts its
+centre at 535 mm, midway to the 1,070 mm top edge that 29 CFR 1910.29(b)(1)-(2) ask for.
+What holds each post down is the anchorage example,
+[`guardrail_post_base_anchors.py`](../examples/guardrail_post_base_anchors.py).
+[`guardrail_run.combination.yaml`](../examples/combinations/guardrail_run.combination.yaml)
+
+![guardrail run](combinations/guardrail_run.png)
+
 ## What comes out
 
 - **A picture.** Four views on one sheet, each part in its own tone and numbered, with the

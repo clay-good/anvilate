@@ -32,6 +32,7 @@ _WORKED = (
     "bracket_on_plate",
     "collar_on_shaft",
     "flange_pair",
+    "guardrail_run",
     "lug_on_base_plate",
     "portal_frame",
 )
@@ -70,7 +71,7 @@ def _disc(diameter: float) -> float:
 
 def test_the_worked_combinations_are_the_ones_shipped():
     shipped = {path.name.removesuffix(".combination.yaml") for path in _EXAMPLES.glob("*.yaml")}
-    assert shipped == set(_WORKED) and len(_WORKED) == 5
+    assert shipped == set(_WORKED) and len(_WORKED) == 6
 
 
 @pytest.mark.parametrize("name", _WORKED)
@@ -264,6 +265,26 @@ def test_a_frame_of_members_stands_on_its_columns():
     assert _box(beam) == ((-50.0, -100.0, 1500.0), (50.0, 1900.0, 1700.0))
     assert _box(right) == ((-50.0, 1700.0, -1500.0), (50.0, 1900.0, 1500.0))
     assert built.card.passed and built.card.status is CheckStatus.PASS
+
+
+def test_a_guardrail_run_lays_its_rails_across_posts_that_stand_on_one_floor():
+    """add-walking-working-surfaces-pack 3.1: tube posts and tube rails, by mates alone.
+
+    The top rail is a tube laid along x, so its bottom is a side and not an end cap; the
+    far post goes under its far end and reaches the same floor as the first, and the
+    midrail sits between the posts' sides, 462.55 mm under the top rail.
+    """
+    built = _built("guardrail_run")
+    left, rail, right, mid = built.parts
+    assert _box(left) == ((-24.15, -24.15, 0.0), (24.15, 24.15, 1021.7))
+    # 29 CFR 1910.29(b)(1): the top edge 42 in (1,070 mm) above the walking surface.
+    assert _box(rail) == ((-24.15, -24.15, 1021.7), (1775.85, 24.15, 1070.0))
+    assert _box(right) == ((1727.55, -24.15, 0.0), (1775.85, 24.15, 1021.7))
+    # 1910.29(b)(2): the midrail midway between the top edge and the walking surface.
+    (low, high) = _box(mid)
+    assert (low[0], high[0]) == (24.15, 1727.55)
+    assert (low[2] + high[2]) / 2 == pytest.approx(1070.0 / 2, abs=1e-9)
+    assert _entry(built, "interference").status is CheckStatus.PASS
 
 
 def test_each_parts_own_verdict_is_on_the_combinations_card():

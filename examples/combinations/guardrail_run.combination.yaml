@@ -1,0 +1,116 @@
+# A worked combination: A guardrail bay of 1-1/2 in pipe: two posts, a top rail at 42 in and a midrail midway.
+#   anvilate combine examples/combinations/guardrail_run.combination.yaml
+anvilate_combination: 1.0.0
+name: guardrail-run
+description: 'A guardrail bay of 1-1/2 in pipe: two posts, a top rail at 42 in and a midrail midway.'
+parts:
+- id: left_post
+  spec:
+    anvilate_spec: 1.3.0
+    name: left_post
+    description: A post standing on the walking surface.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: tube
+    element_params:
+      name: left_post
+      shape: round
+      axis: z
+      outer_diameter: {magnitude: 48.3, unit: mm}
+      wall: {magnitude: 3.68, unit: mm}
+      length: {magnitude: 1021.7, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+- id: top_rail
+  spec:
+    anvilate_spec: 1.3.0
+    name: top_rail
+    description: The top rail, laid across the post tops.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: tube
+    element_params:
+      name: top_rail
+      shape: round
+      axis: x
+      outer_diameter: {magnitude: 48.3, unit: mm}
+      wall: {magnitude: 3.68, unit: mm}
+      length: {magnitude: 1800.0, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+- id: right_post
+  spec:
+    anvilate_spec: 1.3.0
+    name: right_post
+    description: A post under the top rail's far end, standing on the same surface.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: tube
+    element_params:
+      name: right_post
+      shape: round
+      axis: z
+      outer_diameter: {magnitude: 48.3, unit: mm}
+      wall: {magnitude: 3.68, unit: mm}
+      length: {magnitude: 1021.7, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+- id: midrail
+  spec:
+    anvilate_spec: 1.3.0
+    name: midrail
+    description: The midrail, between the posts at mid-height.
+    units: {value: SI, origin: user_stated}
+    material: {ref: ASTM-A36}
+    manufacturing: {process: cnc_milling}
+    element_type: tube
+    element_params:
+      name: midrail
+      shape: round
+      axis: x
+      outer_diameter: {magnitude: 48.3, unit: mm}
+      wall: {magnitude: 3.68, unit: mm}
+      length: {magnitude: 1703.4, unit: mm}
+    acceptance:
+      tiers: [T1_analytical]
+mates:
+- id: rail_on_post
+  kind: face_to_face
+  place: {part: top_rail, face: bottom}
+  'on': {part: left_post, face: top}
+- id: rail_end
+  kind: edge_flush
+  place: {part: top_rail, face: left}
+  'on': {part: left_post, face: left}
+- id: rail_face
+  kind: edge_flush
+  place: {part: top_rail, face: front}
+  'on': {part: left_post, face: front}
+- id: post_under_rail
+  kind: face_to_face
+  place: {part: right_post, face: top}
+  'on': {part: top_rail, face: bottom}
+- id: post_end
+  kind: edge_flush
+  place: {part: right_post, face: right}
+  'on': {part: top_rail, face: right}
+- id: post_face
+  kind: edge_flush
+  place: {part: right_post, face: front}
+  'on': {part: top_rail, face: front}
+- id: midrail_at_post
+  kind: face_to_face
+  place: {part: midrail, face: left}
+  'on': {part: left_post, face: right}
+- id: midrail_below_rail
+  kind: face_to_face
+  place: {part: midrail, face: top}
+  'on': {part: top_rail, face: bottom}
+  offset: {magnitude: 462.55, unit: mm}
+- id: midrail_face
+  kind: edge_flush
+  place: {part: midrail, face: front}
+  'on': {part: left_post, face: front}

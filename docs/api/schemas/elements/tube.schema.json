@@ -20,11 +20,21 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:elements:tube:1.1.0",
+  "$id": "urn:anvilate:schema:elements:tube:1.2.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate pack element 'tube': the fields a Design Spec puts in `element_params` when it declares `element_type: tube`. Generated from anvilate.packs.parts.Tube.",
   "properties": {
+    "axis": {
+      "default": "z",
+      "enum": [
+        "x",
+        "y",
+        "z"
+      ],
+      "title": "Axis",
+      "type": "string"
+    },
     "height": {
       "anyOf": [
         {
@@ -97,5 +107,5 @@
   ],
   "title": "Tube",
   "type": "object",
-  "x-anvilate-version": "1.1.0"
+  "x-anvilate-version": "1.2.0"
 }

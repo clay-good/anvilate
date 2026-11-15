@@ -371,6 +371,25 @@ def test_each_bracket_shape_has_its_outside_dimensions(shape, flanges, box):
     assert (size.X, size.Y, size.Z) == pytest.approx(box, abs=1e-6)
 
 
+@pytest.mark.parametrize(
+    ("axis", "box"),
+    [("z", (40.0, 20.0, 300.0)), ("x", (300.0, 40.0, 20.0)), ("y", (40.0, 300.0, 20.0))],
+)
+def test_a_tube_runs_along_its_axis_and_a_laid_tube_keeps_its_height_vertical(axis, box):
+    built = build_spec(_spec("tube", axis=axis))
+    bound = built.shape.bounding_box()
+    assert (bound.size.X, bound.size.Y, bound.size.Z) == pytest.approx(box, abs=1e-6)
+    # The length starts at the origin and runs the positive way, whichever axis it is.
+    along = "xyz".index(axis)
+    assert tuple(bound.min)[along] == pytest.approx(0.0, abs=1e-9)
+    assert built.volume_mm3 == pytest.approx((40 * 20 - 36 * 16) * 300, rel=1e-6)
+
+
+def test_a_tube_refuses_an_axis_it_does_not_have():
+    with pytest.raises(Exception, match="axis"):
+        build_spec(_spec("tube", axis="w"))
+
+
 def test_a_round_tube_and_a_plain_bushing_are_the_other_branches():
     tube = build_spec(_spec("tube", shape="round", outer_diameter=_mm(30), width=None, height=None))
     assert tube.volume_mm3 == pytest.approx((_disc(30) - _disc(26)) * 300, rel=1e-6)

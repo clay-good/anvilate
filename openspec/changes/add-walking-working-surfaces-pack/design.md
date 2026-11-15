@@ -118,25 +118,22 @@ four-bolt figure, because only one is ever in tension, and **across** it they ar
 — two anchors on one line resist no moment about that line. The same plate works or is a
 mechanism depending on which way it is turned, and nothing on the drawing says which.
 
-## Why the drawable run is blocked (task 3.1, second half)
+## The drawable run (task 3.1, second half)
 
-A guardrail run of tube posts and tube rails cannot be expressed as a combination today,
-for two reasons that are both checkable rather than matters of taste:
+The run was blocked because the `tube` element only built along Z: a tube's `bottom` was
+its end cap, so a rail mated to a post's top stood on it end to end, and every placement
+the mates allowed for a second post put it on top of the rail (a search over all 46,656
+three-mate face combinations found four solutions, all that one). The bundled profile
+table holds only W shapes, so `beam_member` had no round section to name either.
 
-1. **The `tube` element builds along Z.** In a combination a tube can therefore be a post
-   but not a horizontal rail seated on posts: a tube's `bottom` face is its *end cap*, so
-   `face_to_face(rail.bottom, post.top)` stacks the rail on the post end to end. A mate
-   set that lays the rail horizontal beside a post does exist — `face_to_face(front,
-   right)` with two `edge_flush` mates — but then no mate places a **second post on the
-   ground** at the rail's far end: every placement the vocabulary allows puts that post
-   *on top of* the rail. A search over all 46,656 three-mate face combinations found four
-   solutions and all four were that one.
-2. **The alternative, `beam_member`, takes a catalogue section**, and the bundled profile
-   table holds **only W shapes** — no HSS, no pipe, no CHS. A round-tube rail has no
-   designation to name.
+Of the three ways out recorded here — a tube along another axis, a mate at an offset, or
+hollow sections in the profile table — the first was the smallest and was taken: `tube`
+takes `axis: x | y | z` (default `z`), and a laid rectangular tube keeps `height`
+vertical. The offset turned out to exist already: a `face_to_face` mate's `offset` holds
+the midrail 462.55 mm under the top rail without touching it.
 
-So the run needs one of: a tube that can be declared along an axis other than Z, a mate
-that places a part at a declared offset from another without touching it, or hollow
-sections in the profile table. The portal-frame combination already shows the pattern the
-vocabulary *does* support — a horizontal member seated on two columns — so none of this is
-a gap in combinations as such, only in what a guardrail is made of.
+`examples/combinations/guardrail_run.combination.yaml` is two 1-1/2 in pipe posts, a
+1,800 mm top rail across their tops with its top edge at 1,070 mm (1910.29(b)(1)), and a
+midrail centred at 535 mm (1910.29(b)(2)), placed by nine mates and no coordinate. The
+test pins every part's box.
+

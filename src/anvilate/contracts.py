@@ -716,6 +716,8 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     "tension_member": "1.4.0",
     # 1.1.0 adds the support bearing check's optional fields.
     "timber_beam": "1.2.0",
+    # 1.2.0 adds the optional `axis` a tube's length runs along, so a rail can lie down.
+    "tube": "1.2.0",
     "transmission_shaft": "1.2.0",
     "ventilation_zone": "1.3.0",
     "welded_connection": "1.3.0",

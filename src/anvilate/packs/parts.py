@@ -588,12 +588,18 @@ class Clevis(_Part):
 
 
 class Tube(_Part):
-    """A straight tube cut to ``length``: ``round`` (outer diameter) or ``rectangular``."""
+    """A straight tube cut to ``length``: ``round`` (outer diameter) or ``rectangular``.
+
+    ``axis`` is the direction its length runs from the origin: ``z`` stands it up as a
+    post, ``x`` or ``y`` lays it down as a rail. A laid-down rectangular tube keeps
+    ``height`` vertical, so the same section reads the same way whichever way it runs.
+    """
 
     positive_fields = ("outer_diameter", "width", "height", "wall", "length")
 
     name: Named
     shape: Literal["round", "rectangular"] = "round"
+    axis: Literal["x", "y", "z"] = "z"
     wall: Quantity
     length: Quantity
     outer_diameter: Quantity | None = None

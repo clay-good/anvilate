@@ -41,7 +41,7 @@ def _call(name: str, arguments: dict) -> dict:
 
 def test_the_guide_has_one_section_and_one_picture_for_each_worked_combination():
     page = (_REPO / "docs" / "combinations.md").read_text(encoding="utf-8")
-    assert len(_NAMES) == 5
+    assert len(_NAMES) == 6
     pictured = re.findall(r"!\[[^\]]+\]\(combinations/(\w+)\.png\)", page)
     linked = re.findall(r"\]\(\.\./examples/combinations/(\w+)\.combination\.yaml\)", page)
     assert sorted(pictured) == _NAMES and sorted(linked) == _NAMES

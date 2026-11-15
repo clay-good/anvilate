@@ -369,6 +369,6 @@ A straight round or rectangular tube cut to length. **drawn, not checked**.
 ![tube](parts/tube.png)
 
 - Required: `name` (text), `wall` (quantity), `length` (quantity)
-- Optional: `shape` (round | rectangular), `outer_diameter` (quantity), `width` (quantity), `height` (quantity), `material` (text)
+- Optional: `shape` (round | rectangular), `axis` (x | y | z), `outer_diameter` (quantity), `width` (quantity), `height` (quantity), `material` (text)
 - Outputs: views, step, 3mf
 - Example: [`examples/parts/tube.spec.yaml`](../examples/parts/tube.spec.yaml)

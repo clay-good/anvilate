@@ -830,7 +830,14 @@ def test_the_command_line_measures_a_file_and_lists_a_folder(tmp_path):
 
 @pytest.mark.parametrize(
     "name",
-    ["bracket_on_plate", "collar_on_shaft", "flange_pair", "lug_on_base_plate", "portal_frame"],
+    [
+        "bracket_on_plate",
+        "collar_on_shaft",
+        "flange_pair",
+        "guardrail_run",
+        "lug_on_base_plate",
+        "portal_frame",
+    ],
 )
 def test_an_assembly_is_read_back_as_the_parts_and_places_that_wrote_it(name, tmp_path):
     """The tree is read from the file's text and held to the combination that wrote it.

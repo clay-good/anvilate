@@ -23,9 +23,10 @@ in `src/anvilate/packs/industrial.py`, and `add-frame-analysis`.
 
 ## 3. Parts and proof
 
-- [ ] 3.1 A guardrail run as a combination of tube posts and rails; post base on anchors
-      — the **post base on anchors** is built (`anvilate.analysis.anchorage`,
-      `examples/guardrail_post_base_anchors.py`); the **drawable run** is blocked on the
-      combination vocabulary, see design.md
+- [x] 3.1 A guardrail run as a combination of tube posts and rails; post base on anchors
+      — the post base is `anvilate.analysis.anchorage` with
+      `examples/guardrail_post_base_anchors.py`; the run is
+      `examples/combinations/guardrail_run.combination.yaml`, drawable once `tube` took an
+      `axis` (see design.md)
 - [x] 3.2 Worked examples: a mezzanine guardrail and a ship stair, each with a failure
 - [x] 3.3 A docs page for walking-working surfaces: declaring the regime, what is checked

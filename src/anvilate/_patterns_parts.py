@@ -658,8 +658,12 @@ def build_clevis(clevis: parts.Clevis) -> BuiltGeometry:
 
 
 def build_tube(tube: parts.Tube) -> BuiltGeometry:
-    """A round or rectangular tube standing on z = 0, its length along +z."""
-    from build123d import Box
+    """A round or rectangular tube whose length runs from the origin along ``tube.axis``.
+
+    Along ``z`` it stands on z = 0 with ``width`` along x. Laid along ``x`` or ``y`` it is
+    turned a quarter about the other horizontal axis, with ``height`` kept vertical.
+    """
+    from build123d import Box, Rot
 
     geometry._kernel()
     tag = "tube"
@@ -672,10 +676,17 @@ def build_tube(tube: parts.Tube) -> BuiltGeometry:
     else:
         width, height = _mm(tube.width, "width", tag), _mm(tube.height, "height", tag)
         _inside(2 * wall, min(width, height), element=tag, inner_field="wall", outer_field="width")
-        shape = Box(width, height, length, align=_low()) - Box(
-            width - 2 * wall, height - 2 * wall, length, align=_low()
+        # Turning about y puts the section's x on the vertical, so the box is drawn with
+        # height there before it turns; about x it is the section's y that goes vertical.
+        across, up = (height, width) if tube.axis == "x" else (width, height)
+        shape = Box(across, up, length, align=_low()) - Box(
+            across - 2 * wall, up - 2 * wall, length, align=_low()
         )
         dimensions = {"width": width, "height": height, "wall": wall, "length": length}
+    if tube.axis == "x":
+        shape = Rot(0, 90, 0) * shape
+    elif tube.axis == "y":
+        shape = Rot(-90, 0, 0) * shape
     return _built(tube, tag, shape, dimensions)
 
 
