@@ -646,6 +646,7 @@ product.Connection
 product.PlacedJoint
 product.OpenInterface
 product.MassGrowth
+product.LateralAcceleration
 product.Limit
 product.ProductLoad
 product.Split

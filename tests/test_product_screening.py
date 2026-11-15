@@ -739,3 +739,120 @@ def test_a_determinate_path_attributes_nothing_because_there_is_nothing_to_attri
     for step in report.load_path:
         entry = _named(report, f"load path {step.body}")
         assert "share assumed above it" not in entry.detail
+
+
+# --- A sideways acceleration, and the part that goes first ------------------------------
+#
+# A vertical acceleration scales every weight. A lateral one makes a horizontal force at
+# each body's centre of mass, and the moment of it moves the point the vertical load acts
+# at. That is how a product that stands up under gravity tips over on a truck.
+
+
+def _shoved(g: float, direction=(1.0, 0.0)) -> dict:
+    document = _carted(_THREE, ("right", "back"))
+    if g:
+        document["screening"]["lateral_acceleration"] = {
+            "value": {"magnitude": g, "unit": "g0"},
+            "direction": list(direction),
+            "source": "transport shock, declared",
+        }
+    return document
+
+
+def _statuses(g: float) -> dict[str, CheckStatus]:
+    report = product_screening(parse_product(_shoved(g)))
+    return {step.body: step.status for step in report.load_path}
+
+
+def test_a_lateral_acceleration_moves_the_point_the_load_acts_at():
+    still = {s.body: s for s in product_screening(parse_product(_shoved(0))).load_path}
+    shoved = {s.body: s for s in product_screening(parse_product(_shoved(0.3))).load_path}
+    assert still["cart/frame"].lateral_n == 0.0 and still["cart/frame"].shift_mm == 0.0
+    # 63 kg at 0.3 g is 185 N sideways, and it moves the frame's load point outward.
+    assert shoved["cart/frame"].lateral_n == pytest.approx(63 * 0.3 * 9.80665, rel=1e-3)
+    assert shoved["cart/frame"].shift_mm > 0
+    assert shoved["cart/frame"].at_mm[0] > still["cart/frame"].at_mm[0]
+    # Along x only: the direction is declared and nothing moves across it.
+    assert shoved["cart/frame"].at_mm[1] == pytest.approx(still["cart/frame"].at_mm[1])
+
+
+def test_the_direction_is_the_declared_one_and_not_an_axis():
+    across = {
+        s.body: s for s in product_screening(parse_product(_shoved(0.3, (0.0, 1.0)))).load_path
+    }
+    still = {s.body: s for s in product_screening(parse_product(_shoved(0))).load_path}
+    assert across["cart/frame"].at_mm[1] > still["cart/frame"].at_mm[1]
+    assert across["cart/frame"].at_mm[0] == pytest.approx(still["cart/frame"].at_mm[0])
+
+
+def test_the_caster_goes_over_ten_times_before_the_cart_does():
+    """The finding: the slender part in the stack fails first, by an order of magnitude.
+
+    A caster is 60 mm across and 100 mm tall. The sideways force arrives at its top and
+    has the whole of that height as a lever, so its own load walks outside its own
+    footprint at **0.30 g**. The cart on its three casters does not tip until **2.99 g**.
+    A check on the product as a whole would have reported it standing up through ten times
+    the acceleration that lays a wheel over.
+    """
+    assert all(status is CheckStatus.PASS for status in _statuses(0.0).values())
+    assert all(status is CheckStatus.PASS for status in _statuses(0.29).values())
+    at_three_tenths = _statuses(0.31)
+    assert at_three_tenths["cart/caster3"] is CheckStatus.FAIL
+    assert at_three_tenths["cart/frame"] is CheckStatus.PASS
+    # And the frame itself holds out to very nearly three g.
+    assert _statuses(2.9)["cart/frame"] is CheckStatus.PASS
+    assert _statuses(3.1)["cart/frame"] is CheckStatus.FAIL
+
+
+def test_the_sideways_force_is_named_on_the_entry_with_its_source():
+    report = product_screening(parse_product(_shoved(0.3)))
+    entry = _named(report, "load path cart/frame")
+    assert "N sideways (transport shock, declared)" in entry.detail
+    assert "moved that point" in entry.detail
+    # A product with no lateral acceleration says nothing about one.
+    quiet = _named(product_screening(parse_product(_shoved(0))), "load path cart/frame")
+    assert "sideways" not in quiet.detail
+
+
+def test_a_load_given_as_a_force_is_not_accelerated_sideways():
+    """A mass has a sideways force; a force is a force, and no direction is invented."""
+    as_mass = product_screening(parse_product(_shoved(0.5)))
+    document = _shoved(0.5)
+    document["screening"]["loads"] = [
+        {"item": "plate", "force": _q(50 * 9.80665, "N"), "source": "payload spec"}
+    ]
+    as_force = product_screening(parse_product(document))
+    by_mass = {s.body: s for s in as_mass.load_path}["cart/frame"]
+    by_force = {s.body: s for s in as_force.load_path}["cart/frame"]
+    assert by_mass.carries_n == pytest.approx(by_force.carries_n, rel=1e-6)
+    assert by_mass.lateral_n > by_force.lateral_n
+
+
+def test_a_lateral_acceleration_points_somewhere_and_is_finite():
+    for bad, message in (
+        ({"magnitude": 1.0, "unit": "g0"}, None),
+        ({"magnitude": -1.0, "unit": "g0"}, "non-negative"),
+        ({"magnitude": 1.0, "unit": "m"}, "acceleration"),
+    ):
+        document = _shoved(0)
+        document["screening"]["lateral_acceleration"] = {
+            "value": bad,
+            "direction": [1.0, 0.0],
+            "source": "declared",
+        }
+        if message is None:
+            product_screening(parse_product(document))
+            continue
+        with pytest.raises(ValueError, match=message):
+            parse_product(document)
+    # A direction with no length is this model's own refusal; a non-finite one is caught
+    # a layer up, by the base class that refuses any infinity in a document.
+    for direction, says in (([0.0, 0.0], "has no length"), ([float("inf"), 0.0], "is inf")):
+        document = _shoved(0)
+        document["screening"]["lateral_acceleration"] = {
+            "value": {"magnitude": 1.0, "unit": "g0"},
+            "direction": direction,
+            "source": "declared",
+        }
+        with pytest.raises(ValueError, match=says):
+            parse_product(document)

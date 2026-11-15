@@ -85,6 +85,7 @@ __all__ = [
     "PlacedJoint",
     "OpenInterface",
     "MassGrowth",
+    "LateralAcceleration",
     "Limit",
     "ProductLoad",
     "Split",
@@ -121,7 +122,7 @@ __all__ = [
     "write_product_step",
 ]
 
-PRODUCT_VERSION: Literal["1.15.0"] = "1.15.0"
+PRODUCT_VERSION: Literal["1.16.0"] = "1.16.0"
 _DOCUMENT_SOURCE = "the product document"
 
 
@@ -601,6 +602,51 @@ class Limit(StatableModel):
     source: Provenance
 
 
+class LateralAcceleration(StatableModel):
+    """A horizontal acceleration the product is carried at, and which way it points.
+
+    A vertical acceleration scales every weight. A lateral one does not: it makes a
+    *horizontal* force at each body's centre of mass, and the moment of that force about
+    whatever the body rests on **moves the point its load acts at**. That is how a product
+    that stands up under gravity tips over on a truck, and nothing short of the direction
+    says which way it goes.
+
+    ``direction`` is a plan vector; its length does not matter and is normalised. The
+    magnitude is ``value``, and gravity is not included in it — this is the sideways part,
+    and ``vertical_acceleration`` is the down part.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
+
+    value: Quantity
+    direction: tuple[float, float]
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _points_somewhere(self) -> LateralAcceleration:
+        if not (
+            self.value.has_dimension("[acceleration]")
+            and math.isfinite(self.value.magnitude)
+            and self.value.magnitude >= 0
+        ):
+            raise _refuse(f"a lateral acceleration is a finite, non-negative [acceleration]; "
+                          f"got {self.value}",
+                          subject="screening.lateral_acceleration")  # fmt: skip
+        length = math.hypot(*self.direction)
+        if not math.isfinite(length) or length <= 0:
+            raise _refuse(f"a lateral acceleration points somewhere; its direction is "
+                          f"{self.direction}, which has no length",
+                          subject="screening.lateral_acceleration")  # fmt: skip
+        return self
+
+    @property
+    def unit(self) -> tuple[float, float]:
+        """The direction as a unit plan vector."""
+        length = math.hypot(*self.direction)
+        return (self.direction[0] / length, self.direction[1] / length)
+
+
 class ProductLoad(StatableModel):
     """A load the product carries: on an item, as a force down or a mass under gravity."""
 
@@ -907,6 +953,10 @@ class Screening(StatableModel):
     more supports than determine it, each with its basis. ``vertical_acceleration`` is the
     acceleration the load path is carried at, gravity included and acting down: each body's
     weight and each load given as a mass are carried at m·a rather than m·g.
+    ``lateral_acceleration`` is the sideways part, with the direction it points: it makes a
+    horizontal force at each body's centre of mass, and the moment of that force moves the
+    point each body's load acts at — which is how a product that stands up under gravity
+    tips over on a truck.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -921,6 +971,7 @@ class Screening(StatableModel):
     min_clearance: Limit | None = None
     loads: tuple[ProductLoad, ...] = Field(default=(), max_length=256)
     vertical_acceleration: Limit | None = None
+    lateral_acceleration: LateralAcceleration | None = None
     splits: tuple[Split, ...] = Field(default=(), max_length=256)
     thermal: Thermal | None = None
     chains: tuple[ProductChain, ...] = Field(default=(), max_length=64)
@@ -976,7 +1027,8 @@ class Product(StatableModel):
     # separated for service, and 1.10.0 stack-up chains through its items, and 1.11.0 its
     # materials and what they must withstand, and 1.12.0 a unit price on a part or a
     # component record, and 1.13.0 a limit on the centre of mass's height, and 1.14.0 the
-    # vertical acceleration its load path is carried at, and 1.15.0 a chain band's source; an
+    # vertical acceleration its load path is carried at, and 1.15.0 a chain band's source,
+    # and 1.16.0 the lateral acceleration that moves the point each body's load acts at; an
     # older document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
@@ -995,6 +1047,7 @@ class Product(StatableModel):
         "1.13.0",
         "1.14.0",
         "1.15.0",
+        "1.16.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

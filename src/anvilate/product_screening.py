@@ -579,6 +579,10 @@ class LoadStep(StatableModel):
     reactions: tuple[Reaction, ...] = ()
     status: CheckStatus
     note: str = ""
+    #: The horizontal force arriving at this body, and how far the moment of it moved the
+    #: point the vertical load acts at. Zero without a declared lateral acceleration.
+    lateral_n: float = 0.0
+    shift_mm: float = 0.0
 
 
 def _overlap(a: Any, b: Any) -> tuple[float, float, float] | None:
@@ -604,11 +608,20 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
     accel = declared.vertical_acceleration if declared is not None else None
     a = _G if accel is None else accel.value.to("m/s**2").magnitude
     at = "" if accel is None else f", weights at {a / _G:.4g} g ({accel.source}),"
+    lateral = declared.lateral_acceleration if declared is not None else None
+    sideways = 0.0 if lateral is None else lateral.value.to("m/s**2").magnitude
+    push = (0.0, 0.0) if lateral is None else lateral.unit
     incoming: dict[str, list[tuple[float, float, float, str]]] = {b.path: [] for b in bodies}
+    # The horizontal force arriving at each body, and the height it acts at. A horizontal
+    # force passes down undiminished; what grows as it goes is its moment about whatever
+    # the next body rests on, so the height it was delivered at travels with it.
+    horizontal: dict[str, list[tuple[float, float]]] = {b.path: [] for b in bodies}
     for body in bodies:
         if body.mass_kg is not None and body.mass_kg > 0:
-            x, y, _z = body.center_of_mass_mm
+            x, y, z = body.center_of_mass_mm
             incoming[body.path].append((body.mass_kg * a, x, y, "its own weight"))
+            if sideways > 0:
+                horizontal[body.path].append((body.mass_kg * sideways, z))
     for load in declared.loads if declared is not None else ():
         base = f"{product.name}/{load.item}"
         held = [b for b in bodies if b.path == base or b.path.startswith((base + "/", base + "["))]
@@ -621,6 +634,11 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
         cx = (target.box_min_mm[0] + target.box_max_mm[0]) / 2
         cy = (target.box_min_mm[1] + target.box_max_mm[1]) / 2
         incoming[target.path].append((force, cx, cy, f"the load on {load.item} ({load.source})"))
+        if sideways > 0 and load.mass is not None:
+            # A load given as a MASS is accelerated sideways too; one given as a force is
+            # a force, and this does not invent a direction for it.
+            height = (target.box_min_mm[2] + target.box_max_mm[2]) / 2
+            horizontal[target.path].append((load.mass.to("kg").magnitude * sideways, height))
     splits = {split.body: split for split in (declared.splits if declared is not None else ())}
     unknown: set[str] = set()
     # The basis a body's load came through, and every basis above it. A share that came
@@ -637,6 +655,15 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
             continue
         xw = sum(f * x for f, x, _y, _s in inputs) / total
         yw = sum(f * y for f, _x, y, _s in inputs) / total
+        # The sideways force's moment about this body's own bottom moves the point the
+        # vertical load acts at. That shift is the whole of what a lateral acceleration
+        # does to a load path, and it is what turns a passing check into "it would tip".
+        arriving = horizontal[body.path]
+        side_force = sum(f for f, _z in arriving)
+        moment = sum(f * (z - body.box_min_mm[2]) for f, z in arriving)
+        shift = moment / total if total > 0 else 0.0
+        xw += shift * push[0]
+        yw += shift * push[1]
         supports: list[tuple[str, float, float, Any]] = []
         for other in bodies:
             if other is body or abs(body.box_min_mm[2] - other.box_max_mm[2]) > _TOUCH_MM:
@@ -669,6 +696,13 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
         if split is not None and forces is not None:
             passed_on.append(f"{body.path} divided as declared ({split.basis})")
         for reaction in reactions:
+            if reaction.support != "the floor" and side_force > 0 and total > 0:
+                # Each support takes the sideways force in the same share as the vertical
+                # one, delivered at this body's bottom.
+                horizontal[reaction.support].append(
+                    (side_force * reaction.force_n / total, body.box_min_mm[2])
+                )
+        for reaction in reactions:
             if reaction.support != "the floor":
                 incoming[reaction.support].append(
                     (reaction.force_n, reaction.at_mm[0], reaction.at_mm[1], body.path)
@@ -678,7 +712,8 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
                         inherited[reaction.support].append(basis)
         steps.append(LoadStep(body=body.path, carries_n=round(total, 6),
                               at_mm=(round(xw, 3), round(yw, 3)), reactions=reactions,
-                              status=status, note=note))  # fmt: skip
+                              status=status, note=note, lateral_n=round(side_force, 6),
+                              shift_mm=round(shift, 3)))  # fmt: skip
         carried = "; ".join(f"{r.force_n:.4g} N to {r.support} at ({r.at_mm[0]:g}, "
                             f"{r.at_mm[1]:g})" for r in reactions)  # fmt: skip
         upstream_note = (
@@ -686,9 +721,16 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
             if inherited[body.path]
             else ""
         )
+        sideways_note = (
+            f"; {side_force:.4g} N sideways ({lateral.source}) moved that point "
+            f"{shift:.4g} mm along {push}"
+            if side_force > 0 and lateral is not None
+            else ""
+        )
         detail = (f"{body.path} carries {total:.4g} N{at} acting at ({xw:.4g}, {yw:.4g}) mm"
                   + (f": {carried}; ΣFz, ΣMx and ΣMy balance" if reactions else "")
-                  + (f"; {note}" if note else "") + upstream_note)  # fmt: skip
+                  + sideways_note + (f"; {note}" if note else "")
+                  + upstream_note)  # fmt: skip
         entries.append(ScorecardEntry(
             name=f"load path {body.path}", status=status, detail=detail,
             underived=_SUMMED if status is not CheckStatus.NOT_EVALUATED else None,

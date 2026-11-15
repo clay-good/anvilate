@@ -86,6 +86,28 @@ puts twice its at-rest load on each caster, and a 100 N hand on the plate adds
 vertical_acceleration: {value: {magnitude: 2, unit: g0}, source: transport shock}
 ```
 
+**A lateral acceleration is a different thing, and it is the one that tips the product
+over.** It does not scale weights; it makes a horizontal force at each body's centre of
+mass, and the moment of that force **moves the point each body's vertical load acts at**.
+The existing check — a load acting outside what the body rests on fails, as lifting off —
+then does the rest.
+
+```yaml
+lateral_acceleration: {value: {magnitude: 0.3, unit: g0}, direction: [1, 0], source: transport shock}
+```
+
+The direction is declared, because nothing else says which way the product goes. A load
+given as a **mass** is accelerated sideways; one given as a **force** is a force, and no
+direction is invented for it. Each entry names the sideways force, its source, and how
+far it moved the point.
+
+**The slender part goes first, by an order of magnitude.** On the worked cart — a 600 x
+400 frame on three casters, carrying a 50 kg payload — a caster is 60 mm across and
+100 mm tall, so the sideways force arriving at its top has the whole of that height as a
+lever and walks its own load outside its own footprint at **0.30 g**. The cart on its
+three casters does not tip until **2.99 g**. A check on the product as a whole would have
+reported it standing up through ten times the acceleration that lays a wheel over.
+
 Expansion coefficients are declared with their source, not looked up: the bundled
 materials carry none. A dissimilar connection with no range, or a material with no declared
 coefficient, is not evaluated, naming what is missing.
