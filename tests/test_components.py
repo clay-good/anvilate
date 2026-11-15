@@ -240,7 +240,9 @@ def test_a_record_is_drafted_from_a_measured_vendor_model(tmp_path):
     assert record.model.file == "motor.step" and len(record.model.sha256) == 64
     assert len(record.holes) == 4 and {h.face for h in record.holes} == {"bottom"}
     corners = sorted((h.x.magnitude, h.y.magnitude) for h in record.holes)
-    assert corners == pytest.approx([(-23.5, -23.5), (-23.5, 23.5), (23.5, -23.5), (23.5, 23.5)])
+    # pytest 9.2 refuses nested approx, so compare the corners flattened.
+    flat = [c for corner in corners for c in corner]
+    assert flat == pytest.approx([-23.5, -23.5, -23.5, 23.5, 23.5, -23.5, 23.5, 23.5])
     assert [h.z.magnitude for h in record.holes] == pytest.approx([-38.0] * 4)
 
 
