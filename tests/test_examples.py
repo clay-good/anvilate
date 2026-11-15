@@ -9713,3 +9713,26 @@ def test_ship_stair_example_is_three_violations_as_one_kind_and_none_as_the_othe
     assert d["tread_factor_against_the_floor"] < 1.0
     assert d["ship_fails"] == 1.0 and d["stronger_passes"] == 1.0
     _assert_narrates_computed("ship_stair_access.py", namespace)
+
+
+def test_bolted_timber_splice_example_shows_the_gap_term_has_no_floor():
+    """The finding: the gap enters the governing mode as a lever arm, so the loss keeps
+    growing, and the yield limit clause an engineer reaches for first has no such term."""
+    namespace = runpy.run_path(str(_EXAMPLES / "bolted_timber_splice.py"))
+    d = namespace["bolted_timber_splice"]()
+
+    # Every gap costs capacity, and a bigger gap costs strictly more: no floor.
+    assert d["tight_lbf"] > d["quarter_inch_gap_lbf"] > d["one_inch_gap_lbf"]
+    assert d["quarter_inch_loss_percent"] == pytest.approx(10.9, abs=0.1)
+    assert d["one_inch_loss_percent"] == pytest.approx(34.7, abs=0.1)
+    # And resolving the grain angle costs again, on top of a tight connection.
+    assert d["angled_grain_loss_percent"] == pytest.approx(9.4, abs=0.1)
+    # Mode IIIs governs throughout — the gap never hands the connection to another mode,
+    # which is why the loss is unbounded rather than capped by the next mode up.
+    for result in (
+        namespace["drawn_tight"](),
+        namespace["with_a_gap"](namespace["Q"]("4 inch")),
+        namespace["at_an_angle_to_the_grain"](),
+    ):
+        assert result.governing.mode.value == "IIIs"
+    _assert_narrates_computed("bolted_timber_splice.py", namespace)

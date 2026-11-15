@@ -499,6 +499,12 @@ modules:
   solar_pv/solar_thermal/wind_power; plus the turbine specific speed
   Ω_s = ω·√(P/ρ)/(g·H)^1.25 that picks Pelton, Francis, or Kaplan (a power-based group, distinct
   from the flow-based pump one)
+- :mod:`~anvilate.analysis.dowel_yield` — dowel-type timber connections by the yield limit
+  equations (AWC TR12 Table 1-1, the generalized published form of the NDS equations): the six
+  Johansen modes of a bolt, lag screw, nail or screw through wood, the unreduced 5% offset
+  yield value of each and which one governs, with the two modes a double-shear connection
+  cannot reach reported as not applicable rather than silently dropped; plus the dowel bearing
+  strength from specific gravity and the Hankinson value at an angle to the grain
 - :mod:`~anvilate.analysis.drag` — fluid-dynamic forces: the drag force ½·ρ·V²·C_d·A (wind
   load on a sign, current on a member), the terminal (settling) velocity where drag balances
   weight, the jet impact force ρ·Q·V·(1−cos θ) a stream delivers to a surface, and the
@@ -1747,6 +1753,19 @@ from .diode import (
     led_resistor_power,
     led_series_resistor,
     thermal_voltage,
+)
+from .dowel_yield import (
+    BEARING_FORMULA_CITATION,
+    DOUBLE_SHEAR_MODES,
+    TR12_CITATION,
+    DowelConnection,
+    DowelYield,
+    ModeCapacity,
+    ShearPlanes,
+    YieldMode,
+    dowel_bearing_strength,
+    dowel_yield_capacity,
+    hankinson_bearing_strength,
 )
 from .drag import (
     archimedes_number,
@@ -3988,6 +4007,17 @@ __all__ = [
     "conveyor_mass_flow",
     "belt_speed_for_capacity",
     "conveyor_lift_power",
+    "TR12_CITATION",
+    "BEARING_FORMULA_CITATION",
+    "YieldMode",
+    "ShearPlanes",
+    "DOUBLE_SHEAR_MODES",
+    "DowelConnection",
+    "ModeCapacity",
+    "DowelYield",
+    "dowel_yield_capacity",
+    "dowel_bearing_strength",
+    "hankinson_bearing_strength",
     "archimedes_number",
     "galilei_number",
     "drag_force",

@@ -647,6 +647,17 @@ diode.diode_voltage
 diode.led_resistor_power
 diode.led_series_resistor
 diode.thermal_voltage
+dowel_yield.TR12_CITATION
+dowel_yield.BEARING_FORMULA_CITATION
+dowel_yield.YieldMode
+dowel_yield.ShearPlanes
+dowel_yield.DOUBLE_SHEAR_MODES
+dowel_yield.DowelConnection
+dowel_yield.ModeCapacity
+dowel_yield.DowelYield
+dowel_yield.dowel_yield_capacity
+dowel_yield.dowel_bearing_strength
+dowel_yield.hankinson_bearing_strength
 drag.archimedes_number
 drag.galilei_number
 drag.drag_force

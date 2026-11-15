@@ -14,11 +14,14 @@ column stability factor (§3.7), bearing perpendicular to grain (§3.10), and th
 combined bending-plus-axial interaction (§3.9.2). Each is a closed-form screen against
 an adjusted design value you supply the reference for.
 
-**What is not.** Connections (bolts, nails, screws, shear plates — NDS Chapters 11-13),
-glulam and cross-laminated timber specifics, fire design, vibration serviceability,
+**What is not.** Shear plates and split rings, metal connector plates, hollow or
+tapered fasteners, glulam and cross-laminated timber specifics, fire design, vibration serviceability,
 the size factor C_F and the glulam volume factor C_V as derivations, and
 any diaphragm or shear-wall system behaviour. Those factors can still enter through the
-caller's chain; Anvilate just does not derive them. **The beam stability factor C_L is
+caller's chain; Anvilate just does not derive them. **Dowel-type connections are
+screened now** — see [the yield limit equations](#connections--the-yield-limit-equations)
+below, which carry a bolt, lag screw, nail or screw to its governing yield mode. **The
+beam stability factor C_L is
 derived now** (§3.3.3) — see below; the Table 3.3.3 conversion from an unbraced length to
 an effective length l_e stays the caller's, because it depends on where the load acts and
 how the compression edge is held, neither of which a section knows.
@@ -238,6 +241,74 @@ The build is the audited `timber_beam/1` pattern: a box of the dressed width and
 the span, depth vertical, with the bearing ends not modelled, since the element states a
 bearing length and not how far the member runs past it.
 
+## Connections — the yield limit equations
+
+A timber structure fails at its connections more often than in its members. A dowel-type
+fastener — a bolt, lag screw, nail or screw — is checked by the yield limit equations,
+Johansen's rigid-plastic theory, which the NDS adopted as the European Yield Model. Six
+modes, each a closed form; the capacity is the least of them.
+
+`dowel_yield_capacity` takes a `DowelConnection` and returns all six, each with its
+capacity or the reason it does not apply:
+
+```python
+from anvilate.analysis.dowel_yield import (
+    DowelConnection, ShearPlanes, YieldMode, dowel_bearing_strength, dowel_yield_capacity,
+)
+from anvilate.units import Quantity
+
+Q = Quantity.parse
+bearing = dowel_bearing_strength(specific_gravity=0.50, diameter=Q("0.75 inch"))
+result = dowel_yield_capacity(
+    DowelConnection(
+        diameter=Q("0.75 inch"),
+        bending_yield_strength=Q("45000 psi"),
+        main_bearing_length=Q("3.5 inch"),
+        side_bearing_length=Q("1.5 inch"),
+        main_bearing_strength=bearing,
+        side_bearing_strength=bearing,
+        shear_planes=ShearPlanes.DOUBLE,
+    )
+)
+print(result)            # 7692.64 lbf by mode IIIs (one hinge in the dowel, ...)
+print(result.of(YieldMode.IM))  # Im: 14700 lbf — the main member crushes ...
+```
+
+**The equations are AWC Technical Report 12**, which publishes the generalized form and
+is freely downloadable; the NDS's own Chapter 12 tables are copyrighted and are not
+bundled. So what comes back is TR12's unreduced 5% offset yield value `P`, not the NDS
+reference design value `Z`. `Z` is `P` divided by a reduction term per mode, and that
+term is yours to supply with its citation — the same contract the member screens keep
+for reference design values.
+
+| What | Where it comes from |
+| --- | --- |
+| The six modes and their equations | AWC TR12 Table 1-1, bundled |
+| The dowel bearing strength formulas | AWC TR12 Appendix A Table A1, bundled |
+| Hankinson at an angle to the grain | bundled |
+| Reduction terms R_d per mode | yours, from the NDS |
+| Group action C_g, geometry C_Δ, end/edge distances | yours |
+| Withdrawal, metal connector plates | out of scope |
+
+**Two modes a double-shear connection cannot reach.** Modes II and IIIm describe a
+rotation that a connection symmetric about its main member cannot perform, which TR12
+states in footnote 1 to its own table. They come back as `not_applicable` with that
+reason rather than being dropped, because a mode left out of a list reads as a mode that
+did not govern.
+
+**The gap is a term most people do not have.** TR12 carries the space between members
+through every mode, and the clause an engineer reaches for first has no such term. The
+splice in the example below loses 10.9% of its capacity to a quarter inch of gap and
+34.7% to an inch, and nothing floors it: the gap is a lever arm in the governing mode's
+quadratic, so the loss keeps growing. A connection detailed with a shim is outside the
+clause, not conservatively inside it.
+
+Every value of TR12's own Example 3.1 — all 54, across three gaps and six modes — is
+reproduced in `tests/test_dowel_yield.py`. The sign in the quadratic is the one thing a
+reader of Table 1-1 gets wrong, because the table's layout hides the leading minus; the
+wrong sign gives a number about six times too large, which looks like a capacity and not
+like an error, and a dedicated test pins it.
+
 ## Examples
 
 - [`examples/timber_beam_lateral_stability.py`](../examples/timber_beam_lateral_stability.py)
@@ -257,6 +328,11 @@ bearing length and not how far the member runs past it.
   bearing on a 1.5 in wall plate crushes at 0.96. Landing it on a 3.5 in post takes
   bearing to 2.24 and leaves the other two untouched: the repair is the detail, not a
   deeper beam.
+
+- [`examples/bolted_timber_splice.py`](../examples/bolted_timber_splice.py) — a
+  double-shear bolted splice at 7,693 lbf drawn tight, 10.9% down on a quarter inch of
+  gap and 34.7% down on an inch, with a further 9.4% for a load 30 degrees off the
+  grain. The gap term has no floor.
 
 ## Worked-example anchors
 

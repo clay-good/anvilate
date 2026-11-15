@@ -1763,8 +1763,11 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # refuses a NaN embedding.
     # 99 -> 100: retention_after_creep takes creep records; tests/test_plastic_retention.py
     # refuses NaN hours.
+    # 100 -> 101: dowel_yield_capacity takes a DowelConnection; every field of it is
+    # refused non-finite in tests/test_dowel_yield.py
+    # (test_no_field_of_a_connection_takes_a_non_finite_value).
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 100, (
+    assert len(unbuildable) <= 101, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

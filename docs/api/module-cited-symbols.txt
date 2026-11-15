@@ -1303,3 +1303,6 @@ worm.worm_lead_angle
 worm.worm_output_torque
 worm.worm_separating_force
 worm.worm_tangential_force
+dowel_yield.BEARING_FORMULA_CITATION
+dowel_yield.DOUBLE_SHEAR_MODES
+dowel_yield.TR12_CITATION
