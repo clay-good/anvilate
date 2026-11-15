@@ -104,3 +104,39 @@ Source: https://www.law.cornell.edu/cfr/text/29/1910.28
 
 A document declares one regime. The pack refuses to apply 1910 numbers to a document
 declaring construction, and vice versa.
+
+## The post base on anchors (task 3.1, first half)
+
+The guardrail screen checks the post, the rails and the toeboard. It did not check what
+holds the post down, and that is where the clause's 200 lbf ends up: as a moment at the
+base, and as tension in the anchors. `anvilate.analysis.anchorage` answers it, and
+`examples/guardrail_post_base_anchors.py` is the worked case — **3,098 N into each of two
+anchors** of a 150 mm pattern, with the post's own weight resisting 2.4% of the moment.
+
+The sharpest part is the two-bolt base plate: **along** the load two bolts take double the
+four-bolt figure, because only one is ever in tension, and **across** it they are refused
+— two anchors on one line resist no moment about that line. The same plate works or is a
+mechanism depending on which way it is turned, and nothing on the drawing says which.
+
+## Why the drawable run is blocked (task 3.1, second half)
+
+A guardrail run of tube posts and tube rails cannot be expressed as a combination today,
+for two reasons that are both checkable rather than matters of taste:
+
+1. **The `tube` element builds along Z.** In a combination a tube can therefore be a post
+   but not a horizontal rail seated on posts: a tube's `bottom` face is its *end cap*, so
+   `face_to_face(rail.bottom, post.top)` stacks the rail on the post end to end. A mate
+   set that lays the rail horizontal beside a post does exist — `face_to_face(front,
+   right)` with two `edge_flush` mates — but then no mate places a **second post on the
+   ground** at the rail's far end: every placement the vocabulary allows puts that post
+   *on top of* the rail. A search over all 46,656 three-mate face combinations found four
+   solutions and all four were that one.
+2. **The alternative, `beam_member`, takes a catalogue section**, and the bundled profile
+   table holds **only W shapes** — no HSS, no pipe, no CHS. A round-tube rail has no
+   designation to name.
+
+So the run needs one of: a tube that can be declared along an axis other than Z, a mate
+that places a part at a declared offset from another without touching it, or hollow
+sections in the profile table. The portal-frame combination already shows the pattern the
+vocabulary *does* support — a horizontal member seated on two columns — so none of this is
+a gap in combinations as such, only in what a guardrail is made of.
