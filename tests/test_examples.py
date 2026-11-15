@@ -9615,3 +9615,22 @@ def test_clip_retention_example():
     assert d["force_300_n"] == pytest.approx(28.41, abs=0.005)
     assert "no time is extrapolated" in d["beyond"]
     _assert_narrates_computed("clip_retention.py", namespace)
+
+
+def test_proof_test_correlation_example_files_a_candidate_without_moving_the_verdict():
+    """The one loop the doctrine demands: a green check whose proof test came in low.
+
+    Both halves are asserted, because either alone would be the wrong behaviour — a
+    finding that moved the verdict would rewrite the analysis after the fact, and a
+    verdict left alone with no finding is the silence the change exists to break.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "proof_test_correlation.py"))
+    d = namespace["proof_test_correlation"]()
+    assert d["ratio"] == pytest.approx(92 / 100, rel=1e-12)
+    assert d["shortfall_beyond_band"] == pytest.approx(0.08 - 0.05, abs=1e-12)
+    assert d["candidates_filed"] == 1.0
+    assert d["verdict_is_still_pass"] == 1.0
+    # One recorded test, and it did not agree — so there is no favourable comparison and
+    # the validation factor is 0, not 2.
+    assert d["validation_level"] == 0.0
+    _assert_narrates_computed("proof_test_correlation.py", namespace)

@@ -4,18 +4,42 @@ Research done on 2026-10-19.
 
 ## NASA-STD-7009A credibility factors
 
-Eight factors, each scored 0 to 4 on an ordinal scale, 0 when evidence is insufficient:
+**Read from the standard on 2026-11-14, and the proposal's first draft had the wrong
+names.** Revision A renamed the set. The 2008 original's *code verification*, *solution
+verification*, *conceptual validation* and *referent validation* are Rev A's single
+`Verification` and `Validation` factors, and Rev A adds a third category, *Supporting
+Evidence*, carrying two factors that did not exist before. Appendix E, figure 2 and
+table 3 are the authority for the list below.
 
-| Factor | What Anvilate already holds as evidence |
-| --- | --- |
-| Data pedigree | Standards and materials database provenance per record |
-| Input pedigree | Value origin (user-stated, database-resolved, default, agent-read, confirmed) |
-| Code verification | Worked-example anchors and derivation evaluation gates in CI |
-| Solution verification | Mesh-convergence study on FEA results; none for closed-form checks (which is a correct 0 or a stated "not applicable") |
-| Conceptual validation | Stated modeling assumptions on every physics result |
-| Referent validation | The correlation this change adds |
-| Results uncertainty | Monte Carlo bands from `uncertainty-quantification` |
-| Results robustness | Sensitivity ranking from the same capability; neighborhood checks from `add-design-optimization` |
+Eight factors in three categories, each scored 0 to 4, 0 meaning insufficient evidence:
+
+| Category | Factor | What Anvilate already holds as evidence |
+| --- | --- | --- |
+| M&S Development | Data Pedigree | Standards and materials database provenance per record |
+| M&S Development | Verification | Worked-example anchors and derivation-evaluation gates in CI (code verification); no solution verification for a closed form, which is a correct 0 |
+| M&S Development | Validation | The correlation this change adds |
+| M&S Use | Input Pedigree | Value origin (user-stated, database-resolved, default, agent-read, confirmed) |
+| M&S Use | Uncertainty Characterization | Monte Carlo bands from `uncertainty-quantification` |
+| M&S Use | Results Robustness | Sensitivity ranking from the same capability |
+| Supporting Evidence | M&S History | A declared change and use history; nothing holds one today |
+| Supporting Evidence | M&S Process/Product Management | A declared managed process; nothing holds one today |
+
+Two statements of the standard that the implementation obeys rather than paraphrases:
+
+- **E.4: the assessments are ordinal only and "should not be arithmetically
+  manipulated."** `CredibilityFactorSet` therefore offers no total, mean or overall score,
+  and a test holds that absence — an average of eight ordinal scales is a number with no
+  meaning that every reader would nonetheless compare.
+- **E.4: the assessment of each factor level is a discrete step function, with no partial
+  credit.** Levels are integers, never interpolated.
+
+Every proposed level is capped at 2, published as `EVIDENCE_CEILINGS` with the reason per
+factor. That is the honest reading of table 4 to table 6: level 3 needs *formal*
+verification practices over the end-to-end model and validation points that significantly
+span the domain of operation; level 4 needs comparison against the real-world system
+across its full operating range. A screening library anchored to worked examples and
+correlated against whichever tests a user records has neither, whatever its test count. A
+reviewer who believes a higher level is earned says so as an override, under their name.
 
 The standard is approved for public release, distribution unlimited (NTRS 20160011121,
 "Work of the US Gov. Public Use Permitted"). Sources:

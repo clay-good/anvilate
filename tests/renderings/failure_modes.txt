@@ -51,6 +51,10 @@ Failure modes
     bolt self-loosening: no check; left to transverse vibration (Junker) test
     not yet checked, normally found at qualification: bolt self-loosening
 
+Model credibility
+-----------------
+  no credibility assessment was made for this document
+
 Margin ledger
 -------------
   none declared

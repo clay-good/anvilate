@@ -129,6 +129,15 @@ class VerificationOutcome(RevalidatedModel):
     All four are required. An outcome without an instrument identity or a performer is
     not traceable, and an untraceable record is closer to a claim than to evidence — the
     plan would rather have no outcome than an anonymous one.
+
+    ``measured`` is the record in the performer's own words and is always required.
+    ``measured_value`` is the same result as a number, and it is the one
+    :mod:`anvilate.credibility` can correlate with the prediction that planned the item —
+    a sentence cannot be compared with a capacity. It is optional because plenty of
+    legitimate outcomes have no number ("no crack found at 10x"), and an outcome without
+    one stays a valid record: the plan reports it as performed and *uncorrelated*, never
+    as agreeing with anything. ``instrument_uncertainty`` is the instrument's stated
+    uncertainty where the record gives one, in the same dimension as the value.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -138,9 +147,42 @@ class VerificationOutcome(RevalidatedModel):
     performed_on: date
     performed_by: str
     instrument: str
+    measured_value: Quantity | None = None
+    instrument_uncertainty: Quantity | None = None
 
     @model_validator(mode="after")
     def _well_formed(self) -> VerificationOutcome:
+        if self.instrument_uncertainty is not None and self.measured_value is None:
+            raise _OutcomeInputError(
+                "an outcome states an instrument uncertainty and no measured value; an "
+                "uncertainty bounds a number, and there is no number here to bound",
+                remedies=(
+                    Remedy(
+                        action="add",
+                        subject="measured_value",
+                        source="the number the instrument read",
+                    ),
+                ),
+            )
+        if (
+            self.measured_value is not None
+            and self.instrument_uncertainty is not None
+            and self.measured_value.pint.dimensionality
+            != self.instrument_uncertainty.pint.dimensionality
+        ):
+            raise _OutcomeInputError(
+                f"the instrument's uncertainty is a "
+                f"{self.instrument_uncertainty.dimensionality} against a "
+                f"{self.measured_value.dimensionality} reading; an uncertainty in another "
+                f"dimension cannot bound this measurement",
+                remedies=(
+                    Remedy(
+                        action="replace",
+                        subject="instrument_uncertainty",
+                        source="the instrument's calibration record",
+                    ),
+                ),
+            )
         for value, name in (
             (self.measured, "measured"),
             (self.performed_by, "performed_by"),
@@ -190,8 +232,20 @@ class VerificationItem(RevalidatedModel):
             return CheckStatus.NOT_EVALUATED
         return CheckStatus.PASS if self.outcome.passed else CheckStatus.FAIL
 
+    @property
+    def correlated(self) -> bool:
+        """Whether this item's outcome carries a number to compare with the prediction.
+
+        A performed item with no measured value is *uncorrelated*, and every rendering
+        here says so rather than leaving it to read as agreement: "passed" with no number
+        is a performer's judgement, not a comparison anyone can re-check.
+        """
+        return self.outcome is not None and self.outcome.measured_value is not None
+
     def __str__(self) -> str:
         state = "planned" if self.outcome is None else self.status.value
+        if self.outcome is not None:
+            state += ", correlated" if self.correlated else ", uncorrelated"
         # ``driving_checks`` is what this class's own docstring calls the link the matrix
         # exists to make, so it is rendered: an item standing behind one check and an item
         # standing behind three are different rows of the matrix.
@@ -297,6 +351,8 @@ class VerificationPlan(BaseModel):
         for item in self.items:
             for check in item.driving_checks:
                 state = "planned" if item.outcome is None else item.status.value
+                if item.outcome is not None:
+                    state += ", correlated" if item.correlated else ", uncorrelated"
                 lines.append(f"{check:<30} {item.archetype.method.value:<13} {state}")
         for check in self.analysis_only:
             lines.append(f"{check:<30} {'analysis':<13} complete")

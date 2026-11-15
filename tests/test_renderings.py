@@ -88,6 +88,68 @@ def _failure_modes() -> CalculationReport:
     return report.model_copy(update={"failure_modes": modes, "revision": "B"})
 
 
+def _credibility() -> CalculationReport:
+    """A passing check whose proof test came in low, with the factor set beside it.
+
+    The one case that reaches the correlation line on an entry, the unattributed-
+    conservatism note in the ledger and the credibility table — three blocks a reviewer
+    sees only here.
+    """
+    from datetime import date
+
+    from anvilate.credibility import (
+        AcceptanceBand,
+        HeldEvidence,
+        PredictionSense,
+        annotate,
+        correlate,
+        propose_factor_set,
+    )
+    from anvilate.verification import VerificationOutcome, plan_verification, record_outcome
+
+    sys.path.insert(0, str(_REPO / "examples"))
+    try:
+        import proof_test_correlation as worked
+    finally:
+        sys.path.pop(0)
+
+    card = worked._card()
+    plan = plan_verification(card, parameters={"rated_load": worked.RATED_LOAD})
+    plan = record_outcome(
+        plan,
+        name="Proof load test",
+        outcome=VerificationOutcome(
+            passed=True,
+            measured="held 92 kN, then permanent set at the pin hole",
+            performed_on=date(2026, 11, 1),
+            performed_by="A. Tester",
+            instrument="load cell SN-7741",
+            measured_value=worked.MEASURED_CAPACITY,
+        ),
+    )
+    annotated = annotate(
+        card,
+        correlate(
+            plan,
+            card,
+            bands={"lug tension": AcceptanceBand(fraction=0.05, source="proof-test procedure")},
+            senses={"lug tension": PredictionSense.CAPACITY},
+        ),
+    )
+    return CalculationReport(
+        title="Proof test correlation",
+        project="Rendering corpus",
+        date="2026-11-01",
+        unit_system=UnitSystem.SI,
+        sections=tuple(ReportSection(entry=entry) for entry in annotated.entries),
+        credibility=(
+            propose_factor_set(
+                "lug tension", HeldEvidence(cited_data_records=1, worked_example_anchors=1)
+            ),
+        ),
+    )
+
+
 def _from_test_report(name: str) -> Callable[[], CalculationReport]:
     def build() -> CalculationReport:
         import test_report
@@ -107,6 +169,7 @@ CASES: dict[str, Callable[[], CalculationReport]] = {
     "uncertainty": _from_test_report("_annotated_report"),
     "margin_ledger": _from_test_report("_ledgered_report"),
     "performance_budget": _from_test_report("_budgeted_report"),
+    "credibility": _credibility,
 }
 
 

@@ -1897,7 +1897,7 @@ def test_a_report_with_no_margins_says_so_rather_than_omitting_the_section():
 def test_the_calc_record_carries_the_margin_ledger_back():
     report = _ledgered_report()
     record = json.loads(json.dumps(report.to_record()))
-    assert record["schema_version"] == "1.5"
+    assert record["schema_version"] == "1.6"
     assert report_from_record(record) == report
 
 

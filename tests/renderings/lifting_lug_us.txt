@@ -75,6 +75,10 @@ Failure modes
 -------------
   no coverage report was supplied with this document
 
+Model credibility
+-----------------
+  no credibility assessment was made for this document
+
 Margin ledger
 -------------
   none declared

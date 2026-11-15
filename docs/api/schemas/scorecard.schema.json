@@ -1,5 +1,24 @@
 {
   "$defs": {
+    "AcceptanceBand": {
+      "description": "How far predicted and measured may differ and still be called agreement.\n\n``fraction`` is the half-width as a fraction of the prediction: 0.05 is ±5%. ``source``\nis required and may not be blank, because a corridor nobody can attribute is the\narbitrary one ASME V&V 10's teaching material warns against — the reader has to be able\nto disagree with the band rather than with the verdict it produced.",
+      "properties": {
+        "fraction": {
+          "title": "Fraction",
+          "type": "number"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fraction",
+        "source"
+      ],
+      "title": "AcceptanceBand",
+      "type": "object"
+    },
     "AppliedFactor": {
       "additionalProperties": false,
       "description": "A factor a check applied inside its capacity, where its verdict cannot show it.\n\nA check judged at a required safety factor of 1.0 has put its whole margin inside the\ncapacity: a pile's allowable load is its ultimate capacity over a factor of safety, and a\nBTH-1 allowable is a strength over the design factor N_d. The verdict then reads \"1.0\nrequired\", and the conservatism the reader is relying on is nowhere on the card. The\ncheck records it here, so the margin ledger can itemize it like any other.\n\n``authority`` is the clause that obliges the factor. ``None`` means an election or a\ndefault nobody cited, and the ledger files it as such rather than as a code's.",
@@ -86,6 +105,115 @@
       "title": "Comparison",
       "type": "object"
     },
+    "Correlation": {
+      "description": "One prediction compared with one measurement of the same quantity.\n\n``predicted`` is what the driving check computed; ``measured`` is what the recorded\nverification outcome measured. They are converted into the prediction's own unit before\nanything is compared, so a preload predicted in kN and measured in lbf correlates.\n\nThe test record travels with the comparison — the date, the performer and the\ninstrument — because the escaped-defect process downstream needs the record, not a\nreference to one, and because a correlation whose instrument nobody can name is a claim.\n\n:attr:`verdict` is ``NOT_EVALUATED`` with no band: both values and the ratio are still\nreported, and :meth:`__str__` names the band it needs.",
+      "properties": {
+        "band": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AcceptanceBand"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "check_passed": {
+          "default": true,
+          "title": "Check Passed",
+          "type": "boolean"
+        },
+        "citation": {
+          "default": "ASME V&V 10 vocabulary (verification, validation, validation domain)",
+          "title": "Citation",
+          "type": "string"
+        },
+        "difference": {
+          "$ref": "#/$defs/Quantity",
+          "description": "Measured minus predicted, in the prediction's own unit.",
+          "readOnly": true
+        },
+        "instrument": {
+          "title": "Instrument",
+          "type": "string"
+        },
+        "instrument_uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "measured": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "performed_by": {
+          "title": "Performed By",
+          "type": "string"
+        },
+        "performed_on": {
+          "format": "date",
+          "title": "Performed On",
+          "type": "string"
+        },
+        "predicted": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "ratio": {
+          "description": "Measured over predicted, both in the prediction's unit. 1.0 is exact agreement.",
+          "readOnly": true,
+          "title": "Ratio",
+          "type": "number"
+        },
+        "sense": {
+          "$ref": "#/$defs/PredictionSense"
+        },
+        "verdict": {
+          "$ref": "#/$defs/CorrelationVerdict",
+          "description": "Agreement, or which way it fell outside the declared band.",
+          "readOnly": true
+        }
+      },
+      "required": [
+        "check",
+        "item",
+        "predicted",
+        "measured",
+        "sense",
+        "performed_on",
+        "performed_by",
+        "instrument",
+        "ratio",
+        "difference",
+        "verdict"
+      ],
+      "title": "Correlation",
+      "type": "object"
+    },
+    "CorrelationVerdict": {
+      "description": "What the comparison said. Never what the check said.",
+      "enum": [
+        "agrees",
+        "unconservative",
+        "conservative",
+        "not_evaluated"
+      ],
+      "title": "CorrelationVerdict",
+      "type": "string"
+    },
     "Derivation": {
       "description": "A check's worked calculation: formula, substitution, result, citation.\n\n``symbolic`` is the governing formula written the way the source writes it\n(``\"σ_b = M · c / I\"``); ``inputs`` supply every symbol on its right-hand side;\n``result`` is the left-hand side with the computed value; and ``citation`` names\nthe handbook section or standard clause the formula comes from. Every symbol\nused carries its own glossary line, so the derivation is readable without the\nsource book open.",
       "properties": {
@@ -135,6 +263,46 @@
       ],
       "title": "Direction",
       "type": "string"
+    },
+    "DomainKind": {
+      "description": "Whether a use sits inside the domain a check was compared in, or outside it.",
+      "enum": [
+        "interpolative",
+        "extrapolative"
+      ],
+      "title": "DomainKind",
+      "type": "string"
+    },
+    "DomainLabel": {
+      "description": "Where a use sits relative to the validation domain. Never a verdict.\n\nASME V&V 10's distinction: a prediction inside the domain the model was compared in is\ninterpolative, one outside it is extrapolative. The label is the information — an\nextrapolative check may well be right, and the reader is entitled to know that nothing\nhas ever been measured out there.",
+      "properties": {
+        "citation": {
+          "default": "ASME V&V 10 vocabulary (verification, validation, validation domain)",
+          "title": "Citation",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DomainKind"
+        },
+        "nearest": {
+          "$ref": "#/$defs/ValidationRange"
+        },
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "kind",
+        "parameter",
+        "value",
+        "nearest"
+      ],
+      "title": "DomainLabel",
+      "type": "object"
     },
     "LimitSense": {
       "description": "Which side of its limit a measured value has to be on to pass.",
@@ -267,6 +435,15 @@
       "title": "Need",
       "type": "object"
     },
+    "PredictionSense": {
+      "description": "Which direction of disagreement is the unsafe one.\n\nThe same 8% gap means opposite things on the two kinds of prediction a screen makes. A\npredicted *capacity* measured low is the design holding less than the calculation\nsaid; a predicted *response* — a stress, a deflection, a temperature — measured high is\nthe design working harder than the calculation said. Both are the unconservative case,\nand which one applies is the check's to state, never this module's to guess.",
+      "enum": [
+        "capacity",
+        "response"
+      ],
+      "title": "PredictionSense",
+      "type": "string"
+    },
     "Quantity": {
       "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
       "properties": {
@@ -382,6 +559,17 @@
           ],
           "default": null
         },
+        "correlation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Correlation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "derivation": {
           "anyOf": [
             {
@@ -396,6 +584,17 @@
         "detail": {
           "title": "Detail",
           "type": "string"
+        },
+        "domain": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DomainLabel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "name": {
           "title": "Name",
@@ -629,6 +828,33 @@
       "title": "UnverifiedOrigin",
       "type": "object"
     },
+    "ValidationRange": {
+      "description": "One parameter's range over which a check has been anchored or correlated.\n\n``source`` is the worked example or the recorded test the range came from, so a reader\ncan see that a check \"validated from 10 to 40 mm\" was validated against two points and\nnot a continuum.",
+      "properties": {
+        "high": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "low": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parameter",
+        "low",
+        "high",
+        "source"
+      ],
+      "title": "ValidationRange",
+      "type": "object"
+    },
     "ValueSource": {
       "description": "Where an acceptable value for a declaration may come from.",
       "enum": [
@@ -641,7 +867,7 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:scorecard:1.14.0",
+  "$id": "urn:anvilate:schema:scorecard:1.15.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate scorecard: one typed result per validation check, with a rolled-up status. A check that could not run reports not_evaluated, which is not a pass. Generated from anvilate.scorecard.Scorecard.",
   "properties": {
@@ -663,5 +889,5 @@
   ],
   "title": "Scorecard",
   "type": "object",
-  "x-anvilate-version": "1.14.0"
+  "x-anvilate-version": "1.15.0"
 }

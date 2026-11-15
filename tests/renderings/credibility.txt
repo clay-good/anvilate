@@ -1,0 +1,56 @@
+Proof test correlation
+======================
+Project: Rendering corpus
+Date: 2026-11-01
+Units: SI
+
+Standards relied upon:
+  - none declared
+
+Assumptions:
+  - none declared
+
+PASS  lug tension
+-----------------
+  [no formula to render — a lookup, not a calculation: the capacity is stated for this example rather than worked]
+  tensile capacity 120.000 kN vs capacity required of the test 100.000 kN
+  correlation: lug tension: predicted 100 kN, measured 92 kN (ratio 0.920, band ±0.05 (proof-test procedure)) — unconservative
+    recorded 2026-11-01 by A. Tester on load cell SN-7741
+  source: ASME BTH-1-2020 §3-3.3.1 (pin-connected plates)
+
+Margin summary
+--------------
+  Result         Safety factor  Required  Check
+  PASS                       —  —         lug tension
+  not evaluated: 0, out of declared depth: 0
+  overall: PASS
+
+Performance budgets
+-------------------
+  none declared
+
+Failure modes
+-------------
+  no coverage report was supplied with this document
+
+Model credibility
+-----------------
+  credibility of lug tension — NASA-STD-7009A, Appendix E (credibility assessment, levels 0-4)
+    M&S Development
+      Data Pedigree: 2 — 1 bundled record traceable to formal documentation by edition and clause
+      Verification: 2 — 1 check anchored to a published worked example, with the derivation evaluated in CI
+      Validation: 0 — no evidence held: no recorded test has been correlated with these predictions
+    M&S Use (Operations)
+      Input Pedigree: 0 — no evidence held: no input carries a stated origin
+      Uncertainty Characterization: 0 — no evidence held: no distribution was declared, so no band was computed
+      Results Robustness: 0 — no evidence held: no sensitivity of this result is quantified
+    Supporting Evidence
+      M&S History: 0 — no evidence held: no change or use history is stated for these checks
+      M&S Process/Product Management: 0 — no evidence held: no managed process is stated for this work
+    the levels are ordinal; the standard states they are not to be averaged or totalled, and this is an assessment of evidence, not a certification
+
+Margin ledger
+-------------
+  none declared
+
+These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.

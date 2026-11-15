@@ -41,6 +41,11 @@ section.check { page-break-inside: avoid; }
 .uncertainty { font-size: 0.9em; color: var(--ink-muted); }
 .uncertainty-method { font-size: 0.85em; color: var(--ink-faint); margin-top: -0.4em; }
 .uncertainty.fragile { color: var(--ink); font-weight: bold; }
+.correlation { font-size: 0.9em; color: var(--ink-muted); }
+.credibility-subject { font-weight: bold; }
+.correlation-record { font-size: 0.85em; color: var(--ink-faint); margin-top: -0.4em; }
+.correlation.unconservative { color: var(--ink); font-weight: bold; }
+.domain { font-size: 0.9em; color: var(--ink-muted); }
 .fallback { font-style: italic; color: var(--ink-faint); }
 .source { font-size: 0.9em; color: var(--ink-muted); }
 tr.governing td { font-weight: bold; }
@@ -145,6 +150,8 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 <p class="none">none declared</p>
 <h2>Failure modes</h2>
 <p class="none">no coverage report was supplied</p>
+<h2>Model credibility</h2>
+<p class="none">no credibility assessment was made</p>
 <h2>Margin ledger</h2>
 <p class="none">none declared</p>
 <p class="disclaimer">These are closed-form screening calculations, not a substitute for detailed analysis or design. Every value shown was computed from the inputs recorded in this document; inputs supplied by the user are marked as such. Engineering sign-off remains with a qualified engineer.</p>

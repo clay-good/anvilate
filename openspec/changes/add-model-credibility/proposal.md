@@ -17,9 +17,11 @@ Two public documents give the shape:
 
 - **NASA-STD-7009A** (Standard for Models and Simulations, Revision A, 2016; approved
   for public release, distribution unlimited) defines eight credibility factors, each
-  scored 0 to 4, with 0 meaning insufficient evidence: data pedigree, input pedigree,
-  code verification, solution verification, conceptual validation, referent validation,
-  results uncertainty, results robustness. It was written after the Columbia accident so
+  scored 0 to 4, with 0 meaning insufficient evidence: data pedigree, verification,
+  validation, input pedigree, uncertainty characterization, results robustness, M&S
+  history, and M&S process/product management. (This list was corrected while building:
+  the first draft carried the 2008 original's factor names, which Revision A replaced.)
+  It was written after the Columbia accident so
   that a decision-maker could see how much a simulation result deserved to be trusted.
   Anvilate already holds evidence for most of these factors (database provenance, value
   origins, worked-example anchoring, mesh convergence, uncertainty bands) and states none

@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Seventy-six pages, arranged by what you are trying to do. The [README](../README.md) is the
+Seventy-seven pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -67,6 +67,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Design-space exploration](design-space-exploration.md) | An exact Pareto front, because every check is closed-form. |
 | [Typed repair feedback](repair-feedback.md) | The parameter and the value that fixes a failing check. |
 | [Verification planning](verification-planning.md) | The physical test each check implies — and why a plan is never evidence. |
+| [Model credibility](model-credibility.md) | The recorded test read back against the prediction, the escaped-defect candidate an unconservative one files, and the eight NASA-STD-7009A factors scored only from evidence held. |
 | [Responsible-charge review](responsible-charge-review.md) | What a licensed engineer needs before sealing. |
 
 ## Declaring the part

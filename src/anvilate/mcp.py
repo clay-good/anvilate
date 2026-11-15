@@ -200,7 +200,9 @@ _SPEC_REF = "urn:anvilate:schema:design-spec:1.22.0"
 # property, and neither release closes `additionalProperties` — so an old client keeps
 # working; it simply cannot see whether a check is owed a derivation.
 # 1.12.0 adds the optional stable `check_id` that document-driven module checks receive.
-_SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
+# 1.15.0 adds the optional `correlation` and `domain` annotations a recorded test writes
+# onto an entry: both are absent on every card nothing has been correlated against.
+_SCORECARD_REF = "urn:anvilate:schema:scorecard:1.15.0"
 # The evidence bundle, published so `export_artifact` can describe what it returns. It could
 # not before: the tool declared its entire output as `{"type": "object"}`, because
 # `contracts.py` generated a spec schema and a scorecard schema and no third one. A literal
@@ -216,7 +218,9 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.14.0"
 # 1.3.0 follows Design Spec 1.5.0 for the optional circular locator embedded in that spec.
 # 1.4.0 follows Design Spec 1.6.0 for the counterbore's through diameter.
 # 1.24.0 follows Scorecard 1.12.0 for stable module check ids embedded in the bundle.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.30.0"
+# 1.31.0 follows Scorecard 1.15.0, and adds the reviewer dossier's credibility factor
+# sets and its escaped-defect candidates; both default empty.
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.31.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
@@ -225,7 +229,7 @@ _CONTEXT_INVENTORY_REF = "urn:anvilate:schema:context-inventory:1.0.0"
 _CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.2.0"
 _COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
 _PRODUCT_SUMMARY_REF = "urn:anvilate:schema:product-summary:1.2.0"
-_NODE_CARD_REF = "urn:anvilate:schema:node-card:1.2.1"
+_NODE_CARD_REF = "urn:anvilate:schema:node-card:1.3.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A

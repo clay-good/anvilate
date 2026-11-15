@@ -22,6 +22,7 @@ from typing import Annotated
 from pydantic import ConfigDict, Field, computed_field, model_validator
 
 from ._models import ItemCollection, Named, Provenance, StatableModel
+from .credibility import Correlation, DomainLabel
 from .derivation import Derivation, DerivationAbsence, Underived
 from .refusal import RefusalError, Remedy
 from .uncertainty import MarginUncertainty
@@ -527,6 +528,15 @@ class ScorecardEntry(StatableModel):
     # Set only on an entry a third-party module contributed; absent from the dump otherwise,
     # so every in-tree card serializes exactly as before.
     origin: UnverifiedOrigin | None = Field(default=None, exclude_if=lambda value: value is None)
+    # A recorded test read back against this check's own prediction. Set by
+    # `anvilate.credibility.annotate`, never by a screen: the comparison needs an outcome
+    # nobody had when the check ran. It annotates the verdict and never changes it — an
+    # unconservative correlation is a finding beside a PASS, which is the whole point.
+    correlation: Correlation | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Where this use sits relative to the range the check has actually been compared over.
+    # Information, not a verdict: an extrapolative check may well be right, and the reader
+    # is entitled to know that nothing has ever been measured out there.
+    domain: DomainLabel | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _check_derivation_declaration(self) -> ScorecardEntry:

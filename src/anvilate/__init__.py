@@ -53,6 +53,9 @@ that already ran and does one more thing with them:
   operations :mod:`anvilate.assembly` re-exports, so a Design Spec can declare an assembly.
 - :mod:`anvilate._cli_output` — the private wire models used to generate and validate
   the versioned schema for completed machine-readable CLI results.
+- :mod:`anvilate.credibility` — the recorded test read back against the prediction that
+  planned it, the escaped-defect candidate an unconservative one files, and the eight
+  NASA-STD-7009A credibility factors scored only from evidence actually held.
 - :mod:`anvilate.dcc` — Digital Calibration Certificates read as measured inputs,
   with the instrument's identity, its stated uncertainty, and an honest signature
   status attached to every value.

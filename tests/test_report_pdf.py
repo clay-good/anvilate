@@ -196,7 +196,7 @@ def test_the_revision_travels_in_the_calc_record():
 
     report = _lug_report().model_copy(update={"revision": "C"})
     record = report.to_record()
-    assert record["schema_version"] == "1.5"
+    assert record["schema_version"] == "1.6"
     assert report_from_record(record).revision == "C"
 
 

@@ -32,6 +32,11 @@ from pydantic import ConfigDict, computed_field
 
 from .._models import StatableModel
 from ..budget import BudgetResult, LimitBasis
+from ..credibility import (
+    CorrelationVerdict,
+    CredibilityFactorSet,
+    unattributed_conservatisms,
+)
 from ..dependency import COMPUTED_FROM
 from ..derivation import Derivation, DerivationAbsence, SymbolValue
 from ..failure_modes import CoverageReport
@@ -69,9 +74,10 @@ __all__ = [
 # for a change that older readers cannot ignore. 1.1 added the optional scorecard
 # annotations (repair hint, upper safety-factor band, uncertainty distribution);
 # a 1.0 reader ignores them and still loads the record. 1.2 added the report's margin
-# ledger entries, 1.3 its evaluated performance budgets, 1.4 its failure-mode coverage, and
-# 1.5 the document's revision.
-CALC_RECORD_SCHEMA_VERSION = "1.5"
+# ledger entries, 1.3 its evaluated performance budgets, 1.4 its failure-mode coverage,
+# 1.5 the document's revision, and 1.6 its NASA-STD-7009A credibility factor sets and the
+# correlation and validation-domain annotations the scorecard entries now carry.
+CALC_RECORD_SCHEMA_VERSION = "1.6"
 
 SCREENING_DISCLAIMER = (
     "These are closed-form screening calculations, not a substitute for detailed "
@@ -366,6 +372,10 @@ class CalculationReport(StatableModel):
     # Evaluated budgets, itemized in their own section. A budget's verdict is already a
     # check in `sections`; this is the arithmetic behind it, which no single line can carry.
     budgets: tuple[BudgetResult, ...] = ()
+    # The NASA-STD-7009A factor sets this document states, one per subject. Rendered with
+    # the standard cited and with no total, because the standard says the levels are
+    # ordinal and are not to be arithmetically manipulated.
+    credibility: tuple[CredibilityFactorSet, ...] = ()
 
     def scorecard(self) -> Scorecard:
         """The report's checks as a scorecard, for the usual roll-up rules."""
@@ -467,6 +477,18 @@ class CalculationReport(StatableModel):
                     f"by {unc.method}{flag}"
                 )
                 out.append(f"    {unc.citation}")
+            # The recorded test read back against this check's own prediction. It is
+            # printed beside the verdict and never in place of it: an unconservative
+            # correlation on a PASS is exactly the pair a reader has to see together.
+            corr = section.entry.correlation
+            if corr is not None:
+                out.append(f"  correlation: {corr}")
+                out.append(
+                    f"    recorded {corr.performed_on.isoformat()} by "
+                    f"{corr.performed_by} on {corr.instrument}"
+                )
+            if section.entry.domain is not None:
+                out.append(f"  validation domain: {section.entry.domain}")
             if section.citation:
                 out.append(f"  source: {section.citation}")
             if section.entry.origin is not None:
@@ -491,6 +513,12 @@ class CalculationReport(StatableModel):
             out.append("  no coverage report was supplied with this document")
         else:
             out.extend(f"  {line}" for line in str(self.failure_modes).splitlines())
+        blocks.append(_TextBlock(tuple(out), heading=2))
+        out = ["Model credibility", "-----------------"]
+        if not self.credibility:
+            out.append("  no credibility assessment was made for this document")
+        for factors in self.credibility:
+            out.extend(f"  {line}" for line in factors.table().splitlines())
         blocks.append(_TextBlock(tuple(out), heading=2))
         out = ["Margin ledger", "-------------"]
         if not self.margins:
@@ -578,6 +606,7 @@ class CalculationReport(StatableModel):
         out.extend(self._html_summary())
         out.extend(self._html_budgets())
         out.extend(self._html_failure_modes())
+        out.extend(self._html_credibility())
         out.extend(self._html_ledger())
         out.append(f'<p class="disclaimer">{escape(SCREENING_DISCLAIMER)}</p>')
         out.append("</body>")
@@ -845,6 +874,20 @@ class CalculationReport(StatableModel):
             )
             out.append(f'<p class="{cls}">{escape(message)}</p>')
             out.append(f'<p class="uncertainty-method">{escape(unc.citation)}</p>')
+        corr = section.entry.correlation
+        if corr is not None:
+            unsafe = corr.verdict is CorrelationVerdict.UNCONSERVATIVE
+            cls = "correlation unconservative" if unsafe else "correlation"
+            out.append(f'<p class="{cls}">{escape("Correlation: " + str(corr))}</p>')
+            recorded = (
+                f"recorded {corr.performed_on.isoformat()} by {corr.performed_by} "
+                f"on {corr.instrument}"
+            )
+            out.append(f'<p class="correlation-record">{escape(recorded)}</p>')
+        if section.entry.domain is not None:
+            out.append(
+                f'<p class="domain">{escape("Validation domain: " + str(section.entry.domain))}</p>'
+            )
         if section.citation:
             out.append(f'<p class="source">Source: {escape(section.citation)}</p>')
         if section.entry.origin is not None:
@@ -966,7 +1009,62 @@ class CalculationReport(StatableModel):
             for stack in ledger.stacks()
         ]
         lines.extend(str(double) for double in ledger.double_counts())
+        # A test the design beat is conservatism this ledger has no entry for. It is noted
+        # here, where the elected factors are read, and never multiplied into a stack:
+        # nothing was applied, so there is no factor to multiply.
+        lines.extend(
+            str(note)
+            for note in unattributed_conservatisms(
+                tuple(
+                    entry.correlation
+                    for entry in self.scorecard().entries
+                    if entry.correlation is not None
+                )
+            )
+        )
         return lines
+
+    def _html_credibility(self) -> list[str]:
+        """The factor sets as a table per subject: level, evidence, and any override.
+
+        No total row. The standard states the levels are ordinal and are not to be
+        arithmetically manipulated, and a totals row is the first thing a reader compares.
+        """
+        out = ["<h2>Model credibility</h2>"]
+        if not self.credibility:
+            return [*out, '<p class="none">no credibility assessment was made</p>']
+        for factors in self.credibility:
+            # A paragraph and not a third-level heading: this document's element
+            # vocabulary is enumerated and deliberately flat, and one new section is not
+            # a reason to deepen it. (The gate reads the renderer's own tag literals, so
+            # naming the tag here even in prose would trip it — which is the gate working.)
+            out.append(f'<p class="credibility-subject">{escape(factors.subject)}</p>')
+            out.append('<table class="credibility">')
+            out.append(
+                "<thead><tr><th>Category</th><th>Factor</th><th>Level</th>"
+                "<th>Evidence</th></tr></thead>"
+            )
+            for score in factors.scores:
+                override = ""
+                if score.overridden():
+                    override = (
+                        f" (overridden from {score.proposed_level} by {score.override_by}: "
+                        f"{score.override_reason})"
+                    )
+                out.append(
+                    f"<tr><td>{escape(score.category.label)}</td>"
+                    f"<td>{escape(score.label)}</td>"
+                    f'<td class="num">{score.level}</td>'
+                    f"<td>{escape(score.evidence + override)}</td></tr>"
+                )
+            out.append("</table>")
+            out.append(f'<p class="source">{escape(factors.citation)}</p>')
+            out.append(
+                '<p class="source">The levels are ordinal; the standard states they are '
+                "not to be averaged or totalled. This is an assessment of the evidence "
+                "held, not a certification.</p>"
+            )
+        return out
 
     def _html_ledger(self) -> list[str]:
         out = ["<h2>Margin ledger</h2>"]
@@ -1109,6 +1207,11 @@ section.check { page-break-inside: avoid; }
 .uncertainty { font-size: 0.9em; color: var(--ink-muted); }
 .uncertainty-method { font-size: 0.85em; color: var(--ink-faint); margin-top: -0.4em; }
 .uncertainty.fragile { color: var(--ink); font-weight: bold; }
+.correlation { font-size: 0.9em; color: var(--ink-muted); }
+.credibility-subject { font-weight: bold; }
+.correlation-record { font-size: 0.85em; color: var(--ink-faint); margin-top: -0.4em; }
+.correlation.unconservative { color: var(--ink); font-weight: bold; }
+.domain { font-size: 0.9em; color: var(--ink-muted); }
 .fallback { font-style: italic; color: var(--ink-faint); }
 .source { font-size: 0.9em; color: var(--ink-muted); }
 tr.governing td { font-weight: bold; }

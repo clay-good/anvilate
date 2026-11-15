@@ -46,6 +46,10 @@ Failure modes
 -------------
   no coverage report was supplied with this document
 
+Model credibility
+-----------------
+  no credibility assessment was made for this document
+
 Margin ledger
 -------------
   - design factor: x2 on lug tension demand [code-required; ASME BTH-1-2020 §1-5; from spec: constraints.min_safety_factor]

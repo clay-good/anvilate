@@ -39,13 +39,14 @@ the same scrutiny as human work).
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from enum import IntEnum, StrEnum
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ._models import RevalidatedModel
+from ._models import RevalidatedModel, each_one
+from .credibility import CredibilityFactorSet, EscapedDefectCandidate
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 
@@ -385,11 +386,36 @@ class ReviewerDossier(BaseModel):
     model_involvement: tuple[str, ...] = ()
     record: ReviewRecord | None = None
     stale_record: bool = False
+    # The NASA-STD-7009A factor sets this artifact carries — one per subject, so a set
+    # for a single result and a set for the bundle as a whole both sit here. The dossier
+    # is the bundle's reviewer-facing block, which makes this the one place both the
+    # "on a result" and the "on a bundle" halves of the requirement are satisfied.
+    credibility: tuple[CredibilityFactorSet, ...] = ()
+    # Passing checks whose recorded test came in unconservative. They stay here until a
+    # person dispositions them: an undispositioned candidate is the state a reviewer most
+    # needs told, because the card beside it reads `pass`.
+    candidates: tuple[EscapedDefectCandidate, ...] = ()
 
     @property
     def attention_first(self) -> tuple[ReviewItem, ...]:
         """The items above routine — what a reviewer should read before anything else."""
         return tuple(i for i in self.items if i.priority < ReviewPriority.ROUTINE)
+
+    @property
+    def undispositioned(self) -> tuple[EscapedDefectCandidate, ...]:
+        """The escaped-defect candidates still waiting on a person's judgement."""
+        return tuple(c for c in self.candidates if c.undispositioned)
+
+    def credibility_table(self) -> str:
+        """Every factor set this artifact carries, with the standard cited on each.
+
+        Empty rather than reassuring when nothing was scored: a dossier with no
+        credibility assessment has not been assessed, which is different from one whose
+        factors came out low.
+        """
+        if not self.credibility:
+            return "no credibility assessment was made for this artifact"
+        return "\n\n".join(factors.table() for factors in self.credibility)
 
     def summary(self) -> str:
         """The line that goes at the top of a report pane. Never says 'approved'."""
@@ -417,7 +443,18 @@ class ReviewerDossier(BaseModel):
         involvement = ""
         if self.model_involvement:
             involvement = f" Proposed by a model: {'; '.join(self.model_involvement)}."
-        return f"{head}. For attention: {needing}.{involvement} {state}."
+        # A passing check whose proof test came in low is the one thing on this page a
+        # reviewer cannot see by reading the verdicts, so it is on the first line.
+        open_candidates = self.undispositioned
+        filed = ""
+        if open_candidates:
+            named = ", ".join(sorted({c.check for c in open_candidates}))
+            filed = (
+                f" {len(open_candidates)} undispositioned escaped-defect "
+                f"{'candidate' if len(open_candidates) == 1 else 'candidates'} "
+                f"({named})."
+            )
+        return f"{head}. For attention: {needing}.{involvement}{filed} {state}."
 
 
 def build_dossier(
@@ -427,6 +464,8 @@ def build_dossier(
     origins: dict[str, DecisionOrigin] | None = None,
     origin_details: dict[str, str] | None = None,
     record: ReviewRecord | None = None,
+    credibility: Sequence[CredibilityFactorSet] = (),
+    candidates: Sequence[EscapedDefectCandidate] = (),
 ) -> ReviewerDossier:
     """Assemble a scorecard into a reviewer's dossier.
 
@@ -484,4 +523,6 @@ def build_dossier(
         model_involvement=involvement,
         record=record,
         stale_record=stale,
+        credibility=each_one(credibility, CredibilityFactorSet, named="credibility"),
+        candidates=each_one(candidates, EscapedDefectCandidate, named="candidates"),
     )

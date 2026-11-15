@@ -1,5 +1,24 @@
 {
   "$defs": {
+    "AcceptanceBand": {
+      "description": "How far predicted and measured may differ and still be called agreement.\n\n``fraction`` is the half-width as a fraction of the prediction: 0.05 is ±5%. ``source``\nis required and may not be blank, because a corridor nobody can attribute is the\narbitrary one ASME V&V 10's teaching material warns against — the reader has to be able\nto disagree with the band rather than with the verdict it produced.",
+      "properties": {
+        "fraction": {
+          "title": "Fraction",
+          "type": "number"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fraction",
+        "source"
+      ],
+      "title": "AcceptanceBand",
+      "type": "object"
+    },
     "AcceptanceCriteria": {
       "additionalProperties": false,
       "description": "Which checks must run and the thresholds they are judged against.",
@@ -861,6 +880,157 @@
       "title": "ContributorBasis",
       "type": "string"
     },
+    "Correlation": {
+      "description": "One prediction compared with one measurement of the same quantity.\n\n``predicted`` is what the driving check computed; ``measured`` is what the recorded\nverification outcome measured. They are converted into the prediction's own unit before\nanything is compared, so a preload predicted in kN and measured in lbf correlates.\n\nThe test record travels with the comparison — the date, the performer and the\ninstrument — because the escaped-defect process downstream needs the record, not a\nreference to one, and because a correlation whose instrument nobody can name is a claim.\n\n:attr:`verdict` is ``NOT_EVALUATED`` with no band: both values and the ratio are still\nreported, and :meth:`__str__` names the band it needs.",
+      "properties": {
+        "band": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AcceptanceBand"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "check_passed": {
+          "default": true,
+          "title": "Check Passed",
+          "type": "boolean"
+        },
+        "citation": {
+          "default": "ASME V&V 10 vocabulary (verification, validation, validation domain)",
+          "title": "Citation",
+          "type": "string"
+        },
+        "difference": {
+          "$ref": "#/$defs/Quantity",
+          "description": "Measured minus predicted, in the prediction's own unit.",
+          "readOnly": true
+        },
+        "instrument": {
+          "title": "Instrument",
+          "type": "string"
+        },
+        "instrument_uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "measured": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "performed_by": {
+          "title": "Performed By",
+          "type": "string"
+        },
+        "performed_on": {
+          "format": "date",
+          "title": "Performed On",
+          "type": "string"
+        },
+        "predicted": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "ratio": {
+          "description": "Measured over predicted, both in the prediction's unit. 1.0 is exact agreement.",
+          "readOnly": true,
+          "title": "Ratio",
+          "type": "number"
+        },
+        "sense": {
+          "$ref": "#/$defs/PredictionSense"
+        },
+        "verdict": {
+          "$ref": "#/$defs/CorrelationVerdict",
+          "description": "Agreement, or which way it fell outside the declared band.",
+          "readOnly": true
+        }
+      },
+      "required": [
+        "check",
+        "item",
+        "predicted",
+        "measured",
+        "sense",
+        "performed_on",
+        "performed_by",
+        "instrument",
+        "ratio",
+        "difference",
+        "verdict"
+      ],
+      "title": "Correlation",
+      "type": "object"
+    },
+    "CorrelationVerdict": {
+      "description": "What the comparison said. Never what the check said.",
+      "enum": [
+        "agrees",
+        "unconservative",
+        "conservative",
+        "not_evaluated"
+      ],
+      "title": "CorrelationVerdict",
+      "type": "string"
+    },
+    "CredibilityFactor": {
+      "description": "The eight factors of NASA-STD-7009A Appendix E, Revision A's names.\n\nRev A's set is not the 2008 original's. ``VERIFICATION`` subsumes what the original\nsplit into code and solution verification, ``VALIDATION`` what it split into conceptual\nand referent validation, and the last two factors are new in Rev A.",
+      "enum": [
+        "data_pedigree",
+        "verification",
+        "validation",
+        "input_pedigree",
+        "uncertainty_characterization",
+        "results_robustness",
+        "ms_history",
+        "ms_management"
+      ],
+      "title": "CredibilityFactor",
+      "type": "string"
+    },
+    "CredibilityFactorSet": {
+      "description": "The eight factors of a result or a bundle, each with its evidence.\n\nThere is no overall score here and there will not be one. NASA-STD-7009A E.4 states\nthat the assessments are ordinal only and \"should not be arithmetically manipulated\";\na mean of eight ordinal scales is a number with no meaning that every reader would\nnonetheless compare against another one.",
+      "properties": {
+        "citation": {
+          "default": "NASA-STD-7009A, Appendix E (credibility assessment, levels 0-4)",
+          "title": "Citation",
+          "type": "string"
+        },
+        "scores": {
+          "items": {
+            "$ref": "#/$defs/FactorScore"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "subject": {
+          "title": "Subject",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "scores"
+      ],
+      "title": "CredibilityFactorSet",
+      "type": "object"
+    },
     "CylinderKeepout": {
       "additionalProperties": false,
       "description": "A cylinder of protected space: a connector's mating bore, a shaft's swept radius.",
@@ -1310,6 +1480,85 @@
       "title": "Direction",
       "type": "string"
     },
+    "Disposition": {
+      "description": "A person's judgement on a candidate, with the reason and the person recorded.",
+      "properties": {
+        "by": {
+          "title": "By",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DispositionKind"
+        },
+        "on": {
+          "format": "date",
+          "title": "On",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "reason",
+        "by",
+        "on"
+      ],
+      "title": "Disposition",
+      "type": "object"
+    },
+    "DispositionKind": {
+      "description": "The three ways a person can close an escaped-defect candidate.",
+      "enum": [
+        "escaped_defect",
+        "test_or_instrument_issue",
+        "conservative_test"
+      ],
+      "title": "DispositionKind",
+      "type": "string"
+    },
+    "DomainKind": {
+      "description": "Whether a use sits inside the domain a check was compared in, or outside it.",
+      "enum": [
+        "interpolative",
+        "extrapolative"
+      ],
+      "title": "DomainKind",
+      "type": "string"
+    },
+    "DomainLabel": {
+      "description": "Where a use sits relative to the validation domain. Never a verdict.\n\nASME V&V 10's distinction: a prediction inside the domain the model was compared in is\ninterpolative, one outside it is extrapolative. The label is the information — an\nextrapolative check may well be right, and the reader is entitled to know that nothing\nhas ever been measured out there.",
+      "properties": {
+        "citation": {
+          "default": "ASME V&V 10 vocabulary (verification, validation, validation domain)",
+          "title": "Citation",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/DomainKind"
+        },
+        "nearest": {
+          "$ref": "#/$defs/ValidationRange"
+        },
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "kind",
+        "parameter",
+        "value",
+        "nearest"
+      ],
+      "title": "DomainLabel",
+      "type": "object"
+    },
     "DutyCycleDeclaration": {
       "additionalProperties": false,
       "description": "The part's duty cycle: a life, named events over it, and the S-N curve it uses.\n\nEach event states its stress history at the critical point or its blocks of ranges, how\nmany times it occurs per life, and its source. Screened as one entry: Miner's damage per\nlife over the declared ``curve`` with the declared mean-stress ``correction``, each\nevent's share, and the event that drives it. Goodman needs ``ultimate_strength``.",
@@ -1485,6 +1734,35 @@
       "title": "Environment",
       "type": "string"
     },
+    "EscapedDefectCandidate": {
+      "description": "A passing check whose test came in unconservative, filed for the post-mortem.\n\n``benchmarking`` defines an escaped defect as a green-checked part that failed\nphysically for a reason the validation claims to model, and requires a post-mortem and\na permanent regression. The record that detects one is this. It carries the bundle\ndigest so the post-mortem can reach the exact evidence the verdict was written from.\n\nDispositioning sets :attr:`disposition` and nothing else: the finding stays on the card,\nbecause the card states what the test found and that did not change.",
+      "properties": {
+        "bundle_digest": {
+          "title": "Bundle Digest",
+          "type": "string"
+        },
+        "correlation": {
+          "$ref": "#/$defs/Correlation"
+        },
+        "disposition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Disposition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "bundle_digest",
+        "correlation"
+      ],
+      "title": "EscapedDefectCandidate",
+      "type": "object"
+    },
     "ExportAuthorization": {
       "description": "Permission to write one artifact, and the watermark that goes into it.\n\nConstructed by :func:`authorize_export` and not usefully by hand: the validator below\nrefuses the two combinations that would let a caller assemble a clean-looking\nauthorization for a part that did not pass.",
       "properties": {
@@ -1528,6 +1806,65 @@
         "authorization"
       ],
       "title": "ExportRecord",
+      "type": "object"
+    },
+    "FactorScore": {
+      "description": "One factor's level, the evidence it rests on, and any person's override.\n\n``level`` is the effective score. When a person overrode the proposal, ``proposed_level``\nkeeps what this library said, and ``override_reason`` and ``override_by`` say who\ndisagreed and why — the dossier renders all four, because an override nobody can see is\nindistinguishable from a proposal.",
+      "properties": {
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "factor": {
+          "$ref": "#/$defs/CredibilityFactor"
+        },
+        "level": {
+          "title": "Level",
+          "type": "integer"
+        },
+        "override_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Override By"
+        },
+        "override_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Override Reason"
+        },
+        "proposed_level": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proposed Level"
+        }
+      },
+      "required": [
+        "factor",
+        "level",
+        "evidence"
+      ],
+      "title": "FactorScore",
       "type": "object"
     },
     "FitTolerance": {
@@ -2732,6 +3069,15 @@
       "title": "Part",
       "type": "object"
     },
+    "PredictionSense": {
+      "description": "Which direction of disagreement is the unsafe one.\n\nThe same 8% gap means opposite things on the two kinds of prediction a screen makes. A\npredicted *capacity* measured low is the design holding less than the calculation\nsaid; a predicted *response* — a stress, a deflection, a temperature — measured high is\nthe design working harder than the calculation said. Both are the unconservative case,\nand which one applies is the check's to state, never this module's to guess.",
+      "enum": [
+        "capacity",
+        "response"
+      ],
+      "title": "PredictionSense",
+      "type": "string"
+    },
     "PrismKeepout": {
       "additionalProperties": false,
       "description": "A rectangular block of protected space: width by depth by height.",
@@ -3065,6 +3411,22 @@
     "ReviewerDossier": {
       "description": "Everything a reviewer needs, ordered by what most deserves their attention.\n\n``items`` are in :class:`ReviewPriority` order and ties keep the scorecard's own\norder, so the ordering is total and two runs over the same inputs agree exactly.\n\n``status`` is the scorecard's status, unchanged and unchangeable from here. ``record``\nis the review, if one has been made and still applies; ``stale_record`` is True when a\nrecord exists but the artifact has moved underneath it — the state a reviewer most\nneeds told, because it looks identical to \"reviewed\" from the outside.",
       "properties": {
+        "candidates": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EscapedDefectCandidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "credibility": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/CredibilityFactorSet"
+          },
+          "title": "Credibility",
+          "type": "array"
+        },
         "digest": {
           "title": "Digest",
           "type": "string"
@@ -3194,6 +3556,17 @@
           ],
           "default": null
         },
+        "correlation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Correlation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "derivation": {
           "anyOf": [
             {
@@ -3208,6 +3581,17 @@
         "detail": {
           "title": "Detail",
           "type": "string"
+        },
+        "domain": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DomainLabel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "name": {
           "title": "Name",
@@ -3918,6 +4302,33 @@
       "title": "UnverifiedOrigin",
       "type": "object"
     },
+    "ValidationRange": {
+      "description": "One parameter's range over which a check has been anchored or correlated.\n\n``source`` is the worked example or the recorded test the range came from, so a reader\ncan see that a check \"validated from 10 to 40 mm\" was validated against two points and\nnot a continuum.",
+      "properties": {
+        "high": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "low": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "parameter": {
+          "title": "Parameter",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parameter",
+        "low",
+        "high",
+        "source"
+      ],
+      "title": "ValidationRange",
+      "type": "object"
+    },
     "ValidationTier": {
       "enum": [
         "T0_geometry",
@@ -4052,15 +4463,37 @@
       "type": "string"
     },
     "VerificationOutcome": {
-      "description": "A recorded result: what was measured, when, by whom, and on what instrument.\n\nAll four are required. An outcome without an instrument identity or a performer is\nnot traceable, and an untraceable record is closer to a claim than to evidence — the\nplan would rather have no outcome than an anonymous one.",
+      "description": "A recorded result: what was measured, when, by whom, and on what instrument.\n\nAll four are required. An outcome without an instrument identity or a performer is\nnot traceable, and an untraceable record is closer to a claim than to evidence — the\nplan would rather have no outcome than an anonymous one.\n\n``measured`` is the record in the performer's own words and is always required.\n``measured_value`` is the same result as a number, and it is the one\n:mod:`anvilate.credibility` can correlate with the prediction that planned the item —\na sentence cannot be compared with a capacity. It is optional because plenty of\nlegitimate outcomes have no number (\"no crack found at 10x\"), and an outcome without\none stays a valid record: the plan reports it as performed and *uncorrelated*, never\nas agreeing with anything. ``instrument_uncertainty`` is the instrument's stated\nuncertainty where the record gives one, in the same dimension as the value.",
       "properties": {
         "instrument": {
           "title": "Instrument",
           "type": "string"
         },
+        "instrument_uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "measured": {
           "title": "Measured",
           "type": "string"
+        },
+        "measured_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "passed": {
           "title": "Passed",
@@ -4144,7 +4577,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:evidence-bundle:1.30.0",
+  "$id": "urn:anvilate:schema:evidence-bundle:1.31.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate evidence bundle: every screening layer's contribution for one part, with one rolled-up status, the scorecard, and the spec the verdicts were computed from. A layer that never ran is an absent key, not a null one — the two are different facts and the bundle refuses to collapse them. Carries the screening disclaimer unconditionally. Generated from anvilate.bundle.BundleDocument.",
   "properties": {
@@ -4355,5 +4788,5 @@
   ],
   "title": "BundleDocument",
   "type": "object",
-  "x-anvilate-version": "1.30.0"
+  "x-anvilate-version": "1.31.0"
 }

@@ -54,27 +54,30 @@ card.
 ### Requirement: Credibility factors are stated with their evidence
 
 A result and an evidence bundle SHALL be able to carry a credibility factor set on the
-NASA-STD-7009A scale — data pedigree, input pedigree, code verification, solution
-verification, conceptual validation, referent validation, results uncertainty and
-results robustness, each scored 0 to 4 — where every score names the evidence it rests on.
+NASA-STD-7009A Revision A scale — data pedigree, verification, validation, input
+pedigree, uncertainty characterization, results robustness, M&S history and M&S
+process/product management, each scored 0 to 4 — where every score names the evidence it
+rests on.
 The system MAY propose a score only from evidence it holds (a worked-example anchor, a
 convergence study, a correlation, an uncertainty band, a provenance origin) by a
 published mapping, SHALL score a factor 0 when it holds no evidence, and SHALL accept a
 person's override of any score with a stated reason, attributed. A factor set SHALL be
 rendered in the dossier with the standard cited, and MUST NOT be rendered as a
-certification or as "validated".
+certification or as "validated". Because the standard states the levels are ordinal and
+are not to be arithmetically manipulated, no total, mean or other aggregate of the eight
+SHALL be computed or rendered.
 
 #### Scenario: A closed-form check with a correlation
 
 - **WHEN** a bending check anchored to a worked example and correlated with one recorded
   test is scored
-- **THEN** code verification and referent validation carry proposed scores naming the
-  anchor and the correlation, solution verification is stated not applicable with the
-  reason, and results uncertainty is 0 with "no distribution declared" as its evidence
+- **THEN** verification and validation carry proposed scores naming the anchor and the
+  correlation, and uncertainty characterization is 0 with "no distribution was declared"
+  as its evidence
 
 #### Scenario: An override is attributed
 
-- **WHEN** a reviewer lowers a proposed referent-validation score with a reason
+- **WHEN** a reviewer lowers a proposed validation score with a reason
 - **THEN** the dossier shows the proposed score, the override, the reason and the person
 
 ### Requirement: Use outside the validation domain is labeled

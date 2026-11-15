@@ -97,6 +97,13 @@ never counted as verified by analysis either: it appears as `FAILED` in the matr
 fails the plan, because a failing check is what the analysis found, not something the
 analysis verified.
 
+## Give the outcome a number
+
+`measured` is the performer's own words and is always required. Add `measured_value` — the
+same result as a quantity — and the outcome can be compared with the check that planned
+it: see [model credibility](model-credibility.md). An outcome with no number stays a valid
+record and shows as performed and *uncorrelated*, never as agreeing.
+
 See [`examples/lifter_verification_matrix.py`](../examples/lifter_verification_matrix.py).
 
 Out of scope: executing tests, acquiring lab data, and any claim of qualification or
