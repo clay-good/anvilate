@@ -74,3 +74,36 @@ whether the species is a softwood, and neither is something a diameter knows.
 more fasteners into a fixed end zone and both fall, so the row's effective count
 `n · C_g · C_Delta` is not monotone in n. Six 3/4 in bolts in a 15-inch row are worth
 5.70 bolts; the seventh makes the row 3.9% weaker; the eighth is refused.
+
+## The screen, and the step that looks right
+
+`screen_timber_connection` takes a `TimberConnection` — one fastener's geometry, the
+caller's reduction terms, the Table 11.3.1 chain, the fastener count and the demand — and
+emits one check.
+
+**The reference design value is the least of P/R_d over every reachable mode, not
+P_governing/R_d.** NDS gives the bearing modes a reduction term of 4.0 and the hinge
+modes 3.2, so P and Z do not rank the modes the same way. A 1/2 in bolt with a 0.6 in
+main member has mode IIIm governing P and mode Im governing Z; dividing only the smallest
+P by its own term returns 506 lbf where the answer is 420. The screen divides every mode,
+names both when they differ, and `tests/test_timber_pack.py` writes down the wrong number
+so it cannot come back.
+
+A mode with no reduction term declared makes the whole check `NOT_EVALUATED`, naming the
+modes. A connection screened on three of its five reachable modes has been screened on
+the wrong one as often as not — so a partial declaration is not a partial answer.
+
+R_d is recorded as an `AppliedFactor`: the check is judged at 1.0, so the conservatism the
+reader is relying on would otherwise be nowhere on the card.
+
+## What the screen does not check, deliberately
+
+The yield limit equations describe the fastener and the wood bearing on it, and not the
+wood *around* the group. A row of closely spaced fasteners loaded parallel to grain can
+tear a block out of the member before any fastener reaches the mode its capacity was
+computed from. NDS 2018 Appendix E (non-mandatory) covers that — net section tension E.2,
+row tear-out E.3, group tear-out E.4 — and none of it is screened.
+
+The catalogue carries no failure mode for it either, so `timber_connection` goes in
+`docs/api/uncatalogued-elements.txt` and the screen in the declares-none list. A screen
+that declared a mode it does not address is the lie those ratchets exist to prevent.

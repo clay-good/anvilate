@@ -421,6 +421,12 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             ("timber.screen_timber_beam", "bearing"),
         ),
         _state(
+            "timber.connection_lateral",
+            "a dowel-type timber connection exceeding its NDS adjusted lateral design "
+            "value, by whichever yield mode governs after the reduction terms",
+            ("timber.screen_timber_connection", "lateral capacity"),
+        ),
+        _state(
             "timber.beam_deflection",
             "a sawn-lumber beam sagging past its limit, with creep on its sustained load",
             ("timber.screen_timber_beam", "deflection"),

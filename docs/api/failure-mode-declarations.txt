@@ -38,14 +38,11 @@ optomechanics.adjustment_scorecard -> an adjustment that does not reach or does 
 timber.screen_timber_beam -> timber creep under sustained load
 
 ## declares none yet
-frame.screen_frame
-frame.screen_solution
-optomechanics.obscuration_scorecard
 aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
 callouts.callout_scorecard
-compliance.screen_material_needs
 cold_formed_steel.dsm_scorecard
+compliance.screen_material_needs
 dynamics.frequency_scorecard
 dynamics.half_sine_shock_scorecard
 dynamics.isolation_scorecard
@@ -56,6 +53,8 @@ fatigue.gerber_scorecard
 fatigue.goodman_scorecard
 fatigue.soderberg_scorecard
 fracture.fad_scorecard
+frame.screen_frame
+frame.screen_solution
 geotechnical.screen_driven_pile
 geotechnical.screen_infinite_slope
 geotechnical.screen_retaining_wall
@@ -77,6 +76,7 @@ nds_timber.nds_bending_scorecard
 nds_timber.nds_compression_scorecard
 nds_timber.nds_shear_scorecard
 noise_exposure.screen_noise_exposure
+optomechanics.obscuration_scorecard
 parts.screen_angle_bracket
 parts.screen_bushing
 parts.screen_clevis
@@ -112,8 +112,9 @@ structural.screen_structure
 structural.screen_tension_member
 structural.screen_welded_connection
 thermal.junction_temperature_scorecard
+timber.screen_timber_connection
 ventilation.screen_ventilation
 walking_working.screen_fixed_ladder
 walking_working.screen_guardrail
-walking_working.screen_stair
 walking_working.screen_platform_edge
+walking_working.screen_stair

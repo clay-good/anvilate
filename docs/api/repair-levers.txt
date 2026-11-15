@@ -118,6 +118,7 @@ structural.screen_tension_member -> net_area (solved)
 structural.screen_welded_connection -> leg_size (solved)
 thermal.junction_temperature_scorecard -> thermal_resistance (solved)
 timber.screen_timber_beam -> depth (solved)
+timber.screen_timber_connection
 ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 
 walking_working.screen_guardrail -> post_section_modulus (solved)

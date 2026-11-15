@@ -156,8 +156,10 @@ packs.structural.screen_structure
 packs.structural.screen_tension_member
 packs.structural.screen_welded_connection
 packs.timber.TimberBeam
+packs.timber.TimberConnection
 packs.timber.TimberLoad
 packs.timber.screen_timber_beam
+packs.timber.screen_timber_connection
 packs.walking_working.SUBPART_D_EDITION
 packs.walking_working.Regime
 packs.walking_working.GuardrailSystem

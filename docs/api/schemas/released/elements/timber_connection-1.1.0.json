@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "DowelConnection": {
+      "description": "One dowel-type fastener through a main member and its side member(s).\n\nEvery field is an input to the AWC TR12 Table 1-1 general dowel equations, which are\nthe NDS yield limit equations in their published generalized form.\n\n``main_bearing_strength`` and ``side_bearing_strength`` are the dowel bearing\nstrengths *of each member in the direction its load acts* — resolve an angled load\nwith :func:`hankinson_bearing_strength` first, because the yield equations take one\nnumber per member and the angle is not theirs to apply.\n\n``gap`` is the space between the members, which TR12 carries through every mode: a\nbolted connection with a quarter-inch gap loses about a tenth of its capacity, and\nthe clause most engineers use has no term for it at all.",
+      "properties": {
+        "bending_yield_strength": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "gap": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "main_bearing_length": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "main_bearing_strength": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "shear_planes": {
+          "$ref": "#/$defs/ShearPlanes",
+          "default": "single"
+        },
+        "side_bearing_length": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "side_bearing_strength": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "source": {
+          "default": "AWC Technical Report 12 (2012 edition, ANSI/AWC NDS-2012), Table 1-1 general dowel equations for solid cross-section members",
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "diameter",
+        "bending_yield_strength",
+        "main_bearing_length",
+        "side_bearing_length",
+        "main_bearing_strength",
+        "side_bearing_strength"
+      ],
+      "title": "DowelConnection",
+      "type": "object"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "ShearPlanes": {
+      "description": "How many shear planes the fastener crosses, which decides the mode set.\n\nSingle and double shear are the two cases AWC TR12 Table 1-1 tabulates, and the NDS\nyield limit equations read the same distinction.",
+      "enum": [
+        "single",
+        "double"
+      ],
+      "title": "ShearPlanes",
+      "type": "string"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:timber_connection:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'timber_connection': the fields a Design Spec puts in `element_params` when it declares `element_type: timber_connection`. Generated from anvilate.packs.timber.TimberConnection.",
+  "properties": {
+    "connection": {
+      "$ref": "#/$defs/DowelConnection"
+    },
+    "demand": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "edition": {
+      "title": "Edition",
+      "type": "string"
+    },
+    "factors": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Factors",
+      "type": "object"
+    },
+    "fasteners": {
+      "default": 1,
+      "title": "Fasteners",
+      "type": "integer"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "reduction_terms": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Reduction Terms",
+      "type": "object"
+    }
+  },
+  "required": [
+    "name",
+    "connection",
+    "reduction_terms",
+    "demand",
+    "edition"
+  ],
+  "title": "TimberConnection",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

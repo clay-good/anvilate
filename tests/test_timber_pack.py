@@ -7,7 +7,12 @@ import copy
 import pytest
 from pydantic import ValidationError
 
-from anvilate.packs.timber import TimberBeam, screen_timber_beam
+from anvilate.packs.timber import (
+    TimberBeam,
+    TimberConnection,
+    screen_timber_beam,
+    screen_timber_connection,
+)
 from anvilate.scorecard import CheckStatus
 
 
@@ -253,7 +258,150 @@ def test_every_timber_pack_refusal_site_is_structured():
         if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
             unstructured.append(node.exc)
 
-    assert len(structured) == 14
+    assert len(structured) == 21
     assert unstructured == []
     for call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
+
+
+# --- The dowel-connection screen ------------------------------------------------------
+#
+# A 1/2 in bolt in single shear with a 0.6 in main member and a 2 in side member. The
+# geometry is chosen, not typical: it is the case where the mode with the smallest
+# unreduced value P is NOT the mode with the smallest design value Z, because the
+# reduction terms differ (4.0 for the bearing modes, 3.2 for the hinge ones).
+
+_THIN_MAIN = {
+    "diameter": {"magnitude": 0.5, "unit": "inch"},
+    "bending_yield_strength": {"magnitude": 45000.0, "unit": "psi"},
+    "main_bearing_length": {"magnitude": 0.6, "unit": "inch"},
+    "side_bearing_length": {"magnitude": 2.0, "unit": "inch"},
+    "main_bearing_strength": {"magnitude": 5600.0, "unit": "psi"},
+    "side_bearing_strength": {"magnitude": 5600.0, "unit": "psi"},
+}
+#: NDS Table 12.3.1B at an angle to grain of zero, which the caller cites.
+_REDUCTION_TERMS = {"Im": 4.0, "Is": 4.0, "II": 3.6, "IIIm": 3.2, "IIIs": 3.2, "IV": 3.2}
+
+
+def _connection(**kwargs) -> TimberConnection:
+    defaults = {
+        "name": "chord splice",
+        "edition": "2018",
+        "connection": copy.deepcopy(_THIN_MAIN),
+        "reduction_terms": dict(_REDUCTION_TERMS),
+        "demand": {"magnitude": 1000.0, "unit": "lbf"},
+    }
+    return TimberConnection.model_validate({**defaults, **kwargs})
+
+
+def test_the_design_value_governs_on_a_different_mode_than_the_unreduced_one():
+    """The reason the screen divides every mode and not just the smallest.
+
+    P and Z do not rank the modes the same way, because NDS gives the bearing modes a
+    reduction term of 4.0 and the hinge modes 3.2. Here mode IIIm has the smallest P and
+    mode Im the smallest Z, so `P_governing / R_d_governing` returns 506 lbf where the
+    reference design value is 420 — a fifth too much, from a step that looks right.
+    """
+    from anvilate.analysis import dowel_yield_capacity
+    from anvilate.analysis.dowel_yield import DowelConnection
+
+    yielded = dowel_yield_capacity(DowelConnection.model_validate(_THIN_MAIN))
+    assert yielded.governing.mode.value == "IIIm"
+    reduced = {
+        entry.mode.value: entry.capacity.to("lbf").magnitude / _REDUCTION_TERMS[entry.mode.value]
+        for entry in yielded.modes
+        if entry.capacity is not None
+    }
+    assert min(reduced, key=lambda mode: reduced[mode]) == "Im"
+    assert reduced["Im"] == pytest.approx(420.0, abs=1.0)
+    # The wrong step, kept here so the number the screen must not return is written down.
+    assert reduced["IIIm"] == pytest.approx(506.0, abs=1.0)
+
+    entry = screen_timber_connection(_connection()).entries[0]
+    assert "governs on mode Im" in entry.detail
+    assert "mode IIIm governs the unreduced value" in entry.detail
+    assert entry.safety_factor == pytest.approx(420.0 / 1000.0, rel=1e-3)
+
+
+def test_the_screen_multiplies_by_the_chain_and_the_fastener_count():
+    plain = screen_timber_connection(_connection()).entries[0].safety_factor
+    with_chain = screen_timber_connection(
+        _connection(factors={"C_D": 1.6, "C_g": 0.95}, fasteners=4)
+    ).entries[0]
+    assert with_chain.safety_factor == pytest.approx(plain * 1.6 * 0.95 * 4, rel=1e-9)
+    assert "C_D 1.6, C_g 0.95" in with_chain.detail
+    assert "4 fastener(s)" in with_chain.detail
+    # And a chain with nothing in it says so rather than printing an empty list.
+    assert (
+        "no adjustment factors declared"
+        in screen_timber_connection(_connection()).entries[0].detail
+    )
+
+
+def test_a_mode_with_no_reduction_term_is_not_evaluated_naming_it():
+    """A connection screened on some of its modes has been screened on the wrong one as
+    often as not, so a missing term is NOT_EVALUATED rather than a capacity."""
+    card = screen_timber_connection(_connection(reduction_terms={"Im": 4.0}))
+    entry = card.entries[0]
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "Is, II, IIIm, IIIs, IV" in entry.detail
+    assert entry.needs and "reduction_terms" in entry.needs[0].declaration
+
+
+def test_a_double_shear_connection_needs_no_term_for_the_modes_it_cannot_reach():
+    """Modes II and IIIm do not apply in double shear, so their terms are not asked for."""
+    card = screen_timber_connection(
+        _connection(
+            connection={**copy.deepcopy(_THIN_MAIN), "shear_planes": "double"},
+            reduction_terms={"Im": 4.0, "Is": 4.0, "IIIs": 3.2, "IV": 3.2},
+        )
+    )
+    assert card.entries[0].status is not CheckStatus.NOT_EVALUATED
+
+
+def test_the_reduction_term_is_recorded_as_a_factor_inside_the_capacity():
+    """The check is judged at 1.0, so the conservatism has to be itemized somewhere."""
+    entry = screen_timber_connection(_connection()).entries[0]
+    assert entry.applied_factors and entry.applied_factors[0].value == 4.0
+    assert "Table 12.3.1B" in str(entry.applied_factors[0].authority)
+
+
+def test_the_connection_refuses_the_chain_its_table_does_not_list():
+    for bad, message in (
+        ({"C_F": 1.1}, "does not apply"),
+        ({"C_D": 2.0}, "caps C_D at 1.6"),
+        ({"C_D": 0.0}, "positive and finite"),
+    ):
+        with pytest.raises(ValidationError, match=message):
+            _connection(factors=bad)
+
+
+def test_the_connection_refuses_a_reduction_term_that_is_not_a_mode():
+    with pytest.raises(ValidationError, match="not yield modes"):
+        _connection(reduction_terms={"Im": 4.0, "V": 3.2})
+    with pytest.raises(ValidationError, match="positive and finite"):
+        _connection(reduction_terms={**_REDUCTION_TERMS, "Im": 0.0})
+
+
+def test_the_demand_is_a_force_and_a_magnitude():
+    with pytest.raises(ValidationError, match=r"a \[force\]"):
+        _connection(demand={"magnitude": 1000.0, "unit": "psi"})
+    # The negative and the non-finite are the base class's, which guards every field.
+    with pytest.raises(ValidationError, match="must not be negative"):
+        _connection(demand={"magnitude": -1000.0, "unit": "lbf"})
+    with pytest.raises(ValidationError, match="finite"):
+        _connection(demand={"magnitude": float("nan"), "unit": "lbf"})
+    with pytest.raises(ValidationError, match="at least"):
+        _connection(fasteners=0)
+    # Zero demand is a check with nothing to screen, not one that passed.
+    entry = screen_timber_connection(_connection(demand={"magnitude": 0.0, "unit": "lbf"})).entries[
+        0
+    ]
+    assert entry.status is CheckStatus.NOT_EVALUATED
+
+
+def test_the_edition_is_cited_and_shows_on_the_card():
+    with pytest.raises(ValidationError):
+        _connection(edition="  ")
+    entry = screen_timber_connection(_connection(edition="2024")).entries[0]
+    assert "NDS 2024 §12.3" in str(entry.reference)

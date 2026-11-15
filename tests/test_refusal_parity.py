@@ -259,6 +259,8 @@ def test_every_required_element_field_left_out_is_shown_a_value_to_write():
                 too_long.append(f"{tag}.{name}")
     assert checked > 200, f"only {checked} required fields were tried"
     # A section, a list of steps or members, a timber grade: each a paragraph, so each is
-    # pointed to. Seven of them; a longer list means the examples grew, and is looked at.
-    assert len(too_long) <= 7, too_long
+    # pointed to. A longer list means the examples grew, and is looked at.
+    # 7 -> 8: timber_connection.connection is a whole DowelConnection — six quantities and
+    # a shear-plane count — which is the same shape as the timber_beam records beside it.
+    assert len(too_long) <= 8, too_long
     assert shown == checked - len(too_long)

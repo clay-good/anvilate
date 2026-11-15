@@ -40,6 +40,7 @@ stepped_shaft
 structure
 t_slot_extrusion
 tension_member
+timber_connection
 tube
 ventilation_zone
 worker_noise_exposure

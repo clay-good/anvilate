@@ -14,13 +14,18 @@ caller's; nothing here supplies one.
 from __future__ import annotations
 
 from enum import StrEnum
+from math import isfinite
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, Field, model_validator
 
-from .._models import FrozenMap, Named
+from .._models import FrozenMap, Named, cited
 from ..analysis import (
+    DowelConnection,
+    YieldMode,
     deflection_scorecard,
+    dowel_yield_capacity,
     nds_bearing_area_factor,
     nds_bearing_scorecard,
     nds_bearing_stress,
@@ -31,6 +36,7 @@ from ..analysis import (
 from ..derivation import Derivation, SymbolValue
 from ..refusal import RefusalError, Remedy
 from ..scorecard import (
+    AppliedFactor,
     CheckStatus,
     Direction,
     Need,
@@ -39,7 +45,13 @@ from ..scorecard import (
     ScorecardEntry,
     ValueSource,
 )
-from ..standards.timber import TimberDesignValue, TimberProperty
+from ..standards.timber import (
+    MAX_CONNECTION_LOAD_DURATION,
+    NDS_CONNECTION_FACTORS,
+    ConnectionLoad,
+    TimberDesignValue,
+    TimberProperty,
+)
 from ..units import Quantity
 from ._guarded import GuardedInputs
 
@@ -63,8 +75,10 @@ def _timber_pack_refusal(message: str, *, subject: str, source: str) -> _TimberP
 
 __all__ = [
     "TimberBeam",
+    "TimberConnection",
     "TimberLoad",
     "screen_timber_beam",
+    "screen_timber_connection",
 ]
 
 # Each cites the edition the element's own records are from, so a 2018 value is never
@@ -73,6 +87,32 @@ _NDS_BENDING = "NDS {edition} §3.3 bending"
 _NDS_SHEAR = "NDS {edition} §3.4 shear parallel to grain"
 _NDS_DEFLECTION = "NDS {edition} §3.5 deflection"
 _NDS_BEARING = "NDS {edition} §3.10 bearing perpendicular to grain"
+_NDS_CONNECTION = (
+    "NDS {edition} §12.3 dowel-type fastener lateral design values, with the Table 11.3.1 "
+    "adjustment chain"
+)
+
+_TIMBER_CONNECTION_SOURCE = (
+    "the connection schedule: the fastener, the members it joins, and the cited NDS "
+    "reduction terms for the declared edition"
+)
+
+if TYPE_CHECKING:
+    _NDSEdition = str
+else:
+    _NDSEdition = cited(
+        "the NDS edition the reduction terms and the adjustment chain were read from; "
+        "the numbers move between editions and the chain does not say which it is from"
+    )
+
+
+_NEEDS_A_DEMAND = Need(
+    declaration="element_params.demand",
+    takes="the lateral force the connection carries, from the governing load combination",
+    dimension="[force]",
+    units=("kN", "lbf"),
+    sources=(ValueSource.USER,),
+)
 
 # The catalogue's mode, by id: the deflection check addresses it only when it has been told
 # which part of the load is sustained.
@@ -517,3 +557,260 @@ def screen_timber_beam(beam: TimberBeam) -> Scorecard:
             if beam.sustained_load is not None:
                 entries[-1] = entries[-1].model_copy(update={"addresses": _CREEP_MODES})
     return Scorecard(entries=tuple(entries))
+
+
+class TimberConnection(GuardedInputs):
+    """A group of identical dowel-type fasteners carrying one lateral force.
+
+    ``connection`` is the geometry of **one** fastener at **one** shear plane, as the
+    yield limit equations take it; :func:`~anvilate.analysis.dowel_yield.
+    dowel_yield_capacity` gives the unreduced 5% offset yield value P of each mode.
+
+    ``reduction_terms`` is the caller's: NDS Table 12.3.1B gives a reduction term R_d per
+    mode, modified by the angle to grain, and it is a copyrighted table this library does
+    not carry. **Every mode the connection can reach needs one**, because the reference
+    design value is the least of ``P/R_d`` over the modes and not ``P_governing/R_d`` —
+    the terms differ by mode, so the mode with the smallest P is not always the one with
+    the smallest Z.
+
+    ``factors`` is the NDS Table 11.3.1 chain for a lateral value, checked when the
+    connection is built: C_D (capped at 1.6 for a connection), C_M, C_t, C_g, C_Delta,
+    C_eg, C_di and C_tn. ``fasteners`` is the number in the group, which multiplies the
+    adjusted value, and ``demand`` is the force the group carries.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    positive_fields = ()
+
+    name: Named
+    connection: DowelConnection
+    reduction_terms: FrozenMap[str, float]
+    demand: Quantity
+    fasteners: int = 1
+    factors: FrozenMap[str, float] = Field(default_factory=_no_factors)
+    edition: _NDSEdition
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> TimberConnection:
+        if not self.demand.has_dimension("[force]"):
+            raise _timber_pack_refusal(
+                f"demand is the lateral force on the group, a [force]; got {self.demand}",
+                subject="demand",
+                source=_TIMBER_LOAD_SOURCE,
+            )
+        if isinstance(self.fasteners, bool) or self.fasteners < 1:
+            raise _timber_pack_refusal(
+                f"fasteners is the number in the group, and a connection has at least "
+                f"one; got {self.fasteners}",
+                subject="fasteners",
+                source=_TIMBER_CONNECTION_SOURCE,
+            )
+        known = {mode.value for mode in YieldMode}
+        unknown = sorted(set(self.reduction_terms) - known)
+        if unknown:
+            raise _timber_pack_refusal(
+                f"reduction_terms names {unknown}, which are not yield modes; the modes "
+                f"are {sorted(known)}",
+                subject="reduction_terms",
+                source=_TIMBER_CONNECTION_SOURCE,
+            )
+        for mode, term in self.reduction_terms.items():
+            if not isfinite(term) or term <= 0:
+                raise _timber_pack_refusal(
+                    f"the reduction term for mode {mode} must be positive and finite; got {term}",
+                    subject="reduction_terms",
+                    source=_TIMBER_CONNECTION_SOURCE,
+                )
+        allowed = NDS_CONNECTION_FACTORS[ConnectionLoad.LATERAL]
+        inapplicable = sorted(set(self.factors) - allowed)
+        if inapplicable:
+            raise _timber_pack_refusal(
+                f"NDS Table 11.3.1 does not apply {inapplicable} to a lateral connection "
+                f"value; it takes {sorted(allowed)}",
+                subject="factors",
+                source=_TIMBER_CODE_SOURCE,
+            )
+        duration = self.factors.get("C_D")
+        if duration is not None and duration > MAX_CONNECTION_LOAD_DURATION:
+            raise _timber_pack_refusal(
+                f"NDS Table 11.3.1 footnote 1 caps C_D at {MAX_CONNECTION_LOAD_DURATION} "
+                f"for a connection; got {duration}. The member it joins may take 2.0 under "
+                f"an impact load, and copying that across overstates the connection",
+                subject="factors",
+                source=_TIMBER_CODE_SOURCE,
+            )
+        for name, factor in self.factors.items():
+            if not isfinite(factor) or factor <= 0:
+                raise _timber_pack_refusal(
+                    f"the adjustment factor {name} must be positive and finite; got {factor}",
+                    subject="factors",
+                    source=_TIMBER_CODE_SOURCE,
+                )
+        return self
+
+
+def screen_timber_connection(connection: TimberConnection) -> Scorecard:
+    """Screen a dowel-type fastener group against its lateral demand (NDS §12.3, §11.3).
+
+    Three steps, and the middle one is where a hand calculation goes wrong:
+
+    1. The yield limit equations give the unreduced 5% offset yield value P of every mode
+       the connection can reach (AWC TR12 Table 1-1).
+    2. The reference design value is **the least of P/R_d over those modes**, with the
+       caller's reduction terms. Not P_governing/R_d: the terms differ by mode — NDS gives
+       4.0 for the bearing modes against 3.2 for the hinge ones — so a thin main member
+       can have mode IIIm governing P and mode Im governing Z, and dividing only the
+       smallest P by its own term overstates the connection by a fifth.
+    3. Z' = Z · ∏C_i over the Table 11.3.1 chain, times the fastener count, against the
+       demand. The NDS allowable carries its own margin, so the check passes at 1.0.
+
+    A mode with no reduction term declared is not evaluated, naming the mode: a connection
+    screened on three of its five reachable modes has been screened on the wrong one as
+    often as not.
+
+    **What this does not check.** The yield limit equations describe the fastener and the
+    wood bearing on it, and not the wood *around* the group: a row of closely spaced
+    fasteners loaded parallel to grain can tear a block out of the member before any
+    fastener reaches the mode its capacity was computed from. NDS 2018 Appendix E
+    (non-mandatory) gives net section tension (E.2), row tear-out (E.3) and group tear-out
+    (E.4) for that, and none of them is screened here. Nor are the edge, end and spacing
+    minimums themselves — :func:`~anvilate.analysis.nds_timber.nds_geometry_factor` turns
+    a declared distance into C_Delta, and the distance is the caller's to declare.
+    """
+    yielded = dowel_yield_capacity(connection.connection)
+    reachable = [entry for entry in yielded.modes if entry.capacity is not None]
+    # In the modes' own order, not alphabetical: "Im, Is, II, IIIm" is how the table
+    # prints them, and "II, IIIm, IIIs, IV, Is" reads as a different connection.
+    missing = [
+        entry.mode.value
+        for entry in reachable
+        if entry.mode.value not in connection.reduction_terms
+    ]
+    citation = _NDS_CONNECTION.format(edition=connection.edition)
+    if missing:
+        return Scorecard(
+            entries=(
+                ScorecardEntry(
+                    name=f"{connection.name} lateral capacity",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"not evaluated — no reduction term declared for mode(s) "
+                        f"{', '.join(missing)}, which this connection can reach. The "
+                        f"reference design value is the least of P/R_d over every reachable "
+                        f"mode, so a missing term is a mode that might have governed"
+                    ),
+                    reference=citation,
+                    needs=(
+                        Need(
+                            declaration="element_params.reduction_terms",
+                            takes=(
+                                "the NDS Table 12.3.1B reduction term R_d for each yield "
+                                "mode, at the connection's angle to grain"
+                            ),
+                            sources=(ValueSource.STANDARD, ValueSource.USER),
+                        ),
+                    ),
+                ),
+            )
+        )
+
+    reduced = {
+        entry.mode: entry.capacity.to("lbf").magnitude
+        / connection.reduction_terms[entry.mode.value]
+        for entry in reachable
+    }
+    governing = min(reduced, key=lambda mode: reduced[mode])
+    product = 1.0
+    for factor in connection.factors.values():
+        product *= factor
+    capacity = reduced[governing] * product * connection.fasteners
+    demand = connection.demand.to("lbf").magnitude
+    chain = (
+        ", ".join(f"{name} {value:g}" for name, value in sorted(connection.factors.items()))
+        or "no adjustment factors declared"
+    )
+    unreduced = yielded.governing.mode
+    crossed = (
+        ""
+        if unreduced is governing
+        else (
+            f"; mode {unreduced.value} governs the unreduced value and mode "
+            f"{governing.value} governs the design value, because their reduction terms "
+            f"differ"
+        )
+    )
+    entry = ScorecardEntry.from_safety_factor(
+        f"{connection.name} lateral capacity",
+        computed=None if demand == 0 else capacity / demand,
+        required=1.0,
+        unavailable=(
+            "the demand is zero, so there is no force to screen; pass the `demand` the "
+            "governing load combination puts on the connection"
+        ),
+        needs=(_NEEDS_A_DEMAND,),
+    )
+    return Scorecard(
+        entries=(
+            entry.model_copy(
+                update={
+                    "reference": citation,
+                    "derivation": Derivation(
+                        symbolic="Z'_group = (P / R_d) · C · n",
+                        inputs=(
+                            SymbolValue(
+                                symbol="P",
+                                description=(
+                                    f"the unreduced 5% offset yield value of mode "
+                                    f"{governing.value}, the mode that governs after the "
+                                    f"reduction terms"
+                                ),
+                                value=Quantity(
+                                    magnitude=yielded.of(governing).capacity.to("lbf").magnitude,
+                                    unit="lbf",
+                                ),
+                            ),
+                            SymbolValue(
+                                symbol="R_d",
+                                description="the declared reduction term for that mode",
+                                value=connection.reduction_terms[governing.value],
+                            ),
+                            SymbolValue(
+                                symbol="C",
+                                description=f"the Table 11.3.1 chain multiplied out ({chain})",
+                                value=product,
+                            ),
+                            SymbolValue(
+                                symbol="n",
+                                description="the fasteners in the group",
+                                value=float(connection.fasteners),
+                            ),
+                        ),
+                        result=SymbolValue(
+                            symbol="Z'_group",
+                            description="the group's adjusted lateral design value",
+                            value=Quantity(magnitude=capacity, unit="lbf"),
+                        ),
+                        citation=citation,
+                    ),
+                    "applied_factors": (
+                        AppliedFactor(
+                            label=f"R_d, reduction term for mode {governing.value}",
+                            value=connection.reduction_terms[governing.value],
+                            origin="the NDS reduction term the document declares",
+                            authority=(
+                                f"NDS {connection.edition} Table 12.3.1B reduction term "
+                                f"R_d, at the connection's angle to grain"
+                            ),
+                        ),
+                    ),
+                    "detail": (
+                        f"{entry.detail}; governs on mode {governing.value} "
+                        f"({governing.description}) at R_d "
+                        f"{connection.reduction_terms[governing.value]:g}, Z "
+                        f"{reduced[governing]:.0f} lbf per fastener, chain {chain}, "
+                        f"{connection.fasteners} fastener(s){crossed}"
+                    ),
+                }
+            ),
+        )
+    )

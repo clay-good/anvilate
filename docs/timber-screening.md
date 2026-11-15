@@ -374,6 +374,50 @@ Three refusals, each a rule the table states and a chain composed by hand loses:
 The values themselves are yours, as the member tables are: the reference Z and W, and the
 six factors Table 11.3.1 lists that are table lookups rather than equations.
 
+## A timber connection in a Design Spec
+
+`TimberConnection` is the element a document declares, and `screen_timber_connection`
+screens it: the yield modes, the caller's reduction terms, the Table 11.3.1 chain, the
+fastener count, against the demand.
+
+```yaml
+element_type: timber_connection
+element_params:
+  name: chord splice
+  edition: "2018"
+  demand: {magnitude: 1200, unit: lbf}
+  fasteners: 4
+  factors: {C_D: 1.0, C_g: 0.97}
+  reduction_terms: {Im: 4.0, Is: 4.0, II: 3.6, IIIm: 3.2, IIIs: 3.2, IV: 3.2}
+  connection:
+    diameter: {magnitude: 0.5, unit: inch}
+    bending_yield_strength: {magnitude: 45000, unit: psi}
+    main_bearing_length: {magnitude: 1.5, unit: inch}
+    side_bearing_length: {magnitude: 1.5, unit: inch}
+    main_bearing_strength: {magnitude: 5600, unit: psi}
+    side_bearing_strength: {magnitude: 5600, unit: psi}
+```
+
+**The reference design value is the least of P/R_d over every reachable mode, not
+P_governing/R_d.** The reduction terms differ by mode — NDS gives 4.0 to the bearing
+modes and 3.2 to the hinge ones — so the two do not rank the modes the same way. A thin
+main member can have mode IIIm governing the unreduced value and mode Im governing the
+design value, and dividing only the smallest P by its own term returns 506 lbf where the
+answer is 420: a fifth too much, from a step that looks right. The card names both modes
+when they differ.
+
+A mode with no reduction term declared makes the whole check `NOT_EVALUATED`, naming the
+modes. A connection screened on three of its five reachable modes has been screened on
+the wrong one as often as not.
+
+**What the screen does not check.** The yield limit equations describe the fastener and
+the wood bearing on it, not the wood *around* the group: a row of closely spaced
+fasteners loaded parallel to grain can tear a block out of the member first. NDS 2018
+Appendix E (non-mandatory) covers that — net section tension, row tear-out and group
+tear-out — and none of it is screened here. The element is recorded in
+[`docs/api/uncatalogued-elements.txt`](api/uncatalogued-elements.txt) for the same
+reason.
+
 ## Examples
 
 - [`examples/timber_beam_lateral_stability.py`](../examples/timber_beam_lateral_stability.py)

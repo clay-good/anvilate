@@ -1,1585 +1,1634 @@
 {
- "angle_bracket": {
-  "allowable_bearing": null,
-  "allowable_bending": null,
-  "base_holes": [
-   {
-    "counterbore_depth": null,
-    "counterbore_diameter": null,
-    "diameter": {
-     "magnitude": 6.6,
-     "unit": "mm"
+  "angle_bracket": {
+    "allowable_bearing": null,
+    "allowable_bending": null,
+    "base_holes": [
+      {
+        "counterbore_depth": null,
+        "counterbore_diameter": null,
+        "diameter": {
+          "magnitude": 6.6,
+          "unit": "mm"
+        },
+        "head_diameter": null,
+        "kind": "through",
+        "tag": "b1",
+        "thread": null,
+        "x": {
+          "magnitude": 10.0,
+          "unit": "mm"
+        },
+        "y": {
+          "magnitude": -15.0,
+          "unit": "mm"
+        }
+      },
+      {
+        "counterbore_depth": null,
+        "counterbore_diameter": null,
+        "diameter": {
+          "magnitude": 6.6,
+          "unit": "mm"
+        },
+        "head_diameter": null,
+        "kind": "through",
+        "tag": "b2",
+        "thread": null,
+        "x": {
+          "magnitude": 10.0,
+          "unit": "mm"
+        },
+        "y": {
+          "magnitude": 15.0,
+          "unit": "mm"
+        }
+      }
+    ],
+    "base_length": {
+      "magnitude": 60.0,
+      "unit": "mm"
     },
-    "head_diameter": null,
-    "kind": "through",
-    "tag": "b1",
-    "thread": null,
-    "x": {
-     "magnitude": 10.0,
-     "unit": "mm"
-    },
-    "y": {
-     "magnitude": -15.0,
-     "unit": "mm"
-    }
-   },
-   {
-    "counterbore_depth": null,
-    "counterbore_diameter": null,
-    "diameter": {
-     "magnitude": 6.6,
-     "unit": "mm"
-    },
-    "head_diameter": null,
-    "kind": "through",
-    "tag": "b2",
-    "thread": null,
-    "x": {
-     "magnitude": 10.0,
-     "unit": "mm"
-    },
-    "y": {
-     "magnitude": 15.0,
-     "unit": "mm"
-    }
-   }
-  ],
-  "base_length": {
-   "magnitude": 60.0,
-   "unit": "mm"
-  },
-  "base_patterns": [],
-  "base_slots": [],
-  "load": null,
-  "load_height": null,
-  "material": null,
-  "name": "shelf-angle-bracket",
-  "rib_leg": {
-   "magnitude": 25.0,
-   "unit": "mm"
-  },
-  "rib_thickness": {
-   "magnitude": 5.0,
-   "unit": "mm"
-  },
-  "thickness": {
-   "magnitude": 5.0,
-   "unit": "mm"
-  },
-  "upright_height": {
-   "magnitude": 80.0,
-   "unit": "mm"
-  },
-  "upright_holes": [],
-  "upright_patterns": [],
-  "upright_slots": [
-   {
-    "angle_deg": 0.0,
-    "length": {
-     "magnitude": 20.0,
-     "unit": "mm"
-    },
-    "tag": "s1",
-    "width": {
-     "magnitude": 6.6,
-     "unit": "mm"
-    },
-    "x": {
-     "magnitude": 0.0,
-     "unit": "mm"
-    },
-    "y": {
-     "magnitude": 15.0,
-     "unit": "mm"
-    }
-   }
-  ],
-  "width": {
-   "magnitude": 50.0,
-   "unit": "mm"
-  }
- },
- "base_plate": {
-  "axial_load": {
-   "magnitude": 200.0,
-   "unit": "kN"
-  },
-  "cantilever": {
-   "magnitude": 50.0,
-   "unit": "mm"
-  },
-  "concrete_strength": {
-   "magnitude": 25.0,
-   "unit": "MPa"
-  },
-  "depth": {
-   "magnitude": 240.0,
-   "unit": "mm"
-  },
-  "name": "bp1",
-  "plate_material": "ASTM-A36",
-  "plate_thickness": {
-   "magnitude": 25.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 300.0,
-   "unit": "mm"
-  }
- },
- "beam_column_member": {
-  "axial_load": {
-   "magnitude": 50.0,
-   "unit": "kN"
-  },
-  "end_condition": "pinned_pinned",
-  "length": {
-   "magnitude": 3.0,
-   "unit": "m"
-  },
-  "material": "ASTM-A36",
-  "moment": {
-   "magnitude": 2.0,
-   "unit": "kN * m"
-  },
-  "name": "bc",
-  "section": {
-   "area": {
-    "magnitude": 2500.0,
-    "unit": "mm**2"
-   },
-   "extreme_fibre": {
-    "magnitude": 25.0,
-    "unit": "mm"
-   },
-   "second_moment": {
-    "magnitude": 520833.3333333333,
-    "unit": "mm**4"
-   },
-   "second_moment_transverse": {
-    "magnitude": 520833.3333333333,
-    "unit": "mm**4"
-   },
-   "shear_form_factor": 1.5
-  }
- },
- "beam_member": {
-  "deflection_limit": {
-   "magnitude": 16.0,
-   "unit": "mm"
-  },
-  "length": {
-   "magnitude": 4.0,
-   "unit": "m"
-  },
-  "load": {
-   "magnitude": 5.0,
-   "unit": "kN / m"
-  },
-  "load_position": null,
-  "load_type": "distributed",
-  "loaded_length": null,
-  "mass_per_length": null,
-  "material": "ASTM-A36",
-  "min_frequency": null,
-  "name": "rafter",
-  "overhang_length": null,
-  "pair_offset": null,
-  "patch_centered": false,
-  "section": {
-   "area": {
-    "magnitude": 15000.0,
-    "unit": "mm**2"
-   },
-   "extreme_fibre": {
-    "magnitude": 75.0,
-    "unit": "mm"
-   },
-   "second_moment": {
-    "magnitude": 28125000.0,
-    "unit": "mm**4"
-   },
-   "second_moment_transverse": {
-    "magnitude": 12500000.0,
-    "unit": "mm**4"
-   },
-   "shear_form_factor": 1.5
-  },
-  "support": "simply_supported",
-  "triangle_mirrored": false
- },
- "bolted_connection": {
-  "bolt_diameter": {
-   "magnitude": 16.0,
-   "unit": "mm"
-  },
-  "bolt_material": "ASTM-A36",
-  "edge_distance": {
-   "magnitude": 30.0,
-   "unit": "mm"
-  },
-  "load": {
-   "magnitude": 60.0,
-   "unit": "kN"
-  },
-  "name": "clevis",
-  "plate_material": "ASTM-A36",
-  "plate_thickness": {
-   "magnitude": 10.0,
-   "unit": "mm"
-  },
-  "shear_planes": 2,
-  "tension": {
-   "magnitude": 25.0,
-   "unit": "kN"
-  }
- },
- "bushing": {
-  "flange_diameter": {
-   "magnitude": 22.0,
-   "unit": "mm"
-  },
-  "flange_thickness": {
-   "magnitude": 2.0,
-   "unit": "mm"
-  },
-  "inner_diameter": {
-   "magnitude": 12.0,
-   "unit": "mm"
-  },
-  "length": {
-   "magnitude": 20.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "flanged-bushing",
-  "outer_diameter": {
-   "magnitude": 16.0,
-   "unit": "mm"
-  }
- },
- "clevis": {
-  "allowable_bearing": {
-   "magnitude": 250.0,
-   "unit": "MPa"
-  },
-  "allowable_shear": {
-   "magnitude": 145.0,
-   "unit": "MPa"
-  },
-  "allowable_tension": {
-   "magnitude": 250.0,
-   "unit": "MPa"
-  },
-  "base_thickness": {
-   "magnitude": 12.0,
-   "unit": "mm"
-  },
-  "depth": {
-   "magnitude": 30.0,
-   "unit": "mm"
-  },
-  "gap": {
-   "magnitude": 20.0,
-   "unit": "mm"
-  },
-  "height": {
-   "magnitude": 50.0,
-   "unit": "mm"
-  },
-  "load": {
-   "magnitude": 20.0,
-   "unit": "kN"
-  },
-  "material": null,
-  "name": "rod-end-clevis",
-  "pin_allowable_shear": {
-   "magnitude": 240.0,
-   "unit": "MPa"
-  },
-  "pin_diameter": {
-   "magnitude": 12.0,
-   "unit": "mm"
-  },
-  "pin_height": {
-   "magnitude": 34.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  }
- },
- "column_member": {
-  "axial_load": {
-   "magnitude": 40.0,
-   "unit": "kN"
-  },
-  "end_condition": "pinned_pinned",
-  "length": {
-   "magnitude": 3000.0,
-   "unit": "mm"
-  },
-  "material": "ASTM-A36",
-  "name": "post",
-  "section": {
-   "area": {
-    "magnitude": 2500.0,
-    "unit": "mm**2"
-   },
-   "extreme_fibre": {
-    "magnitude": 25.0,
-    "unit": "mm"
-   },
-   "second_moment": {
-    "magnitude": 520833.3333333333,
-    "unit": "mm**4"
-   },
-   "second_moment_transverse": {
-    "magnitude": 520833.3333333333,
-    "unit": "mm**4"
-   },
-   "shear_form_factor": 1.5
-  }
- },
- "concrete_bearing": {
-  "bearing_area": {
-   "magnitude": 40000.0,
-   "unit": "mm ** 2"
-  },
-  "concrete_strength": {
-   "magnitude": 28.0,
-   "unit": "MPa"
-  },
-  "load": {
-   "magnitude": 600.0,
-   "unit": "kN"
-  },
-  "name": "pedestal",
-  "support_area": {
-   "magnitude": 250000.0,
-   "unit": "mm ** 2"
-  }
- },
- "cover_plate": {
-  "deflection_limit": {
-   "magnitude": 3.0,
-   "unit": "mm"
-  },
-  "diameter": null,
-  "edge": "clamped",
-  "hole_diameter": null,
-  "length": {
-   "magnitude": 900.0,
-   "unit": "mm"
-  },
-  "material": "ASTM-A36",
-  "min_frequency": {
-   "magnitude": 60.0,
-   "unit": "Hz"
-  },
-  "name": "manway",
-  "patch_length": null,
-  "patch_width": null,
-  "pressure": {
-   "magnitude": 0.4,
-   "unit": "MPa"
-  },
-  "thickness": {
-   "magnitude": 12.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 620.0,
-   "unit": "mm"
-  }
- },
- "driven_pile": {
-  "adhesion_factor": 0.7,
-  "applied_load": {
-   "magnitude": 500.0,
-   "unit": "kN"
-  },
-  "diameter": {
-   "magnitude": 0.4,
-   "unit": "m"
-  },
-  "factor_of_safety": 2.5,
-  "length": {
-   "magnitude": 8.0,
-   "unit": "m"
-  },
-  "undrained_shear_strength": {
-   "magnitude": 75.0,
-   "unit": "kPa"
-  }
- },
- "enclosure": {
-  "corner_radius": {
-   "magnitude": 6.0,
-   "unit": "mm"
-  },
-  "floor": null,
-  "floor_holes": [],
-  "floor_patterns": [
-   {
-    "centre_x": null,
-    "centre_y": null,
-    "circle_diameter": null,
-    "count": null,
-    "count_x": 2,
-    "count_y": 2,
-    "diameter": {
-     "magnitude": 4.5,
-     "unit": "mm"
-    },
-    "kind": "rectangular",
-    "pitch_x": {
-     "magnitude": 90.0,
-     "unit": "mm"
-    },
-    "pitch_y": {
-     "magnitude": 50.0,
-     "unit": "mm"
-    },
-    "start_angle_deg": 0.0,
-    "tag": "mnt",
-    "thread": null
-   }
-  ],
-  "height": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  },
-  "length": {
-   "magnitude": 80.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "control-box",
-  "wall": {
-   "magnitude": 3.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 120.0,
-   "unit": "mm"
-  }
- },
- "enclosure_lid": {
-  "corner_radius": {
-   "magnitude": 6.0,
-   "unit": "mm"
-  },
-  "hole_patterns": [
-   {
-    "centre_x": null,
-    "centre_y": null,
-    "circle_diameter": null,
-    "count": null,
-    "count_x": 2,
-    "count_y": 2,
-    "diameter": {
-     "magnitude": 3.4,
-     "unit": "mm"
-    },
-    "kind": "rectangular",
-    "pitch_x": {
-     "magnitude": 90.0,
-     "unit": "mm"
-    },
-    "pitch_y": {
-     "magnitude": 50.0,
-     "unit": "mm"
-    },
-    "start_angle_deg": 0.0,
-    "tag": "scr",
-    "thread": null
-   }
-  ],
-  "holes": [
-   {
-    "counterbore_depth": null,
-    "counterbore_diameter": null,
-    "diameter": {
-     "magnitude": 12.5,
-     "unit": "mm"
-    },
-    "head_diameter": null,
-    "kind": "through",
-    "tag": "gland",
-    "thread": null,
-    "x": {
-     "magnitude": 0.0,
-     "unit": "mm"
-    },
-    "y": {
-     "magnitude": 0.0,
-     "unit": "mm"
-    }
-   }
-  ],
-  "length": {
-   "magnitude": 80.0,
-   "unit": "mm"
-  },
-  "lip_height": {
-   "magnitude": 4.0,
-   "unit": "mm"
-  },
-  "lip_inset": {
-   "magnitude": 3.2,
-   "unit": "mm"
-  },
-  "lip_wall": {
-   "magnitude": 2.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "control-box-lid",
-  "thickness": {
-   "magnitude": 3.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 120.0,
-   "unit": "mm"
-  }
- },
- "feeder": {
-  "conductor_ampacity": {
-   "magnitude": 115.0,
-   "unit": "A"
-  },
-  "conductor_area": {
-   "magnitude": 35.0,
-   "unit": "mm ** 2"
-  },
-  "drop_limit_percent": 3.0,
-  "line_voltage": {
-   "magnitude": 480.0,
-   "unit": "V"
-  },
-  "load_power": {
-   "magnitude": 37.0,
-   "unit": "kW"
-  },
-  "one_way_length": {
-   "magnitude": 100.0,
-   "unit": "m"
-  },
-  "power_factor": 0.85,
-  "reactance": null,
-  "resistivity": {
-   "magnitude": 1.68e-08,
-   "unit": "m * Ω"
-  }
- },
- "fixed_ladder": {
-  "regime": "us_general_industry",
-  "height": {
-   "magnitude": 9.0,
-   "unit": "m"
-  },
-  "rung_spacing": {
-   "magnitude": 300.0,
-   "unit": "mm"
-  },
-  "rung_clear_width": {
-   "magnitude": 420.0,
-   "unit": "mm"
-  },
-  "clearance_behind": {
-   "magnitude": 190.0,
-   "unit": "mm"
-  },
-  "rail_extension": {
-   "magnitude": 1100.0,
-   "unit": "mm"
-  },
-  "fall_protection": "ladder_safety_system"
- },
- "guardrail_system": {
-  "regime": "us_general_industry",
-  "post_height": {
-   "magnitude": 1070.0,
-   "unit": "mm"
-  },
-  "post_spacing": {
-   "magnitude": 1800.0,
-   "unit": "mm"
-  },
-  "post_section_modulus": {
-   "magnitude": 4930.0,
-   "unit": "mm ** 3"
-  },
-  "post_second_moment": {
-   "magnitude": 119000.0,
-   "unit": "mm ** 4"
-  },
-  "yield_strength": {
-   "magnitude": 355.0,
-   "unit": "MPa"
-  },
-  "elastic_modulus": {
-   "magnitude": 200.0,
-   "unit": "GPa"
-  },
-  "rail_section_modulus": {
-   "magnitude": 4930.0,
-   "unit": "mm ** 3"
-  },
-  "midrail_height": {
-   "magnitude": 530.0,
-   "unit": "mm"
-  },
-  "toeboard_height": {
-   "magnitude": 100.0,
-   "unit": "mm"
-  },
-  "toeboard_section_modulus": {
-   "magnitude": 1670.0,
-   "unit": "mm ** 3"
-  }
- },
- "gusset_plate": {
-  "load": {
-   "magnitude": 400.0,
-   "unit": "kN"
-  },
-  "material": "ASTM-A36",
-  "name": "gusset",
-  "net_shear_area": {
-   "magnitude": 3000.0,
-   "unit": "mm ** 2"
-  },
-  "net_tension_area": {
-   "magnitude": 1200.0,
-   "unit": "mm ** 2"
-  },
-  "outline": null
- },
- "helical_compression_spring": {
-  "active_coils": 20.0,
-  "allowable_shear_stress": {
-   "magnitude": 700.0,
-   "unit": "MPa"
-  },
-  "elastic_modulus": {
-   "magnitude": 207.0,
-   "unit": "GPa"
-  },
-  "end_condition_constant": 0.5,
-  "free_length": {
-   "magnitude": 200.0,
-   "unit": "mm"
-  },
-  "mean_coil_diameter": {
-   "magnitude": 24.0,
-   "unit": "mm"
-  },
-  "operating_force": {
-   "magnitude": 120.0,
-   "unit": "N"
-  },
-  "shear_modulus": {
-   "magnitude": 79.3,
-   "unit": "GPa"
-  },
-  "total_coils": 22.0,
-  "wire_diameter": {
-   "magnitude": 3.0,
-   "unit": "mm"
-  }
- },
- "infinite_slope": {
-  "cohesion": {
-   "magnitude": 20.0,
-   "unit": "kPa"
-  },
-  "depth": {
-   "magnitude": 2.5,
-   "unit": "m"
-  },
-  "friction_angle": 30.0,
-  "pore_pressure": null,
-  "slope_angle": 35.0,
-  "unit_weight": {
-   "magnitude": 19.0,
-   "unit": "kN / m ** 3"
-  }
- },
- "lifting_lug": {
-  "hole_diameter": {
-   "magnitude": 25.0,
-   "unit": "mm"
-  },
-  "hole_height": {
-   "magnitude": 90.0,
-   "unit": "mm"
-  },
-  "load": {
-   "magnitude": 50.0,
-   "unit": "kN"
-  },
-  "material": "ASTM-A36",
-  "name": "padeye",
-  "thickness": {
-   "magnitude": 12.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 80.0,
-   "unit": "mm"
-  }
- },
- "lighting_installation": {
-  "allowable_power_density": {
-   "magnitude": 8.8,
-   "unit": "W / m ** 2"
-  },
-  "coefficient_of_utilization": 0.62,
-  "floor_area": {
-   "magnitude": 80.0,
-   "unit": "m ** 2"
-  },
-  "input_watts_per_luminaire": {
-   "magnitude": 30.0,
-   "unit": "W"
-  },
-  "light_loss_factor": 0.8,
-  "lumens_per_luminaire": {
-   "magnitude": 3400.0,
-   "unit": "lm"
-  },
-  "luminaire_count": 20,
-  "required_illuminance": {
-   "magnitude": 400.0,
-   "unit": "lx"
-  }
- },
- "masonry_wall": {
-  "axial_stress": {
-   "magnitude": 4.0,
-   "unit": "MPa"
-  },
-  "flexural_stress": {
-   "magnitude": 2.2,
-   "unit": "MPa"
-  },
-  "masonry_strength": {
-   "magnitude": 10.0,
-   "unit": "MPa"
-  },
-  "slenderness_ratio": 40.0
- },
- "mounting_plate": {
-  "corner_radius": {
-   "magnitude": 8.0,
-   "unit": "mm"
-  },
-  "hole_patterns": [
-   {
-    "centre_x": null,
-    "centre_y": null,
-    "circle_diameter": null,
-    "count": null,
-    "count_x": 2,
-    "count_y": 2,
-    "diameter": {
-     "magnitude": 6.6,
-     "unit": "mm"
-    },
-    "kind": "rectangular",
-    "pitch_x": {
-     "magnitude": 100.0,
-     "unit": "mm"
-    },
-    "pitch_y": {
-     "magnitude": 60.0,
-     "unit": "mm"
-    },
-    "start_angle_deg": 0.0,
-    "tag": "m6",
-    "thread": null
-   }
-  ],
-  "holes": [
-   {
-    "counterbore_depth": {
-     "magnitude": 3.0,
-     "unit": "mm"
-    },
-    "counterbore_diameter": {
-     "magnitude": 11.0,
-     "unit": "mm"
-    },
-    "diameter": {
-     "magnitude": 6.6,
-     "unit": "mm"
-    },
-    "head_diameter": null,
-    "kind": "counterbore",
-    "tag": "cb",
-    "thread": null,
-    "x": {
-     "magnitude": 0.0,
-     "unit": "mm"
-    },
-    "y": {
-     "magnitude": 0.0,
-     "unit": "mm"
-    }
-   }
-  ],
-  "length": {
-   "magnitude": 80.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "motor-mounting-plate",
-  "slots": [
-   {
-    "angle_deg": 0.0,
-    "length": {
-     "magnitude": 30.0,
-     "unit": "mm"
-    },
-    "tag": "adj",
-    "width": {
-     "magnitude": 6.0,
-     "unit": "mm"
-    },
-    "x": {
-     "magnitude": 0.0,
-     "unit": "mm"
-    },
-    "y": {
-     "magnitude": 25.0,
-     "unit": "mm"
-    }
-   }
-  ],
-  "thickness": {
-   "magnitude": 6.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 120.0,
-   "unit": "mm"
-  }
- },
- "pipe_run": {
-  "available_head": {
-   "magnitude": 2.0,
-   "unit": "m"
-  },
-  "designation": null,
-  "diameter": {
-   "magnitude": 0.15,
-   "unit": "m"
-  },
-  "fitting_loss_coefficient": 5.0,
-  "flow_rate": {
-   "magnitude": 0.05,
-   "unit": "m ** 3 / s"
-  },
-  "kinematic_viscosity": {
-   "magnitude": 1e-06,
-   "unit": "m ** 2 / s"
-  },
-  "length": {
-   "magnitude": 100.0,
-   "unit": "m"
-  },
-  "roughness": {
-   "magnitude": 0.045,
-   "unit": "mm"
-  }
- },
- "plate_flange": {
-  "bolt_circle_diameter": {
-   "magnitude": 90.0,
-   "unit": "mm"
-  },
-  "bolt_count": 6,
-  "bolt_hole_diameter": {
-   "magnitude": 9.0,
-   "unit": "mm"
-  },
-  "bore_diameter": {
-   "magnitude": 50.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "pump-plate-flange",
-  "outer_diameter": {
-   "magnitude": 120.0,
-   "unit": "mm"
-  },
-  "thickness": {
-   "magnitude": 12.0,
-   "unit": "mm"
-  }
- },
- "platform_edge": {
-  "regime": "us_general_industry",
-  "height_above_lower_level": {
-   "magnitude": 3.0,
-   "unit": "m"
-  },
-  "protection": "guardrail"
- },
- "pulley": {
-  "bore": {
-   "magnitude": 20.0,
-   "unit": "mm"
-  },
-  "groove_angle_deg": 38.0,
-  "groove_depth": {
-   "magnitude": 11.0,
-   "unit": "mm"
-  },
-  "groove_width": {
-   "magnitude": 13.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "v-belt-pulley",
-  "outer_diameter": {
-   "magnitude": 100.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 20.0,
-   "unit": "mm"
-  }
- },
- "pump_duty": {
-  "efficiency": 0.7,
-  "flow_rate": {
-   "magnitude": 0.05,
-   "unit": "m ** 3 / s"
-  },
-  "fluid_density": {
-   "magnitude": 1000.0,
-   "unit": "kg / m ** 3"
-  },
-  "motor_rating": {
-   "magnitude": 9.0,
-   "unit": "kW"
-  },
-  "npsh_available": {
-   "magnitude": 3.0,
-   "unit": "m"
-  },
-  "npsh_required": {
-   "magnitude": 4.0,
-   "unit": "m"
-  },
-  "total_head": {
-   "magnitude": 20.0,
-   "unit": "m"
-  }
- },
- "retaining_wall": {
-  "backfill_friction_angle": 28.0,
-  "backfill_unit_weight": {
-   "magnitude": 18.0,
-   "unit": "kN / m ** 3"
-  },
-  "base_friction_coefficient": 0.45,
-  "load_arm": {
-   "magnitude": 1.2,
-   "unit": "m"
-  },
-  "retained_height": {
-   "magnitude": 5.0,
-   "unit": "m"
-  },
-  "vertical_load": {
-   "magnitude": 150.0,
-   "unit": "kN / m"
-  }
- },
- "rolling_bearing": {
-  "axial_factor": 1.45,
-  "axial_load": {
-   "magnitude": 1.1,
-   "unit": "kN"
-  },
-  "designation": "6204",
-  "dynamic_load_rating": {
-   "magnitude": 35.1,
-   "unit": "kN"
-  },
-  "life_exponent": 3.0,
-  "radial_factor": 0.56,
-  "radial_load": {
-   "magnitude": 4.2,
-   "unit": "kN"
-  },
-  "required_life_hours": {
-   "magnitude": 20000.0,
-   "unit": "h"
-  },
-  "required_static_factor": 1.5,
-  "speed": {
-   "magnitude": 1450.0,
-   "unit": "rpm"
-  },
-  "static_load_rating": {
-   "magnitude": 19.3,
-   "unit": "kN"
-  }
- },
- "shaft_collar": {
-  "bore": {
-   "magnitude": 20.0,
-   "unit": "mm"
-  },
-  "keyway_depth": null,
-  "keyway_width": null,
-  "material": null,
-  "name": "shaft-collar-20",
-  "outer_diameter": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 15.0,
-   "unit": "mm"
-  }
- },
- "shaft_key": {
-  "allowable_bearing": {
-   "magnitude": 180.0,
-   "unit": "MPa"
-  },
-  "allowable_shear": {
-   "magnitude": 100.0,
-   "unit": "MPa"
-  },
-  "key_height": {
-   "magnitude": 20.0,
-   "unit": "mm"
-  },
-  "key_length": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  },
-  "key_width": {
-   "magnitude": 4.0,
-   "unit": "mm"
-  },
-  "shaft_diameter": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  },
-  "torque": {
-   "magnitude": 400.0,
-   "unit": "m * N"
-  }
- },
- "shallow_footing": {
-  "applied_load": {
-   "magnitude": 900.0,
-   "unit": "kN"
-  },
-  "cohesion": {
-   "magnitude": 20.0,
-   "unit": "kPa"
-  },
-  "embedment_depth": {
-   "magnitude": 1.2,
-   "unit": "m"
-  },
-  "friction_angle": 28.0,
-  "length": {
-   "magnitude": 3.0,
-   "unit": "m"
-  },
-  "unit_weight": {
-   "magnitude": 18.0,
-   "unit": "kN / m ** 3"
-  },
-  "width": {
-   "magnitude": 2.0,
-   "unit": "m"
-  }
- },
- "shear_plate": {
-  "gross_shear_area": {
-   "magnitude": 2400.0,
-   "unit": "mm ** 2"
-  },
-  "load": {
-   "magnitude": 250.0,
-   "unit": "kN"
-  },
-  "material": "ASTM-A36",
-  "name": "tab",
-  "net_shear_area": {
-   "magnitude": 1800.0,
-   "unit": "mm ** 2"
-  },
-  "outline": null
- },
- "sheet_metal_bracket": {
-  "flange_a": {
-   "magnitude": 30.0,
-   "unit": "mm"
-  },
-  "flange_b": {
-   "magnitude": 50.0,
-   "unit": "mm"
-  },
-  "flange_c": {
-   "magnitude": 25.0,
-   "unit": "mm"
-  },
-  "inside_radius": {
-   "magnitude": 2.0,
-   "unit": "mm"
-  },
-  "k_factor": 0.44,
-  "k_factor_source": "shop bend table rev C",
-  "material": null,
-  "name": "z-bracket",
-  "shape": "Z",
-  "thickness": {
-   "magnitude": 2.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  }
- },
- "spacer": {
-  "inner_diameter": {
-   "magnitude": 6.4,
-   "unit": "mm"
-  },
-  "length": {
-   "magnitude": 10.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "m6-spacer",
-  "outer_diameter": {
-   "magnitude": 12.0,
-   "unit": "mm"
-  }
- },
- "spur_gear_mesh": {
-  "allowable_bending_stress": {
-   "magnitude": 250.0,
-   "unit": "MPa"
-  },
-  "allowable_contact_stress": {
-   "magnitude": 1100.0,
-   "unit": "MPa"
-  },
-  "bending_geometry_factor": 0.34,
-  "contact_geometry_factor": 0.115,
-  "dynamic_factor": 1.3,
-  "face_width": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  },
-  "gear_modulus": {
-   "magnitude": 207.0,
-   "unit": "GPa"
-  },
-  "gear_teeth": 54,
-  "load_distribution_factor": 1.2,
-  "minimum_contact_ratio": 1.2,
-  "module": {
-   "magnitude": 2.0,
-   "unit": "mm"
-  },
-  "overload_factor": 1.25,
-  "pinion_modulus": {
-   "magnitude": 207.0,
-   "unit": "GPa"
-  },
-  "pinion_teeth": 18,
-  "pinion_torque": {
-   "magnitude": 180.0,
-   "unit": "m * N"
-  },
-  "pressure_angle": 20.0,
-  "rim_thickness_factor": 1.0,
-  "size_factor": 1.0,
-  "surface_condition_factor": 1.0
- },
- "stair_system": {
-  "regime": "us_general_industry",
-  "kind": "standard",
-  "angle": {
-   "magnitude": 38.0,
-   "unit": "degree"
-  },
-  "riser_height": {
-   "magnitude": 180.0,
-   "unit": "mm"
-  },
-  "tread_depth": {
-   "magnitude": 280.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 900.0,
-   "unit": "mm"
-  },
-  "headroom": {
-   "magnitude": 2100.0,
-   "unit": "mm"
-  },
-  "tread_capacity": {
-   "magnitude": 6.0,
-   "unit": "kN"
-  },
-  "anticipated_live_load": {
-   "magnitude": 1.2,
-   "unit": "kN"
-  },
-  "landing_depth": {
-   "magnitude": 900.0,
-   "unit": "mm"
-  }
- },
- "standoff": {
-  "across_flats": {
-   "magnitude": 8.0,
-   "unit": "mm"
-  },
-  "hole_diameter": {
-   "magnitude": 3.3,
-   "unit": "mm"
-  },
-  "length": {
-   "magnitude": 25.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "m4-hex-standoff",
-  "thread": "M4x0.7"
- },
- "stepped_shaft": {
-  "allowable_bending": {
-   "magnitude": 250.0,
-   "unit": "MPa"
-  },
-  "allowable_shear": {
-   "magnitude": 145.0,
-   "unit": "MPa"
-  },
-  "bending_moment": {
-   "magnitude": 30.0,
-   "unit": "N*m"
-  },
-  "end_chamfer": {
-   "magnitude": 1.0,
-   "unit": "mm"
-  },
-  "keyways": [
-   {
-    "depth": {
-     "magnitude": 3.5,
-     "unit": "mm"
-    },
-    "length": {
-     "magnitude": 25.0,
-     "unit": "mm"
-    },
-    "offset": {
-     "magnitude": 5.0,
-     "unit": "mm"
-    },
-    "step": 1,
-    "width": {
-     "magnitude": 6.0,
-     "unit": "mm"
-    }
-   }
-  ],
-  "material": null,
-  "name": "drive-shaft",
-  "shoulder_bending_stress_concentration": 1.9,
-  "shoulder_stress_concentration": 1.6,
-  "steps": [
-   {
-    "diameter": {
-     "magnitude": 20.0,
-     "unit": "mm"
-    },
-    "length": {
-     "magnitude": 40.0,
-     "unit": "mm"
-    }
-   },
-   {
-    "diameter": {
-     "magnitude": 30.0,
-     "unit": "mm"
-    },
-    "length": {
-     "magnitude": 60.0,
-     "unit": "mm"
-    }
-   },
-   {
-    "diameter": {
-     "magnitude": 25.0,
-     "unit": "mm"
-    },
-    "length": {
-     "magnitude": 30.0,
-     "unit": "mm"
-    }
-   }
-  ],
-  "torque": {
-   "magnitude": 40.0,
-   "unit": "N*m"
-  }
- },
- "structure": {
-  "members": [
-   {
-    "element_params": {
-     "hole_diameter": {
+    "base_patterns": [],
+    "base_slots": [],
+    "load": null,
+    "load_height": null,
+    "material": null,
+    "name": "shelf-angle-bracket",
+    "rib_leg": {
       "magnitude": 25.0,
       "unit": "mm"
-     },
-     "load": {
-      "magnitude": 50.0,
-      "unit": "kN"
-     },
-     "material": "ASTM-A36",
-     "name": "padeye",
-     "thickness": {
-      "magnitude": 12.0,
+    },
+    "rib_thickness": {
+      "magnitude": 5.0,
       "unit": "mm"
-     },
-     "width": {
+    },
+    "thickness": {
+      "magnitude": 5.0,
+      "unit": "mm"
+    },
+    "upright_height": {
       "magnitude": 80.0,
       "unit": "mm"
-     }
     },
-    "element_type": "lifting_lug"
-   }
-  ]
- },
- "t_slot_extrusion": {
-  "designation": "EXT-4040",
-  "length": {
-   "magnitude": 500.0,
-   "unit": "mm"
+    "upright_holes": [],
+    "upright_patterns": [],
+    "upright_slots": [
+      {
+        "angle_deg": 0.0,
+        "length": {
+          "magnitude": 20.0,
+          "unit": "mm"
+        },
+        "tag": "s1",
+        "width": {
+          "magnitude": 6.6,
+          "unit": "mm"
+        },
+        "x": {
+          "magnitude": 0.0,
+          "unit": "mm"
+        },
+        "y": {
+          "magnitude": 15.0,
+          "unit": "mm"
+        }
+      }
+    ],
+    "width": {
+      "magnitude": 50.0,
+      "unit": "mm"
+    }
   },
-  "name": "frame-rail"
- },
- "tension_member": {
-  "gross_area": {
-   "magnitude": 2000.0,
-   "unit": "mm ** 2"
+  "base_plate": {
+    "axial_load": {
+      "magnitude": 200.0,
+      "unit": "kN"
+    },
+    "cantilever": {
+      "magnitude": 50.0,
+      "unit": "mm"
+    },
+    "concrete_strength": {
+      "magnitude": 25.0,
+      "unit": "MPa"
+    },
+    "depth": {
+      "magnitude": 240.0,
+      "unit": "mm"
+    },
+    "name": "bp1",
+    "plate_material": "ASTM-A36",
+    "plate_thickness": {
+      "magnitude": 25.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 300.0,
+      "unit": "mm"
+    }
   },
-  "load": {
-   "magnitude": 50.0,
-   "unit": "kN"
+  "beam_column_member": {
+    "axial_load": {
+      "magnitude": 50.0,
+      "unit": "kN"
+    },
+    "end_condition": "pinned_pinned",
+    "length": {
+      "magnitude": 3.0,
+      "unit": "m"
+    },
+    "material": "ASTM-A36",
+    "moment": {
+      "magnitude": 2.0,
+      "unit": "kN * m"
+    },
+    "name": "bc",
+    "section": {
+      "area": {
+        "magnitude": 2500.0,
+        "unit": "mm**2"
+      },
+      "extreme_fibre": {
+        "magnitude": 25.0,
+        "unit": "mm"
+      },
+      "second_moment": {
+        "magnitude": 520833.3333333333,
+        "unit": "mm**4"
+      },
+      "second_moment_transverse": {
+        "magnitude": 520833.3333333333,
+        "unit": "mm**4"
+      },
+      "shear_form_factor": 1.5
+    }
   },
-  "material": "ASTM-A36",
-  "name": "t",
-  "net_area": {
-   "magnitude": 1500.0,
-   "unit": "mm ** 2"
+  "beam_member": {
+    "deflection_limit": {
+      "magnitude": 16.0,
+      "unit": "mm"
+    },
+    "length": {
+      "magnitude": 4.0,
+      "unit": "m"
+    },
+    "load": {
+      "magnitude": 5.0,
+      "unit": "kN / m"
+    },
+    "load_position": null,
+    "load_type": "distributed",
+    "loaded_length": null,
+    "mass_per_length": null,
+    "material": "ASTM-A36",
+    "min_frequency": null,
+    "name": "rafter",
+    "overhang_length": null,
+    "pair_offset": null,
+    "patch_centered": false,
+    "section": {
+      "area": {
+        "magnitude": 15000.0,
+        "unit": "mm**2"
+      },
+      "extreme_fibre": {
+        "magnitude": 75.0,
+        "unit": "mm"
+      },
+      "second_moment": {
+        "magnitude": 28125000.0,
+        "unit": "mm**4"
+      },
+      "second_moment_transverse": {
+        "magnitude": 12500000.0,
+        "unit": "mm**4"
+      },
+      "shear_form_factor": 1.5
+    },
+    "support": "simply_supported",
+    "triangle_mirrored": false
   },
-  "outline": null,
-  "shear_lag_factor": 1.0
- },
- "timber_beam": {
-  "bending": {
-   "edition": "2018",
-   "grade": "No. 2",
-   "property": "F_b",
-   "size_classification": "dimension lumber",
-   "species": "Douglas Fir-Larch",
-   "standard": "NDS",
-   "table": "Supplement Table 4A",
-   "value": {
-    "magnitude": 900.0,
-    "unit": "psi"
-   }
+  "bolted_connection": {
+    "bolt_diameter": {
+      "magnitude": 16.0,
+      "unit": "mm"
+    },
+    "bolt_material": "ASTM-A36",
+    "edge_distance": {
+      "magnitude": 30.0,
+      "unit": "mm"
+    },
+    "load": {
+      "magnitude": 60.0,
+      "unit": "kN"
+    },
+    "name": "clevis",
+    "plate_material": "ASTM-A36",
+    "plate_thickness": {
+      "magnitude": 10.0,
+      "unit": "mm"
+    },
+    "shear_planes": 2,
+    "tension": {
+      "magnitude": 25.0,
+      "unit": "kN"
+    }
   },
-  "bending_factors": {
-   "C_D": 1.0,
-   "C_F": 1.1
+  "bushing": {
+    "flange_diameter": {
+      "magnitude": 22.0,
+      "unit": "mm"
+    },
+    "flange_thickness": {
+      "magnitude": 2.0,
+      "unit": "mm"
+    },
+    "inner_diameter": {
+      "magnitude": 12.0,
+      "unit": "mm"
+    },
+    "length": {
+      "magnitude": 20.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "flanged-bushing",
+    "outer_diameter": {
+      "magnitude": 16.0,
+      "unit": "mm"
+    }
   },
-  "deflection_limit": {
-   "magnitude": 0.4,
-   "unit": "inch"
+  "clevis": {
+    "allowable_bearing": {
+      "magnitude": 250.0,
+      "unit": "MPa"
+    },
+    "allowable_shear": {
+      "magnitude": 145.0,
+      "unit": "MPa"
+    },
+    "allowable_tension": {
+      "magnitude": 250.0,
+      "unit": "MPa"
+    },
+    "base_thickness": {
+      "magnitude": 12.0,
+      "unit": "mm"
+    },
+    "depth": {
+      "magnitude": 30.0,
+      "unit": "mm"
+    },
+    "gap": {
+      "magnitude": 20.0,
+      "unit": "mm"
+    },
+    "height": {
+      "magnitude": 50.0,
+      "unit": "mm"
+    },
+    "load": {
+      "magnitude": 20.0,
+      "unit": "kN"
+    },
+    "material": null,
+    "name": "rod-end-clevis",
+    "pin_allowable_shear": {
+      "magnitude": 240.0,
+      "unit": "MPa"
+    },
+    "pin_diameter": {
+      "magnitude": 12.0,
+      "unit": "mm"
+    },
+    "pin_height": {
+      "magnitude": 34.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    }
   },
-  "depth": {
-   "magnitude": 9.25,
-   "unit": "inch"
+  "column_member": {
+    "axial_load": {
+      "magnitude": 40.0,
+      "unit": "kN"
+    },
+    "end_condition": "pinned_pinned",
+    "length": {
+      "magnitude": 3000.0,
+      "unit": "mm"
+    },
+    "material": "ASTM-A36",
+    "name": "post",
+    "section": {
+      "area": {
+        "magnitude": 2500.0,
+        "unit": "mm**2"
+      },
+      "extreme_fibre": {
+        "magnitude": 25.0,
+        "unit": "mm"
+      },
+      "second_moment": {
+        "magnitude": 520833.3333333333,
+        "unit": "mm**4"
+      },
+      "second_moment_transverse": {
+        "magnitude": 520833.3333333333,
+        "unit": "mm**4"
+      },
+      "shear_form_factor": 1.5
+    }
   },
-  "load": {
-   "magnitude": 80.0,
-   "unit": "lbf/ft"
+  "concrete_bearing": {
+    "bearing_area": {
+      "magnitude": 40000.0,
+      "unit": "mm ** 2"
+    },
+    "concrete_strength": {
+      "magnitude": 28.0,
+      "unit": "MPa"
+    },
+    "load": {
+      "magnitude": 600.0,
+      "unit": "kN"
+    },
+    "name": "pedestal",
+    "support_area": {
+      "magnitude": 250000.0,
+      "unit": "mm ** 2"
+    }
   },
-  "modulus": {
-   "edition": "2018",
-   "grade": "No. 2",
-   "property": "E",
-   "size_classification": "dimension lumber",
-   "species": "Douglas Fir-Larch",
-   "standard": "NDS",
-   "table": "Supplement Table 4A",
-   "value": {
-    "magnitude": 1600000.0,
-    "unit": "psi"
-   }
+  "cover_plate": {
+    "deflection_limit": {
+      "magnitude": 3.0,
+      "unit": "mm"
+    },
+    "diameter": null,
+    "edge": "clamped",
+    "hole_diameter": null,
+    "length": {
+      "magnitude": 900.0,
+      "unit": "mm"
+    },
+    "material": "ASTM-A36",
+    "min_frequency": {
+      "magnitude": 60.0,
+      "unit": "Hz"
+    },
+    "name": "manway",
+    "patch_length": null,
+    "patch_width": null,
+    "pressure": {
+      "magnitude": 0.4,
+      "unit": "MPa"
+    },
+    "thickness": {
+      "magnitude": 12.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 620.0,
+      "unit": "mm"
+    }
   },
-  "name": "joist",
-  "shear": {
-   "edition": "2018",
-   "grade": "No. 2",
-   "property": "F_v",
-   "size_classification": "dimension lumber",
-   "species": "Douglas Fir-Larch",
-   "standard": "NDS",
-   "table": "Supplement Table 4A",
-   "value": {
-    "magnitude": 180.0,
-    "unit": "psi"
-   }
+  "driven_pile": {
+    "adhesion_factor": 0.7,
+    "applied_load": {
+      "magnitude": 500.0,
+      "unit": "kN"
+    },
+    "diameter": {
+      "magnitude": 0.4,
+      "unit": "m"
+    },
+    "factor_of_safety": 2.5,
+    "length": {
+      "magnitude": 8.0,
+      "unit": "m"
+    },
+    "undrained_shear_strength": {
+      "magnitude": 75.0,
+      "unit": "kPa"
+    }
   },
-  "shear_factors": {
-   "C_D": 1.0
+  "enclosure": {
+    "corner_radius": {
+      "magnitude": 6.0,
+      "unit": "mm"
+    },
+    "floor": null,
+    "floor_holes": [],
+    "floor_patterns": [
+      {
+        "centre_x": null,
+        "centre_y": null,
+        "circle_diameter": null,
+        "count": null,
+        "count_x": 2,
+        "count_y": 2,
+        "diameter": {
+          "magnitude": 4.5,
+          "unit": "mm"
+        },
+        "kind": "rectangular",
+        "pitch_x": {
+          "magnitude": 90.0,
+          "unit": "mm"
+        },
+        "pitch_y": {
+          "magnitude": 50.0,
+          "unit": "mm"
+        },
+        "start_angle_deg": 0.0,
+        "tag": "mnt",
+        "thread": null
+      }
+    ],
+    "height": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    },
+    "length": {
+      "magnitude": 80.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "control-box",
+    "wall": {
+      "magnitude": 3.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 120.0,
+      "unit": "mm"
+    }
   },
-  "span": {
-   "magnitude": 12.0,
-   "unit": "ft"
+  "enclosure_lid": {
+    "corner_radius": {
+      "magnitude": 6.0,
+      "unit": "mm"
+    },
+    "hole_patterns": [
+      {
+        "centre_x": null,
+        "centre_y": null,
+        "circle_diameter": null,
+        "count": null,
+        "count_x": 2,
+        "count_y": 2,
+        "diameter": {
+          "magnitude": 3.4,
+          "unit": "mm"
+        },
+        "kind": "rectangular",
+        "pitch_x": {
+          "magnitude": 90.0,
+          "unit": "mm"
+        },
+        "pitch_y": {
+          "magnitude": 50.0,
+          "unit": "mm"
+        },
+        "start_angle_deg": 0.0,
+        "tag": "scr",
+        "thread": null
+      }
+    ],
+    "holes": [
+      {
+        "counterbore_depth": null,
+        "counterbore_diameter": null,
+        "diameter": {
+          "magnitude": 12.5,
+          "unit": "mm"
+        },
+        "head_diameter": null,
+        "kind": "through",
+        "tag": "gland",
+        "thread": null,
+        "x": {
+          "magnitude": 0.0,
+          "unit": "mm"
+        },
+        "y": {
+          "magnitude": 0.0,
+          "unit": "mm"
+        }
+      }
+    ],
+    "length": {
+      "magnitude": 80.0,
+      "unit": "mm"
+    },
+    "lip_height": {
+      "magnitude": 4.0,
+      "unit": "mm"
+    },
+    "lip_inset": {
+      "magnitude": 3.2,
+      "unit": "mm"
+    },
+    "lip_wall": {
+      "magnitude": 2.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "control-box-lid",
+    "thickness": {
+      "magnitude": 3.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 120.0,
+      "unit": "mm"
+    }
   },
-  "width": {
-   "magnitude": 1.5,
-   "unit": "inch"
+  "feeder": {
+    "conductor_ampacity": {
+      "magnitude": 115.0,
+      "unit": "A"
+    },
+    "conductor_area": {
+      "magnitude": 35.0,
+      "unit": "mm ** 2"
+    },
+    "drop_limit_percent": 3.0,
+    "line_voltage": {
+      "magnitude": 480.0,
+      "unit": "V"
+    },
+    "load_power": {
+      "magnitude": 37.0,
+      "unit": "kW"
+    },
+    "one_way_length": {
+      "magnitude": 100.0,
+      "unit": "m"
+    },
+    "power_factor": 0.85,
+    "reactance": null,
+    "resistivity": {
+      "magnitude": 1.68e-08,
+      "unit": "m * \u03a9"
+    }
+  },
+  "fixed_ladder": {
+    "clearance_behind": {
+      "magnitude": 190.0,
+      "unit": "mm"
+    },
+    "fall_protection": "ladder_safety_system",
+    "height": {
+      "magnitude": 9.0,
+      "unit": "m"
+    },
+    "rail_extension": {
+      "magnitude": 1100.0,
+      "unit": "mm"
+    },
+    "regime": "us_general_industry",
+    "rung_clear_width": {
+      "magnitude": 420.0,
+      "unit": "mm"
+    },
+    "rung_spacing": {
+      "magnitude": 300.0,
+      "unit": "mm"
+    }
+  },
+  "guardrail_system": {
+    "elastic_modulus": {
+      "magnitude": 200.0,
+      "unit": "GPa"
+    },
+    "midrail_height": {
+      "magnitude": 530.0,
+      "unit": "mm"
+    },
+    "post_height": {
+      "magnitude": 1070.0,
+      "unit": "mm"
+    },
+    "post_second_moment": {
+      "magnitude": 119000.0,
+      "unit": "mm ** 4"
+    },
+    "post_section_modulus": {
+      "magnitude": 4930.0,
+      "unit": "mm ** 3"
+    },
+    "post_spacing": {
+      "magnitude": 1800.0,
+      "unit": "mm"
+    },
+    "rail_section_modulus": {
+      "magnitude": 4930.0,
+      "unit": "mm ** 3"
+    },
+    "regime": "us_general_industry",
+    "toeboard_height": {
+      "magnitude": 100.0,
+      "unit": "mm"
+    },
+    "toeboard_section_modulus": {
+      "magnitude": 1670.0,
+      "unit": "mm ** 3"
+    },
+    "yield_strength": {
+      "magnitude": 355.0,
+      "unit": "MPa"
+    }
+  },
+  "gusset_plate": {
+    "load": {
+      "magnitude": 400.0,
+      "unit": "kN"
+    },
+    "material": "ASTM-A36",
+    "name": "gusset",
+    "net_shear_area": {
+      "magnitude": 3000.0,
+      "unit": "mm ** 2"
+    },
+    "net_tension_area": {
+      "magnitude": 1200.0,
+      "unit": "mm ** 2"
+    },
+    "outline": null
+  },
+  "helical_compression_spring": {
+    "active_coils": 20.0,
+    "allowable_shear_stress": {
+      "magnitude": 700.0,
+      "unit": "MPa"
+    },
+    "elastic_modulus": {
+      "magnitude": 207.0,
+      "unit": "GPa"
+    },
+    "end_condition_constant": 0.5,
+    "free_length": {
+      "magnitude": 200.0,
+      "unit": "mm"
+    },
+    "mean_coil_diameter": {
+      "magnitude": 24.0,
+      "unit": "mm"
+    },
+    "operating_force": {
+      "magnitude": 120.0,
+      "unit": "N"
+    },
+    "shear_modulus": {
+      "magnitude": 79.3,
+      "unit": "GPa"
+    },
+    "total_coils": 22.0,
+    "wire_diameter": {
+      "magnitude": 3.0,
+      "unit": "mm"
+    }
+  },
+  "infinite_slope": {
+    "cohesion": {
+      "magnitude": 20.0,
+      "unit": "kPa"
+    },
+    "depth": {
+      "magnitude": 2.5,
+      "unit": "m"
+    },
+    "friction_angle": 30.0,
+    "pore_pressure": null,
+    "slope_angle": 35.0,
+    "unit_weight": {
+      "magnitude": 19.0,
+      "unit": "kN / m ** 3"
+    }
+  },
+  "lifting_lug": {
+    "hole_diameter": {
+      "magnitude": 25.0,
+      "unit": "mm"
+    },
+    "hole_height": {
+      "magnitude": 90.0,
+      "unit": "mm"
+    },
+    "load": {
+      "magnitude": 50.0,
+      "unit": "kN"
+    },
+    "material": "ASTM-A36",
+    "name": "padeye",
+    "thickness": {
+      "magnitude": 12.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 80.0,
+      "unit": "mm"
+    }
+  },
+  "lighting_installation": {
+    "allowable_power_density": {
+      "magnitude": 8.8,
+      "unit": "W / m ** 2"
+    },
+    "coefficient_of_utilization": 0.62,
+    "floor_area": {
+      "magnitude": 80.0,
+      "unit": "m ** 2"
+    },
+    "input_watts_per_luminaire": {
+      "magnitude": 30.0,
+      "unit": "W"
+    },
+    "light_loss_factor": 0.8,
+    "lumens_per_luminaire": {
+      "magnitude": 3400.0,
+      "unit": "lm"
+    },
+    "luminaire_count": 20,
+    "required_illuminance": {
+      "magnitude": 400.0,
+      "unit": "lx"
+    }
+  },
+  "masonry_wall": {
+    "axial_stress": {
+      "magnitude": 4.0,
+      "unit": "MPa"
+    },
+    "flexural_stress": {
+      "magnitude": 2.2,
+      "unit": "MPa"
+    },
+    "masonry_strength": {
+      "magnitude": 10.0,
+      "unit": "MPa"
+    },
+    "slenderness_ratio": 40.0
+  },
+  "mounting_plate": {
+    "corner_radius": {
+      "magnitude": 8.0,
+      "unit": "mm"
+    },
+    "hole_patterns": [
+      {
+        "centre_x": null,
+        "centre_y": null,
+        "circle_diameter": null,
+        "count": null,
+        "count_x": 2,
+        "count_y": 2,
+        "diameter": {
+          "magnitude": 6.6,
+          "unit": "mm"
+        },
+        "kind": "rectangular",
+        "pitch_x": {
+          "magnitude": 100.0,
+          "unit": "mm"
+        },
+        "pitch_y": {
+          "magnitude": 60.0,
+          "unit": "mm"
+        },
+        "start_angle_deg": 0.0,
+        "tag": "m6",
+        "thread": null
+      }
+    ],
+    "holes": [
+      {
+        "counterbore_depth": {
+          "magnitude": 3.0,
+          "unit": "mm"
+        },
+        "counterbore_diameter": {
+          "magnitude": 11.0,
+          "unit": "mm"
+        },
+        "diameter": {
+          "magnitude": 6.6,
+          "unit": "mm"
+        },
+        "head_diameter": null,
+        "kind": "counterbore",
+        "tag": "cb",
+        "thread": null,
+        "x": {
+          "magnitude": 0.0,
+          "unit": "mm"
+        },
+        "y": {
+          "magnitude": 0.0,
+          "unit": "mm"
+        }
+      }
+    ],
+    "length": {
+      "magnitude": 80.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "motor-mounting-plate",
+    "slots": [
+      {
+        "angle_deg": 0.0,
+        "length": {
+          "magnitude": 30.0,
+          "unit": "mm"
+        },
+        "tag": "adj",
+        "width": {
+          "magnitude": 6.0,
+          "unit": "mm"
+        },
+        "x": {
+          "magnitude": 0.0,
+          "unit": "mm"
+        },
+        "y": {
+          "magnitude": 25.0,
+          "unit": "mm"
+        }
+      }
+    ],
+    "thickness": {
+      "magnitude": 6.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 120.0,
+      "unit": "mm"
+    }
+  },
+  "pipe_run": {
+    "available_head": {
+      "magnitude": 2.0,
+      "unit": "m"
+    },
+    "designation": null,
+    "diameter": {
+      "magnitude": 0.15,
+      "unit": "m"
+    },
+    "fitting_loss_coefficient": 5.0,
+    "flow_rate": {
+      "magnitude": 0.05,
+      "unit": "m ** 3 / s"
+    },
+    "kinematic_viscosity": {
+      "magnitude": 1e-06,
+      "unit": "m ** 2 / s"
+    },
+    "length": {
+      "magnitude": 100.0,
+      "unit": "m"
+    },
+    "roughness": {
+      "magnitude": 0.045,
+      "unit": "mm"
+    }
+  },
+  "plate_flange": {
+    "bolt_circle_diameter": {
+      "magnitude": 90.0,
+      "unit": "mm"
+    },
+    "bolt_count": 6,
+    "bolt_hole_diameter": {
+      "magnitude": 9.0,
+      "unit": "mm"
+    },
+    "bore_diameter": {
+      "magnitude": 50.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "pump-plate-flange",
+    "outer_diameter": {
+      "magnitude": 120.0,
+      "unit": "mm"
+    },
+    "thickness": {
+      "magnitude": 12.0,
+      "unit": "mm"
+    }
+  },
+  "platform_edge": {
+    "height_above_lower_level": {
+      "magnitude": 3.0,
+      "unit": "m"
+    },
+    "protection": "guardrail",
+    "regime": "us_general_industry"
+  },
+  "pulley": {
+    "bore": {
+      "magnitude": 20.0,
+      "unit": "mm"
+    },
+    "groove_angle_deg": 38.0,
+    "groove_depth": {
+      "magnitude": 11.0,
+      "unit": "mm"
+    },
+    "groove_width": {
+      "magnitude": 13.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "v-belt-pulley",
+    "outer_diameter": {
+      "magnitude": 100.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 20.0,
+      "unit": "mm"
+    }
+  },
+  "pump_duty": {
+    "efficiency": 0.7,
+    "flow_rate": {
+      "magnitude": 0.05,
+      "unit": "m ** 3 / s"
+    },
+    "fluid_density": {
+      "magnitude": 1000.0,
+      "unit": "kg / m ** 3"
+    },
+    "motor_rating": {
+      "magnitude": 9.0,
+      "unit": "kW"
+    },
+    "npsh_available": {
+      "magnitude": 3.0,
+      "unit": "m"
+    },
+    "npsh_required": {
+      "magnitude": 4.0,
+      "unit": "m"
+    },
+    "total_head": {
+      "magnitude": 20.0,
+      "unit": "m"
+    }
+  },
+  "retaining_wall": {
+    "backfill_friction_angle": 28.0,
+    "backfill_unit_weight": {
+      "magnitude": 18.0,
+      "unit": "kN / m ** 3"
+    },
+    "base_friction_coefficient": 0.45,
+    "load_arm": {
+      "magnitude": 1.2,
+      "unit": "m"
+    },
+    "retained_height": {
+      "magnitude": 5.0,
+      "unit": "m"
+    },
+    "vertical_load": {
+      "magnitude": 150.0,
+      "unit": "kN / m"
+    }
+  },
+  "rolling_bearing": {
+    "axial_factor": 1.45,
+    "axial_load": {
+      "magnitude": 1.1,
+      "unit": "kN"
+    },
+    "designation": "6204",
+    "dynamic_load_rating": {
+      "magnitude": 35.1,
+      "unit": "kN"
+    },
+    "life_exponent": 3.0,
+    "radial_factor": 0.56,
+    "radial_load": {
+      "magnitude": 4.2,
+      "unit": "kN"
+    },
+    "required_life_hours": {
+      "magnitude": 20000.0,
+      "unit": "h"
+    },
+    "required_static_factor": 1.5,
+    "speed": {
+      "magnitude": 1450.0,
+      "unit": "rpm"
+    },
+    "static_load_rating": {
+      "magnitude": 19.3,
+      "unit": "kN"
+    }
+  },
+  "shaft_collar": {
+    "bore": {
+      "magnitude": 20.0,
+      "unit": "mm"
+    },
+    "keyway_depth": null,
+    "keyway_width": null,
+    "material": null,
+    "name": "shaft-collar-20",
+    "outer_diameter": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 15.0,
+      "unit": "mm"
+    }
+  },
+  "shaft_key": {
+    "allowable_bearing": {
+      "magnitude": 180.0,
+      "unit": "MPa"
+    },
+    "allowable_shear": {
+      "magnitude": 100.0,
+      "unit": "MPa"
+    },
+    "key_height": {
+      "magnitude": 20.0,
+      "unit": "mm"
+    },
+    "key_length": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    },
+    "key_width": {
+      "magnitude": 4.0,
+      "unit": "mm"
+    },
+    "shaft_diameter": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    },
+    "torque": {
+      "magnitude": 400.0,
+      "unit": "m * N"
+    }
+  },
+  "shallow_footing": {
+    "applied_load": {
+      "magnitude": 900.0,
+      "unit": "kN"
+    },
+    "cohesion": {
+      "magnitude": 20.0,
+      "unit": "kPa"
+    },
+    "embedment_depth": {
+      "magnitude": 1.2,
+      "unit": "m"
+    },
+    "friction_angle": 28.0,
+    "length": {
+      "magnitude": 3.0,
+      "unit": "m"
+    },
+    "unit_weight": {
+      "magnitude": 18.0,
+      "unit": "kN / m ** 3"
+    },
+    "width": {
+      "magnitude": 2.0,
+      "unit": "m"
+    }
+  },
+  "shear_plate": {
+    "gross_shear_area": {
+      "magnitude": 2400.0,
+      "unit": "mm ** 2"
+    },
+    "load": {
+      "magnitude": 250.0,
+      "unit": "kN"
+    },
+    "material": "ASTM-A36",
+    "name": "tab",
+    "net_shear_area": {
+      "magnitude": 1800.0,
+      "unit": "mm ** 2"
+    },
+    "outline": null
+  },
+  "sheet_metal_bracket": {
+    "flange_a": {
+      "magnitude": 30.0,
+      "unit": "mm"
+    },
+    "flange_b": {
+      "magnitude": 50.0,
+      "unit": "mm"
+    },
+    "flange_c": {
+      "magnitude": 25.0,
+      "unit": "mm"
+    },
+    "inside_radius": {
+      "magnitude": 2.0,
+      "unit": "mm"
+    },
+    "k_factor": 0.44,
+    "k_factor_source": "shop bend table rev C",
+    "material": null,
+    "name": "z-bracket",
+    "shape": "Z",
+    "thickness": {
+      "magnitude": 2.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    }
+  },
+  "spacer": {
+    "inner_diameter": {
+      "magnitude": 6.4,
+      "unit": "mm"
+    },
+    "length": {
+      "magnitude": 10.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "m6-spacer",
+    "outer_diameter": {
+      "magnitude": 12.0,
+      "unit": "mm"
+    }
+  },
+  "spur_gear_mesh": {
+    "allowable_bending_stress": {
+      "magnitude": 250.0,
+      "unit": "MPa"
+    },
+    "allowable_contact_stress": {
+      "magnitude": 1100.0,
+      "unit": "MPa"
+    },
+    "bending_geometry_factor": 0.34,
+    "contact_geometry_factor": 0.115,
+    "dynamic_factor": 1.3,
+    "face_width": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    },
+    "gear_modulus": {
+      "magnitude": 207.0,
+      "unit": "GPa"
+    },
+    "gear_teeth": 54,
+    "load_distribution_factor": 1.2,
+    "minimum_contact_ratio": 1.2,
+    "module": {
+      "magnitude": 2.0,
+      "unit": "mm"
+    },
+    "overload_factor": 1.25,
+    "pinion_modulus": {
+      "magnitude": 207.0,
+      "unit": "GPa"
+    },
+    "pinion_teeth": 18,
+    "pinion_torque": {
+      "magnitude": 180.0,
+      "unit": "m * N"
+    },
+    "pressure_angle": 20.0,
+    "rim_thickness_factor": 1.0,
+    "size_factor": 1.0,
+    "surface_condition_factor": 1.0
+  },
+  "stair_system": {
+    "angle": {
+      "magnitude": 38.0,
+      "unit": "degree"
+    },
+    "anticipated_live_load": {
+      "magnitude": 1.2,
+      "unit": "kN"
+    },
+    "headroom": {
+      "magnitude": 2100.0,
+      "unit": "mm"
+    },
+    "kind": "standard",
+    "landing_depth": {
+      "magnitude": 900.0,
+      "unit": "mm"
+    },
+    "regime": "us_general_industry",
+    "riser_height": {
+      "magnitude": 180.0,
+      "unit": "mm"
+    },
+    "tread_capacity": {
+      "magnitude": 6.0,
+      "unit": "kN"
+    },
+    "tread_depth": {
+      "magnitude": 280.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 900.0,
+      "unit": "mm"
+    }
+  },
+  "standoff": {
+    "across_flats": {
+      "magnitude": 8.0,
+      "unit": "mm"
+    },
+    "hole_diameter": {
+      "magnitude": 3.3,
+      "unit": "mm"
+    },
+    "length": {
+      "magnitude": 25.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "m4-hex-standoff",
+    "thread": "M4x0.7"
+  },
+  "stepped_shaft": {
+    "allowable_bending": {
+      "magnitude": 250.0,
+      "unit": "MPa"
+    },
+    "allowable_shear": {
+      "magnitude": 145.0,
+      "unit": "MPa"
+    },
+    "bending_moment": {
+      "magnitude": 30.0,
+      "unit": "N*m"
+    },
+    "end_chamfer": {
+      "magnitude": 1.0,
+      "unit": "mm"
+    },
+    "keyways": [
+      {
+        "depth": {
+          "magnitude": 3.5,
+          "unit": "mm"
+        },
+        "length": {
+          "magnitude": 25.0,
+          "unit": "mm"
+        },
+        "offset": {
+          "magnitude": 5.0,
+          "unit": "mm"
+        },
+        "step": 1,
+        "width": {
+          "magnitude": 6.0,
+          "unit": "mm"
+        }
+      }
+    ],
+    "material": null,
+    "name": "drive-shaft",
+    "shoulder_bending_stress_concentration": 1.9,
+    "shoulder_stress_concentration": 1.6,
+    "steps": [
+      {
+        "diameter": {
+          "magnitude": 20.0,
+          "unit": "mm"
+        },
+        "length": {
+          "magnitude": 40.0,
+          "unit": "mm"
+        }
+      },
+      {
+        "diameter": {
+          "magnitude": 30.0,
+          "unit": "mm"
+        },
+        "length": {
+          "magnitude": 60.0,
+          "unit": "mm"
+        }
+      },
+      {
+        "diameter": {
+          "magnitude": 25.0,
+          "unit": "mm"
+        },
+        "length": {
+          "magnitude": 30.0,
+          "unit": "mm"
+        }
+      }
+    ],
+    "torque": {
+      "magnitude": 40.0,
+      "unit": "N*m"
+    }
+  },
+  "structure": {
+    "members": [
+      {
+        "element_params": {
+          "hole_diameter": {
+            "magnitude": 25.0,
+            "unit": "mm"
+          },
+          "load": {
+            "magnitude": 50.0,
+            "unit": "kN"
+          },
+          "material": "ASTM-A36",
+          "name": "padeye",
+          "thickness": {
+            "magnitude": 12.0,
+            "unit": "mm"
+          },
+          "width": {
+            "magnitude": 80.0,
+            "unit": "mm"
+          }
+        },
+        "element_type": "lifting_lug"
+      }
+    ]
+  },
+  "t_slot_extrusion": {
+    "designation": "EXT-4040",
+    "length": {
+      "magnitude": 500.0,
+      "unit": "mm"
+    },
+    "name": "frame-rail"
+  },
+  "tension_member": {
+    "gross_area": {
+      "magnitude": 2000.0,
+      "unit": "mm ** 2"
+    },
+    "load": {
+      "magnitude": 50.0,
+      "unit": "kN"
+    },
+    "material": "ASTM-A36",
+    "name": "t",
+    "net_area": {
+      "magnitude": 1500.0,
+      "unit": "mm ** 2"
+    },
+    "outline": null,
+    "shear_lag_factor": 1.0
+  },
+  "timber_beam": {
+    "bending": {
+      "edition": "2018",
+      "grade": "No. 2",
+      "property": "F_b",
+      "size_classification": "dimension lumber",
+      "species": "Douglas Fir-Larch",
+      "standard": "NDS",
+      "table": "Supplement Table 4A",
+      "value": {
+        "magnitude": 900.0,
+        "unit": "psi"
+      }
+    },
+    "bending_factors": {
+      "C_D": 1.0,
+      "C_F": 1.1
+    },
+    "deflection_limit": {
+      "magnitude": 0.4,
+      "unit": "inch"
+    },
+    "depth": {
+      "magnitude": 9.25,
+      "unit": "inch"
+    },
+    "load": {
+      "magnitude": 80.0,
+      "unit": "lbf/ft"
+    },
+    "modulus": {
+      "edition": "2018",
+      "grade": "No. 2",
+      "property": "E",
+      "size_classification": "dimension lumber",
+      "species": "Douglas Fir-Larch",
+      "standard": "NDS",
+      "table": "Supplement Table 4A",
+      "value": {
+        "magnitude": 1600000.0,
+        "unit": "psi"
+      }
+    },
+    "name": "joist",
+    "shear": {
+      "edition": "2018",
+      "grade": "No. 2",
+      "property": "F_v",
+      "size_classification": "dimension lumber",
+      "species": "Douglas Fir-Larch",
+      "standard": "NDS",
+      "table": "Supplement Table 4A",
+      "value": {
+        "magnitude": 180.0,
+        "unit": "psi"
+      }
+    },
+    "shear_factors": {
+      "C_D": 1.0
+    },
+    "span": {
+      "magnitude": 12.0,
+      "unit": "ft"
+    },
+    "width": {
+      "magnitude": 1.5,
+      "unit": "inch"
+    }
+  },
+  "timber_connection": {
+    "connection": {
+      "bending_yield_strength": {
+        "magnitude": 45000.0,
+        "unit": "psi"
+      },
+      "diameter": {
+        "magnitude": 0.5,
+        "unit": "inch"
+      },
+      "main_bearing_length": {
+        "magnitude": 1.5,
+        "unit": "inch"
+      },
+      "main_bearing_strength": {
+        "magnitude": 5600.0,
+        "unit": "psi"
+      },
+      "shear_planes": "single",
+      "side_bearing_length": {
+        "magnitude": 1.5,
+        "unit": "inch"
+      },
+      "side_bearing_strength": {
+        "magnitude": 5600.0,
+        "unit": "psi"
+      },
+      "source": "AWC Technical Report 12 (2012 edition, ANSI/AWC NDS-2012), Table 1-1 general dowel equations for solid cross-section members"
+    },
+    "demand": {
+      "magnitude": 1200.0,
+      "unit": "lbf"
+    },
+    "edition": "2018",
+    "factors": {
+      "C_D": 1.0,
+      "C_g": 0.97
+    },
+    "fasteners": 4,
+    "name": "chord splice",
+    "reduction_terms": {
+      "II": 3.6,
+      "IIIm": 3.2,
+      "IIIs": 3.2,
+      "IV": 3.2,
+      "Im": 4.0,
+      "Is": 4.0
+    }
+  },
+  "transmission_shaft": {
+    "allowable_twist": {
+      "magnitude": 0.5,
+      "unit": "deg"
+    },
+    "bending_moment": {
+      "magnitude": 250.0,
+      "unit": "m * N"
+    },
+    "diameter": {
+      "magnitude": 22.0,
+      "unit": "mm"
+    },
+    "endurance_limit": {
+      "magnitude": 200.0,
+      "unit": "MPa"
+    },
+    "length": {
+      "magnitude": 60.0,
+      "unit": "mm"
+    },
+    "shear_modulus": {
+      "magnitude": 79.3,
+      "unit": "GPa"
+    },
+    "torque": {
+      "magnitude": 400.0,
+      "unit": "m * N"
+    },
+    "ultimate_strength": {
+      "magnitude": 690.0,
+      "unit": "MPa"
+    },
+    "yield_strength": {
+      "magnitude": 370.0,
+      "unit": "MPa"
+    }
+  },
+  "tube": {
+    "height": {
+      "magnitude": 20.0,
+      "unit": "mm"
+    },
+    "length": {
+      "magnitude": 300.0,
+      "unit": "mm"
+    },
+    "material": null,
+    "name": "frame-tube",
+    "outer_diameter": null,
+    "shape": "rectangular",
+    "wall": {
+      "magnitude": 2.0,
+      "unit": "mm"
+    },
+    "width": {
+      "magnitude": 40.0,
+      "unit": "mm"
+    }
+  },
+  "ventilation_zone": {
+    "area_outdoor_rate": {
+      "magnitude": 0.3,
+      "unit": "l / m ** 2 / s"
+    },
+    "floor_area": {
+      "magnitude": 120.0,
+      "unit": "m ** 2"
+    },
+    "occupancy": 12.0,
+    "people_outdoor_rate": {
+      "magnitude": 2.5,
+      "unit": "l / s"
+    },
+    "provided_outdoor_airflow": {
+      "magnitude": 340.0,
+      "unit": "m ** 3 / h"
+    },
+    "required_air_changes": 0.9,
+    "room_volume": {
+      "magnitude": 360.0,
+      "unit": "m ** 3"
+    },
+    "zone_air_distribution_effectiveness": 0.8
+  },
+  "welded_connection": {
+    "electrode_strength": {
+      "magnitude": 483.0,
+      "unit": "MPa"
+    },
+    "leg_size": {
+      "magnitude": 8.0,
+      "unit": "mm"
+    },
+    "load": {
+      "magnitude": 50.0,
+      "unit": "kN"
+    },
+    "name": "seam",
+    "weld_length": {
+      "magnitude": 160.0,
+      "unit": "mm"
+    }
+  },
+  "worker_noise_exposure": {
+    "exposure_duration": {
+      "magnitude": 6.0,
+      "unit": "h"
+    },
+    "machine_levels": [
+      92.0,
+      90.0
+    ]
   }
- },
- "transmission_shaft": {
-  "allowable_twist": {
-   "magnitude": 0.5,
-   "unit": "deg"
-  },
-  "bending_moment": {
-   "magnitude": 250.0,
-   "unit": "m * N"
-  },
-  "diameter": {
-   "magnitude": 22.0,
-   "unit": "mm"
-  },
-  "endurance_limit": {
-   "magnitude": 200.0,
-   "unit": "MPa"
-  },
-  "length": {
-   "magnitude": 60.0,
-   "unit": "mm"
-  },
-  "shear_modulus": {
-   "magnitude": 79.3,
-   "unit": "GPa"
-  },
-  "torque": {
-   "magnitude": 400.0,
-   "unit": "m * N"
-  },
-  "ultimate_strength": {
-   "magnitude": 690.0,
-   "unit": "MPa"
-  },
-  "yield_strength": {
-   "magnitude": 370.0,
-   "unit": "MPa"
-  }
- },
- "tube": {
-  "height": {
-   "magnitude": 20.0,
-   "unit": "mm"
-  },
-  "length": {
-   "magnitude": 300.0,
-   "unit": "mm"
-  },
-  "material": null,
-  "name": "frame-tube",
-  "outer_diameter": null,
-  "shape": "rectangular",
-  "wall": {
-   "magnitude": 2.0,
-   "unit": "mm"
-  },
-  "width": {
-   "magnitude": 40.0,
-   "unit": "mm"
-  }
- },
- "ventilation_zone": {
-  "area_outdoor_rate": {
-   "magnitude": 0.3,
-   "unit": "l / m ** 2 / s"
-  },
-  "floor_area": {
-   "magnitude": 120.0,
-   "unit": "m ** 2"
-  },
-  "occupancy": 12.0,
-  "people_outdoor_rate": {
-   "magnitude": 2.5,
-   "unit": "l / s"
-  },
-  "provided_outdoor_airflow": {
-   "magnitude": 340.0,
-   "unit": "m ** 3 / h"
-  },
-  "required_air_changes": 0.9,
-  "room_volume": {
-   "magnitude": 360.0,
-   "unit": "m ** 3"
-  },
-  "zone_air_distribution_effectiveness": 0.8
- },
- "welded_connection": {
-  "electrode_strength": {
-   "magnitude": 483.0,
-   "unit": "MPa"
-  },
-  "leg_size": {
-   "magnitude": 8.0,
-   "unit": "mm"
-  },
-  "load": {
-   "magnitude": 50.0,
-   "unit": "kN"
-  },
-  "name": "seam",
-  "weld_length": {
-   "magnitude": 160.0,
-   "unit": "mm"
-  }
- },
- "worker_noise_exposure": {
-  "exposure_duration": {
-   "magnitude": 6.0,
-   "unit": "h"
-  },
-  "machine_levels": [
-   92.0,
-   90.0
-  ]
- }
 }

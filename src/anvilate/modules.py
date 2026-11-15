@@ -396,11 +396,14 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "timber",
-            covers=("timber_beam",),
-            screens=("screen_timber_beam",),
+            covers=("timber_beam", "timber_connection"),
+            screens=("screen_timber_beam", "screen_timber_connection"),
             standards=("NDS",),
             unit_default=UnitSystem.US,
-            summary="sawn-lumber beams: NDS bending, shear and creep deflection",
+            summary=(
+                "sawn-lumber beams and the dowel-type connections between them: NDS "
+                "bending, shear and creep deflection, and the yield limit equations"
+            ),
         ),
         _manifest(
             "walking_working",
