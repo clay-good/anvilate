@@ -622,7 +622,11 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
     # material needs 73: it holds a declared attribute against a declared limit, and the
     # mechanism behind each (softening, outgassing, burning) is the material's, not one the
     # catalogue carries for a part.
-    assert len(none) <= 73, f"the declares-none list grew to {len(none)}"
+    # 75 with the frame solver's two: a direct-stiffness solve is an analysis and not a
+    # way a part fails, and a deflection limit is serviceability against a number the
+    # document declared. The catalogue carries no mode either could honestly name, and
+    # inventing one to keep this number down is the thing the ratchet exists to prevent.
+    assert len(none) <= 75, f"the declares-none list grew to {len(none)}"
     # The page quotes both counts, and it said "five" while fourteen screens declared one.
     page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
     stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"

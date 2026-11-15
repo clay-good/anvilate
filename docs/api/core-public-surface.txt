@@ -404,6 +404,12 @@ frame.Mechanism
 frame.FrameSolution
 frame.MechanismFound
 frame.solve_frame
+frame.DeflectionLimit
+frame.screen_frame
+frame.screen_solution
+frame.MEMBER_OUTPUTS
+frame.frame_check_node
+frame.frame_outputs
 gdt.Y14Edition
 gdt.CharacteristicClass
 gdt.Characteristic

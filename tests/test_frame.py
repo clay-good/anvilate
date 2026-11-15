@@ -14,9 +14,11 @@ import math
 
 import pytest
 
+from anvilate.dependency import COMPUTED_FROM
 from anvilate.frame import (
     MAX_NODES,
     AnalysisBasis,
+    DeflectionLimit,
     Frame,
     FrameMaterial,
     FrameMember,
@@ -27,9 +29,12 @@ from anvilate.frame import (
     MemberLoad,
     NodeLoad,
     Support,
+    screen_frame,
+    screen_solution,
     solve_frame,
 )
 from anvilate.refusal import RefusalError
+from anvilate.scorecard import CheckStatus, LimitSense, ScorecardEntry
 from anvilate.units import Quantity
 
 # One steel and one section through every case, so a difference between two cases is the
@@ -963,3 +968,234 @@ def test_every_basis_names_a_method_and_the_table_is_total():
 
     assert set(METHODS) == set(AnalysisBasis)
     assert all(text.strip() for text in METHODS.values())
+
+
+# --- the card the solve produces -------------------------------------------------------
+
+
+def _floor_beam(span: float = 6.0, load: float = 8.0e3, count: int = 4) -> Frame:
+    return Frame(
+        name="floor beam",
+        nodes=_beam_nodes(count, span),
+        members=_beam_members(count),
+        supports=_planar_supports(count, {0: (Freedom.UX, Freedom.UZ), count: (Freedom.UZ,)}),
+        member_loads=tuple(MemberLoad(member=f"m{i}", wz=_q(-load, "N/m")) for i in range(count)),
+    )
+
+
+def _limit(node: str, millimetres: float, freedom: Freedom | None = None) -> DeflectionLimit:
+    return DeflectionLimit(
+        node=node,
+        limit=_q(millimetres, "mm"),
+        source="the project's declared deflection limit, specification §3.2",
+        freedom=freedom,
+    )
+
+
+def test_the_solve_is_a_check_of_its_own_and_comes_first():
+    """Every deflection entry says what it was computed from, and this is that thing."""
+    screening = screen_frame(_floor_beam(), limits=(_limit("n2", 500.0),))
+    first = screening.entries[0]
+
+    assert first.name == "floor beam frame solve"
+    assert first.status is CheckStatus.PASS
+    assert "equilibrium residual" in first.detail
+    assert "first-order linear elastic" in first.detail
+    assert COMPUTED_FROM in screening.entries[1].detail
+    assert "floor beam frame solve" in screening.entries[1].detail
+
+
+def test_a_deflection_past_its_declared_limit_fails_and_names_the_source():
+    screening = screen_frame(_floor_beam(), limits=(_limit("n2", 5.0, Freedom.UZ),))
+    entry = screening.entries[1]
+
+    assert entry.status is CheckStatus.FAIL
+    assert entry.comparison is not None
+    assert entry.comparison.sense is LimitSense.AT_MOST
+    assert "specification §3.2" in entry.detail
+    assert screening.status is CheckStatus.FAIL
+
+
+def test_a_deflection_inside_its_limit_passes_and_the_card_rolls_up():
+    screening = screen_frame(_floor_beam(), limits=(_limit("n2", 500.0, Freedom.UZ),))
+    assert screening.status is CheckStatus.PASS
+    assert all(entry.status is CheckStatus.PASS for entry in screening.entries)
+
+
+def test_two_limits_on_one_node_are_two_entries_a_reader_can_tell_apart():
+    screening = screen_frame(
+        _floor_beam(),
+        limits=(_limit("n2", 500.0, Freedom.UZ), _limit("n2", 5.0)),
+    )
+    names = [entry.name for entry in screening.entries]
+    assert len(set(names)) == len(names)
+    assert "n2 uz deflection" in names
+    assert "n2 resultant translation deflection" in names
+
+
+def test_a_mechanism_is_one_not_evaluated_entry_and_no_deflection_verdicts():
+    """A limit judged against displacements that do not exist is a verdict on nothing."""
+    frame = Frame(
+        name="floating",
+        nodes=_beam_nodes(1, 3.0),
+        members=_beam_members(1),
+        node_loads=(NodeLoad(node="n1", fz=_q(-1.0e3, "N")),),
+    )
+    screening = screen_frame(frame, limits=(_limit("n1", 5.0),))
+
+    assert len(screening.entries) == 1
+    entry = screening.entries[0]
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "mechanism" in entry.detail
+    assert entry.needs and "supports[" in entry.needs[0].declaration
+
+
+def test_a_limit_on_a_node_the_frame_does_not_have_is_refused():
+    with pytest.raises(RefusalError, match="is on no node of this frame"):
+        screen_frame(_floor_beam(), limits=(_limit("elsewhere", 5.0),))
+
+
+def test_a_limit_that_is_not_a_length_or_is_on_a_rotation_is_refused():
+    with pytest.raises(RefusalError, match="is a length"):
+        DeflectionLimit(node="n2", limit=_q(5.0, "N"), source="declared")
+    with pytest.raises(RefusalError, match="is positive"):
+        DeflectionLimit(node="n2", limit=_q(0.0, "mm"), source="declared")
+    with pytest.raises(RefusalError, match="is a rotation"):
+        DeflectionLimit(node="n2", limit=_q(5.0, "mm"), source="declared", freedom=Freedom.RY)
+
+
+def test_an_uncited_deflection_limit_is_refused_one_layer_down():
+    """A limit nobody can attribute is a number nobody can argue with."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="state where it came from"):
+        DeflectionLimit(node="n2", limit=_q(5.0, "mm"), source="  ")
+
+
+def test_the_screening_can_be_asked_for_second_order_too():
+    screening = screen_frame(
+        _sway_column(4.0, 10.0e3, 200.0e3),
+        limits=(_limit("tip", 500.0, Freedom.UX),),
+        basis=AnalysisBasis.SECOND_ORDER,
+    )
+    assert "P-Delta" in screening.entries[0].detail
+    assert "P-Delta" in screening.entries[1].detail
+
+
+def test_a_deflection_limit_renders_what_it_is_about():
+    assert str(_limit("n2", 20.0, Freedom.UZ)).startswith("n2 uz at most 20 mm")
+    assert "resultant translation" in str(_limit("n2", 20.0))
+
+
+# --- the frame as a node of a dependency chain ----------------------------------------
+
+
+def test_a_member_check_runs_on_the_solved_force_and_says_so():
+    """The whole point of the chain: a downstream check is ordered after the solve, fed
+    the number it produced, and its detail line names where that number came from."""
+    from anvilate.dependency import ChainResult, CheckNode, Consumes, DependencyGraph, run_chain
+    from anvilate.frame import frame_check_node, frame_outputs
+
+    frame = _floor_beam()
+    solution = solve_frame(frame)
+    node = frame_check_node(frame)
+    downstream = CheckNode(
+        id="m1 bending",
+        consumes=(
+            Consumes(
+                upstream="frame solve",
+                output="m1.moment_z",
+                parameter="moment",
+                dimension="[force] * [length]",
+            ),
+        ),
+    )
+    graph = DependencyGraph(nodes=(node, downstream))
+
+    def run(check: str, inputs) -> ChainResult:
+        if check == "frame solve":
+            return ChainResult(
+                check=check,
+                entry=screen_solution(frame, solution).entries[0],
+                outputs=frame_outputs(solution),
+            )
+        moment = inputs["moment"]
+        return ChainResult(
+            check=check,
+            entry=ScorecardEntry.from_safety_factor(check, computed=1.8, required=1.5).model_copy(
+                update={"detail": f"against a solved moment of {moment}"}
+            ),
+        )
+
+    card = run_chain(graph, run).card()
+    bending = next(entry for entry in card.entries if entry.name == "m1 bending")
+    assert bending.status is CheckStatus.PASS
+    assert COMPUTED_FROM in bending.detail
+    assert "frame solve.m1.moment_z" in bending.detail
+
+
+def test_the_node_declares_every_member_and_the_dimensions_the_values_really_are():
+    """The graph compares these textually at registration, so a mismatch is caught there."""
+    from anvilate.frame import MEMBER_OUTPUTS, frame_check_node, frame_outputs
+
+    frame = _floor_beam()
+    node = frame_check_node(frame)
+    produced = frame_outputs(solve_frame(frame))
+
+    assert {output.name for output in node.produces} == set(produced)
+    assert len(node.produces) == len(frame.members) * len(MEMBER_OUTPUTS)
+    for output in node.produces:
+        assert produced[output.name].has_dimension(output.dimension), output.name
+
+
+def test_the_moments_handed_downstream_are_the_governing_end():
+    """A member check takes one number, and the end that is not governing is not it."""
+    from anvilate.frame import frame_outputs
+
+    frame = _floor_beam()
+    solution = solve_frame(frame)
+    produced = frame_outputs(solution)
+    for force in solution.member_forces:
+        assert produced[f"{force.member}.moment_z"] == force.worst_moment_z
+        assert produced[f"{force.member}.moment_y"].magnitude == pytest.approx(
+            max(abs(force.moment_y_start), abs(force.moment_y_end))
+        )
+        assert produced[f"{force.member}.axial"] == force.axial
+
+
+def test_a_member_check_downstream_of_a_mechanism_is_not_evaluated_and_names_the_frame():
+    """A check handed a default in place of a force nobody computed is the silent green."""
+    from anvilate.dependency import ChainResult, CheckNode, Consumes, DependencyGraph, run_chain
+    from anvilate.frame import frame_check_node
+
+    frame = Frame(
+        name="floating",
+        nodes=_beam_nodes(1, 3.0),
+        members=_beam_members(1),
+        node_loads=(NodeLoad(node="n1", fz=_q(-1.0e3, "N")),),
+    )
+    graph = DependencyGraph(
+        nodes=(
+            frame_check_node(frame),
+            CheckNode(
+                id="m0 bending",
+                consumes=(
+                    Consumes(
+                        upstream="frame solve",
+                        output="m0.moment_z",
+                        parameter="moment",
+                        dimension="[force] * [length]",
+                    ),
+                ),
+            ),
+        )
+    )
+
+    def run(check: str, inputs) -> ChainResult:
+        assert check != "m0 bending", "a check downstream of a mechanism must not be called"
+        return ChainResult(check=check, entry=screen_frame(frame).entries[0])
+
+    card = run_chain(graph, run).card()
+    bending = next(entry for entry in card.entries if entry.name == "m0 bending")
+    assert bending.status is CheckStatus.NOT_EVALUATED
+    assert "frame solve" in bending.detail

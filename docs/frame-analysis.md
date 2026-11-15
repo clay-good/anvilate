@@ -52,6 +52,41 @@ global X axis is used instead, which is why a column's bending axes are defined 
 `roll` turns the local axes about the member. `axial` reports tension positive, which is
 what a member check reads.
 
+## The card it produces
+
+```python
+from anvilate.frame import DeflectionLimit, screen_frame
+
+screening = screen_frame(frame, limits=(
+    DeflectionLimit(node="mid", limit=Quantity.parse("20 mm"),
+                    source="the project's deflection limit, specification §3.2",
+                    freedom=Freedom.UZ),
+))
+```
+
+The solve is a check of its own and comes first, carrying the equilibrium residual and
+the analysis that was run. Every deflection entry then says what it was computed from, so
+a verdict at the end of a factorisation reads as resting on one rather than appearing out
+of nowhere. A limit with no source is refused: a deflection limit is a decision somebody
+made, and a number with no author is one nobody can argue with.
+
+A mechanism is one `not_evaluated` entry naming the free freedom and **no deflection
+entries at all** — a limit judged against displacements that do not exist would be a
+verdict on nothing.
+
+## Member checks on solved forces
+
+`frame_check_node(frame)` is the frame as one node of a
+[dependency chain](check-dependencies.md), producing `<member>.axial`,
+`.shear_y`, `.shear_z`, `.torsion`, `.moment_y` and `.moment_z`. A member check declares
+what it consumes and is then ordered after the solve, fed the solved number, and — the
+part that matters — reported `not_evaluated` **naming the frame** when the frame did not
+solve. A member check handed a default in place of a force nobody computed is the silent
+green the rest of this library refuses.
+
+The moments and shears handed downstream are the governing end by magnitude: a member
+check takes one number, and the end that is not governing is not it.
+
 ## What the declaration refuses
 
 | | |

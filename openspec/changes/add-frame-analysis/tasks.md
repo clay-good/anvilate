@@ -19,10 +19,10 @@ Builds on the member-force ingestion in `src/anvilate/interop.py` and the load p
 
 ## 3. Downstream
 
-- [ ] 3.1 Member checks run on solved forces as dependent entries
+- [x] 3.1 Member checks run on solved forces as dependent entries
 - [ ] 3.2 Product load path resolved from a declared frame; attribution on every downstream
       entry; placeholders with declared stiffness or refused
-- [ ] 3.3 Deflection checks against declared limits
+- [x] 3.3 Deflection checks against declared limits
 
 ## 4. Proof
 

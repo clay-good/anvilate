@@ -45,8 +45,19 @@ from math import cos, hypot, isfinite, sin, sqrt
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import Named, Provenance, StatableModel
+from ._models import Named, Provenance, StatableModel, each_one
+from .dependency import COMPUTED_FROM, CheckNode, Output
+from .derivation import DerivationAbsence, Underived
 from .refusal import RefusalError, Remedy
+from .scorecard import (
+    CheckStatus,
+    Comparison,
+    LimitSense,
+    Need,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from .units import Quantity
 
 __all__ = [
@@ -69,6 +80,12 @@ __all__ = [
     "FrameSolution",
     "MechanismFound",
     "solve_frame",
+    "DeflectionLimit",
+    "screen_frame",
+    "screen_solution",
+    "MEMBER_OUTPUTS",
+    "frame_check_node",
+    "frame_outputs",
 ]
 
 #: The largest frame this solver will take. A dense symmetric factorisation in pure
@@ -1415,3 +1432,253 @@ def _solve_symmetric(matrix: list[list[float]], right: list[float]) -> list[floa
             total -= lower[k][i] * z[k]
         z[i] = total
     return z
+
+
+# --- the card the solve produces -----------------------------------------------------
+
+
+class DeflectionLimit(StatableModel):
+    """How far a node may move, and the document that says so.
+
+    ``freedom`` limits one component — a sway limit is on ``ux``, a beam's sag on ``uz``
+    — and ``None`` limits the resultant translation, which is what a clearance is
+    written against. A limit with no source is refused by :class:`Provenance`: a
+    deflection limit is a decision somebody made, usually out of a code or a client's
+    specification, and a number with no author is one nobody can argue with.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    states_requirements = True
+
+    node: Named
+    limit: Quantity
+    source: Provenance
+    freedom: Freedom | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def _is_a_limit(self) -> DeflectionLimit:
+        if not self.limit.has_dimension("[length]"):
+            raise _refuse(
+                f"a deflection limit is a length; got {self.limit.dimensionality}",
+                subject="limit",
+                source="the code or specification that states the limit",
+            )
+        if self.limit.magnitude <= 0:
+            raise _refuse(
+                f"a deflection limit is positive; got {self.limit}. A limit of zero is a "
+                f"node that may not move, which is a support and not a limit",
+                subject="limit",
+                source="the code or specification that states the limit",
+            )
+        if self.freedom is not None and self.freedom not in _TRANSLATIONS:
+            raise _refuse(
+                f"a deflection limit is on a translation; '{self.freedom.value}' is a "
+                f"rotation, and a length cannot bound it",
+                subject="freedom",
+                source="the freedom the limit is written against",
+            )
+        return self
+
+    def __str__(self) -> str:
+        where = "resultant translation" if self.freedom is None else self.freedom.value
+        return f"{self.node} {where} at most {self.limit} ({self.source})"
+
+
+_TRANSLATIONS = (Freedom.UX, Freedom.UY, Freedom.UZ)
+
+
+_SOLVE_CHECK = "frame solve"
+_FRAME_CITATION = "direct stiffness, this library's own solve (anvilate.frame)"
+
+
+def screen_frame(
+    frame: Frame,
+    *,
+    limits: Sequence[DeflectionLimit] = (),
+    basis: AnalysisBasis = AnalysisBasis.FIRST_ORDER,
+) -> Scorecard:
+    """Solve a frame and read its card: the solve itself, then each declared limit.
+
+    A mechanism is one ``NOT_EVALUATED`` entry naming the free freedom, and no deflection
+    entries at all — a limit judged against displacements that do not exist would be a
+    verdict on nothing.
+
+    A caller that already has a solution calls :func:`screen_solution` instead. Solving
+    twice for one card is the kind of duplication that eventually returns two answers.
+    """
+    limits = each_one(limits, DeflectionLimit, named="limits")
+    try:
+        solution = solve_frame(frame, basis=basis)
+    except MechanismFound as refused:
+        return Scorecard(
+            entries=(
+                ScorecardEntry(
+                    name=f"{frame.name} {_SOLVE_CHECK}",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"the frame is a mechanism: {refused.mechanism}. No member force "
+                        f"and no displacement exists to check"
+                    ),
+                    reference=_FRAME_CITATION,
+                    needs=(
+                        Need(
+                            declaration=f"supports[{refused.mechanism.node}]",
+                            takes=(
+                                f"a restraint on {refused.mechanism.freedom.value}, or a "
+                                f"member reaching that node"
+                            ),
+                            sources=(ValueSource.USER,),
+                        ),
+                    ),
+                    underived=Underived(
+                        kind=DerivationAbsence.NUMERIC_RESULT,
+                        reason=(
+                            "the solve is a factorisation, not a formula, and it did not "
+                            "reach an answer to show"
+                        ),
+                    ),
+                ),
+            )
+        )
+    return screen_solution(frame, solution, limits=limits)
+
+
+def screen_solution(
+    frame: Frame, solution: FrameSolution, *, limits: Sequence[DeflectionLimit] = ()
+) -> Scorecard:
+    """The card a solution reads to: the solve as a check, then each declared limit.
+
+    The solve is a check of its own, and it is first. It carries the equilibrium residual
+    and the analysis that was run, so every deflection entry below it says what it was
+    computed from rather than appearing out of a factorisation nobody can see.
+    """
+    limits = each_one(limits, DeflectionLimit, named="limits")
+    known = {node.name for node in frame.nodes}
+    for limit in limits:
+        if limit.node not in known:
+            raise _refuse(
+                f"the deflection limit at '{limit.node}' is on no node of this frame",
+                subject="limits",
+            )
+    entries = [
+        ScorecardEntry(
+            name=f"{frame.name} {_SOLVE_CHECK}",
+            status=CheckStatus.PASS,
+            detail=(
+                f"{len(solution.member_forces)} members solved over "
+                f"{solution.free_degrees} free degrees of freedom by {solution.method}; "
+                f"equilibrium residual {solution.residual:.3g} N"
+            ),
+            reference=_FRAME_CITATION,
+            underived=_underived_frame_entry(),
+        )
+    ]
+    for limit in limits:
+        moved = solution.displacement(limit.node)
+        if limit.freedom is None:
+            measured, label = moved.translation, "resultant translation"
+        else:
+            measured = Quantity(magnitude=abs(getattr(moved, limit.freedom.value)), unit="m")
+            label = limit.freedom.value
+        comparison = Comparison(
+            measured=measured,
+            limit=limit.limit,
+            sense=LimitSense.AT_MOST,
+            measured_label=f"{limit.node} {label}",
+            limit_label="the declared limit",
+        )
+        entries.append(
+            ScorecardEntry(
+                # The label is in the name because two limits on one node is ordinary —
+                # a sway limit and a clearance — and two entries called the same thing is
+                # a card a reader cannot act on.
+                name=f"{limit.node} {label} deflection",
+                status=CheckStatus.PASS if comparison.passes() else CheckStatus.FAIL,
+                detail=(
+                    f"{comparison.sentence()} ({limit.source})"
+                    # The method in words, not the enum's own spelling: this line is what
+                    # a report, a terminal and an evidence bundle print, and
+                    # `first_order_elastic` is a key and not English.
+                    f"{COMPUTED_FROM}{frame.name} {_SOLVE_CHECK} by {solution.method}"
+                ),
+                reference=limit.source,
+                comparison=comparison,
+                underived=_underived_frame_entry(),
+            )
+        )
+    return Scorecard(entries=tuple(entries))
+
+
+def _underived_frame_entry() -> Underived:
+    """Why a frame entry shows no worked line: the answer came out of a factorisation."""
+    return Underived(
+        kind=DerivationAbsence.NUMERIC_RESULT,
+        reason=(
+            "the displacement is the solution of the frame's stiffness equations, solved "
+            "rather than evaluated, so there is no substitutable line to show; the inputs "
+            "are the frame's own declaration"
+        ),
+    )
+
+
+# --- the frame as a node of a dependency chain ---------------------------------------
+
+#: What a frame hands downstream, per member, and the dimension each is in. Written here
+#: once so the node's declaration and the values it produces cannot drift apart: the
+#: gate in `anvilate.dependency` compares them textually at registration, and a member
+#: check that bound a moment to a force would be caught there rather than on the first
+#: frame that runs.
+MEMBER_OUTPUTS: dict[str, str] = {
+    "axial": "[force]",
+    "shear_y": "[force]",
+    "shear_z": "[force]",
+    "torsion": "[force] * [length]",
+    "moment_y": "[force] * [length]",
+    "moment_z": "[force] * [length]",
+}
+
+
+def frame_check_node(frame: Frame, *, check_id: str = _SOLVE_CHECK) -> CheckNode:
+    """The frame as one node of a dependency graph, producing every member's forces.
+
+    A member check downstream declares ``Consumes(upstream=check_id,
+    output="beam.moment_z", parameter="moment", dimension="[force] * [length]")`` and is
+    then *ordered after* the solve, fed the solved value, and — this is the part that
+    matters — reported ``NOT_EVALUATED`` naming the frame when the frame did not solve.
+    A member check handed a default in place of a force nobody computed is the silent
+    green the rest of this library refuses.
+
+    Output names are ``<member>.<quantity>``. The quantities are the six of
+    :data:`MEMBER_OUTPUTS`, and the moments are the **larger end moment by magnitude**,
+    which is what a member check is written against.
+    """
+    return CheckNode(
+        id=check_id,
+        produces=tuple(
+            Output(name=f"{member.name}.{quantity}", dimension=dimension)
+            for member in frame.members
+            for quantity, dimension in MEMBER_OUTPUTS.items()
+        ),
+    )
+
+
+def frame_outputs(solution: FrameSolution) -> dict[str, Quantity]:
+    """Every member force a downstream check can consume, keyed as the node declares it.
+
+    The moments are the larger of the two ends by magnitude, and the shears likewise: a
+    member check takes one number, and the end that is not governing is not the one to
+    hand it. The axial force is tension positive, as :attr:`MemberEndForces.axial` is.
+    """
+    values: dict[str, Quantity] = {}
+    for force in solution.member_forces:
+        worst_shear_y = max(abs(force.shear_y_start), abs(force.shear_y_end))
+        worst_shear_z = max(abs(force.shear_z_start), abs(force.shear_z_end))
+        worst_torsion = max(abs(force.torsion_start), abs(force.torsion_end))
+        values[f"{force.member}.axial"] = force.axial
+        values[f"{force.member}.shear_y"] = Quantity(magnitude=worst_shear_y, unit="N")
+        values[f"{force.member}.shear_z"] = Quantity(magnitude=worst_shear_z, unit="N")
+        values[f"{force.member}.torsion"] = Quantity(magnitude=worst_torsion, unit="N*m")
+        values[f"{force.member}.moment_y"] = force.worst_moment_y
+        values[f"{force.member}.moment_z"] = force.worst_moment_z
+    return values

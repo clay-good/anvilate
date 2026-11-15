@@ -38,6 +38,8 @@ optomechanics.adjustment_scorecard -> an adjustment that does not reach or does 
 timber.screen_timber_beam -> timber creep under sustained load
 
 ## declares none yet
+frame.screen_frame
+frame.screen_solution
 optomechanics.obscuration_scorecard
 aluminum.aluminum_compression_scorecard
 beam.deflection_scorecard
