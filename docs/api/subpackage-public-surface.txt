@@ -165,6 +165,7 @@ packs.walking_working.screen_guardrail
 packs.walking_working.STAIR_ANGLE_RANGE
 packs.walking_working.SHIP_STAIR_ANGLE_RANGE
 packs.walking_working.MAX_RISER
+packs.walking_working.SHIP_RISER_RANGE
 packs.walking_working.MIN_TREAD_DEPTH
 packs.walking_working.SHIP_MIN_TREAD_DEPTH
 packs.walking_working.MIN_STAIR_WIDTH

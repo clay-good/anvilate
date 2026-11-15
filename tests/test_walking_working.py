@@ -30,6 +30,7 @@ from anvilate.packs.walking_working import (
     RUNG_SPACING_RANGE,
     SHIP_MIN_TREAD_DEPTH,
     SHIP_MIN_TREAD_WIDTH,
+    SHIP_RISER_RANGE,
     SHIP_STAIR_ANGLE_RANGE,
     STAIR_ANGLE_RANGE,
     SUBPART_D_EDITION,
@@ -745,3 +746,27 @@ def test_every_ladder_and_edge_entry_cites_its_paragraph_and_edition():
             assert entry.reference is not None
             assert "29 CFR 1910." in entry.reference
             assert SUBPART_D_EDITION in entry.reference
+
+
+def test_a_ship_stairs_riser_is_its_own_band_and_not_the_standard_limit():
+    """1910.25(e)(2) is 6.5 to 12 in; (c)(2) is at most 9.5 in. A ship stair with an
+    11 in rise is legal, and reading it against (c)(2) fails a riser the clause allows."""
+    low, high = SHIP_RISER_RANGE
+    assert (low.to("inch").magnitude, high.to("inch").magnitude) == (6.5, 12.0)
+
+    eleven = _Q("280 mm")  # 11.0 in
+    ship = screen_stair(_stair(kind=StairKind.SHIP, angle=_Q("60 degree"),
+                               tread_depth=_Q("120 mm"), width=_Q("500 mm"),
+                               riser_height=eleven))  # fmt: skip
+    assert _entry(ship, "stair riser height").status is CheckStatus.PASS
+    assert "25(e)(2)" in _entry(ship, "stair riser height").reference
+
+    standard = screen_stair(_stair(riser_height=eleven))
+    assert _entry(standard, "stair riser height").status is CheckStatus.FAIL
+    assert "25(c)(2)" in _entry(standard, "stair riser height").reference
+
+    # And the ship band has a floor the standard rule does not: a 5 in rise fails it.
+    shallow = screen_stair(_stair(kind=StairKind.SHIP, angle=_Q("60 degree"),
+                                  tread_depth=_Q("120 mm"), width=_Q("500 mm"),
+                                  riser_height=_Q("127 mm")))  # fmt: skip
+    assert _entry(shallow, "stair riser height").status is CheckStatus.FAIL

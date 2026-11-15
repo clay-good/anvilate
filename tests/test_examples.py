@@ -9684,3 +9684,32 @@ def test_skid_frame_solved_example_screens_members_on_forces_nobody_typed():
     assert d["heaviest_leg_kn"] == pytest.approx(20.6, abs=0.5)
     assert d["equilibrium_residual_n"] < 1e-6
     _assert_narrates_computed("skid_frame_solved.py", namespace)
+
+
+def test_mezzanine_guardrail_example_shows_which_clause_actually_governs():
+    """The finding is the point: for a steel post of ordinary height, 1910.29(b)(3)
+    always fails before (b)(4), and the crossover diameter says why."""
+    namespace = runpy.run_path(str(_EXAMPLES / "mezzanine_guardrail.py"))
+    d = namespace["mezzanine_guardrail"]()
+
+    assert d["drawn_passes"] == 1.0 and d["light_fails"] == 1.0
+    assert d["drawn_strength_factor"] > 1.0 > d["light_strength_factor"]
+    # The failing run still clears the deflection floor, which is the whole point.
+    assert d["light_deflected_height_mm"] > d["floor_mm"]
+    # And the crossover is a rod, not a guardrail.
+    assert d["crossover_diameter_mm"] == pytest.approx(17.1, abs=0.2)
+    _assert_narrates_computed("mezzanine_guardrail.py", namespace)
+
+
+def test_ship_stair_example_is_three_violations_as_one_kind_and_none_as_the_other():
+    """`kind` is a declaration: the same steel comes out of two paragraphs opposite ways."""
+    namespace = runpy.run_path(str(_EXAMPLES / "ship_stair_access.py"))
+    d = namespace["ship_stair_access"]()
+
+    assert d["standard_geometry_failures"] == 3.0
+    assert d["ship_geometry_failures"] == 0.0
+    # It passes five-times and fails the 1,000 lb floor, which is the half nobody checks.
+    assert d["tread_factor_against_five_times"] > 1.0
+    assert d["tread_factor_against_the_floor"] < 1.0
+    assert d["ship_fails"] == 1.0 and d["stronger_passes"] == 1.0
+    _assert_narrates_computed("ship_stair_access.py", namespace)

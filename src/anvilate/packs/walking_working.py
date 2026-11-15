@@ -54,6 +54,7 @@ __all__ = [
     "STAIR_ANGLE_RANGE",
     "SHIP_STAIR_ANGLE_RANGE",
     "MAX_RISER",
+    "SHIP_RISER_RANGE",
     "MIN_TREAD_DEPTH",
     "SHIP_MIN_TREAD_DEPTH",
     "MIN_STAIR_WIDTH",
@@ -635,8 +636,15 @@ def _toeboard_height_entry(guardrail: GuardrailSystem) -> ScorecardEntry:
 STAIR_ANGLE_RANGE = (30.0, 50.0)
 #: 1910.25(e)(1): ship stairs, 50 to 70 degrees.
 SHIP_STAIR_ANGLE_RANGE = (50.0, 70.0)
-#: 1910.25(c)(2): maximum riser height 9.5 in.
+#: 1910.25(c)(2): maximum riser height 9.5 in on a standard stair.
 MAX_RISER = Quantity(magnitude=9.5, unit="inch")
+#: 1910.25(e)(2): a ship stair has **open** risers with a vertical rise between tread
+#: surfaces of 6.5 to 12 in — a band, and a wider one at the top than a standard stair's
+#: limit. Applying (c)(2)'s 9.5 in to a ship stair fails a riser the clause allows.
+SHIP_RISER_RANGE = (
+    Quantity(magnitude=6.5, unit="inch"),
+    Quantity(magnitude=12.0, unit="inch"),
+)
 #: 1910.25(c)(3): minimum tread depth 9.5 in.
 MIN_TREAD_DEPTH = Quantity(magnitude=9.5, unit="inch")
 #: 1910.25(e)(3): a ship stair's minimum tread depth is 4 in.
@@ -823,11 +831,11 @@ def screen_stair(stair: StairSystem, *, required_safety_factor: float = 1.0) -> 
         _band_entry(
             "stair riser height",
             stair.riser_height,
-            low=None,
-            high=MAX_RISER.to("inch").magnitude,
+            low=SHIP_RISER_RANGE[0].to("inch").magnitude if ship else None,
+            high=(SHIP_RISER_RANGE[1] if ship else MAX_RISER).to("inch").magnitude,
             unit="inch",
-            paragraph="25(c)(2)",
-            what="maximum riser height",
+            paragraph="25(e)(2)" if ship else "25(c)(2)",
+            what="rise between tread surfaces" if ship else "maximum riser height",
             label="riser height",
         ),
         _band_entry(

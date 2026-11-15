@@ -78,7 +78,7 @@ element_params:
 | Check | Clause | Standard | Ship |
 | --- | --- | --- | --- |
 | Slope from the horizontal | (c)(1) / (e)(1) | 30 to 50 degrees | 50 to 70 degrees |
-| Riser height | (c)(2) | at most 9.5 in | — |
+| Riser height | (c)(2) / (e)(2) | at most 9.5 in | 6.5 to 12 in between tread surfaces |
 | Tread depth | (c)(3) / (e)(3) | at least 9.5 in | at least 4 in |
 | Width | (c)(4) / (e)(4) | at least 22 in **between vertical barriers** | at least 18 in **of tread** |
 | Headroom above a tread | (b)(2) | at least 6 ft 8 in | same |
@@ -125,6 +125,19 @@ that does not govern.
 
 Which fall-protection system to fit is a person's choice, so the repair hint is a
 direction and not a value.
+
+## Worked end to end
+
+[`examples/mezzanine_guardrail.py`](../examples/mezzanine_guardrail.py) answers the
+question a designer actually has: *which clause fails this?* For a steel post of ordinary
+height, (b)(3) always fails before (b)(4), and the example computes the post diameter at
+which the two change places — about 17 mm, which is a rod and not a guardrail. Sizing for
+the deflection clause is sizing for the wrong one.
+
+[`examples/ship_stair_access.py`](../examples/ship_stair_access.py) screens one steep
+stair twice. Three violations as a standard stair, none as a ship stair — `kind` selects
+the paragraph. What the ship paragraph does **not** relax is (b), and the stair fails the
+load rule's second half.
 
 ## Not in this pack yet
 

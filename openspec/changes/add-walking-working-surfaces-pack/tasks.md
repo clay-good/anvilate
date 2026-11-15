@@ -24,5 +24,5 @@ in `src/anvilate/packs/industrial.py`, and `add-frame-analysis`.
 ## 3. Parts and proof
 
 - [ ] 3.1 A guardrail run as a combination of tube posts and rails; post base on anchors
-- [ ] 3.2 Worked examples: a mezzanine guardrail and a ship stair, each with a failure
-- [ ] 3.3 A docs page for walking-working surfaces: declaring the regime, what is checked
+- [x] 3.2 Worked examples: a mezzanine guardrail and a ship stair, each with a failure
+- [x] 3.3 A docs page for walking-working surfaces: declaring the regime, what is checked
