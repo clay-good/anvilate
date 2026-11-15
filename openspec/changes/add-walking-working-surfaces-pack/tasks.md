@@ -5,7 +5,7 @@ in `src/anvilate/packs/industrial.py`, and `add-frame-analysis`.
 
 ## 1. Regulation
 
-- [ ] 1.1 Re-read 29 CFR 1910.23, 1910.25, 1910.28 and 1910.29 from the eCFR; record each
+- [x] 1.1 Re-read 29 CFR 1910.23, 1910.25, 1910.28 and 1910.29 from the eCFR; record each
       number with its paragraph and the date read ("an edition is read, not recalled")
 - [ ] 1.2 Regime declaration: general industry, construction, user-declared code; refusal
       across regimes
