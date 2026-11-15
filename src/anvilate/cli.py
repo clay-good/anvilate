@@ -503,6 +503,48 @@ def _build_parser() -> argparse.ArgumentParser:
         "it, the result, and the symbol glossary. A check with no derivation says so "
         "rather than being left out",
     )
+    check.add_argument(
+        "--sarif",
+        type=Path,
+        metavar="FILE",
+        help="write a SARIF 2.1.0 log of every failing, not-evaluated and warning check, "
+        "each on the line of the spec field it is about, for a code-scanning upload",
+    )
+    check.add_argument(
+        "--sarif-category",
+        metavar="NAME",
+        default="anvilate",
+        help="the code-scanning category the SARIF declares (its automationDetails id). "
+        "One per spec set, so two runs over two folders do not overwrite each other",
+    )
+    check.add_argument(
+        "--junit",
+        type=Path,
+        metavar="FILE",
+        help="write a JUnit XML report: one test case per check per spec, a check that "
+        "could not run reported as skipped and never as a pass",
+    )
+    check.add_argument(
+        "--baseline",
+        type=Path,
+        metavar="FILE",
+        help="compare every card against this committed baseline and report what changed. "
+        "Reading only: a sweep never writes the baseline it is judged against",
+    )
+    check.add_argument(
+        "--write-baseline",
+        type=Path,
+        metavar="FILE",
+        help="write the baseline these specs screen to, and screen nothing else. This is "
+        "the only thing that writes one, and the file is meant to be committed",
+    )
+    check.add_argument(
+        "--summary",
+        type=Path,
+        metavar="FILE",
+        help="append the change table to this file, as a CI job summary (set it to "
+        "$GITHUB_STEP_SUMMARY). Needs --baseline",
+    )
     verify = commands.add_parser(
         "verify",
         help="verify an attestation envelope or STEP import integrity",
@@ -3922,7 +3964,66 @@ def _check_product(
         print(json.dumps(document, indent=2), file=out)
     else:
         print(summary, file=out)
-    return EXIT_CODES[summary.status]
+    return _product_ci_reports(args, path, placed.card, tree, EXIT_CODES[summary.status], err=err)
+
+
+def _product_ci_reports(args, path: Path, card, tree, verdict: int, *, err) -> int:
+    """The SARIF, JUnit and baseline for a product document, one entry per node.
+
+    A node of a product has no fields of its own in the file — it is an instance of a
+    definition — so its findings are annotated on the definition it instantiates, which
+    is the thing a reader edits. A node whose definition cannot be found is annotated on
+    the document rather than on another node's line.
+    """
+    from . import __version__
+    from .ci import Baseline, compare, product_specs, sarif_json, summary_table, to_junit
+
+    if not any((args.sarif, args.junit, args.baseline, args.write_baseline, args.summary)):
+        return verdict
+    if args.summary is not None and args.baseline is None:
+        print(
+            "anvilate check: --summary writes the change table, which needs --baseline to "
+            "compare against",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+
+    def definitions(node, into: dict[str, str]) -> dict[str, str]:
+        into[node.path] = node.definition
+        for child in node.children:
+            definitions(child, into)
+        return into
+
+    specs = product_specs(path.as_posix(), _read_text(path) or "", card, definitions(tree, {}))
+    if args.sarif is not None:
+        _write_report(
+            args.sarif,
+            sarif_json(specs, tool_version=__version__, category=args.sarif_category),
+        )
+    if args.junit is not None:
+        _write_report(args.junit, to_junit(specs))
+    if args.write_baseline is not None:
+        _write_report(args.write_baseline, Baseline.of(specs).to_json())
+        print(f"anvilate check: wrote {len(specs)} nodes to {args.write_baseline}; "
+              "commit it", file=err)  # fmt: skip
+        return EXIT_OK
+    if args.baseline is not None:
+        try:
+            baseline = Baseline.parse(args.baseline.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as unreadable:
+            print(f"anvilate check: cannot read {args.baseline}: {unreadable}", file=err)
+            return EXIT_BAD_REQUEST
+        changes = compare(baseline, specs)
+        table = summary_table(changes)
+        if args.summary is not None:
+            with args.summary.open("a", encoding="utf-8") as handle:
+                handle.write(table + "\n")
+        news = [line for line in changes if line.change.is_news]
+        for line in news:
+            print(f"anvilate check: {line}", file=err)
+        if news and verdict == EXIT_OK:
+            return EXIT_FAILED
+    return verdict
 
 
 def _check(args: argparse.Namespace, *, out, err) -> int:
@@ -4064,10 +4165,93 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                     f"anvilate check: {path}: {entry.status.value}: {entry.name} — {verdict}",
                     file=err,
                 )
-    return max(
+    verdict = max(
         (EXIT_CODES[card.status] for _p, _s, card in results),
         key=_EXIT_SEVERITY.index,
     )
+    return _ci_reports(args, results, verdict, out=out, err=err)
+
+
+def _ci_reports(args, results, verdict: int, *, out, err) -> int:
+    """Write the SARIF, JUnit, baseline and summary a CI run asked for, and decide the exit.
+
+    ``verdict`` is the worst status across the cards, which is what the run exits with
+    when nothing here has anything worse to say. A sweep against a baseline can: a spec
+    the baseline records and the sweep did not find is news on a repository where every
+    card passes, and exiting 0 on it would make the gate silent about a part somebody
+    deleted or renamed.
+    """
+    from . import __version__
+    from .ci import Baseline, compare, sarif_json, screened, summary_table, to_junit
+
+    wants = (args.sarif, args.junit, args.baseline, args.write_baseline, args.summary)
+    if not any(wants):
+        return verdict
+    if args.summary is not None and args.baseline is None:
+        print(
+            "anvilate check: --summary writes the change table, which needs --baseline to "
+            "compare against",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
+    specs = [
+        screened(path.as_posix(), spec.name, card, _read_text(path)) for path, spec, card in results
+    ]
+    if args.sarif is not None:
+        _write_report(
+            args.sarif,
+            sarif_json(specs, tool_version=__version__, category=args.sarif_category),
+        )
+    if args.junit is not None:
+        _write_report(args.junit, to_junit(specs))
+    if args.write_baseline is not None:
+        _write_report(args.write_baseline, Baseline.of(specs).to_json())
+        print(
+            f"anvilate check: wrote {len(specs)} spec"
+            f"{'s' if len(specs) != 1 else ''} to {args.write_baseline}; commit it",
+            file=err,
+        )
+        # Writing the baseline is not screening against one. The run records what the
+        # repository screens to today, whatever that is, and saying it failed because a
+        # part fails would make the command unusable on the day you most need it.
+        return EXIT_OK
+    if args.baseline is not None:
+        try:
+            baseline = Baseline.parse(args.baseline.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as unreadable:
+            # The decode error too: a baseline saved as UTF-16 by an editor is a file a
+            # caller named, and `UnicodeDecodeError` is a `ValueError` that would
+            # otherwise reach the top as an internal error about the wrong thing.
+            print(f"anvilate check: cannot read {args.baseline}: {unreadable}", file=err)
+            return EXIT_BAD_REQUEST
+        changes = compare(baseline, specs)
+        table = summary_table(changes)
+        if args.summary is not None:
+            with args.summary.open("a", encoding="utf-8") as handle:
+                handle.write(table + "\n")
+        news = [line for line in changes if line.change.is_news]
+        for line in news:
+            print(f"anvilate check: {line}", file=err)
+        if news and verdict == EXIT_OK:
+            # The cards all passed and the repository still changed in a way a person has
+            # to look at. Exiting 0 here is the gate being silent about the one thing it
+            # was asked to watch.
+            return EXIT_FAILED
+    return verdict
+
+
+def _read_text(path: Path) -> str | None:
+    """The document's own text, for its line marks. ``None`` when it cannot be read."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _write_report(path: Path, text: str) -> None:
+    """Write a report beside wherever the caller asked, making the folder if it is new."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def _resolve(paths: list[Path], *, err, command: str = "check") -> tuple[list[Path], bool] | int:

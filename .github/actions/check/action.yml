@@ -44,6 +44,33 @@ inputs:
       reviewer reads when the run fails, not a nicety.
     required: false
     default: ""
+  sarif:
+    description: >-
+      Where to write the SARIF 2.1.0 log, or empty to write none. Every failing,
+      not-evaluated and warning check becomes an annotation on the line of the spec field
+      it is about. Uploading it is the caller's step: this action writes the file and says
+      how many results it holds, because an upload needs permissions a composite action
+      should not assume.
+    required: false
+    default: ""
+  sarif-category:
+    description: >-
+      The code-scanning category to upload the SARIF under. One category per spec set, so
+      two runs over two folders do not overwrite each other's findings.
+    required: false
+    default: "anvilate"
+  junit:
+    description: "Where to write the JUnit XML report, or empty to write none."
+    required: false
+    default: ""
+  baseline:
+    description: >-
+      A committed baseline of card digests to compare against. The run reports what
+      changed and fails on news — a newly failing spec, a newly not-evaluated one, or one
+      the baseline records and the sweep did not find. Never written here: the baseline is
+      updated by `anvilate check --write-baseline` and committed.
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -69,6 +96,10 @@ runs:
         ANVILATE_ALLOW_NOT_EVALUATED: ${{ inputs.allow-not-evaluated }}
         ANVILATE_REPORT: ${{ inputs.report }}
         ANVILATE_BUNDLES: ${{ inputs.bundles }}
+        ANVILATE_SARIF: ${{ inputs.sarif }}
+        ANVILATE_SARIF_CATEGORY: ${{ inputs.sarif-category }}
+        ANVILATE_JUNIT: ${{ inputs.junit }}
+        ANVILATE_BASELINE: ${{ inputs.baseline }}
       run: |
         set -uo pipefail
         if [ -n "$ANVILATE_REPORT" ]; then
@@ -77,8 +108,28 @@ runs:
         if [ -n "$ANVILATE_BUNDLES" ]; then
           anvilate export "$ANVILATE_PATH" --format json > "$ANVILATE_BUNDLES"
         fi
-        anvilate check "$ANVILATE_PATH"
+        # The reports and the baseline comparison ride on the one run whose exit code is
+        # the gate. Writing them in a separate invocation would screen the repository
+        # twice and could report a different answer from the one the gate acted on.
+        reports=()
+        [ -n "$ANVILATE_SARIF" ] \
+          && reports+=(--sarif "$ANVILATE_SARIF" --sarif-category "$ANVILATE_SARIF_CATEGORY")
+        [ -n "$ANVILATE_JUNIT" ] && reports+=(--junit "$ANVILATE_JUNIT")
+        [ -n "$ANVILATE_BASELINE" ] && reports+=(--baseline "$ANVILATE_BASELINE")
+        [ -n "$ANVILATE_BASELINE" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ] \
+          && reports+=(--summary "$GITHUB_STEP_SUMMARY")
+        anvilate check "$ANVILATE_PATH" "${reports[@]+"${reports[@]}"}"
         status=$?
+        if [ -n "$ANVILATE_SARIF" ] && [ -f "$ANVILATE_SARIF" ]; then
+          # GitHub code scanning takes at most 5,000 results per upload. Saying the count
+          # here is what lets a caller see a repository approaching it, rather than
+          # discovering the truncation in a dashboard that quietly stopped reporting.
+          results=$(python -c "import json,sys;d=json.load(open(sys.argv[1]));print(sum(len(r.get('results',[])) for r in d['runs']))" "$ANVILATE_SARIF")
+          echo "::notice::anvilate wrote $results SARIF results to $ANVILATE_SARIF"
+          if [ "$results" -gt 5000 ]; then
+            echo "::warning::$results results exceed the 5,000 GitHub accepts in one upload; split the run by folder and upload each under its own category"
+          fi
+        fi
         # The exit codes are the interface:
         #   0 passed
         #   1 a check failed

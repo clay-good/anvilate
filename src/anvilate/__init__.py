@@ -47,6 +47,9 @@ that already ran and does one more thing with them:
   the user's own agent writes specs over the MCP server.
 - :mod:`anvilate.confirmation` — the four decisions only a person may make, and the
   channel each confirmation arrived through: a client's form, a terminal, or a file.
+- :mod:`anvilate.ci` — parts as code: a finding on the line of the spec field that
+  caused it, SARIF and JUnit for the dashboards, and a committed baseline of card
+  digests so "what changed" is a different question from "what fails".
 - :mod:`anvilate.contracts` — the Spec IR and the scorecard published as versioned
   JSON Schema 2020-12 artifacts, generated from the models and held against them.
 - :mod:`anvilate._assembly_declarations` — the private home of the parts, states and

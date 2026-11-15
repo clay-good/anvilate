@@ -1,0 +1,31 @@
+# The hook a repository of parts adds to its own `.pre-commit-config.yaml`:
+#
+#   repos:
+#     - repo: https://github.com/clay-good/anvilate
+#       rev: main            # pin a tag once one exists
+#       hooks:
+#         - id: anvilate-check
+#
+# See docs/parts-as-code.md.
+#
+# One hook and not two. A "schema only, no screening" variant was written and removed:
+# this CLI has no validate-only command, so the fast hook would have been the same screen
+# under a name that said it was not, and a hook whose description is wrong is worse than
+# no hook. The tiers that need geometry are not reached by a spec that declares none, so
+# the cost below is what a commit actually pays.
+#
+# The budget: tools/responsiveness/budget.json holds `anvilate check` on one spec to well
+# under a second, measured on every release, and pre-commit passes only the files that
+# changed. A repository whose commits touch dozens of specs at once should move this to a
+# push hook instead; the exit codes are the same either way.
+- id: anvilate-check
+  name: anvilate check (screen the changed specs)
+  description: >-
+    Screen every changed Design Spec. Exit 0 only when every check passed; a check that
+    could not run is exit 2 and is not forgiven here, because a screen that did not run
+    is not a screen that passed.
+  entry: anvilate check
+  language: python
+  types: [yaml]
+  pass_filenames: true
+  require_serial: false

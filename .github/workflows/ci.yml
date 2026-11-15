@@ -139,11 +139,17 @@ jobs:
             echo "the network transport was not exercised"
             exit 1
           fi
+      - name: Fetch the SARIF 2.1.0 JSON schema
+        run: |
+          mkdir -p sarif
+          curl -sSfL -o sarif/sarif-schema-2.1.0.json \
+            https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json
       - name: Validate emitted documents against the published schemas
         env:
           ANVILATE_QIF_XSD: qif/xsd
           ANVILATE_DCC_XSD: dcc
           ANVILATE_CYCLONEDX_SCHEMA: cyclonedx
+          ANVILATE_SARIF_SCHEMA: sarif/sarif-schema-2.1.0.json
         run: |
           set -o pipefail
           # Named exactly, not selected by keyword: a `-k` expression that stops matching
@@ -155,11 +161,12 @@ jobs:
             "tests/test_attestation.py::test_the_bom_validates_against_the_published_cyclonedx_schema" \
             "tests/test_attestation.py::test_every_component_kind_is_one_the_published_schema_defines" \
             "tests/test_attestation.py::test_the_declared_spec_version_is_the_schema_the_document_is_checked_against" \
+            "tests/test_ci_reports.py::test_the_log_validates_against_the_published_sarif_schema" \
             | tee result.txt
           # A skip here means the schemas did not arrive and nothing was validated, which is
           # exactly the outcome this job exists to rule out. Passing on a skip would make the
           # job a green light for a check that never ran.
-          grep -qE "^6 passed" result.txt
+          grep -qE "^7 passed" result.txt
           if grep -q skipped result.txt; then
             echo "the schema tests skipped; nothing was validated"
             exit 1

@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Seventy-eight pages, arranged by what you are trying to do. The [README](../README.md) is the
+Seventy-nine pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -21,6 +21,7 @@ You have a part and you want a verdict.
 | [Parts you can ask for](parts-catalog.md) | Every part Anvilate draws, with a picture of each and the fields it takes. Generated from the pattern registry. |
 | [Example highlights](example-highlights.md) | Worked examples where the governing check is not the obvious one, each with the figures it prints. |
 | [`anvilate` on the command line](headless-cli.md) | Screen a spec, export its bundle, verify an attestation, diff two revisions. The exit codes are the interface, and **2 is not a pass**. |
+| [Parts as code in CI](parts-as-code.md) | A finding on the line of the spec field that caused it: SARIF and JUnit for the dashboards, a committed baseline so "what changed" is a different question from "what fails", and the pre-commit hook. |
 | [Screening a Design Spec](spec-screening.md) | What a spec document alone can be screened on, and the tier that has to name a gap rather than run. |
 | [Calculation reports](calculation-reports.md) | The submittal a reviewer reads: formula, substitution, result, clause. |
 | [Values and units](units-and-quantities.md) | What a `Quantity` is, and the arithmetic it refuses so a value is never computed in one unit and read in another. |

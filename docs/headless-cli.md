@@ -8,7 +8,7 @@ has not shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
-| `check` | one or more specs, or a directory; or one product document | `--format`, `--show-work`, `--module`, `--node` | every check passed, or passed with margin to spare |
+| `check` | one or more specs, or a directory; or one product document | `--format`, `--show-work`, `--module`, `--node`, `--sarif`, `--sarif-category`, `--junit`, `--baseline`, `--write-baseline`, `--summary` | every check passed, or passed with margin to spare |
 | `export` | one or more specs, or a directory; one spec for `step` or `3mf` | `--artifact`, `--format`, `--module`; for `step` and `3mf`: `--output`, `--unvalidated`, `--ap214`, `--force` | the bundle rolled up clean; for `step` or `3mf`, the file was written |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format`, `--module` | nothing got worse |
@@ -1221,6 +1221,18 @@ repository:
 | `allow-not-evaluated` | `false` | Accept exit code 2 as a pass. |
 | `report` | (none) | Where to write the JSON scorecard report. |
 | `bundles` | (none) | Where to write the JSON evidence bundles. |
+| `sarif` | (none) | Where to write the SARIF 2.1.0 log, for a code-scanning upload. |
+| `sarif-category` | `anvilate` | The category the SARIF declares, one per spec set. |
+| `junit` | (none) | Where to write the JUnit XML report. |
+| `baseline` | (none) | A committed baseline of card digests to compare against. |
+
+**The reports ride on the gate's own run.** `sarif`, `junit` and `baseline` are passed to
+the same `anvilate check` whose exit code decides the job, not to a second invocation:
+screening the repository twice could report one answer and gate on another. The action
+writes the SARIF and says how many results it holds; **uploading it is your step**, because
+an upload needs `security-events: write` and a composite action should not assume
+permissions its caller did not grant. Above the 5,000 results GitHub accepts in one upload
+the action warns and tells you to split by folder, one category each.
 
 **`allow-not-evaluated` is off by default and that is the whole point.** A screen that
 could not run is not a screen that passed, and a merge gate treating the two alike is the
