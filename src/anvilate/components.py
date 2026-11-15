@@ -34,7 +34,7 @@ from ._models import Named, Provenance, StatableModel, each_one
 from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from .interfaces import Interface, check_interfaces
 from .refusal import RefusalError, Remedy
-from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+from .scorecard import CheckStatus, LifeKind, LifeQuantity, Need, ScorecardEntry, ValueSource
 from .units import Quantity
 
 __all__ = [
@@ -488,6 +488,11 @@ def _rating_entries(
                 "detail": f"L10 life {hours:.4g} h against {required:.4g} h required "
                 f"({stated['required_life'].source}); C {rating.value} ({rating.source})",
                 "reference": _BEARING_REFERENCE, "derivation": derivation,
+                # The life itself, typed, so the service-life plan schedules the
+                # replacement from the number rather than from the detail line. L10 is
+                # the life 90% of a population reaches.
+                "life": LifeQuantity(kind=LifeKind.HOURS, value=life,
+                                     basis=_BEARING_REFERENCE, reliability=0.90),
             }))  # fmt: skip
     elif family in ("motor", "coupling"):
         if "torque" in stated:

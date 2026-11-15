@@ -695,6 +695,8 @@ review.review_priority
 review.artifact_digest
 review.build_dossier
 scorecard.CheckStatus
+scorecard.LifeKind
+scorecard.LifeQuantity
 scorecard.LimitSense
 scorecard.Comparison
 scorecard.Direction
@@ -755,6 +757,17 @@ verification.VerificationPlan
 verification.DEFAULT_ARCHETYPES
 verification.plan_verification
 verification.record_outcome
+service_life.RCM_CITATION
+service_life.LifeKind
+service_life.LifeQuantity
+service_life.TaskType
+service_life.IntervalRule
+service_life.MaintenanceItem
+service_life.PerformedTask
+service_life.SpareLine
+service_life.ServiceLifePlan
+service_life.plan_service_life
+service_life.task_correlations
 sheet.PartSheet
 sheet.part_sheet
 thirdparty.ThirdPartyModule

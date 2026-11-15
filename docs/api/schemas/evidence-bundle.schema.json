@@ -2542,6 +2542,62 @@
       "title": "Keepout",
       "type": "object"
     },
+    "LifeKind": {
+      "description": "What a life is counted in. Four kinds, because four is what the screens produce.",
+      "enum": [
+        "hours",
+        "cycles",
+        "distance",
+        "time_at_temperature"
+      ],
+      "title": "LifeKind",
+      "type": "string"
+    },
+    "LifeQuantity": {
+      "description": "A life a check computed, typed so a plan can read it without parsing prose.\n\n``basis`` is the method that produced it — \"ISO 281 basic rating life L10\", \"Archard\nwear allowance\" — and is required, because two lives in hours from different methods\nare not the same number and a schedule that mixed them would say so nowhere.\n\n``reliability`` is the fraction of a population the life applies to, where the method\nstates one: 0.90 for an L10 rating life. ``None`` where the method states none, which\nis not the same as 1.0 and is never filled in here.",
+      "properties": {
+        "basis": {
+          "title": "Basis",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/LifeKind"
+        },
+        "reliability": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reliability"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "kind",
+        "value",
+        "basis"
+      ],
+      "title": "LifeQuantity",
+      "type": "object"
+    },
     "LimitBasis": {
       "description": "Where an allocated limit came from.",
       "enum": [
@@ -3593,6 +3649,17 @@
           ],
           "default": null
         },
+        "life": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LifeQuantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -4577,7 +4644,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:evidence-bundle:1.31.0",
+  "$id": "urn:anvilate:schema:evidence-bundle:1.32.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate evidence bundle: every screening layer's contribution for one part, with one rolled-up status, the scorecard, and the spec the verdicts were computed from. A layer that never ran is an absent key, not a null one — the two are different facts and the bundle refuses to collapse them. Carries the screening disclaimer unconditionally. Generated from anvilate.bundle.BundleDocument.",
   "properties": {
@@ -4788,5 +4855,5 @@
   ],
   "title": "BundleDocument",
   "type": "object",
-  "x-anvilate-version": "1.31.0"
+  "x-anvilate-version": "1.32.0"
 }

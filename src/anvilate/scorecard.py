@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import cache
-from math import isnan
+from math import isfinite, isnan
 from typing import Annotated
 
 from pydantic import ConfigDict, Field, computed_field, model_validator
@@ -48,6 +48,8 @@ def _scorecard_refusal(message: str, *, subject: str, source: str) -> _Scorecard
 
 __all__ = [
     "CheckStatus",
+    "LifeKind",
+    "LifeQuantity",
     "LimitSense",
     "Comparison",
     "Direction",
@@ -277,6 +279,118 @@ class GoverningChange(StatableModel):
             f"governing check changed: '{self.previous}' "
             f"({previous}) → '{self.current}' ({current})"
         )
+
+
+_LIFE_SOURCE = "the check that computed the life, and the method it states"
+
+#: What each kind of life is measured in, spelled as pint spells it. A TOTAL map: a fifth
+#: kind cannot be added without saying what dimension it has, which is the one thing a
+#: consumer needs. A count of cycles is `"dimensionless"` and not `""` — pint renders the
+#: empty dimensionality with that word, and the convenient spelling refused every life in
+#: cycles until a test wrote one.
+_LIFE_DIMENSIONS: dict[str, str] = {
+    "hours": "[time]",
+    "cycles": "dimensionless",
+    "distance": "[length]",
+    "time_at_temperature": "[time]",
+}
+
+
+class LifeKind(StrEnum):
+    """What a life is counted in. Four kinds, because four is what the screens produce."""
+
+    HOURS = "hours"
+    CYCLES = "cycles"
+    DISTANCE = "distance"
+    TIME_AT_TEMPERATURE = "time_at_temperature"
+
+    @property
+    def dimension(self) -> str:
+        """The pint dimensionality a life of this kind must have, as pint spells it."""
+        return _LIFE_DIMENSIONS[self.value]
+
+
+class LifeQuantity(StatableModel):
+    """A life a check computed, typed so a plan can read it without parsing prose.
+
+    ``basis`` is the method that produced it — "ISO 281 basic rating life L10", "Archard
+    wear allowance" — and is required, because two lives in hours from different methods
+    are not the same number and a schedule that mixed them would say so nowhere.
+
+    ``reliability`` is the fraction of a population the life applies to, where the method
+    states one: 0.90 for an L10 rating life. ``None`` where the method states none, which
+    is not the same as 1.0 and is never filled in here.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: LifeKind
+    value: Quantity
+    basis: Provenance
+    reliability: float | None = Field(default=None, exclude_if=lambda value: value is None)
+    temperature: Quantity | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> LifeQuantity:
+        if not isfinite(self.value.magnitude) or self.value.magnitude <= 0.0:
+            raise _scorecard_refusal(
+                f"a life is a positive finite quantity; got {self.value}. A life of zero "
+                f"or less schedules a task before the product is built, and an infinite "
+                f"one schedules none at all without saying so",
+                subject="value",
+                source=_LIFE_SOURCE,
+            )
+        expected = self.kind.dimension
+        actual = str(self.value.pint.dimensionality)
+        if actual != expected:
+            raise _scorecard_refusal(
+                f"a life in {self.kind.value} is a {expected} quantity; "
+                f"got {self.value.dimensionality}. A schedule built from it would compare "
+                f"an interval with a quantity of another kind",
+                subject="value",
+                source=_LIFE_SOURCE,
+            )
+        if self.reliability is not None and not 0.0 < self.reliability < 1.0:
+            raise _scorecard_refusal(
+                f"a reliability is a fraction of a population strictly between 0 and 1; got "
+                f"{self.reliability}. A method that states none leaves this unset, which is "
+                f"not the same as stating 1",
+                subject="reliability",
+                source=_LIFE_SOURCE,
+            )
+        at_temperature = self.kind is LifeKind.TIME_AT_TEMPERATURE
+        if at_temperature and self.temperature is None:
+            raise _scorecard_refusal(
+                "a life at temperature needs the temperature it is at; 1,000 hours means "
+                "nothing without the condition it was measured under",
+                subject="temperature",
+                source=_LIFE_SOURCE,
+            )
+        if not at_temperature and self.temperature is not None:
+            raise _scorecard_refusal(
+                f"a life in {self.kind.value} carries a temperature, which no consumer "
+                f"reads; state the kind as time_at_temperature or drop the temperature",
+                subject="temperature",
+                source=_LIFE_SOURCE,
+            )
+        if (
+            self.temperature is not None
+            and str(self.temperature.pint.dimensionality) != "[temperature]"
+        ):
+            raise _scorecard_refusal(
+                f"the condition of a life at temperature is a temperature; got "
+                f"{self.temperature.dimensionality}",
+                subject="temperature",
+                source=_LIFE_SOURCE,
+            )
+        return self
+
+    def __str__(self) -> str:
+        at = f" at {self.temperature}" if self.temperature is not None else ""
+        reliability = (
+            f" at {self.reliability:.0%} reliability" if self.reliability is not None else ""
+        )
+        return f"{self.value}{at}{reliability} ({self.basis})"
 
 
 class LimitSense(StrEnum):
@@ -537,6 +651,11 @@ class ScorecardEntry(StatableModel):
     # Information, not a verdict: an extrapolative check may well be right, and the reader
     # is entitled to know that nothing has ever been measured out there.
     domain: DomainLabel | None = Field(default=None, exclude_if=lambda value: value is None)
+    # The life this check computed, typed, when its result *is* a life. Read by
+    # `anvilate.service_life` to turn the number into an inspection or a replacement, so a
+    # schedule is never built by parsing the detail line. Absent on every check whose
+    # result is not a life, which is most of them.
+    life: LifeQuantity | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _check_derivation_declaration(self) -> ScorecardEntry:

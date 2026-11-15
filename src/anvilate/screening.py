@@ -77,7 +77,15 @@ from ._models import (
 from .analysis.embodied_carbon import EmbodiedCarbonEstimate
 from .derivation import Derivation, DerivationAbsence, SymbolValue, Underived
 from .loads import combination_derivation
-from .scorecard import CheckStatus, Need, Scorecard, ScorecardEntry, ValueSource
+from .scorecard import (
+    CheckStatus,
+    LifeKind,
+    LifeQuantity,
+    Need,
+    Scorecard,
+    ScorecardEntry,
+    ValueSource,
+)
 from .spec import DesignSpec, ReferenceResolver, ScreeningDepth, ValidationTier
 from .spec.provenance import Origin, Provenanced
 from .spec.validate import _element_reasons, _remedy
@@ -628,6 +636,13 @@ def _carbon_entries(spec: DesignSpec) -> list[ScorecardEntry]:
 
 
 _DUTY_CLAUSE = "ASTM E1049-85"
+# A declared duty life is a time, a distance or a count of cycles — `DutyLife` refuses
+# anything else — so this map is TOTAL over what can reach it.
+_DUTY_LIFE_KINDS = {
+    "[time]": LifeKind.HOURS,
+    "[length]": LifeKind.DISTANCE,
+    "dimensionless": LifeKind.CYCLES,
+}
 
 
 def _duty_cycle_entries(spec: DesignSpec) -> list[ScorecardEntry]:
@@ -658,6 +673,21 @@ def _duty_cycle_entries(spec: DesignSpec) -> list[ScorecardEntry]:
         )]  # fmt: skip
     entry = ScorecardEntry.from_safety_factor(
         "duty-cycle fatigue", computed=damage.lives, required=1.0
+    ).model_copy(
+        update={
+            # The fatigue life itself, typed: the declared life multiplied by the number
+            # of them Miner's sum says the part survives. `anvilate.service_life` reads
+            # this to schedule a replacement or an inspection; the declared life's own
+            # kind decides whether that is hours, a distance or cycles.
+            "life": LifeQuantity(
+                kind=_DUTY_LIFE_KINDS[str(life.pint.dimensionality)],
+                value=Quantity(magnitude=life.magnitude * damage.lives, unit=life.unit),
+                basis=(
+                    f"Palmgren-Miner over the declared duty cycle, {damage.lives:.4g} "
+                    f"lives of {life} ({declared.life.source})"
+                ),
+            )
+        }
     )
     derivation = Derivation(
         symbolic="D = " + " + ".join(f"d_{i}" for i in range(1, len(damage.events) + 1)),

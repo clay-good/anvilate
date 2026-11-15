@@ -59,6 +59,8 @@ from ..scorecard import (
     AppliedFactor,
     CheckStatus,
     Direction,
+    LifeKind,
+    LifeQuantity,
     Need,
     RepairHint,
     Scorecard,
@@ -1196,7 +1198,22 @@ def _bearing_life_entry(unit: RollingBearing, required_safety_factor: float) -> 
     )
     entry = ScorecardEntry.from_safety_factor(
         "bearing rating life", computed=safety, required=required_safety_factor
-    ).model_copy(update={"reference": _BEARING_LIFE_REFERENCE, "derivation": derivation})
+    ).model_copy(
+        update={
+            "reference": _BEARING_LIFE_REFERENCE,
+            "derivation": derivation,
+            # The life itself, typed, so `anvilate.service_life` can schedule a
+            # replacement from it rather than from the detail line's prose. L10 is the
+            # life 90% of a population reaches, which is the reliability the method
+            # states and the one a maintenance interval is written against.
+            "life": LifeQuantity(
+                kind=LifeKind.HOURS,
+                value=life,
+                basis=_BEARING_LIFE_REFERENCE,
+                reliability=0.90,
+            ),
+        }
+    )
     if entry.status is CheckStatus.FAIL:
         # The lever is the CATALOGUE RATING, not a dimension: a bearing is chosen, not
         # machined, and catalogues are indexed by C. The hint names the least C that reaches

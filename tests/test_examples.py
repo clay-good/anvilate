@@ -9634,3 +9634,21 @@ def test_proof_test_correlation_example_files_a_candidate_without_moving_the_ver
     # the validation factor is 0, not 2.
     assert d["validation_level"] == 0.0
     _assert_narrates_computed("proof_test_correlation.py", namespace)
+
+
+def test_conveyor_bearing_maintenance_example_schedules_and_names_what_it_misses():
+    """A passing card and a plan that is not a record, in one example.
+
+    Both halves are asserted. A plan reporting anything but `not_evaluated` with no task
+    performed would be claiming maintenance nobody did, and a plan that listed only the
+    item it covers would read like a complete one.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "conveyor_bearing_maintenance.py"))
+    d = namespace["conveyor_maintenance"]()
+    assert d["card_is_passing"] == 1.0
+    assert d["plan_is_not_a_record"] == 1.0
+    assert d["interval_hours"] == pytest.approx(d["rating_life_hours"] * 0.5, rel=1e-12)
+    assert d["rating_life_hours"] > 30_000  # the 6310 is the bearing that clears the target
+    assert d["items_without_a_life_basis"] == 3.0
+    assert d["spares_over_service_life"] == math.ceil(10 * 4_000 / d["interval_hours"])
+    _assert_narrates_computed("conveyor_bearing_maintenance.py", namespace)

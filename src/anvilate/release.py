@@ -69,6 +69,17 @@ BOM_COLUMNS = (
     "files",
 )  # fmt: skip
 _BUY_COLUMNS = ("designation", "manufacturer", "supplier part numbers", "quantity", "used at")
+# Spares are a separate sheet with their own provenance column, because a quantity here
+# is the consequence of a declared interval rule and not of the product's structure.
+_SPARES_COLUMNS = ("designation", "quantity", "used at", "derived from")
+
+
+def _spares_rows(plan: Any) -> list[tuple[str, ...]]:
+    """The plan's spares, each saying the arithmetic that produced its quantity."""
+    return [
+        (line.designation, str(line.quantity), line.used_at, line.arithmetic)
+        for line in plan.spares()
+    ]
 
 
 class ReleaseRefused(RefusalError, ValueError):
@@ -213,6 +224,7 @@ def export_package(
     variants: bool = True,
     baseline: Manifest | None = None,
     profiles: Sequence[ColumnProfile] = (),
+    plan: Any = None,
 ) -> Manifest:
     """Write ``source`` (a Product, or a product document's path) into ``folder``.
 
@@ -221,7 +233,10 @@ def export_package(
     and parameter columns with the base product's. ``baseline`` is the manifest of the last
     release: an item whose content changed while its part number and revision did not is a
     blocker, named with what changed. Each of ``profiles`` writes one more BOM,
-    ``bom-<name>.csv``, in that profile's columns and value forms.
+    ``bom-<name>.csv``, in that profile's columns and value forms. ``plan`` is a
+    :class:`~anvilate.service_life.ServiceLifePlan`; when one is given the package also
+    carries ``maintenance.csv`` and ``spares.csv``, each labelled as derived from the
+    plan's declared interval rules rather than from the product's own structure.
     """
     from .export.gate import ExportAuthorization
 
@@ -263,6 +278,13 @@ def export_package(
         columns, cells = profile.apply(rows, dotted)
         _write(out, f"bom-{_safe(profile.name)}.csv", _csv(columns, cells), files, "bom")
     _write(out, "buy.csv", _csv(_BUY_COLUMNS, _buy_rows(chosen, shelf)), files, "buy list")
+    if plan is not None:
+        # Two files and not one appended to `buy.csv`: a spare is bought because a
+        # declared maintenance rule says it will be consumed, and the buy list is what
+        # the product is made of. Merging them would make a policy decision look like a
+        # bill of materials.
+        _write(out, "maintenance.csv", plan.to_csv(), files, "maintenance plan")
+        _write(out, "spares.csv", _csv(_SPARES_COLUMNS, _spares_rows(plan)), files, "spares")
     for definition_id, table in _parameter_tables(chosen).items():
         number = _safe(_number(tree, definition_id))
         _write(out, f"parameters/{number}.csv", table, files, "parameters")

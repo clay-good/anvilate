@@ -174,6 +174,9 @@ that already ran and does one more thing with them:
   onto every result that rests on it.
 - :mod:`anvilate.uncertainty` — input scatter propagated to a shortfall
   probability and a sensitivity ranking.
+- :mod:`anvilate.service_life` — the inspection or replacement each life-limited check
+  implies, from a life the check computed and an interval rule the document declared,
+  with its spares and the items nothing gave a life.
 - :mod:`anvilate.verification` — the physical test each analytical check implies,
   and the rule that a plan is never evidence.
 """

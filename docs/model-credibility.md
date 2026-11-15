@@ -124,4 +124,7 @@ for a person and a regression for CI, never a calibration. Any statement that a 
 - ASME V&V 10 supplies the vocabulary — verification, validation, validation metric,
   validation domain. The document is copyrighted and only its terms are used.
 
+A measured condition from a maintenance inspection is a referent too: see
+[service-life planning](service-life-planning.md).
+
 Worked end to end in [`examples/proof_test_correlation.py`](../examples/proof_test_correlation.py).

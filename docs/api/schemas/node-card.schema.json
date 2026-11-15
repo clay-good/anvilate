@@ -304,6 +304,62 @@
       "title": "DomainLabel",
       "type": "object"
     },
+    "LifeKind": {
+      "description": "What a life is counted in. Four kinds, because four is what the screens produce.",
+      "enum": [
+        "hours",
+        "cycles",
+        "distance",
+        "time_at_temperature"
+      ],
+      "title": "LifeKind",
+      "type": "string"
+    },
+    "LifeQuantity": {
+      "description": "A life a check computed, typed so a plan can read it without parsing prose.\n\n``basis`` is the method that produced it — \"ISO 281 basic rating life L10\", \"Archard\nwear allowance\" — and is required, because two lives in hours from different methods\nare not the same number and a schedule that mixed them would say so nowhere.\n\n``reliability`` is the fraction of a population the life applies to, where the method\nstates one: 0.90 for an L10 rating life. ``None`` where the method states none, which\nis not the same as 1.0 and is never filled in here.",
+      "properties": {
+        "basis": {
+          "title": "Basis",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/LifeKind"
+        },
+        "reliability": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reliability"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "value": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "kind",
+        "value",
+        "basis"
+      ],
+      "title": "LifeQuantity",
+      "type": "object"
+    },
     "LimitSense": {
       "description": "Which side of its limit a measured value has to be on to pass.",
       "enum": [
@@ -596,6 +652,17 @@
           ],
           "default": null
         },
+        "life": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LifeQuantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -867,7 +934,7 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:node-card:1.3.0",
+  "$id": "urn:anvilate:schema:node-card:1.4.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate node card: one node of a placed product, the checks it owns and its children's cards, with its status the worst of them; not evaluated is never a pass. Generated from anvilate.product.NodeCard.",
   "properties": {
@@ -914,5 +981,5 @@
   ],
   "title": "NodeCard",
   "type": "object",
-  "x-anvilate-version": "1.3.0"
+  "x-anvilate-version": "1.4.0"
 }
