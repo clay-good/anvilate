@@ -1,7 +1,7 @@
 {
   "$defs": {
     "DowelConnection": {
-      "description": "One dowel-type fastener through a main member and its side member(s).\n\nEvery field is an input to the AWC TR12 Table 1-1 general dowel equations, which are\nthe NDS yield limit equations in their published generalized form.\n\n``main_bearing_strength`` and ``side_bearing_strength`` are the dowel bearing\nstrengths *of each member in the direction its load acts* — resolve an angled load\nwith :func:`hankinson_bearing_strength` first, because the yield equations take one\nnumber per member and the angle is not theirs to apply.\n\n``gap`` is the space between the members, which TR12 carries through every mode: a\nbolted connection with a quarter-inch gap loses about a tenth of its capacity, and\nthe clause most engineers use has no term for it at all.",
+      "description": "One dowel-type fastener through a main member and its side member(s).\n\nEvery field is an input to the AWC TR12 Table 1-1 general dowel equations, which are\nthe NDS yield limit equations in their published generalized form.\n\n``main_bearing_strength`` and ``side_bearing_strength`` are the dowel bearing\nstrengths *of each member in the direction its load acts* — resolve an angled load\nwith :func:`hankinson_bearing_strength` first, because the yield equations take one\nnumber per member and the angle is not theirs to apply.\n\n``gap`` is the space between the members. TR12 carries it through every hinge mode\nand no bearing mode, and the clause most engineers reach for has no term for it at\nall; see this module's own documentation for what that means.",
       "properties": {
         "bending_yield_strength": {
           "$ref": "#/$defs/Quantity"
@@ -82,7 +82,7 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:elements:timber_connection:1.1.0",
+  "$id": "urn:anvilate:schema:elements:timber_connection:1.2.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate pack element 'timber_connection': the fields a Design Spec puts in `element_params` when it declares `element_type: timber_connection`. Generated from anvilate.packs.timber.TimberConnection.",
@@ -130,5 +130,5 @@
   ],
   "title": "TimberConnection",
   "type": "object",
-  "x-anvilate-version": "1.1.0"
+  "x-anvilate-version": "1.2.0"
 }

@@ -357,8 +357,11 @@ def governing_anchor_direction(
     least: a 400 x 100 mm pattern takes 4.2 times the anchor tension across its short
     dimension that it takes along its long one. On a square the two axes are the worst and
     the **diagonal is the mildest** — the diagonal looks like it concentrates the moment
-    on one corner, and it does, but it also lengthens every lever, and the sum of squares
-    in the denominator grows faster than the one in the numerator.
+    on one corner, and it does, but it also lengthens every lever, so the sum of squares
+    in the denominator grows faster than the one in the numerator, and it gives the weight
+    a longer lever as well. (That holds wherever the pattern lifts at all. A pattern the
+    weight holds down in every direction has no tension anywhere, and no worst direction
+    to find — the sweep reports zero and the stability ratio says why.)
 
     **This is a sweep, not a solve**, and that is stated rather than hidden: the tension
     is a ratio of two functions of the direction, and the worst of it is found by trying

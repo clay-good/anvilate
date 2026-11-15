@@ -10,11 +10,16 @@ members — a shim to line up a splice plate, a washer stack, a member that shra
 from its neighbour. A quarter inch of gap takes **10.9%** of the capacity. An inch takes
 **34.7%**.
 
-The point is not the size of the loss. It is that **nothing floors it**. The gap enters
-the governing mode's quadratic as a lever arm, so the capacity keeps falling as the gap
-grows; and the yield limit clause an engineer reaches for first has no gap term at all,
-which reads as "a gap does not matter" rather than "this clause assumes there is none."
-A connection detailed with a shim is outside the clause, not conservatively inside it.
+The point is not the size of the loss. It is that **nothing floors it**. The gap is a
+lever arm in every hinge mode's quadratic — mode IIIs governs this splice at every gap
+below — so the capacity keeps falling as the gap grows. The yield limit clause an
+engineer reaches for first has no gap term at all, which reads as "a gap does not matter"
+rather than "this clause assumes there is none." A connection detailed with a shim is
+outside the clause, not conservatively inside it.
+
+(The gap is in no *bearing* mode, so a connection governed by Im or Is loses nothing to
+one at all — until the gap grows enough to bring a hinge mode down underneath it. This
+splice is not that connection, and most are not.)
 
 The second figure in the same splice is the grain angle. Resolve the side member's
 dowel bearing strength to a load 30 degrees off the grain, which the Hankinson formula

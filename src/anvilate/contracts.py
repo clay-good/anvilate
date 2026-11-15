@@ -698,6 +698,14 @@ ELEMENT_SCHEMA_VERSIONS: dict[str, str] = {
     # 1.2.0 adds the optional keyseat along the bore.
     "shaft_collar": "1.2.0",
     "shear_plate": "1.4.0",
+    # 1.2.0 for one sentence, and the sentence is the reason the rule exists: 1.1.0's
+    # published description of `gap` said TR12 carries it "through every mode" and that a
+    # quarter-inch gap "loses about a tenth of its capacity". Both are wrong. The gap is in
+    # every HINGE mode and no bearing mode, so a connection governed by Im or Is loses
+    # nothing to one at all, and where it does cost the figure runs 10% to 19%. A schema
+    # is read by people as well as validators, and a released one carrying a false
+    # statement about what a field means is corrected under a new number, not in place.
+    "timber_connection": "1.2.0",
     # 1.2.0 adds the bend-radius check's optional reduction of area and its source.
     "sheet_metal_bracket": "1.2.0",
     "spur_gear_mesh": "1.2.0",

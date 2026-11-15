@@ -473,3 +473,41 @@ def test_the_direction_flag_is_a_bool_and_not_a_truthy_thing():
             dowel_bearing_strength(
                 specific_gravity=0.50, diameter=Quantity.parse("0.75 inch"), perpendicular=bad
             )
+
+
+def test_a_gap_costs_nothing_while_a_bearing_mode_governs():
+    """The gap is in every hinge mode's quadratic and in no bearing mode's.
+
+    The module's docstring said a quarter-inch gap costs "about a tenth" of the capacity.
+    Over six ordinary geometries the real figure runs from **0% to 19%**, and the zero is
+    the interesting end: a connection governed by mode Im or Is has no gap term anywhere
+    in the mode that decides it, so the gap does nothing at all. Open it far enough and a
+    hinge mode drops below the bearing one, and from there it costs.
+    """
+
+    def splice(gap: str | None):
+        return dowel_yield_capacity(
+            DowelConnection(
+                diameter=Quantity.parse("0.5 inch"),
+                bending_yield_strength=Quantity.parse("45000 psi"),
+                main_bearing_length=Quantity.parse("1 inch"),
+                side_bearing_length=Quantity.parse("3 inch"),
+                main_bearing_strength=Quantity.parse("5600 psi"),
+                side_bearing_strength=Quantity.parse("5600 psi"),
+                gap=None if gap is None else Quantity.parse(gap),
+                shear_planes=ShearPlanes.DOUBLE,
+            )
+        )
+
+    tight, small, wide = splice(None), splice("0.25 inch"), splice("2 inch")
+    assert tight.governing.mode is YieldMode.IM
+    assert small.governing.mode is YieldMode.IM
+    # Not approximately: the mode that governs does not mention the gap, so it is the
+    # same number to the last place.
+    assert small.capacity.to("lbf").magnitude == tight.capacity.to("lbf").magnitude
+    # And the mode Im itself is untouched at every gap, which is the reason.
+    for card in (tight, small, wide):
+        assert card.of(YieldMode.IM).capacity.to("lbf").magnitude == pytest.approx(2800.0)
+    # Far enough, and a hinge mode comes down under it.
+    assert wide.governing.mode is YieldMode.IV
+    assert wide.capacity.to("lbf").magnitude < tight.capacity.to("lbf").magnitude

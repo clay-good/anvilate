@@ -26,6 +26,16 @@ the footnote to its own Table 1-1: the geometry is symmetric about the main memb
 the rotation those modes describe cannot happen. A capacity list that silently included
 them would govern on a mode the connection cannot reach.
 
+**The gap between members is in every hinge mode and no bearing mode**, and that is the
+whole of how it behaves. While mode Im or Is governs, a gap costs nothing at all: a 1/2 in
+bolt through a 1 in main member in double shear is 2,800 lbf with a quarter inch of gap
+and 2,800 lbf without. Open it far enough and a hinge mode drops below the bearing one —
+the same connection at 2 in of gap governs on IV, at 1,636 lbf — and from there the loss
+grows with nothing to floor it. A connection already governed by a hinge mode loses from
+the first millimetre: 10% to 19% at a quarter inch, over the ordinary geometries. The
+clause most engineers reach for has no gap term at all, which reads as "a gap does not
+matter" rather than "this clause assumes there is none".
+
 Out of scope here: hollow members and fasteners of varying diameter (TR12 Tables 1-2 and
 1-3), the group-action and geometry factors, withdrawal, and metal connector plates. The
 sign convention and the quadratic are the ones below, verified against every value of
@@ -182,9 +192,9 @@ class DowelConnection(StatableModel):
     with :func:`hankinson_bearing_strength` first, because the yield equations take one
     number per member and the angle is not theirs to apply.
 
-    ``gap`` is the space between the members, which TR12 carries through every mode: a
-    bolted connection with a quarter-inch gap loses about a tenth of its capacity, and
-    the clause most engineers use has no term for it at all.
+    ``gap`` is the space between the members. TR12 carries it through every hinge mode
+    and no bearing mode, and the clause most engineers reach for has no term for it at
+    all; see this module's own documentation for what that means.
     """
 
     model_config = ConfigDict(frozen=True)

@@ -161,7 +161,9 @@ the plate. See
 `governing_anchor_direction` sweeps for the worst: it is **across the pattern's short
 side**, where the lever is least. A 400 x 100 mm pattern takes 4.2 times the tension
 across its short dimension that it takes along its long one. On a square the axes are the
-worst and the diagonal is the mildest, which is the opposite of how it looks.
+worst and the diagonal is the mildest, which is the opposite of how it looks — and both
+hold wherever the pattern lifts at all. A pattern the weight holds down in every direction
+has no tension anywhere, and the stability ratio is what says so.
 
 Two bolts are where this gets sharp: **along** the load they take double the four-bolt
 figure, because only one is ever in tension, and **across** it they are refused — two

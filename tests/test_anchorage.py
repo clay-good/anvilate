@@ -324,3 +324,76 @@ def test_the_sweep_finds_the_square_patterns_closed_form():
         anchors=_SQUARE, weight=Q("300 N"), lateral_force=Q("200 lbf"), height=Q("1070 mm")
     )
     assert worst.governing.tension.to("N").magnitude == pytest.approx(closed_form, rel=1e-9)
+
+
+@pytest.mark.parametrize(
+    ("spacing_mm", "weight", "height"),
+    [
+        (150, "300 N", "1070 mm"),
+        (600, "300 N", "1070 mm"),
+        (150, "5 kN", "1070 mm"),
+        (150, "300 N", "300 mm"),
+        (60, "10 N", "3 m"),
+    ],
+)
+def test_the_square_claim_holds_wherever_the_pattern_lifts(spacing_mm, weight, height):
+    """The docstring says the axes are worst and the diagonal mildest on a square.
+
+    A claim about every square is worth checking on more than one. The qualifier matters
+    too: at 1,000 mm centres under 20 kN the weight holds the pattern down in **every**
+    direction, every tension is zero, and there is no worst direction to find. That is
+    why the sentence says "wherever the pattern lifts at all" — the case is covered by
+    the test below rather than quietly excluded.
+    """
+    from math import cos, radians, sin
+
+    half = spacing_mm / 2
+    pattern = tuple(
+        _at(tag, x, y)
+        for tag, (x, y) in zip(
+            ("a", "b", "c", "d"),
+            ((-half, -half), (-half, half), (half, -half), (half, half)),
+            strict=True,
+        )
+    )
+
+    def at(degrees: float) -> float:
+        angle = radians(degrees)
+        return (
+            anchor_pattern_demand(
+                anchors=pattern,
+                weight=Q(weight),
+                lateral_force=Q("200 lbf"),
+                height=Q(height),
+                direction=(cos(angle), sin(angle)),
+            )
+            .governing.tension.to("N")
+            .magnitude
+        )
+
+    tensions = {degrees: at(degrees) for degrees in (0, 15, 30, 45, 60, 75, 90)}
+    assert max(tensions.values()) > 0, "this case does not lift, so it tests nothing"
+    assert tensions[0] == pytest.approx(tensions[90], rel=1e-9)
+    assert tensions[45] == min(tensions.values())
+    assert tensions[0] == max(tensions.values())
+
+
+def test_a_pattern_the_weight_holds_down_has_no_worst_direction():
+    """The qualifier on the claim above, as its own case."""
+    from anvilate.analysis.anchorage import governing_anchor_direction
+
+    held = tuple(
+        _at(tag, x, y)
+        for tag, (x, y) in zip(
+            ("a", "b", "c", "d"),
+            ((-500, -500), (-500, 500), (500, -500), (500, 500)),
+            strict=True,
+        )
+    )
+    _direction, worst = governing_anchor_direction(
+        anchors=held, weight=Q("20 kN"), lateral_force=Q("200 lbf"), height=Q("500 mm")
+    )
+    assert not worst.uplift
+    assert worst.governing.tension.to("N").magnitude == 0.0
+    assert worst.stability_ratio > 1.0
+    assert "no uplift" in str(worst)

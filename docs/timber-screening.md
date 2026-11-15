@@ -299,11 +299,12 @@ reason rather than being dropped, because a mode left out of a list reads as a m
 did not govern.
 
 **The gap is a term most people do not have.** TR12 carries the space between members
-through every mode, and the clause an engineer reaches for first has no such term. The
-splice in the example below loses 10.9% of its capacity to a quarter inch of gap and
-34.7% to an inch, and nothing floors it: the gap is a lever arm in the governing mode's
-quadratic, so the loss keeps growing. A connection detailed with a shim is outside the
-clause, not conservatively inside it.
+through **every hinge mode and no bearing mode**, and the clause an engineer reaches for
+first has no such term at all. The splice in the example below is governed by mode IIIs,
+a hinge mode, so it loses 10.9% of its capacity to a quarter inch of gap and 34.7% to an
+inch with nothing to floor it. A connection governed by Im or Is instead loses **nothing**
+to a gap, until the gap grows enough to bring a hinge mode down underneath it. Either way
+a connection detailed with a shim is outside the clause, not conservatively inside it.
 
 Every value of TR12's own Example 3.1 — all 54, across three gaps and six modes — is
 reproduced in `tests/test_dowel_yield.py`. The sign in the quadratic is the one thing a
