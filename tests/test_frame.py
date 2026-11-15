@@ -11,6 +11,7 @@ the dev extra so CI always has it; a referee that is usually absent is not a ref
 from __future__ import annotations
 
 import math
+import pathlib
 
 import pytest
 
@@ -848,9 +849,22 @@ def test_the_docs_page_quotes_the_cap_and_the_closed_forms_it_claims():
     assert set(timings) <= {"20", "60", "120"}
     assert max(int(n) for n in timings) == MAX_NODES
 
-    rows = re.findall(r"^\| ([A-Z][^|]+?) \| ([^|]*`[^|]+) \|$", page, re.M)
+    # Scoped to the section the table is in, and not to the whole page: the first draft
+    # read every two-column row with a backtick in it, so the next table added to the
+    # page — the frame-over-combination checks — counted as two more verification cases.
+    # A detector shaped like "any table" cannot hold a claim about one table.
+    section = page.split("## How it is checked", 1)
+    assert len(section) == 2, "the verification section's heading has moved"
+    body = section[1].split("\n## ", 1)[0]
+    rows = re.findall(r"^\| ([A-Z][^|]+?) \| ([^|]*`[^|]+) \|$", body, re.M)
     cases = [(case, cells) for case, cells in rows if "`" in cells]
-    assert len(cases) == 5, f"the page lists {len(cases)} verification cases"
+    assert len(cases) == 5, f"the section lists {len(cases)} verification cases"
+    # The scoping has to still be doing something: the page's other tables are outside it.
+    elsewhere = re.findall(r"^\| ([A-Z][^|]+?) \| ([^|]*`[^|]+) \|$", page, re.M)
+    assert len(elsewhere) > len(cases), (
+        "the page has only one such table now, so the scoping above is unexercised; "
+        "either it is no longer needed or a table was lost"
+    )
     pinned = " ".join(cells for _case, cells in cases)
     for expected in ("PL/4", "PL³/48EI", "wL²/8", "5wL/8", "PL/8", "0.1wL²", "Ph³/3EI"):
         assert expected in pinned, f"the page no longer claims {expected}"
@@ -1199,3 +1213,247 @@ def test_a_member_check_downstream_of_a_mechanism_is_not_evaluated_and_names_the
     bending = next(entry for entry in card.entries if entry.name == "m0 bending")
     assert bending.status is CheckStatus.NOT_EVALUATED
     assert "frame solve" in bending.detail
+
+
+# --- A frame over a combination -------------------------------------------------------
+#
+# A frame and a combination are two documents about one structure, and until this nothing
+# held them to each other: the frame solves, the combination draws and exports, and a
+# member modelling the wrong part passes every check it has on a force computed for a
+# structure nobody is building.
+
+
+def _portal_combination():
+    """The shipped portal-frame combination, built: two IPE 200 columns and a beam."""
+    import yaml
+
+    from anvilate.combination import build_combination, parse_combination
+
+    path = pathlib.Path(__file__).resolve().parents[1] / "examples" / "combinations"
+    document = yaml.safe_load((path / "portal_frame.combination.yaml").read_text("utf-8"))
+    return build_combination(parse_combination(document))
+
+
+def _portal_frame(**overrides) -> Frame:
+    """A frame declared over that combination, each member naming the part it models."""
+    section, material = _section(), _material()
+    nodes = (
+        FrameNode(name="base_left", x=_q(0, "mm"), y=_q(0, "mm"), z=_q(-1500, "mm")),
+        FrameNode(name="top_left", x=_q(0, "mm"), y=_q(0, "mm"), z=_q(1500, "mm"), at="left_seat"),
+        FrameNode(
+            name="top_right",
+            x=_q(0, "mm"),
+            y=_q(1800, "mm"),
+            z=_q(1500, "mm"),
+            at="right_seat",
+        ),
+        FrameNode(name="base_right", x=_q(0, "mm"), y=_q(1800, "mm"), z=_q(-1500, "mm")),
+    )
+    members = (
+        FrameMember(
+            name="lc",
+            start="base_left",
+            end="top_left",
+            section=section,
+            material=material,
+            item="left_column",
+        ),
+        FrameMember(
+            name="bm",
+            start="top_left",
+            end="top_right",
+            section=section,
+            material=material,
+            item="beam",
+        ),
+        FrameMember(
+            name="rc",
+            start="base_right",
+            end="top_right",
+            section=section,
+            material=material,
+            item="right_column",
+        ),
+    )
+    declared = {
+        "name": "portal",
+        "nodes": nodes,
+        "members": members,
+        "supports": (
+            Support(node="base_left", restrained=ALL_SIX),
+            Support(node="base_right", restrained=ALL_SIX),
+        ),
+    }
+    return Frame(**{**declared, **overrides})
+
+
+def _by_name(card, fragment: str):
+    return next(entry for entry in card.entries if fragment in entry.name)
+
+
+def test_a_frame_over_the_combination_it_models_agrees_with_it():
+    from anvilate.frame import frame_over_combination_scorecard
+
+    card = frame_over_combination_scorecard(_portal_frame(), _portal_combination())
+    assert [entry.status for entry in card.entries] == [CheckStatus.PASS] * 4
+    # The beam is 2 m of steel modelled as a 1.8 m centreline, and the difference is the
+    # two column depths it seats on: the check says so rather than calling it a mismatch.
+    length = _by_name(card, "lengths are ones the build")
+    assert "1.8 m of a 2 m part" in length.detail
+    assert "0.2 m short against a 0.4 m joint allowance" in length.detail
+
+
+def test_a_member_naming_a_part_that_is_not_there_fails_by_name():
+    from anvilate.frame import frame_over_combination_scorecard
+
+    frame = _portal_frame()
+    strayed = frame.model_copy(
+        update={
+            "members": (
+                frame.members[0].model_copy(update={"item": "left_post"}),
+                *frame.members[1:],
+            )
+        }
+    )
+    card = frame_over_combination_scorecard(strayed, _portal_combination())
+    named = _by_name(card, "members name built parts")
+    assert named.status is CheckStatus.FAIL
+    assert "left_post is not a part of this combination" in named.detail
+    # And the part it should have named is now unmodelled, which is the other half.
+    covers = _by_name(card, "covers every built part")
+    assert covers.status is CheckStatus.FAIL and "left_column" in covers.detail
+
+
+def test_a_part_no_member_models_is_a_part_that_carries_load_anyway():
+    from anvilate.frame import frame_over_combination_scorecard
+
+    frame = _portal_frame()
+    short = frame.model_copy(
+        update={"members": (frame.members[0].model_copy(update={"item": ""}), *frame.members[1:])}
+    )
+    covers = _by_name(
+        frame_over_combination_scorecard(short, _portal_combination()), "covers every"
+    )
+    assert covers.status is CheckStatus.FAIL
+    assert "left_column carries no force in this frame" in covers.detail
+
+
+def test_a_member_longer_than_its_part_is_steel_that_is_not_there():
+    """The asymmetric half of the length rule, and the one that is always an error.
+
+    A centreline model is shorter than its part by whatever the joints swallow, so the
+    two are not compared for equality. Longer is different: there is no joint that adds
+    steel, so any excess past the tolerance fails.
+    """
+    from anvilate.frame import frame_over_combination_scorecard
+
+    frame = _portal_frame()
+    stretched = frame.model_copy(
+        update={
+            "nodes": (
+                frame.nodes[0].model_copy(update={"z": _q(-2500, "mm")}),
+                *frame.nodes[1:],
+            )
+        }
+    )
+    length = _by_name(
+        frame_over_combination_scorecard(stretched, _portal_combination()), "lengths are ones"
+    )
+    assert length.status is CheckStatus.FAIL
+    assert "left_column" in length.detail
+    assert "steel that is not there" in length.detail
+
+
+def test_a_shortfall_past_two_joints_is_a_member_modelling_another_part():
+    """The other bound, and the reason it is two section depths and not a percentage.
+
+    A joint can swallow at most the depth of what the member frames into, at each end.
+    A member a quarter of its part's length is not a member of that part, whatever the
+    joints are.
+    """
+    from anvilate.frame import frame_over_combination_scorecard
+
+    frame = _portal_frame()
+    stubbed = frame.model_copy(
+        update={
+            "nodes": (
+                frame.nodes[0].model_copy(update={"z": _q(1000, "mm")}),
+                *frame.nodes[1:],
+            )
+        }
+    )
+    length = _by_name(
+        frame_over_combination_scorecard(stubbed, _portal_combination()), "lengths are ones"
+    )
+    assert length.status is CheckStatus.FAIL
+    assert "joint allowance" in length.detail
+
+
+def test_a_node_at_a_connection_the_build_does_not_have_fails():
+    from anvilate.frame import frame_over_combination_scorecard
+
+    frame = _portal_frame()
+    astray = frame.model_copy(
+        update={
+            "nodes": (
+                frame.nodes[0],
+                frame.nodes[1].model_copy(update={"at": "left_bolt_group"}),
+                *frame.nodes[2:],
+            )
+        }
+    )
+    sits = _by_name(frame_over_combination_scorecard(astray, _portal_combination()), "sit at mates")
+    assert sits.status is CheckStatus.FAIL
+    assert "left_bolt_group is not a mate of this combination" in sits.detail
+
+
+def test_a_frame_claiming_nothing_confirms_nothing():
+    """A frame with no item on any member is NOT_EVALUATED, not agreement.
+
+    Agreement and "nobody claimed anything" are different facts, and the untagged frame
+    is what every frame in the library was before this: reporting it as a pass would
+    make the check vacuous for exactly the documents that need it.
+    """
+    from anvilate.frame import frame_over_combination_scorecard
+
+    frame = _portal_frame()
+    untagged = frame.model_copy(
+        update={"members": tuple(m.model_copy(update={"item": ""}) for m in frame.members)}
+    )
+    card = frame_over_combination_scorecard(untagged, _portal_combination())
+    assert len(card.entries) == 1
+    assert card.entries[0].status is CheckStatus.NOT_EVALUATED
+    assert card.entries[0].needs[0].declaration == "members[].item"
+
+
+def test_the_nodes_check_is_silent_when_no_node_claims_a_connection():
+    """A check that did not apply and a check that passed are different facts, so the
+    entry is absent rather than a pass nobody earned."""
+    from anvilate.frame import frame_over_combination_scorecard
+
+    frame = _portal_frame()
+    plain = frame.model_copy(
+        update={"nodes": tuple(n.model_copy(update={"at": ""}) for n in frame.nodes)}
+    )
+    card = frame_over_combination_scorecard(plain, _portal_combination())
+    assert not any("sit at mates" in entry.name for entry in card.entries)
+    assert len(card.entries) == 3
+
+
+def test_the_solve_still_works_on_a_frame_that_names_its_parts():
+    """`item` and `at` are tags: they must not reach the stiffness matrix."""
+    tagged = _portal_frame()
+    plain = tagged.model_copy(
+        update={
+            "members": tuple(m.model_copy(update={"item": ""}) for m in tagged.members),
+            "nodes": tuple(n.model_copy(update={"at": ""}) for n in tagged.nodes),
+        }
+    )
+    loads = (NodeLoad(node="top_left", fy=_q(10.0, "kN")),)
+    first = solve_frame(tagged.model_copy(update={"node_loads": loads}))
+    second = solve_frame(plain.model_copy(update={"node_loads": loads}))
+    for a, b in zip(first.displacements, second.displacements, strict=True):
+        assert (a.ux, a.uy, a.uz) == pytest.approx((b.ux, b.uy, b.uz))
+        assert (a.rx, a.ry, a.rz) == pytest.approx((b.rx, b.ry, b.rz))
+    # And the tagged frame did deflect, so the comparison is not two sets of zeros.
+    assert max(abs(d.uy) for d in first.displacements) > 1e-9

@@ -7,7 +7,7 @@ Builds on the member-force ingestion in `src/anvilate/interop.py` and the load p
 
 - [x] 1.1 Frame schema: nodes, members (section, material, orientation), supports by
       restrained freedom, end releases, loads, self-weight
-- [ ] 1.2 A frame over a frame-of-members combination; a frame over a product's connections
+- [x] 1.2 A frame over a frame-of-members combination; a frame over a product's connections
 - [x] 1.3 Refusals: an unreferenced node, a member with no section, a support on no node
 
 ## 2. Solve

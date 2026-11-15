@@ -86,6 +86,8 @@ __all__ = [
     "MEMBER_OUTPUTS",
     "frame_check_node",
     "frame_outputs",
+    "ItemAgreement",
+    "frame_over_combination_scorecard",
 ]
 
 #: The largest frame this solver will take. A dense symmetric factorisation in pure
@@ -175,6 +177,11 @@ class FrameNode(StatableModel):
     x: Quantity
     y: Quantity
     z: Quantity
+    #: The connection this node sits at — a combination's mate, or a product's interface.
+    #: Declared, not inferred: two parts whose boxes touch are not necessarily joined, and
+    #: a node that claims to be a connection it is not puts the solve's reaction on the
+    #: wrong bolt. Blank means a node of the model with nothing in the build at it.
+    at: str = ""
 
     @model_validator(mode="after")
     def _is_a_point(self) -> FrameNode:
@@ -341,6 +348,11 @@ class FrameMember(StatableModel):
     end: Named
     section: FrameSection
     material: FrameMaterial
+    #: The built part this member models — a combination's part id, or a product's item.
+    #: More than one member may name the same item: a column with a node at mid-height is
+    #: two members of one part. Blank means a member of the model with no part behind it,
+    #: which :func:`frame_over_combination_scorecard` reports rather than assumes.
+    item: str = ""
     roll: Quantity | None = Field(default=None, exclude_if=lambda value: value is None)
     releases_start: tuple[Freedom, ...] = ()
     releases_end: tuple[Freedom, ...] = ()
@@ -1682,3 +1694,237 @@ def frame_outputs(solution: FrameSolution) -> dict[str, Quantity]:
         values[f"{force.member}.moment_y"] = force.worst_moment_y
         values[f"{force.member}.moment_z"] = force.worst_moment_z
     return values
+
+
+class ItemAgreement(StatableModel):
+    """One built part, and what the frame says about it.
+
+    ``modelled_length`` is the total of the members that name the part; ``built_length``
+    is the longest dimension of the part where its mates put it. They are compared, and
+    not assumed equal: a frame whose members are the lengths the engineer meant and a
+    build whose parts are the lengths the mates produced is the commonest way a solve
+    describes a structure nobody is going to make.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    states_requirements = True
+
+    item: Named
+    members: tuple[str, ...]
+    modelled_length: Quantity
+    built_length: Quantity
+    #: The largest of the part's two cross-section dimensions, which bounds how much of
+    #: its length a joint at each end can swallow.
+    section_depth: Quantity
+
+    @property
+    def over_modelled(self) -> float:
+        """How much longer the model is than the part, as a fraction of the part.
+
+        Positive is steel that is not there, and that is always wrong: a member cannot
+        be longer than the part it is.
+        """
+        built = self.built_length.to("m").magnitude
+        return (self.modelled_length.to("m").magnitude - built) / built
+
+    @property
+    def shortfall(self) -> Quantity:
+        """How much of the part the model leaves out, which a joint at each end explains."""
+        missing = self.built_length.to("m").magnitude - self.modelled_length.to("m").magnitude
+        return Quantity(magnitude=max(0.0, missing), unit="m")
+
+    @property
+    def joint_allowance(self) -> Quantity:
+        """Twice the part's section depth: the most two joints can account for."""
+        return Quantity(magnitude=2.0 * self.section_depth.to("m").magnitude, unit="m")
+
+    @property
+    def explained(self) -> bool:
+        """Is the difference one two joints can account for, or a different part?"""
+        return self.over_modelled <= ITEM_LENGTH_TOLERANCE and self.shortfall.to(
+            "m"
+        ).magnitude <= self.joint_allowance.to("m").magnitude * (1.0 + ITEM_LENGTH_TOLERANCE)
+
+    def __str__(self) -> str:
+        return (
+            f"{self.item}: {', '.join(self.members)} model {self.modelled_length} of a "
+            f"{self.built_length} part, {self.shortfall} short against a "
+            f"{self.joint_allowance} joint allowance"
+        )
+
+
+_ITEM_SOURCE = "the combination document: its parts, and the mates that place them"
+#: Three of the four checks compare one set of names with another, so they share one
+#: sentence rather than composing it three times.
+_NAMES_NOT_A_FORMULA = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="the frame's names are read against the build's; there is no formula to work",
+)
+
+#: A node at a mate is at the mate's own point, and a part's length is read off a solid
+#: built to a rounded dimension, so the two never agree to the micrometre. A twentieth is
+#: wide enough for that and narrow enough to catch a member that models the wrong part.
+ITEM_LENGTH_TOLERANCE = 0.05
+
+
+def frame_over_combination_scorecard(frame: Frame, built: object) -> Scorecard:
+    """Does the declared frame describe the combination it names? → a scorecard.
+
+    A frame and a combination are two documents about one structure, and nothing has
+    held them to each other: the frame solves, the combination draws and exports, and a
+    member that models the wrong part passes every check it has on a force computed for
+    a structure that is not being built.
+
+    Three checks, each over the whole document rather than one part:
+
+    1. **Every member's ``item`` is a part of the combination.** A member naming a part
+       that is not there is a frame of a different build.
+    2. **Every part of the combination is named by a member**, or the entry says which
+       parts are not modelled. A part left out of the frame carries no force in the solve
+       and still carries load in the shop.
+    3. **Each named part's modelled length is one the part can account for.** A
+       centreline model is *shorter* than its part, by however much of each end the
+       joints swallow, so the two are not compared for equality. Two things are refused:
+       a model **longer** than its part, which is steel that is not there, and a
+       shortfall larger than twice the part's section depth, which is the most two joints
+       can account for and so marks a member that is modelling a different part.
+
+    A frame whose members name no items at all is reported ``NOT_EVALUATED``: nothing was
+    claimed, so nothing is confirmed, and that is a different fact from agreement.
+    """
+    parts = {part.id: part for part in getattr(built, "parts", ())}
+    mates = {mate for mate, _part in getattr(built, "placed_by", ())}
+    named: dict[str, list[FrameMember]] = {}
+    for member in frame.members:
+        if member.item:
+            named.setdefault(member.item, []).append(member)
+    at = {node.name: node for node in frame.nodes}
+
+    if not named:
+        return Scorecard(
+            entries=(
+                ScorecardEntry(
+                    name=f"{frame.name} over {getattr(built, 'name', 'the combination')}",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        "not evaluated — no member of this frame names the part it models, "
+                        "so there is nothing to hold the two documents to each other. Set "
+                        "`item` on each member to the combination part id it is"
+                    ),
+                    reference=_ITEM_SOURCE,
+                    needs=(
+                        Need(
+                            declaration="members[].item",
+                            takes="the combination part id each member models",
+                            sources=(ValueSource.USER,),
+                        ),
+                    ),
+                    underived=Underived(
+                        kind=DerivationAbsence.LOOKUP,
+                        reason=(
+                            "two documents are read against each other; there is no formula "
+                            "to work, only a set of names and a set of lengths"
+                        ),
+                    ),
+                ),
+            )
+        )
+
+    entries: list[ScorecardEntry] = []
+    strangers = sorted({item for item in named if item not in parts})
+    entries.append(
+        ScorecardEntry(
+            name=f"{frame.name} members name built parts",
+            status=CheckStatus.FAIL if strangers else CheckStatus.PASS,
+            detail=(
+                f"{len(named)} of the frame's {len(frame.members)} members name a part; "
+                + (
+                    f"{', '.join(strangers)} {'are' if len(strangers) > 1 else 'is'} not a "
+                    f"part of this combination, whose parts are {', '.join(sorted(parts))}"
+                    if strangers
+                    else "every one is a part of this combination"
+                )
+            ),
+            reference=_ITEM_SOURCE,
+            underived=_NAMES_NOT_A_FORMULA,
+        )
+    )
+
+    unmodelled = sorted(set(parts) - set(named))
+    entries.append(
+        ScorecardEntry(
+            name=f"{frame.name} covers every built part",
+            status=CheckStatus.FAIL if unmodelled else CheckStatus.PASS,
+            detail=(
+                f"{', '.join(unmodelled)} {'carry' if len(unmodelled) > 1 else 'carries'} "
+                f"no force in this frame and will carry load in the shop; name "
+                f"{'them' if len(unmodelled) > 1 else 'it'} on a member, or take "
+                f"{'them' if len(unmodelled) > 1 else 'it'} out of the build"
+                if unmodelled
+                else f"all {len(parts)} parts of the combination are modelled"
+            ),
+            reference=_ITEM_SOURCE,
+            underived=_NAMES_NOT_A_FORMULA,
+        )
+    )
+
+    agreements: list[ItemAgreement] = []
+    for item in sorted(set(named) & set(parts)):
+        total = 0.0
+        for member in named[item]:
+            start, end = at[member.start].metres, at[member.end].metres
+            total += sqrt(sum((a - b) ** 2 for a, b in zip(start, end, strict=True)))
+        box = parts[item].shape.bounding_box()
+        sides = sorted((box.size.X, box.size.Y, box.size.Z))
+        agreements.append(
+            ItemAgreement(
+                item=item,
+                members=tuple(member.name for member in named[item]),
+                modelled_length=Quantity(magnitude=total, unit="m"),
+                built_length=Quantity(magnitude=sides[2] / 1000.0, unit="m"),
+                section_depth=Quantity(magnitude=sides[1] / 1000.0, unit="m"),
+            )
+        )
+    unexplained = [item for item in agreements if not item.explained]
+    if agreements:
+        worst = max(agreements, key=lambda a: a.shortfall.to("m").magnitude)
+        entries.append(
+            ScorecardEntry(
+                name=f"{frame.name} member lengths are ones the build can account for",
+                status=CheckStatus.FAIL if unexplained else CheckStatus.PASS,
+                detail=(
+                    "; ".join(str(item) for item in unexplained)
+                    + " — a model longer than its part is steel that is not there, and a "
+                    "shortfall past two joints' worth is a member modelling a different part"
+                    if unexplained
+                    else f"the largest difference is {worst}, which its two joints account for"
+                ),
+                reference=_ITEM_SOURCE,
+                underived=Underived(
+                    kind=DerivationAbsence.LOOKUP,
+                    reason=(
+                        "each length is read off a document — one declared, one measured "
+                        "on the placed solid — and the two are compared"
+                    ),
+                ),
+            )
+        )
+
+    strayed = sorted({node.at for node in frame.nodes if node.at and node.at not in mates})
+    if any(node.at for node in frame.nodes):
+        entries.append(
+            ScorecardEntry(
+                name=f"{frame.name} nodes sit at mates of the build",
+                status=CheckStatus.FAIL if strayed else CheckStatus.PASS,
+                detail=(
+                    f"{', '.join(strayed)} {'are' if len(strayed) > 1 else 'is'} not a mate "
+                    f"of this combination, so the solve's reaction there is on no joint"
+                    if strayed
+                    else "every node that names a connection names a mate of this build"
+                ),
+                reference=_ITEM_SOURCE,
+                underived=_NAMES_NOT_A_FORMULA,
+            )
+        )
+    return Scorecard(entries=tuple(entries))

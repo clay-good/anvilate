@@ -639,7 +639,11 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
     # this screen does not check it — it says so in its docstring. A screen that declared
     # a mode it does not address would be the lie this ratchet exists to prevent, so the
     # element sits in the uncatalogued ledger and the screen sits here.
-    assert len(none) <= 80, f"the declares-none list grew to {len(none)}"
+    # 81 with the frame-over-combination agreement check. It compares two documents about
+    # one structure — a set of names and a set of lengths — and a disagreement between
+    # them is a modelling error, not a way the part fails. The catalogue is of mechanical
+    # failure modes and carries nothing it reaches.
+    assert len(none) <= 81, f"the declares-none list grew to {len(none)}"
     # The page quotes both counts, and it said "five" while fourteen screens declared one.
     page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
     stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"

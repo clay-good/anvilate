@@ -87,6 +87,43 @@ green the rest of this library refuses.
 The moments and shears handed downstream are the governing end by magnitude: a member
 check takes one number, and the end that is not governing is not it.
 
+## A frame over the combination it models
+
+A frame and a combination are two documents about one structure, and nothing held them to
+each other: the frame solves, the combination draws and exports, and a member modelling
+the wrong part passes every check it has on a force computed for a structure nobody is
+building.
+
+So a member may name the part it is, and a node the connection it sits at:
+
+```python
+FrameMember(name="lc", start="base_left", end="top_left",
+            section=ipe200, material=a36, item="left_column")
+FrameNode(name="top_left", x=Q("0 mm"), y=Q("0 mm"), z=Q("1500 mm"), at="left_seat")
+```
+
+`frame_over_combination_scorecard(frame, built)` then reads the two against each other:
+
+| Check | What fails it |
+| --- | --- |
+| Members name built parts | a member whose `item` is not a part of the combination |
+| Every built part is covered | a part no member names — it carries no force in the solve and will carry load in the shop |
+| Member lengths are ones the build can account for | a member **longer** than its part, or short by more than two joints' worth |
+| Nodes sit at mates of the build | an `at` that is not a mate of the combination |
+
+**The length rule is asymmetric, on purpose.** A centreline model is *shorter* than its
+part by however much of each end the joints swallow — the shipped portal frame models a
+2 m beam as a 1.8 m centreline, and the 200 mm is the two column depths it seats on — so
+the two are not compared for equality. What is refused is a model **longer** than its
+part, because no joint adds steel, and a shortfall past twice the part's section depth,
+which is the most two joints can account for and so marks a member modelling a different
+part.
+
+A frame with no `item` on any member is `NOT_EVALUATED`, not agreement. Nobody claimed
+anything, and that is a different fact from the two documents agreeing — reporting it as
+a pass would make the check vacuous for exactly the frames that need it. The node check
+is absent, rather than a pass, when no node names a connection.
+
 ## What the declaration refuses
 
 | | |

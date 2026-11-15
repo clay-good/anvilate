@@ -138,6 +138,7 @@ callouts.callout_scorecard
 compliance.screen_material_needs
 cold_formed_steel.dsm_scorecard
 dfm.screen_dfm
+frame.frame_over_combination_scorecard
 frame.screen_frame
 frame.screen_solution
 dynamics.frequency_scorecard

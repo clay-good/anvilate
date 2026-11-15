@@ -53,6 +53,7 @@ fatigue.gerber_scorecard
 fatigue.goodman_scorecard
 fatigue.soderberg_scorecard
 fracture.fad_scorecard
+frame.frame_over_combination_scorecard
 frame.screen_frame
 frame.screen_solution
 geotechnical.screen_driven_pile
