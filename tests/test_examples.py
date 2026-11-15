@@ -9736,3 +9736,23 @@ def test_bolted_timber_splice_example_shows_the_gap_term_has_no_floor():
     ):
         assert result.governing.mode.value == "IIIs"
     _assert_narrates_computed("bolted_timber_splice.py", namespace)
+
+
+def test_bolt_row_example_shows_a_seventh_bolt_making_the_row_weaker():
+    """`n x C_g x C_Delta` is not monotone in n: the spacing both factors read shrinks."""
+    namespace = runpy.run_path(str(_EXAMPLES / "bolt_row_weakened_by_a_bolt.py"))
+    d = namespace["bolt_row_weakened_by_a_bolt"]()
+
+    assert d["six_bolts_effective"] > d["seven_bolts_effective"]
+    assert d["best_count"] == 6.0
+    assert d["loss_percent_for_the_seventh"] == pytest.approx(3.9, abs=0.1)
+    # The eighth is not a small factor, it is a refusal.
+    assert d["first_refused_count"] == 8.0
+    assert d["eighth_spacing_in"] < 2.25 <= d["seventh_spacing_in"]
+    # Up to six the row does grow, so the turnover is a turnover and not a falling curve.
+    rows = namespace["the_row"]()
+    worked = [v for v in rows.values() if isinstance(v, float)]
+    assert worked[:5] == sorted(worked[:5]), "the row grows up to six bolts"
+    # worked is n = 2 to 7, so index 4 is six bolts and index 5 is seven.
+    assert worked[3] < worked[4] > worked[5], "and turns over at the seventh"
+    _assert_narrates_computed("bolt_row_weakened_by_a_bolt.py", namespace)

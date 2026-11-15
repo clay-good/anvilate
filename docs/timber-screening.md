@@ -287,7 +287,8 @@ for reference design values.
 | The dowel bearing strength formulas | AWC TR12 Appendix A Table A1, bundled |
 | Hankinson at an angle to the grain | bundled |
 | Reduction terms R_d per mode | yours, from the NDS |
-| Group action C_g, geometry C_Δ, end/edge distances | yours |
+| Group action C_g and geometry C_Δ | derived — see below |
+| End, edge and spacing minimums | yours, as multiples of D from the cited table |
 | Withdrawal, metal connector plates | out of scope |
 
 **Two modes a double-shear connection cannot reach.** Modes II and IIIm describe a
@@ -308,6 +309,39 @@ reproduced in `tests/test_dowel_yield.py`. The sign in the quadratic is the one 
 reader of Table 1-1 gets wrong, because the table's layout hides the leading minus; the
 wrong sign gives a number about six times too large, which looks like a capacity and not
 like an error, and a dedicated test pins it.
+
+## The two connection factors that are formulas, not tables
+
+The NDS applies eight adjustment factors to a dowel connection's lateral value (Table
+11.3.1). Six are table lookups and stay yours. Two are published equations, so they are
+derived here, and both are ways a connection is routinely overstated.
+
+**`nds_group_action_factor` — C_g, NDS §11.3.6.** Fasteners in a row do not share the
+load equally; the end ones take more, because the members stretch between them. C_g is
+Equation 11.3-1, worked from the fastener diameter, the row spacing, and each member's
+gross area and modulus. Tables 11.3.6A-D are that equation tabulated, and all 132 of
+their published values are reproduced in `tests/test_analysis.py`. Six 1-inch bolts in
+small members keep 68% of six bolts' worth; twelve keep 38%. A row sized by multiplying
+one fastener's capacity by the count is the commonest way a timber connection is
+overstated.
+
+**`nds_geometry_factor` — C_Δ, NDS §12.5.1.** A dowel too near a member's end, or too
+near its neighbour, splits the wood out before any yield mode can form. Between the
+minimum that earns full value and half of it, C_Δ = actual / minimum-for-full-value;
+below the permitted minimum there is **no factor at all**, and the function refuses
+rather than returning a small number. The two minimums are multiples of D from Tables
+12.5.1A-D, which are yours to cite, because which row applies depends on the direction
+of loading and on whether the species is a softwood. The smallest factor over every
+distance and every shear plane governs the whole group (§12.5.1.2) — this returns one
+factor, not the governing one.
+
+**The two read the same spacing, and that is the trap.** Fit more bolts into a fixed end
+zone and the spacing shrinks, so both factors fall. The row's effective fastener count,
+`n · C_g · C_Δ`, is therefore not monotone in n:
+[`examples/bolt_row_weakened_by_a_bolt.py`](../examples/bolt_row_weakened_by_a_bolt.py)
+shows a 15-inch row where six 3/4 in bolts are worth 5.70 bolts, the seventh makes the
+row 3.9% weaker, and the eighth is not permitted. An engineer short of capacity adds a
+fastener and gets less than they started with.
 
 ## Examples
 
@@ -333,6 +367,10 @@ like an error, and a dedicated test pins it.
   double-shear bolted splice at 7,693 lbf drawn tight, 10.9% down on a quarter inch of
   gap and 34.7% down on an inch, with a further 9.4% for a load 30 degrees off the
   grain. The gap term has no floor.
+
+- [`examples/bolt_row_weakened_by_a_bolt.py`](../examples/bolt_row_weakened_by_a_bolt.py)
+  — six bolts in a 15-inch row are worth 5.70 bolts, seven are worth 5.48, and eight are
+  refused. C_g and C_Δ both read the spacing, and the spacing is what another bolt takes.
 
 ## Worked-example anchors
 

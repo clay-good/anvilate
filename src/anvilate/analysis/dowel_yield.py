@@ -42,6 +42,7 @@ from pydantic import ConfigDict, model_validator
 from .._models import Provenance, StatableModel
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
+from ._flags import require_flag
 
 __all__ = [
     "TR12_CITATION",
@@ -472,14 +473,11 @@ def dowel_bearing_strength(
     # `perpendicular` reads as a flag, and a flag read by truthiness accepts anything: a
     # string, a list, a NaN. `"no"` is truthy, so the caller who writes it gets the
     # perpendicular formula and the opposite of what they asked for.
-    if not isinstance(perpendicular, bool):
-        raise _refuse(
-            f"perpendicular is True or False, not {type(perpendicular).__name__}; got "
-            f"{perpendicular!r}. It selects which of the two formulas is read, and a "
-            f"value read for its truth would select one silently",
-            subject="perpendicular",
-            source="the direction the load acts relative to the member's grain",
-        )
+    perpendicular = require_flag(
+        perpendicular,
+        name="perpendicular",
+        source="the direction the load acts relative to the member's grain",
+    )
     if isinstance(specific_gravity, Quantity) or not isinstance(specific_gravity, (int, float)):
         raise _refuse(
             f"specific_gravity is a plain ratio, not a quantity; got {specific_gravity!r}",

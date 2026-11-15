@@ -47,3 +47,30 @@ formulas sit. The pack screen that puts a connection in an itemized adjustment c
 TR12 Tables 1-2 and 1-3 (hollow members, fasteners of varying diameter), withdrawal,
 metal connector plates, split rings and shear plates. Each is a separate table and a
 separate mode set; none is needed to screen the ordinary case.
+
+## The two connection factors that are equations
+
+Table 11.3.1 lists eight adjustment factors for a dowel connection's lateral value. Six
+are table lookups and stay the caller's. Two are published equations, and a formula is
+not a table, so both are derived:
+
+- **C_g, NDS Equation 11.3-1.** Reproduces all 132 published values of Tables 11.3.6A
+  (wood side members) and the four spot rows read from 11.3.6C (steel side plates),
+  which is the anchor: the tables *are* the equation evaluated at a declared set of
+  inputs, so a transcription error disagrees with all of them at once. The metal path
+  has its own load/slip modulus, 270,000·D^1.5 against 180,000, and no wood table can
+  tell whether that branch was taken — hence the second anchor.
+- **C_Delta, NDS §12.5.1.2.** The proportional half is `actual / minimum for C_Delta =
+  1.0`. The half a formula alone would miss is the floor: below the minimum for
+  C_Delta = 0.5 the detail is *not permitted*, and `actual / minimum` keeps returning a
+  number all the way to zero, every one of which reads as a legal connection with a
+  small factor. That is a refusal here, not a factor.
+
+The minimums themselves (Tables 12.5.1A-D, multiples of D) are the caller's with their
+citation, as task 2.2 asks: which row applies depends on the direction of loading and on
+whether the species is a softwood, and neither is something a diameter knows.
+
+**Both factors read the same spacing**, which is the finding the example carries: fit
+more fasteners into a fixed end zone and both fall, so the row's effective count
+`n · C_g · C_Delta` is not monotone in n. Six 3/4 in bolts in a 15-inch row are worth
+5.70 bolts; the seventh makes the row 3.9% weaker; the eighth is refused.

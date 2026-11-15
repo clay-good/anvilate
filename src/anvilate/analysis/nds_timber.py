@@ -33,6 +33,8 @@ __all__ = [
     "nds_bearing_area_factor",
     "nds_bearing_scorecard",
     "nds_bearing_stress",
+    "nds_geometry_factor",
+    "nds_group_action_factor",
     "nds_bending_scorecard",
     "nds_euler_buckling_stress",
     "nds_beam_slenderness_ratio",
@@ -53,6 +55,20 @@ _NDS_YLINEN_C_SAWN = 0.8  # sawn lumber (0.9 glulam, 0.85 round timber poles)
 # outside the standard and the number is not a design value.
 _NDS_MAX_SLENDERNESS = 50.0
 _NDS_MAX_SLENDERNESS_CONSTRUCTION = 75.0
+
+# NDS §11.3.6 load/slip modulus gamma, in lbs/in for a dowel diameter in inches. Two
+# numbers, published in the clause beside Equation 11.3-1 rather than in a table.
+_SLIP_MODULUS_WOOD = 180000.0
+_SLIP_MODULUS_METAL = 270000.0
+# §11.3.6.1 scopes the group action factor to dowels of 1 in or less; §12.5.1.1 exempts
+# dowels under a quarter inch from the geometry factor, and the same quarter inch is where
+# the group action equation is defined to return 1.0.
+_SMALL_DOWEL = 0.25
+_LARGEST_GROUPED_DOWEL = 1.0
+
+_TIMBER_CONNECTION_SOURCE = (
+    "the connection drawing: the fastener, its spacing, and the members it joins"
+)
 
 _TIMBER_GEOMETRY_SOURCE = "the timber member drawing or verified section dimensions"
 _TIMBER_MATERIAL_SOURCE = (
@@ -1150,3 +1166,195 @@ def nds_combined_bending_compression(
             source=_TIMBER_SCREEN_SOURCE,
         )
     return (fc / fpc) ** 2 + fb / (fpb * amplification)
+
+
+def _check(value: Quantity, expected: str, name: str) -> None:
+    """``value`` is a finite quantity of ``expected``, or a refusal naming the parameter.
+
+    The shape forty-eight sibling modules use, and the shape the package-wide probes read:
+    the dimension a parameter wants is stated here in the source, so the sweeps in
+    ``tests/test_fraction_guards.py`` can hand it one instead of a metre.
+    """
+    if not isinstance(value, Quantity):
+        raise _timber_refusal(
+            f"{name} must be a {expected} quantity; got {value!r}",
+            subject=name,
+            source=_timber_input_source(name),
+        )
+    if not value.has_dimension(expected):
+        raise _timber_refusal(
+            f"{name} must be a {expected} quantity; got {value.dimensionality} ({value})",
+            subject=name,
+            source=_timber_input_source(name),
+        )
+    require_finite(value, name=name)
+
+
+def nds_group_action_factor(
+    *,
+    fasteners_in_row: int,
+    diameter: Quantity,
+    spacing: Quantity,
+    main_area: Quantity,
+    side_area: Quantity,
+    main_modulus: Quantity,
+    side_modulus: Quantity,
+    metal_side_members: bool = False,
+) -> float:
+    """The NDS §11.3.6 group action factor C_g, from Equation 11.3-1.
+
+    Fasteners in a row do not share the load equally: the end ones take more, because the
+    members stretch between them. C_g is how much of the row's nominal capacity survives
+    that, and it falls fast — six 1-inch bolts in small members keep 68% of six bolts'
+    worth, and twelve keep 38%. A row sized by multiplying one fastener's capacity by the
+    count is the single most common way a timber connection is overstated.
+
+    This is Equation 11.3-1 worked, not a table read:
+
+        C_g = [ m(1 − m^2n) / (n·[(1 + R_EA·m^n)(1 + m) − 1 + m^2n]) ] · [ (1 + R_EA)/(1 − m) ]
+
+    with ``u = 1 + γ(s/2)(1/(E_m A_m) + 1/(E_s A_s))``, ``m = u − √(u² − 1)``, ``R_EA`` the
+    lesser of the two axial-stiffness ratios, and the load/slip modulus
+    ``γ = 180,000·D^1.5`` for wood side members or ``270,000·D^1.5`` for metal ones. NDS
+    Tables 11.3.6A-D are that equation tabulated, and this reproduces them exactly.
+
+    ``main_area`` A_m and ``side_area`` A_s are **gross** cross-sections (§11.3.6.3) — no
+    net-section deduction for the holes — and A_s is the sum over all side members.
+    ``fasteners_in_row`` n is the count in one row, where a row is defined by §11.3.6.2:
+    fasteners of the same diameter aligned with the load. Returns the dimensionless factor,
+    which is 1.0 for a dowel under 1/4 in (§11.3.6.1) and for a single fastener.
+
+    Out of scope: split rings and shear plates, whose γ is a connector constant rather than
+    a function of diameter, and dowels over 1 in, which §11.3.6.1 does not cover.
+    """
+    metal_side_members = require_flag(
+        metal_side_members, name="metal_side_members", source=_TIMBER_CONNECTION_SOURCE
+    )
+    if isinstance(fasteners_in_row, bool) or not isinstance(fasteners_in_row, int):
+        raise _timber_refusal(
+            f"fasteners_in_row is a count of fasteners; got {fasteners_in_row!r}",
+            subject="fasteners_in_row",
+            source=_TIMBER_CONNECTION_SOURCE,
+        )
+    if fasteners_in_row < 1:
+        raise _timber_refusal(
+            f"a row holds at least one fastener; got {fasteners_in_row}",
+            subject="fasteners_in_row",
+            source=_TIMBER_CONNECTION_SOURCE,
+        )
+    _check(diameter, "[length]", "diameter")
+    _check(spacing, "[length]", "spacing")
+    _check(main_area, "[area]", "main_area")
+    _check(side_area, "[area]", "side_area")
+    _check(main_modulus, "[pressure]", "main_modulus")
+    _check(side_modulus, "[pressure]", "side_modulus")
+    for name, value in (
+        ("diameter", diameter),
+        ("spacing", spacing),
+        ("main_area", main_area),
+        ("side_area", side_area),
+        ("main_modulus", main_modulus),
+        ("side_modulus", side_modulus),
+    ):
+        if value.magnitude <= 0:
+            raise _timber_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_TIMBER_CONNECTION_SOURCE,
+            )
+    inches = diameter.to("inch").magnitude
+    if inches > _LARGEST_GROUPED_DOWEL:
+        raise _timber_refusal(
+            f"diameter must be at most 1 inch: NDS §11.3.6.1 gives the group action "
+            f"factor for dowels of that size or less, and this one is {diameter}. A larger "
+            f"dowel is outside the equation, and the number it would return is not a "
+            f"design value",
+            subject="diameter",
+            source=_TIMBER_CONNECTION_SOURCE,
+        )
+    # §11.3.6.1: C_g = 1.0 for dowel-type fasteners with D < 1/4". A single fastener is not
+    # a group, and the equation returns 1.0 there of its own accord; this says so plainly.
+    if inches < _SMALL_DOWEL or fasteners_in_row == 1:
+        return 1.0
+    stiffness_main = main_modulus.to("psi").magnitude * main_area.to("inch**2").magnitude
+    stiffness_side = side_modulus.to("psi").magnitude * side_area.to("inch**2").magnitude
+    ratio = min(stiffness_side / stiffness_main, stiffness_main / stiffness_side)
+    slip = (_SLIP_MODULUS_METAL if metal_side_members else _SLIP_MODULUS_WOOD) * inches**1.5
+    u = 1.0 + slip * (spacing.to("inch").magnitude / 2.0) * (
+        1.0 / stiffness_main + 1.0 / stiffness_side
+    )
+    m = u - sqrt(u * u - 1.0)
+    n = fasteners_in_row
+    numerator = m * (1.0 - m ** (2 * n))
+    denominator = n * ((1.0 + ratio * m**n) * (1.0 + m) - 1.0 + m ** (2 * n))
+    factor = (numerator / denominator) * ((1.0 + ratio) / (1.0 - m))
+    # The equation's own maximum is 1.0, reached at n = 1 and approached as the members
+    # stiffen; anything above it is float noise in the last place, not a bonus.
+    return min(1.0, factor)
+
+
+def nds_geometry_factor(
+    *,
+    actual: Quantity,
+    minimum_for_full_value: Quantity,
+    minimum_permitted: Quantity,
+    diameter: Quantity,
+) -> float:
+    """The NDS §12.5.1 geometry factor C_Δ for one end distance or one spacing.
+
+    A dowel too near the end of a member, or too near its neighbour, splits the wood out
+    before the yield mode can form. §12.5.1.2 does not refuse the detail outright: between
+    the minimum that earns C_Δ = 1.0 and half of it, the capacity is reduced in proportion,
+
+        C_Δ = actual / minimum for C_Δ = 1.0
+
+    and below ``minimum_permitted`` the detail is not allowed at all, which is a refusal
+    and not a factor. The two minimums are multiples of the diameter from NDS Tables
+    12.5.1A and 12.5.1B — 4D and 2D for an end distance perpendicular to grain, 7D and
+    3.5D parallel to grain in tension for a softwood — and they are the caller's to cite,
+    because which row applies depends on the direction of loading and the species.
+
+    C_Δ is 1.0 for a dowel under 1/4 in (§12.5.1.1). The caller computes one factor per
+    end distance and per spacing; **the smallest governs the whole group** (§12.5.1.2), and
+    for a multiple-shear or asymmetric connection the smallest over every shear plane
+    governs every fastener — this function returns one of them, not the governing one.
+    """
+    _check(actual, "[length]", "actual")
+    _check(minimum_for_full_value, "[length]", "minimum_for_full_value")
+    _check(minimum_permitted, "[length]", "minimum_permitted")
+    _check(diameter, "[length]", "diameter")
+    for name, value in (
+        ("actual", actual),
+        ("minimum_for_full_value", minimum_for_full_value),
+        ("minimum_permitted", minimum_permitted),
+        ("diameter", diameter),
+    ):
+        if value.magnitude <= 0:
+            raise _timber_refusal(
+                f"{name} must be positive; got {value}",
+                subject=name,
+                source=_TIMBER_CONNECTION_SOURCE,
+            )
+    full = minimum_for_full_value.to("inch").magnitude
+    permitted = minimum_permitted.to("inch").magnitude
+    if permitted > full:
+        raise _timber_refusal(
+            f"minimum_permitted ({minimum_permitted}) is above minimum_for_full_value "
+            f"({minimum_for_full_value}); the reduced-value minimum is the smaller of the "
+            f"two, and reading the table's two columns the wrong way round turns a refusal "
+            f"into a factor",
+            subject="minimum_permitted",
+            source=_TIMBER_CONNECTION_SOURCE,
+        )
+    if diameter.to("inch").magnitude < _SMALL_DOWEL:
+        return 1.0
+    provided = actual.to("inch").magnitude
+    if provided < permitted:
+        raise _timber_refusal(
+            f"NDS §12.5.1.2 permits no reduced value below {minimum_permitted}; this "
+            f"connection provides {actual}. There is no geometry factor for it — the "
+            f"detail has to change",
+            subject="actual",
+            source=_TIMBER_CONNECTION_SOURCE,
+        )
+    return min(1.0, provided / full)

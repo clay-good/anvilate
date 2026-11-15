@@ -1261,6 +1261,21 @@ def _which_dimension_it_wanted(message: str) -> tuple[str, str] | None:
     return (found.group(1), found.group(2)) if found else None
 
 
+# A bound with a unit on it, which the readers above cannot act on: they return a bare
+# number, and the binder substitutes it into the unit the argument already holds. "at most
+# 1 inch" set against a metre is still a metre, so the function went on refusing and fell
+# out of the population. This reader carries the unit across with the number.
+_AT_MOST_WITH_UNIT = re.compile(
+    r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,30}?must be at most ([\d.]+) ([a-zA-Z_]+)\b"
+)
+
+
+def _what_it_asked_for_with_a_unit(message: str) -> tuple[str, float, str] | None:
+    """The parameter, value and unit a refusal naming a unit-bearing upper bound states."""
+    found = _AT_MOST_WITH_UNIT.search(message)
+    return (found.group(1), float(found.group(2)), found.group(3)) if found else None
+
+
 def _what_it_asked_for(message: str) -> tuple[str, float] | None:
     """The parameter a refusal names and a value that would satisfy it, or ``None``."""
     for pattern, pick in _ASKS:
@@ -1356,6 +1371,11 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                                 if isinstance(held, Quantity)
                                 else number
                             )
+                            continue
+                        bounded = _what_it_asked_for_with_a_unit(message)
+                        if bounded is not None and bounded[0] in arguments:
+                            target, number, unit = bounded
+                            arguments[target] = Quantity(magnitude=number, unit=unit)
                             continue
                         spinning = _which_speed_needs_an_angle(message)
                         if spinning is not None and spinning in arguments:
@@ -1822,7 +1842,7 @@ def _exponent_sites() -> tuple[dict[str, list[str]], int]:
             }
             if not numbers:
                 continue
-            finite = _require_finite_arguments(node)
+            finite = _require_finite_arguments(node) | _type_checked_integers(node)
             for call in ast.walk(node):
                 if not isinstance(call, ast.Call) or getattr(call.func, "id", "") not in helpers:
                     continue
@@ -1878,6 +1898,34 @@ def _exponent_sites() -> tuple[dict[str, list[str]], int]:
             if roots - finite:
                 unguarded[f"{path.stem}.{node.name}"] = sorted(roots - finite)
     return unguarded, examined
+
+
+def _type_checked_integers(node: ast.FunctionDef) -> set[str]:
+    """The names this function body checks with ``isinstance(name, int)``.
+
+    A Python ``int`` cannot hold a NaN or an infinity, so a parameter the function refuses
+    unless it *is* an int is already stronger than ``require_finite`` — and adding that
+    call would be a guard no input can reach, which this repo treats as debt rather than
+    safety. The detector could not see the stronger check and reported it as the weaker
+    one missing, so it reads it here.
+    """
+    found: set[str] = set()
+    for call in ast.walk(node):
+        if not (isinstance(call, ast.Call) and getattr(call.func, "id", "") == "isinstance"):
+            continue
+        if len(call.args) != 2 or not isinstance(call.args[0], ast.Name):
+            continue
+        wanted = call.args[1]
+        names = (
+            [wanted]
+            if isinstance(wanted, ast.Name)
+            else list(wanted.elts)
+            if isinstance(wanted, ast.Tuple)
+            else []
+        )
+        if any(isinstance(n, ast.Name) and n.id == "int" for n in names):
+            found.add(call.args[0].id)
+    return found
 
 
 def _require_finite_arguments(node: ast.FunctionDef) -> set[str]:
@@ -2020,3 +2068,23 @@ def test_a_length_that_is_a_size_refuses_a_negative_one() -> None:
     )
     stale = sorted(set(excused) - set(accepted))
     assert not stale, f"these lines in {_SIGNED_LENGTHS} name a parameter that now refuses: {stale}"
+
+
+def test_the_unit_bearing_bound_reader_actually_reads_one():
+    """Attack on the reader added above, which a passing population count cannot make.
+
+    The three readers beside it return a bare number, and the binder puts that number into
+    the unit the argument already holds — so "at most 1 inch" against a metre stayed a
+    metre and the function went on refusing. A reader that silently matched nothing would
+    leave the population exactly where it was and every count here would pass.
+    """
+    read = _what_it_asked_for_with_a_unit(
+        "diameter must be at most 1 inch: NDS 11.3.6.1 gives the group action factor for "
+        "dowels of that size or less, and this one is 1 m."
+    )
+    assert read == ("diameter", 1.0, "inch")
+    # It does not fire on a bound with no unit, which the readers beside it already take.
+    assert _what_it_asked_for_with_a_unit("count must be at most 12") is None
+    assert _what_it_asked_for_with_a_unit("") is None
+    # And the function it was added for is in the population because of it.
+    assert "nds_timber.nds_group_action_factor" in {label for label, _, _ in _uniformly_callable()}

@@ -15145,7 +15145,7 @@ def test_every_shared_branch_flag_caller_names_its_source():
             ):
                 callers.append((path, node))
 
-    assert len(callers) == 25
+    assert len(callers) == 27
     for path, call in callers:
         assert {"name", "source"} <= {keyword.arg for keyword in call.keywords}, (
             f"{path.relative_to(root.parent.parent.parent)}:{call.lineno}"
@@ -47455,7 +47455,7 @@ def test_every_nds_timber_refusal_site_is_structured():
         if isinstance(node.exc.func, ast.Name) and node.exc.func.id == "ValueError":
             unstructured.append(node.exc)
 
-    assert len(structured) == 57
+    assert len(structured) == 66
     assert unstructured == []
     for call in structured:
         assert {"subject", "source"} <= {keyword.arg for keyword in call.keywords}, call.lineno
@@ -48587,4 +48587,190 @@ def test_a_bth1_category_that_is_not_one_is_refused_by_name(category):
             yield_strength=Quantity(magnitude=250.0, unit="MPa"),
             ultimate_strength=Quantity(magnitude=400.0, unit="MPa"),
             category=category,  # type: ignore[arg-type]
+        )
+
+
+# --- NDS §11.3.6 group action and §12.5.1 geometry, against the published tables --------
+#
+# NDS Tables 11.3.6A and 11.3.6C are Equation 11.3-1 tabulated. They are the anchor here
+# precisely because they are the equation's own output at a declared set of inputs: if the
+# equation is transcribed wrong, 132 values disagree at once, and a formula that reproduces
+# all of them cannot be wrong in a way any of them can see.
+
+#: Table 11.3.6A, wood side members, D = 1", s = 4", E = 1,400,000 psi. Keyed
+#: (A_s/A_m, A_s in square inches) -> C_g for n = 2 to 12.
+_TABLE_11_3_6A = {
+    (0.5, 5): [0.98, 0.92, 0.84, 0.75, 0.68, 0.61, 0.55, 0.50, 0.45, 0.41, 0.38],
+    (0.5, 12): [0.99, 0.96, 0.92, 0.87, 0.81, 0.76, 0.70, 0.65, 0.61, 0.57, 0.53],
+    (0.5, 20): [0.99, 0.98, 0.95, 0.91, 0.87, 0.83, 0.78, 0.74, 0.70, 0.66, 0.62],
+    (0.5, 28): [1.00, 0.98, 0.96, 0.93, 0.90, 0.87, 0.83, 0.79, 0.76, 0.72, 0.69],
+    (0.5, 40): [1.00, 0.99, 0.97, 0.95, 0.93, 0.90, 0.87, 0.84, 0.81, 0.78, 0.75],
+    (0.5, 64): [1.00, 0.99, 0.98, 0.97, 0.95, 0.93, 0.91, 0.89, 0.87, 0.84, 0.82],
+    (1.0, 5): [1.00, 0.97, 0.91, 0.85, 0.78, 0.71, 0.64, 0.59, 0.54, 0.49, 0.45],
+    (1.0, 12): [1.00, 0.99, 0.96, 0.93, 0.88, 0.84, 0.79, 0.74, 0.70, 0.65, 0.61],
+    (1.0, 20): [1.00, 0.99, 0.98, 0.95, 0.92, 0.89, 0.86, 0.82, 0.78, 0.75, 0.71],
+    (1.0, 28): [1.00, 0.99, 0.98, 0.97, 0.94, 0.92, 0.89, 0.86, 0.83, 0.80, 0.77],
+    (1.0, 40): [1.00, 1.00, 0.99, 0.98, 0.96, 0.94, 0.92, 0.90, 0.87, 0.85, 0.82],
+    (1.0, 64): [1.00, 1.00, 0.99, 0.98, 0.97, 0.96, 0.95, 0.93, 0.91, 0.90, 0.88],
+}
+
+#: Table 11.3.6C, steel side plates, D = 1", s = 4", E_wood = 1,400,000 psi,
+#: E_steel = 30,000,000 psi. Keyed (A_m/A_s, A_m in square inches).
+_TABLE_11_3_6C = {
+    (12, 5): [0.97, 0.89, 0.80, 0.70, 0.62, 0.55, 0.49, 0.44, 0.40, 0.37, 0.34],
+    (12, 200): [1.00, 1.00, 0.99, 0.99, 0.98, 0.97, 0.96, 0.95, 0.93, 0.92, 0.90],
+    (18, 16): [1.00, 0.98, 0.94, 0.90, 0.85, 0.79, 0.74, 0.69, 0.65, 0.60, 0.56],
+    (35, 40): [0.99, 0.97, 0.94, 0.91, 0.86, 0.82, 0.77, 0.73, 0.68, 0.64, 0.60],
+}
+
+
+def _group_action(count, main_area, side_area, *, metal=False):
+    from anvilate.analysis import nds_group_action_factor
+
+    return nds_group_action_factor(
+        fasteners_in_row=count,
+        diameter=_q("1 inch"),
+        spacing=_q("4 inch"),
+        main_area=Quantity(magnitude=main_area, unit="inch**2"),
+        side_area=Quantity(magnitude=side_area, unit="inch**2"),
+        main_modulus=_q("1400000 psi"),
+        side_modulus=_q("30000000 psi") if metal else _q("1400000 psi"),
+        metal_side_members=metal,
+    )
+
+
+@pytest.mark.parametrize("key", sorted(_TABLE_11_3_6A))
+def test_the_group_action_equation_reproduces_the_published_wood_table(key):
+    ratio, side_area = key
+    main_area = side_area / ratio
+    for count, published in zip(range(2, 13), _TABLE_11_3_6A[key], strict=True):
+        assert round(_group_action(count, main_area, side_area), 2) == published, (
+            f"NDS Table 11.3.6A, A_s/A_m = {ratio}, A_s = {side_area} in^2, n = {count}"
+        )
+
+
+@pytest.mark.parametrize("key", sorted(_TABLE_11_3_6C))
+def test_the_group_action_equation_reproduces_the_published_steel_table(key):
+    """The metal-side-member path has its own load/slip modulus, 270,000 rather than
+    180,000, and no wood table can tell whether that branch was taken."""
+    ratio, main_area = key
+    side_area = main_area / ratio
+    for count, published in zip(range(2, 13), _TABLE_11_3_6C[key], strict=True):
+        assert round(_group_action(count, main_area, side_area, metal=True), 2) == published, (
+            f"NDS Table 11.3.6C, A_m/A_s = {ratio}, A_m = {main_area} in^2, n = {count}"
+        )
+
+
+def test_the_group_action_factor_falls_with_every_fastener_added():
+    """The claim the factor exists to make, checked rather than assumed.
+
+    The two tables above are rounded to two decimals, so adjacent columns can read the
+    same; the underlying value is strictly decreasing, and that is the property a reader
+    takes from the clause.
+    """
+    values = [_group_action(count, 10.0, 5.0) for count in range(1, 21)]
+    assert values[0] == 1.0
+    for before, after in zip(values, values[1:], strict=False):
+        assert after < before
+    assert values[-1] < 0.5
+
+
+def test_a_dowel_under_a_quarter_inch_and_a_single_fastener_are_both_one():
+    from anvilate.analysis import nds_group_action_factor
+
+    common = {
+        "spacing": _q("3 inch"),
+        "main_area": _q("10 inch**2"),
+        "side_area": _q("5 inch**2"),
+        "main_modulus": _q("1400000 psi"),
+        "side_modulus": _q("1400000 psi"),
+    }
+    # NDS §11.3.6.1: C_g = 1.0 below a quarter inch, whatever the row.
+    assert nds_group_action_factor(fasteners_in_row=12, diameter=_q("0.131 inch"), **common) == 1.0
+    assert nds_group_action_factor(fasteners_in_row=1, diameter=_q("0.75 inch"), **common) == 1.0
+
+
+def test_a_dowel_over_an_inch_is_refused_rather_than_extrapolated():
+    """§11.3.6.1 scopes the equation to D <= 1 in, and it keeps returning numbers past it."""
+    from anvilate.analysis import nds_group_action_factor
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(RefusalError, match="diameter must be at most 1 inch"):
+        nds_group_action_factor(
+            fasteners_in_row=4,
+            diameter=_q("1.25 inch"),
+            spacing=_q("5 inch"),
+            main_area=_q("10 inch**2"),
+            side_area=_q("5 inch**2"),
+            main_modulus=_q("1400000 psi"),
+            side_modulus=_q("1400000 psi"),
+        )
+
+
+def test_the_geometry_factor_is_the_ratio_the_clause_states():
+    """NDS §12.5.1.2(a): C_Delta = actual end distance / minimum for C_Delta = 1.0."""
+    from anvilate.analysis import nds_geometry_factor
+
+    # A softwood in tension parallel to grain: 7D for full value, 3.5D permitted (Table
+    # 12.5.1A), on a 1 in bolt.
+    full, permitted, diameter = _q("7 inch"), _q("3.5 inch"), _q("1 inch")
+    assert nds_geometry_factor(
+        actual=_q("7 inch"),
+        minimum_for_full_value=full,
+        minimum_permitted=permitted,
+        diameter=diameter,
+    ) == pytest.approx(1.0)
+    assert nds_geometry_factor(
+        actual=_q("5 inch"),
+        minimum_for_full_value=full,
+        minimum_permitted=permitted,
+        diameter=diameter,
+    ) == pytest.approx(5.0 / 7.0, rel=1e-12)
+    # Past the full-value minimum there is no bonus: the clause caps at 1.0.
+    assert nds_geometry_factor(
+        actual=_q("20 inch"),
+        minimum_for_full_value=full,
+        minimum_permitted=permitted,
+        diameter=diameter,
+    ) == pytest.approx(1.0)
+    # A quarter-inch dowel takes no geometry factor at all (§12.5.1.1).
+    assert nds_geometry_factor(
+        actual=_q("0.5 inch"),
+        minimum_for_full_value=full,
+        minimum_permitted=permitted,
+        diameter=_q("0.131 inch"),
+    ) == pytest.approx(1.0)
+
+
+def test_below_the_permitted_minimum_there_is_no_factor_but_a_refusal():
+    """The half of §12.5.1.2 a proportional formula alone would miss.
+
+    `actual / minimum` keeps returning a number all the way to zero, and every one of them
+    reads as a legal connection with a small factor. The clause does not say that: below
+    the minimum for C_Delta = 0.5 the detail is not permitted, so this is a refusal.
+    """
+    from anvilate.analysis import nds_geometry_factor
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(RefusalError, match="permits no reduced value below"):
+        nds_geometry_factor(
+            actual=_q("3 inch"),
+            minimum_for_full_value=_q("7 inch"),
+            minimum_permitted=_q("3.5 inch"),
+            diameter=_q("1 inch"),
+        )
+
+
+def test_the_two_minimums_read_the_wrong_way_round_are_refused():
+    """Table 12.5.1A prints the C_Delta = 0.5 column first and the C_Delta = 1.0 column
+    second; swapping them turns a refusal into a factor above 1."""
+    from anvilate.analysis import nds_geometry_factor
+    from anvilate.refusal import RefusalError
+
+    with pytest.raises(RefusalError, match="is above minimum_for_full_value"):
+        nds_geometry_factor(
+            actual=_q("5 inch"),
+            minimum_for_full_value=_q("3.5 inch"),
+            minimum_permitted=_q("7 inch"),
+            diameter=_q("1 inch"),
         )

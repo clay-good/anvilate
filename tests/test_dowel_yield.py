@@ -469,7 +469,7 @@ def test_no_field_of_a_connection_takes_a_non_finite_value(field):
 def test_the_direction_flag_is_a_bool_and_not_a_truthy_thing():
     """`perpendicular="no"` is truthy, and would have returned the perpendicular value."""
     for bad in ("no", None, [], float("nan"), 0.0):
-        with pytest.raises(RefusalError, match="perpendicular is True or False"):
+        with pytest.raises(RefusalError, match="perpendicular must be True or False"):
             dowel_bearing_strength(
                 specific_gravity=0.50, diameter=Quantity.parse("0.75 inch"), perpendicular=bad
             )

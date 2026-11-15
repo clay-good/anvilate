@@ -13,8 +13,9 @@ Builds on `src/anvilate/analysis/nds_timber.py` and `src/anvilate/packs/timber.p
 ## 2. Factors and geometry
 
 - [ ] 2.1 Connection factors in the itemized chain: group action, geometry, end grain,
-      toe-nail
-- [ ] 2.2 Edge, end, spacing and row-spacing minimums from user-cited values
+      toe-nail — C_g (§11.3.6) and C_Delta (§12.5.1) derived; the chain itself and the
+      Table 11.3.1 applicability still to come
+- [x] 2.2 Edge, end, spacing and row-spacing minimums from user-cited values
 - [ ] 2.3 Withdrawal from user-cited values
 
 ## 3. Proof
