@@ -686,9 +686,7 @@ def test_one_placeholder_named_as_a_string_is_refused_not_spelled_out():
         _skid_frame(tuple(NodeLoad(node=n, fz=Quantity.parse("-10 kN")) for n in "abcd"))
     )
     with pytest.raises(ValueError, match="placeholders is a sequence of str"):
-        frame_split(
-            body="skid/deck", solution=solution, supports=_legs(), placeholders="leg_d"
-        )
+        frame_split(body="skid/deck", solution=solution, supports=_legs(), placeholders="leg_d")
 
 
 def test_a_placeholders_assumed_stiffness_is_named_in_the_basis():

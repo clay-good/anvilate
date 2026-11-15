@@ -499,6 +499,14 @@ modules:
   solar_pv/solar_thermal/wind_power; plus the turbine specific speed
   Ω_s = ω·√(P/ρ)/(g·H)^1.25 that picks Pelton, Francis, or Kaplan (a power-based group, distinct
   from the flow-based pump one)
+- :mod:`~anvilate.analysis.anchorage` — anchor forces under a base moment: which bolt of a
+  pattern goes into tension first and how much, from a declared lateral force at a height,
+  the weight, the centre of gravity and the anchor positions. Rigid-base statics after
+  Drake and Elkin's AISC Engineering Journal method, with the compression resultant at the
+  leeward anchor row, shear shared equally and **no friction relied on**; it produces the
+  demand a concrete or steel anchor capacity is checked against. Plus the sweep for the
+  governing plan direction of a clause that says "in any direction", whose answer is
+  across the pattern's short side and not, as it looks, the diagonal
 - :mod:`~anvilate.analysis.dowel_yield` — dowel-type timber connections by the yield limit
   equations (AWC TR12 Table 1-1, the generalized published form of the NDS equations): the six
   Johansen modes of a bolt, lag screw, nail or screw through wood, the unreduced 5% offset
@@ -1191,6 +1199,15 @@ from .aluminum import (
     aluminum_local_buckling_stress,
     aluminum_member_buckling_stress,
     aluminum_tension_stress,
+)
+from .anchorage import (
+    ANCHORAGE_METHOD,
+    DIRECTION_SWEEP_STEPS,
+    AnchorageDemand,
+    AnchorDemand,
+    AnchorPosition,
+    anchor_pattern_demand,
+    governing_anchor_direction,
 )
 from .antenna import (
     antenna_far_field_distance,
@@ -4020,6 +4037,13 @@ __all__ = [
     "dowel_yield_capacity",
     "dowel_bearing_strength",
     "hankinson_bearing_strength",
+    "ANCHORAGE_METHOD",
+    "AnchorPosition",
+    "AnchorDemand",
+    "AnchorageDemand",
+    "anchor_pattern_demand",
+    "DIRECTION_SWEEP_STEPS",
+    "governing_anchor_direction",
     "archimedes_number",
     "galilei_number",
     "drag_force",

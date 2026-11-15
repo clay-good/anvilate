@@ -9756,3 +9756,24 @@ def test_bolt_row_example_shows_a_seventh_bolt_making_the_row_weaker():
     # worked is n = 2 to 7, so index 4 is six bolts and index 5 is seven.
     assert worked[3] < worked[4] > worked[5], "and turns over at the seventh"
     _assert_narrates_computed("bolt_row_weakened_by_a_bolt.py", namespace)
+
+
+def test_guardrail_post_base_example_puts_three_kilonewtons_into_two_anchors():
+    """The finding: a hand on a rail is three kilonewtons of anchor tension, and the only
+    lever in the problem is the bolt spacing."""
+    namespace = runpy.run_path(str(_EXAMPLES / "guardrail_post_base_anchors.py"))
+    d = namespace["guardrail_post_base_anchors"]()
+
+    assert d["tension_at_150_n"] == pytest.approx(3098, abs=1)
+    assert d["tension_at_300_n"] == pytest.approx(1512, abs=1)
+    # Opening the pattern is monotone, and a shade better than proportional.
+    assert d["tension_at_150_n"] > d["tension_at_200_n"] > d["tension_at_300_n"]
+    assert d["wide_over_tight"] < 0.5
+    # The post's own weight is nearly irrelevant, which is why the repair is the pattern.
+    assert d["weight_share_percent"] < 3.0
+    # Two bolts in line carry double, because only one of them is ever in tension.
+    assert d["two_bolt_tension_n"] == pytest.approx(2 * d["tension_at_150_n"], rel=1e-9)
+    # And two bolts across the load are refused rather than given a number.
+    refusal = namespace["two_bolts_across"]()
+    assert "resists no moment about it" in refusal
+    _assert_narrates_computed("guardrail_post_base_anchors.py", namespace)

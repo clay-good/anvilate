@@ -5,6 +5,13 @@
 # public symbol, add it to the module's __all__ AND to this file in the same
 # change. To remove one, follow the deprecation policy (deprecate with a
 # replacement for at least one minor release) before deleting its line.
+anchorage.ANCHORAGE_METHOD
+anchorage.AnchorPosition
+anchorage.AnchorDemand
+anchorage.AnchorageDemand
+anchorage.anchor_pattern_demand
+anchorage.DIRECTION_SWEEP_STEPS
+anchorage.governing_anchor_direction
 accumulator.accumulator_size_for_volume
 accumulator.accumulator_usable_volume
 acid_base.henderson_hasselbalch_ph

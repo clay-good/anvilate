@@ -1718,7 +1718,14 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
 
     assert len(surface) >= 1700, f"the surface scan found only {len(surface)} functions"
     share = len(reached) / len(surface)
-    assert share >= 0.84, (
+    # 0.840 -> 0.839 on 2026-11-15, for one function and with its cause:
+    # `anchor_pattern_demand` takes a sequence of `AnchorPosition`, and the binder builds a
+    # ONE-record tuple (see `_probe_record`). The function refuses fewer than two anchors —
+    # one anchor resists no moment about any axis through it — so even built, it falls out
+    # of the population on its own guard rather than on the binder's reach. Its inputs are
+    # each refused non-finite and by name in tests/test_anchorage.py. Lower this again only
+    # with the same kind of reason written here.
+    assert share >= 0.839, (
         f"the probes reach {len(reached):,} of {len(surface):,} public analysis functions "
         f"({share:.1%}); the gates above are written as claims about the whole surface, so "
         "a drop here is a claim quietly narrowing"
@@ -1786,8 +1793,14 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # 100 -> 101: dowel_yield_capacity takes a DowelConnection; every field of it is
     # refused non-finite in tests/test_dowel_yield.py
     # (test_no_field_of_a_connection_takes_a_non_finite_value).
+    # 101 -> 102: anchor_pattern_demand takes a sequence of AnchorPosition; each of its
+    # own inputs is refused non-finite in tests/test_anchorage.py
+    # (test_each_force_input_is_refused_by_name, test_an_anchor_position_is_a_pair_of_
+    # finite_lengths).
+    # 102 -> 103: governing_anchor_direction sweeps the same pattern, so it takes the same
+    # sequence of AnchorPosition and is refused for the same reason.
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 101, (
+    assert len(unbuildable) <= 103, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

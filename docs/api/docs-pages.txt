@@ -83,5 +83,5 @@ units-and-quantities.md | Start here | quickstart | -
 valid-is-not-correct.md | Driving it from an agent | agent-driving-evals | -
 verification-planning.md | Deciding what the answer is worth | evidence-bundle, example-highlights, model-credibility, quality-interchange | -
 voice.md | Deciding what the answer is worth | nothing | -
-walking-working-surfaces.md | Screening by discipline | nothing | -
+walking-working-surfaces.md | Screening by discipline | example-highlights | -
 weld-fatigue-screening.md | Screening by discipline | example-highlights | -

@@ -1306,3 +1306,10 @@ worm.worm_tangential_force
 dowel_yield.BEARING_FORMULA_CITATION
 dowel_yield.DOUBLE_SHEAR_MODES
 dowel_yield.TR12_CITATION
+anchorage.ANCHORAGE_METHOD
+anchorage.AnchorPosition
+anchorage.AnchorDemand
+anchorage.AnchorageDemand
+anchorage.anchor_pattern_demand
+anchorage.DIRECTION_SWEEP_STEPS
+anchorage.governing_anchor_direction

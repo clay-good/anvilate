@@ -126,6 +126,51 @@ that does not govern.
 Which fall-protection system to fit is a person's choice, so the repair hint is a
 direction and not a value.
 
+## The post base, and the two anchors a hand pulls out
+
+The guardrail screen checks the post, the rails and the toeboard. It does not check what
+holds the post down, and that is where 1910.29(b)(3)'s 200 lbf ends up: as a moment at
+the base, and as tension in the anchors.
+
+[`anchor_pattern_demand`](api/analysis-public-surface.txt) takes the pattern and the
+clause load and says which bolt lifts first:
+
+```python
+from anvilate.analysis import anchor_pattern_demand
+from anvilate.analysis.anchorage import AnchorPosition
+from anvilate.units import Quantity
+
+Q = Quantity.parse
+pattern = tuple(
+    AnchorPosition(tag=tag, x=Q(f"{x} mm"), y=Q(f"{y} mm"))
+    for tag, x, y in (("fl", -75, -75), ("fr", -75, 75), ("bl", 75, -75), ("br", 75, 75))
+)
+anchor_pattern_demand(
+    anchors=pattern, weight=Q("300 N"), lateral_force=Q("200 lbf"), height=Q("1070 mm")
+)
+```
+
+A 1,070 mm post on a four-bolt plate at 150 mm centres puts **3,098 N into each of two
+anchors**. The post's own weight resists 2.4% of the moment, so the anchors carry
+essentially all of it, and **the only lever in the problem is the bolt spacing**: opening
+the pattern to 300 mm takes the tension to 1,512 N without changing the post, the rail or
+the plate. See
+[`examples/guardrail_post_base_anchors.py`](../examples/guardrail_post_base_anchors.py).
+
+**"In any direction" is not along an axis.** The clause applies its force any way, and
+`governing_anchor_direction` sweeps for the worst: it is **across the pattern's short
+side**, where the lever is least. A 400 x 100 mm pattern takes 4.2 times the tension
+across its short dimension that it takes along its long one. On a square the axes are the
+worst and the diagonal is the mildest, which is the opposite of how it looks.
+
+Two bolts are where this gets sharp: **along** the load they take double the four-bolt
+figure, because only one is ever in tension, and **across** it they are refused — two
+anchors on one line resist no moment about that line. A two-bolt base plate works or is a
+mechanism depending on which way it is turned, and nothing on the drawing says which.
+
+What this produces is a **demand**. What an anchor can take is a concrete or steel
+capacity with its own edition and factors, and this pack does not carry one.
+
 ## Worked end to end
 
 [`examples/mezzanine_guardrail.py`](../examples/mezzanine_guardrail.py) answers the
