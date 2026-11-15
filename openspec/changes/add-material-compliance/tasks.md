@@ -25,7 +25,10 @@ Depends on `add-product-structure` (BOM lines) and `add-interface-contracts`
 
 - [x] 4.1 Needs declarations (body contact, sterilization, vacuum, flammability,
       temperature) and attribute screens
-- [ ] 4.2 Galvanic compatibility table from public-release data, with provenance;
+- [x] 4.2 Galvanic compatibility table from public-release data, with provenance;
       environment severity; isolation clearing
+      (MIL-STD-889C Table II ships with its citation; the three clause rules a separation
+      alone misses are checked; 889C's Table I is a scanned image and is not transcribed,
+      and which items of a product touch is still the caller's)
 - [x] 4.3 A docs page for material compliance: what is screened, against which list
       version, and what remains the user's declaration

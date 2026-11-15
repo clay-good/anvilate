@@ -83,6 +83,17 @@ from .fatigue import (
     WeldStressKind,
     en1993_detail_category_curve,
 )
+from .galvanic import (
+    GALVANIC_SERIES,
+    GALVANIC_SERIES_CITATION,
+    LISTED_TWICE,
+    WORST_ENVIRONMENT,
+    GalvanicCouple,
+    GalvanicEnvironment,
+    GalvanicVerdict,
+    screen_galvanic_couple,
+    series_position,
+)
 from .hexbolts import (
     HexBolt,
     HexBoltTable,
@@ -178,6 +189,15 @@ __all__ = [
     "UnknownEditionDifferenceError",
     "compare_editions",
     "default_edition_differences",
+    "GALVANIC_SERIES",
+    "GALVANIC_SERIES_CITATION",
+    "LISTED_TWICE",
+    "WORST_ENVIRONMENT",
+    "GalvanicCouple",
+    "GalvanicEnvironment",
+    "GalvanicVerdict",
+    "screen_galvanic_couple",
+    "series_position",
     "MAX_CONNECTION_LOAD_DURATION",
     "NDS_APPLICABLE_FACTORS",
     "NDS_CONNECTION_FACTORS",

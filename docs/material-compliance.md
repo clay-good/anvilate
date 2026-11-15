@@ -61,8 +61,59 @@ need naming an item the product does not have are refused where they are written
 The entries appear in [product screening](product-screening.md) after the product-level
 checks.
 
+## Galvanic couples
+
+Two metals in contact with an electrolyte between them make a cell, and the more active
+one corrodes in place of the other. The series that decides which, and how far apart they
+are, is **MIL-STD-889C Table II**, read from the standard itself — a US Department of
+Defense standard approved for public release, so it ships, 93 names in the published
+order from magnesium to graphite.
+
+```python
+from anvilate.standards import GalvanicCouple, GalvanicEnvironment, screen_galvanic_couple
+
+screen_galvanic_couple(
+    GalvanicCouple(
+        first="Al alloy 6061-T6",
+        second="Copper 110",
+        environment=GalvanicEnvironment.MARINE_ATMOSPHERE,
+        separation_limit=10,                      # yours, with its basis
+        limit_basis="the project's corrosion-control plan, rev B",
+    )
+)
+# Al alloy 6061-T6 (anode) against Copper 110: 37 places apart in marine atmosphere,
+# not acceptable; ... §5.1.2 requires metals widely separated in the series to be
+# protected against contact
+```
+
+**No threshold ships.** 889C gives none: it says only that "the closer one metal is to
+another in the series, the more compatible they will be", and that metals "widely
+separated" shall be protected. The figures that circulate for this calculation — 0.15 V,
+0.25 V and 0.50 V of "anodic index" — are **not in 889C**, and secondary sources
+attribute them to a different standard. So `separation_limit` is yours, with its basis,
+and the verdict quotes that basis back.
+
+Three rules of the standard that a separation alone misses, each checked:
+
+| Rule | Clause | What it catches |
+| --- | --- | --- |
+| A humidity-controlled environment may only be claimed if it is **assured** | note (g) | Control is assured only by a hermetically sealed compartment; where it is not, the contact is screened as if it were in **sea water**, and the verdict says so |
+| The **cathode is the smaller area** | §5.2(a) | "Stainless bolts in an aluminium sheet, but not the reverse" — a small anode feeding a large cathode carries the whole couple's current in very little metal |
+| **Magnesium** takes the maximum protective system, always | §5.1.6 | Whatever the separation and whatever else is declared, and whether or not the joint carries current |
+
+An isolation measure clears a separation past the limit. It does not clear the other two:
+they are about the couple itself, not the distance between its metals.
+
+**What is not transcribed.** 889C's Table I, the per-pair guide to protective systems, is
+a scanned image in the published PDF rather than text. Two hundred compatibility cells
+read off a 1967 scan by eye is a table nobody could check, so it is not here, and the
+environment is carried and reported rather than acted on beyond note (g).
+
+**What is not wired yet.** Which items of a product touch, and which material record maps
+to which name in the series, is still the caller's: this screens a couple you hand it,
+not a product you declare.
+
 ## Not yet
 
 Screening the composition against substance lists (REACH candidate list, RoHS, the
-automotive declarable list) and galvanic compatibility between metals in contact wait on
-lists and tables read from their publishers.
+automotive declarable list) waits on lists read from their publishers.
