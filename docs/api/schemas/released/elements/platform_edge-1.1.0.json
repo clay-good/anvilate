@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "EdgeProtection": {
+      "description": "What an unprotected side or edge has, per 1910.28(b)(1)(i).\n\n``GUARDRAIL`` is ``\"guardrail\"`` and not ``\"guardrail_system\"``, which is the\nclause's own phrase, because ``guardrail_system`` is already this pack's **element\ntag**: an edge whose protection read `guardrail_system` would look like it named the\nelement rather than described itself, and the refusal that lists every element tag\nwould then carry what looks like an enum value where English belongs. The suite's\nmachine-spelling gate found that before a reader did.",
+      "enum": [
+        "none",
+        "guardrail",
+        "safety_net_system",
+        "personal_fall_protection_system"
+      ],
+      "title": "EdgeProtection",
+      "type": "string"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Regime": {
+      "description": "Which regulation a walking-working surface is screened against.\n\nDeclared, never inferred. The three are not interchangeable: 1926 Subpart M says\ndifferent numbers for several of the same things, and a guardrail that passes the\nwrong regulation is worse than one nobody checked.",
+      "enum": [
+        "us_general_industry",
+        "us_construction",
+        "user_declared"
+      ],
+      "title": "Regime",
+      "type": "string"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:platform_edge:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'platform_edge': the fields a Design Spec puts in `element_params` when it declares `element_type: platform_edge`. Generated from anvilate.packs.walking_working.PlatformEdge.",
+  "properties": {
+    "height_above_lower_level": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "protection": {
+      "$ref": "#/$defs/EdgeProtection",
+      "default": "none"
+    },
+    "regime": {
+      "$ref": "#/$defs/Regime"
+    }
+  },
+  "required": [
+    "regime",
+    "height_above_lower_level"
+  ],
+  "title": "PlatformEdge",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

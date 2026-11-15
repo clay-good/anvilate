@@ -65,6 +65,20 @@ __all__ = [
     "StairKind",
     "StairSystem",
     "screen_stair",
+    "RUNG_SPACING_RANGE",
+    "MIN_RUNG_CLEAR_WIDTH",
+    "MIN_CLEARANCE_BEHIND",
+    "MIN_RAIL_EXTENSION",
+    "MIN_SIDE_CLEARANCE",
+    "MIN_CLIMBING_SIDE_CLEARANCE",
+    "FALL_PROTECTION_LADDER_HEIGHT",
+    "FALL_PROTECTION_EDGE_HEIGHT",
+    "EdgeProtection",
+    "LadderFallProtection",
+    "FixedLadder",
+    "screen_fixed_ladder",
+    "PlatformEdge",
+    "screen_platform_edge",
 ]
 
 #: The edition of Subpart D these numbers were read from, as the text states it. Printed
@@ -948,3 +962,369 @@ def _tread_load_entry(stair: StairSystem, required_safety_factor: float) -> Scor
             }
         )
     return entry
+
+
+# --- fixed ladders, 29 CFR 1910.23 and 1910.28(b)(9) ----------------------------------
+#
+# Read from https://www.law.cornell.edu/cfr/text/29/1910.23 on 2026-11-15.
+
+#: 1910.23(b)(2): rungs spaced not less than 10 in and not more than 14 in on centres.
+RUNG_SPACING_RANGE = (
+    Quantity(magnitude=10.0, unit="inch"),
+    Quantity(magnitude=14.0, unit="inch"),
+)
+#: 1910.23(b)(4): minimum clear width 16 in for a fixed ladder, before any safety system.
+MIN_RUNG_CLEAR_WIDTH = Quantity(magnitude=16.0, unit="inch")
+#: 1910.23(d)(2): at least 7 in perpendicular from the rung centreline to the nearest
+#: permanent object behind the ladder.
+MIN_CLEARANCE_BEHIND = Quantity(magnitude=7.0, unit="inch")
+#: 1910.23(d)(4): side rails extend at least 42 in above the access level or landing.
+MIN_RAIL_EXTENSION = Quantity(magnitude=42.0, unit="inch")
+#: 1910.23(d)(13)(i) and (ii): without a cage or well, 15 in clear each side of the
+#: centreline and 30 in perpendicular on the climbing side.
+MIN_SIDE_CLEARANCE = Quantity(magnitude=15.0, unit="inch")
+MIN_CLIMBING_SIDE_CLEARANCE = Quantity(magnitude=30.0, unit="inch")
+#: 1910.28(b)(9): a fixed ladder extending **more than** 24 ft above a lower level needs
+#: a personal fall arrest system, a ladder safety system, a cage or a well.
+FALL_PROTECTION_LADDER_HEIGHT = Quantity(magnitude=24.0, unit="foot")
+#: 1910.28(b)(1)(i): an unprotected side or edge 4 ft or more above a lower level needs
+#: fall protection. **Or more**, where the ladder rule is *more than* — the two clauses
+#: differ at the boundary and the code keeps them apart.
+FALL_PROTECTION_EDGE_HEIGHT = Quantity(magnitude=4.0, unit="foot")
+
+_LADDER_SOURCE = "the fixed ladder as declared: its rungs, its clearances and its height"
+
+
+class EdgeProtection(StrEnum):
+    """What an unprotected side or edge has, per 1910.28(b)(1)(i).
+
+    ``GUARDRAIL`` is ``"guardrail"`` and not ``"guardrail_system"``, which is the
+    clause's own phrase, because ``guardrail_system`` is already this pack's **element
+    tag**: an edge whose protection read `guardrail_system` would look like it named the
+    element rather than described itself, and the refusal that lists every element tag
+    would then carry what looks like an enum value where English belongs. The suite's
+    machine-spelling gate found that before a reader did.
+    """
+
+    NONE = "none"
+    GUARDRAIL = "guardrail"
+    SAFETY_NET = "safety_net_system"
+    PERSONAL_FALL_PROTECTION = "personal_fall_protection_system"
+
+
+class LadderFallProtection(StrEnum):
+    """What a fixed ladder over 24 ft has, per 1910.28(b)(9)(i)."""
+
+    NONE = "none"
+    PERSONAL_FALL_ARREST = "personal_fall_arrest_system"
+    LADDER_SAFETY_SYSTEM = "ladder_safety_system"
+    CAGE_OR_WELL = "cage_or_well"
+
+
+class FixedLadder(GuardedInputs):
+    """A fixed ladder, and what 1910.23 and 1910.28(b)(9) need to judge it.
+
+    ``climbing_side_clearance`` and ``side_clearance`` are only read where the ladder has
+    no cage or well — 1910.23(d)(13) states them for exactly that case — so a caged
+    ladder leaves them unset and gets no entry for them.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    regime: Regime
+    height: Quantity
+    rung_spacing: Quantity
+    rung_clear_width: Quantity
+    clearance_behind: Quantity
+    rail_extension: Quantity
+    fall_protection: LadderFallProtection = LadderFallProtection.NONE
+    side_clearance: Quantity | None = None
+    climbing_side_clearance: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _dimensions_are_what_they_say(self) -> FixedLadder:
+        for value, name in (
+            (self.height, "height"),
+            (self.rung_spacing, "rung_spacing"),
+            (self.rung_clear_width, "rung_clear_width"),
+            (self.clearance_behind, "clearance_behind"),
+            (self.rail_extension, "rail_extension"),
+            (self.side_clearance, "side_clearance"),
+            (self.climbing_side_clearance, "climbing_side_clearance"),
+        ):
+            if value is None:
+                continue
+            if not value.has_dimension("[length]"):
+                raise _refuse(
+                    f"{name} is a length; got {value.dimensionality}",
+                    subject=name,
+                    source=_LADDER_SOURCE,
+                )
+            if value.magnitude <= 0:
+                raise _refuse(
+                    f"{name} is positive; got {value}", subject=name, source=_LADDER_SOURCE
+                )
+        caged = self.fall_protection is LadderFallProtection.CAGE_OR_WELL
+        if caged and (self.side_clearance is not None or self.climbing_side_clearance is not None):
+            raise _refuse(
+                "a caged ladder states the clearances 1910.23(d)(13) writes for a ladder "
+                "*without* a cage or well; the clause does not apply to it, and screening "
+                "it against them would be a verdict under a rule that does not govern",
+                subject="side_clearance and climbing_side_clearance",
+                source=_LADDER_SOURCE,
+            )
+        return self
+
+
+def screen_fixed_ladder(ladder: FixedLadder) -> Scorecard:
+    """Screen a :class:`FixedLadder` against 29 CFR 1910.23 and 1910.28(b)(9).
+
+    Geometry first, then the fall-protection trigger. A ladder at or under 24 ft gets an
+    entry saying the trigger did not fire rather than no entry at all: "the rule does not
+    apply here" is what a reader of a 23-foot ladder's card most needs to be told, and
+    silence reads the same as an oversight.
+    """
+    _general_industry(ladder.regime, "fixed ladder")
+    low, high = RUNG_SPACING_RANGE
+    entries = [
+        _band_entry(
+            "ladder rung spacing",
+            ladder.rung_spacing,
+            low=low.to("inch").magnitude,
+            high=high.to("inch").magnitude,
+            unit="inch",
+            paragraph="23(b)(2)",
+            what="rung spacing between centrelines",
+            label="rung spacing",
+        ),
+        _band_entry(
+            "ladder rung clear width",
+            ladder.rung_clear_width,
+            low=MIN_RUNG_CLEAR_WIDTH.to("inch").magnitude,
+            high=None,
+            unit="inch",
+            paragraph="23(b)(4)",
+            what="clear width of a fixed ladder's rungs",
+            label="clear width",
+        ),
+        _band_entry(
+            "ladder clearance behind",
+            ladder.clearance_behind,
+            low=MIN_CLEARANCE_BEHIND.to("inch").magnitude,
+            high=None,
+            unit="inch",
+            paragraph="23(d)(2)",
+            what="perpendicular distance to the nearest object behind",
+            label="clearance behind the rungs",
+        ),
+        _band_entry(
+            "ladder side rail extension",
+            ladder.rail_extension,
+            low=MIN_RAIL_EXTENSION.to("inch").magnitude,
+            high=None,
+            unit="inch",
+            paragraph="23(d)(4)",
+            what="side rails above the access level",
+            label="side rail extension",
+        ),
+    ]
+    if ladder.side_clearance is not None:
+        entries.append(
+            _band_entry(
+                "ladder side clearance",
+                ladder.side_clearance,
+                low=MIN_SIDE_CLEARANCE.to("inch").magnitude,
+                high=None,
+                unit="inch",
+                paragraph="23(d)(13)(i)",
+                what="clear width each side of the centreline, no cage or well",
+                label="clearance each side of the centreline",
+            )
+        )
+    if ladder.climbing_side_clearance is not None:
+        entries.append(
+            _band_entry(
+                "ladder climbing side clearance",
+                ladder.climbing_side_clearance,
+                low=MIN_CLIMBING_SIDE_CLEARANCE.to("inch").magnitude,
+                high=None,
+                unit="inch",
+                paragraph="23(d)(13)(ii)",
+                what="perpendicular clearance on the climbing side, no cage or well",
+                label="clearance on the climbing side",
+            )
+        )
+    entries.append(_ladder_fall_protection_entry(ladder))
+    return Scorecard(entries=tuple(entries))
+
+
+def _ladder_fall_protection_entry(ladder: FixedLadder) -> ScorecardEntry:
+    """1910.28(b)(9): more than 24 ft needs one of four systems."""
+    height = ladder.height.to("foot").magnitude
+    trigger = FALL_PROTECTION_LADDER_HEIGHT.to("foot").magnitude
+    reference = _clause("28(b)(9)", "fall protection on a fixed ladder extending more than 24 feet")
+    # **More than**, not "or more": 1910.28(b)(9) and (b)(1)(i) differ at their boundary
+    # and a ladder at exactly 24 ft is below this one.
+    if height <= trigger:
+        return ScorecardEntry(
+            name="ladder fall protection",
+            status=CheckStatus.PASS,
+            detail=(
+                f"the ladder extends {ladder.height}, which is not more than the "
+                f"{FALL_PROTECTION_LADDER_HEIGHT} the clause triggers at, so it requires "
+                f"none of the four systems"
+            ),
+            reference=reference,
+            underived=_underived(
+                "the clause states a height at which a requirement starts; the check is "
+                "the comparison"
+            ),
+        )
+    if ladder.fall_protection is LadderFallProtection.NONE:
+        return ScorecardEntry(
+            name="ladder fall protection",
+            status=CheckStatus.FAIL,
+            detail=(
+                f"the ladder extends {ladder.height}, more than the "
+                f"{FALL_PROTECTION_LADDER_HEIGHT} the clause triggers at, and declares "
+                f"none of a personal fall arrest system, a ladder safety system, a cage "
+                f"or a well"
+            ),
+            reference=reference,
+            repair_hint=RepairHint.directional(
+                "fall_protection",
+                direction=Direction.INCREASE,
+                provenance=(
+                    "four systems 1910.28(b)(9)(i) names, of which one is a "
+                    "person's choice rather than a number"
+                ),
+            ),
+            underived=_underived(
+                "the clause names four acceptable systems and the check is which one is "
+                "declared; there is nothing to compute"
+            ),
+        )
+    return ScorecardEntry(
+        name="ladder fall protection",
+        status=CheckStatus.PASS,
+        detail=(
+            f"the ladder extends {ladder.height} and declares a "
+            f"{ladder.fall_protection.value.replace('_', ' ')}, which is one of the four "
+            f"the clause names"
+        ),
+        reference=reference,
+        underived=_underived(
+            "the clause names four acceptable systems and the check is which one is "
+            "declared; there is nothing to compute"
+        ),
+    )
+
+
+# --- platform edges, 29 CFR 1910.28(b)(1)(i) ------------------------------------------
+
+
+class PlatformEdge(GuardedInputs):
+    """An unprotected side or edge of a walking-working surface, and what is at it.
+
+    ``protection`` is what the edge has: a guardrail, a safety net, a personal fall
+    protection system, or nothing. 1910.28(b)(1)(i) requires one of the three at 4 ft or
+    more above a lower level.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    regime: Regime
+    height_above_lower_level: Quantity
+    protection: EdgeProtection = EdgeProtection.NONE
+
+    @model_validator(mode="after")
+    def _is_an_edge(self) -> PlatformEdge:
+        if not self.height_above_lower_level.has_dimension("[length]"):
+            raise _refuse(
+                f"height_above_lower_level is a length; got "
+                f"{self.height_above_lower_level.dimensionality}",
+                subject="height_above_lower_level",
+                source="the platform edge as declared",
+            )
+        if self.height_above_lower_level.magnitude <= 0:
+            raise _refuse(
+                f"height_above_lower_level is positive; got "
+                f"{self.height_above_lower_level}. An edge level with what is below it is "
+                f"not an edge anybody falls from",
+                subject="height_above_lower_level",
+                source="the platform edge as declared",
+            )
+        return self
+
+
+def screen_platform_edge(edge: PlatformEdge) -> Scorecard:
+    """Screen a :class:`PlatformEdge` against 29 CFR 1910.28(b)(1)(i).
+
+    **Four feet or more**, where the ladder trigger is *more than* 24 feet. The two
+    clauses differ at their boundary and this pack keeps them apart: an edge at exactly
+    4 ft needs protection and a ladder at exactly 24 ft does not.
+    """
+    _general_industry(edge.regime, "platform edge")
+    height = edge.height_above_lower_level.to("foot").magnitude
+    trigger = FALL_PROTECTION_EDGE_HEIGHT.to("foot").magnitude
+    reference = _clause("28(b)(1)(i)", "fall protection at an unprotected side or edge")
+    reason = _underived(
+        "the clause states a height at which a requirement starts; the check is the "
+        "comparison and which protection is declared"
+    )
+    if height < trigger:
+        return Scorecard(
+            entries=(
+                ScorecardEntry(
+                    name="platform edge fall protection",
+                    status=CheckStatus.PASS,
+                    detail=(
+                        f"the edge is {edge.height_above_lower_level} above the lower "
+                        f"level, below the {FALL_PROTECTION_EDGE_HEIGHT} the clause "
+                        f"triggers at, so it requires no fall protection"
+                    ),
+                    reference=reference,
+                    underived=reason,
+                ),
+            )
+        )
+    if edge.protection is EdgeProtection.NONE:
+        return Scorecard(
+            entries=(
+                ScorecardEntry(
+                    name="platform edge fall protection",
+                    status=CheckStatus.FAIL,
+                    detail=(
+                        f"the edge is {edge.height_above_lower_level} above the lower "
+                        f"level, at or above the {FALL_PROTECTION_EDGE_HEIGHT} the clause "
+                        f"triggers at, and declares none of a guardrail system, a safety "
+                        f"net system or a personal fall protection system"
+                    ),
+                    reference=reference,
+                    repair_hint=RepairHint.directional(
+                        "protection",
+                        direction=Direction.INCREASE,
+                        provenance=(
+                            "three systems 1910.28(b)(1)(i) names, of which one is a "
+                            "person's choice rather than a number"
+                        ),
+                    ),
+                    underived=reason,
+                ),
+            )
+        )
+    return Scorecard(
+        entries=(
+            ScorecardEntry(
+                name="platform edge fall protection",
+                status=CheckStatus.PASS,
+                detail=(
+                    f"the edge is {edge.height_above_lower_level} above the lower level "
+                    f"and declares a {edge.protection.value.replace('_', ' ')}, which is "
+                    f"one of the three the clause names"
+                ),
+                reference=reference,
+                underived=reason,
+            ),
+        )
+    )

@@ -16,9 +16,9 @@ in `src/anvilate/packs/industrial.py`, and `add-frame-analysis`.
       cases at the worst point; deflection rule
 - [x] 2.2 Stair system element: stringers, treads, landings, stair rail; concentrated and
       factored live loads; angle, riser, tread, width, headroom, landing rules
-- [ ] 2.3 Fixed ladder element: rung spacing, clear width, clearances, side rail extension;
+- [x] 2.3 Fixed ladder element: rung spacing, clear width, clearances, side rail extension;
       the 24 ft fall-protection trigger
-- [ ] 2.4 Platform edge element: the 4 ft trigger; grating spans against a user-supplied
+- [x] 2.4 Platform edge element: the 4 ft trigger; grating spans against a user-supplied
       load table
 
 ## 3. Parts and proof

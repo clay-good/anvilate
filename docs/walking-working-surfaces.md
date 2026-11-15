@@ -97,13 +97,44 @@ A geometry entry's comparison always names **the bound its verdict turned on**. 
 two-sided band reported against one end would render a 25-degree stair as "25 deg vs at
 most 50 deg" beside a FAIL — a sentence contradicting the verdict above it.
 
+## Fixed ladders and platform edges
+
+| Check | Clause | What it says |
+| --- | --- | --- |
+| Rung spacing | 1910.23(b)(2) | 10 to 14 in between centrelines |
+| Clear width | 1910.23(b)(4) | at least 16 in, before any safety system |
+| Clearance behind | 1910.23(d)(2) | at least 7 in to the nearest object |
+| Side rail extension | 1910.23(d)(4) | at least 42 in above the landing |
+| Clearance each side | 1910.23(d)(13)(i) | at least 15 in, **no cage or well** |
+| Clearance climbing side | 1910.23(d)(13)(ii) | at least 30 in, **no cage or well** |
+| Ladder fall protection | 1910.28(b)(9) | **more than** 24 ft needs one of four systems |
+| Edge fall protection | 1910.28(b)(1)(i) | 4 ft **or more** needs one of three |
+
+**The two triggers differ at their boundary**, and this pack keeps them apart: a ladder
+at exactly 24 ft is below its trigger and an edge at exactly 4 ft is at its own. A pack
+reading both as the same comparison would be wrong about one of them.
+
+A ladder *below* the trigger still gets an entry saying the rule did not fire. "It does
+not apply here" is what a reader of a 23-foot ladder's card most needs to be told, and
+silence reads the same as an oversight.
+
+The (d)(13) clearances are written for a ladder **without** a cage or well, so a caged
+ladder leaves them unset and gets no entry for them — and declaring them on a caged
+ladder is refused rather than screened, because that would be a verdict under a rule
+that does not govern.
+
+Which fall-protection system to fit is a person's choice, so the repair hint is a
+direction and not a value.
+
 ## Not in this pack yet
 
-Fixed ladders and platform edges: 1910.23 and 1910.28(b) are read and recorded in the
-change's design notes, and the elements are not built. A guardrail run as a combination
-of real tube posts and rails, with the post bases on anchors, is likewise recorded and
-not built. Spiral and alternating-tread stairs are read and not built; `kind` carries the
-two this pack screens.
+A guardrail run as a combination of real tube posts and rails, with the post bases on
+anchors, is recorded in the change's design notes and not built; nor is the grating-span
+check against a user-supplied load table. Spiral and alternating-tread stairs are read
+and not built — `kind` carries the two this pack screens. The through-ladder extension
+clearance of 1910.23(d)(5) and the step-across distances of (d)(12) are read and not
+built: both need the ladder's relationship to what it serves, which the element does not
+declare yet.
 
 ## What this pack does not do
 

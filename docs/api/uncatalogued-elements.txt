@@ -16,6 +16,7 @@ concrete_bearing
 cover_plate
 driven_pile
 feeder
+fixed_ladder
 guardrail_system
 gusset_plate
 infinite_slope
@@ -24,6 +25,7 @@ lighting_installation
 masonry_wall
 pipe_run
 plate_flange
+platform_edge
 pulley
 pump_duty
 retaining_wall

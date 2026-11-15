@@ -203,6 +203,8 @@ _BOLTS = "structural.screen_bolted_connection"
 _COLUMN = "structural.screen_column_member"
 _GUARDRAIL = "walking_working.screen_guardrail"
 _STAIR = "walking_working.screen_stair"
+_LADDER = "walking_working.screen_fixed_ladder"
+_EDGE = "walking_working.screen_platform_edge"
 
 #: The limit states the shipped modules evaluate. A module that adds a check adds it here.
 DEFAULT_LIMIT_STATES = LimitStateRegistry(
@@ -648,6 +650,33 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             "walking_working.stair_tread_load",
             "a stair tread failing under the load the clause requires it to carry",
             (_STAIR, "tread load"),
+        ),
+        _state(
+            "walking_working.ladder_geometry",
+            "a fixed ladder whose rungs, clearances or rail extension are outside what "
+            "the clause states, so it is harder to climb safely than the rule allows",
+            (_LADDER, "rung spacing"),
+            (_LADDER, "rung clear width"),
+            (_LADDER, "clearance behind"),
+            (_LADDER, "side rail extension"),
+            (_LADDER, "side clearance"),
+            (_LADDER, "climbing side clearance"),
+        ),
+        # Two states and not one: 1910.28(b)(9) triggers at **more than** 24 ft on a
+        # ladder and (b)(1)(i) at 4 ft **or more** at an edge. They differ at their
+        # boundary and they are evaluated by different code, so one state with two
+        # screens would be claiming an implementation neither of them shares.
+        _state(
+            "walking_working.ladder_fall_protection",
+            "a fixed ladder past the height the clause triggers at, with none of the four "
+            "systems it names",
+            (_LADDER, "fall protection"),
+        ),
+        _state(
+            "walking_working.edge_fall_protection",
+            "an unprotected side or edge at or above the height the clause triggers at, "
+            "with none of the three systems it names",
+            (_EDGE, "fall protection"),
         ),
         _state(
             "walking_working.guardrail_intermediate_strength",

@@ -12,14 +12,22 @@ from pydantic import ValidationError
 
 from anvilate.packs.walking_working import (
     DEFLECTED_HEIGHT_FLOOR,
+    FALL_PROTECTION_EDGE_HEIGHT,
+    FALL_PROTECTION_LADDER_HEIGHT,
     LIVE_LOAD_FACTOR,
     MAX_RISER,
     MIDRAIL_FORCE,
+    MIN_CLEARANCE_BEHIND,
+    MIN_CLIMBING_SIDE_CLEARANCE,
     MIN_CONCENTRATED_LOAD,
     MIN_HEADROOM,
     MIN_LANDING_DEPTH,
+    MIN_RAIL_EXTENSION,
+    MIN_RUNG_CLEAR_WIDTH,
+    MIN_SIDE_CLEARANCE,
     MIN_STAIR_WIDTH,
     MIN_TREAD_DEPTH,
+    RUNG_SPACING_RANGE,
     SHIP_MIN_TREAD_DEPTH,
     SHIP_MIN_TREAD_WIDTH,
     SHIP_STAIR_ANGLE_RANGE,
@@ -30,11 +38,17 @@ from anvilate.packs.walking_working import (
     TOP_RAIL_FORCE,
     TOP_RAIL_HEIGHT,
     TOP_RAIL_TOLERANCE,
+    EdgeProtection,
+    FixedLadder,
     GuardrailSystem,
+    LadderFallProtection,
+    PlatformEdge,
     Regime,
     StairKind,
     StairSystem,
+    screen_fixed_ladder,
     screen_guardrail,
+    screen_platform_edge,
     screen_stair,
 )
 from anvilate.refusal import RefusalError
@@ -375,11 +389,22 @@ def test_the_docs_page_quotes_the_clauses_own_numbers():
             unit = "lbf" if "lbf" in text else "inch"
             assert constant.to(unit).magnitude == pytest.approx(number), text
 
-    # Every clause the page's table names is one the card really cites.
-    cited = {entry.reference.split(" (")[0] for entry in screen_guardrail(_guardrail()).entries}
+    # Every clause the page's tables name is one some card really cites — across all
+    # four elements, because the page documents all four.
+    cards = (
+        screen_guardrail(_guardrail()),
+        screen_stair(_stair()),
+        screen_fixed_ladder(
+            _ladder(side_clearance=_Q("400 mm"), climbing_side_clearance=_Q("800 mm"))
+        ),
+        screen_platform_edge(
+            PlatformEdge(regime=Regime.GENERAL_INDUSTRY, height_above_lower_level=_Q("3 m"))
+        ),
+    )
+    cited = {entry.reference.split(" (")[0] for card in cards for entry in card.entries}
     for clause in re.findall(r"\| (1910\.\d+\([^)]+\)[^|]*?) \|", page):
         assert f"29 CFR {clause.strip()}" in cited, f"the page names {clause} and nothing cites it"
-    assert len(cited) >= 5
+    assert len(cited) >= 15
 
 
 # --- stairways, 29 CFR 1910.25 ---------------------------------------------------------
@@ -540,3 +565,183 @@ def test_every_stair_entry_cites_its_paragraph_and_its_edition():
         assert entry.reference is not None
         assert "29 CFR 1910.25" in entry.reference
         assert SUBPART_D_EDITION in entry.reference
+
+
+# --- fixed ladders and platform edges --------------------------------------------------
+
+
+def _ladder(**overrides: object) -> FixedLadder:
+    """A 9 m caged-less fixed ladder: 300 mm rungs, 420 mm clear, 1.1 m of rail above."""
+    fields: dict[str, object] = {
+        "regime": Regime.GENERAL_INDUSTRY,
+        "height": _Q("9 m"),
+        "rung_spacing": _Q("300 mm"),
+        "rung_clear_width": _Q("420 mm"),
+        "clearance_behind": _Q("190 mm"),
+        "rail_extension": _Q("1100 mm"),
+        "fall_protection": LadderFallProtection.LADDER_SAFETY_SYSTEM,
+    }
+    fields.update(overrides)
+    return FixedLadder(**fields)  # type: ignore[arg-type]
+
+
+def test_every_ladder_constant_is_what_the_clause_says():
+    low, high = RUNG_SPACING_RANGE
+    assert (low.to("inch").magnitude, high.to("inch").magnitude) == (10.0, 14.0)  # (b)(2)
+    assert MIN_RUNG_CLEAR_WIDTH.to("inch").magnitude == 16.0  # (b)(4)
+    assert MIN_CLEARANCE_BEHIND.to("inch").magnitude == 7.0  # (d)(2)
+    assert MIN_RAIL_EXTENSION.to("inch").magnitude == 42.0  # (d)(4)
+    assert MIN_SIDE_CLEARANCE.to("inch").magnitude == 15.0  # (d)(13)(i)
+    assert MIN_CLIMBING_SIDE_CLEARANCE.to("inch").magnitude == 30.0  # (d)(13)(ii)
+    assert FALL_PROTECTION_LADDER_HEIGHT.to("foot").magnitude == 24.0  # 1910.28(b)(9)
+    assert FALL_PROTECTION_EDGE_HEIGHT.to("foot").magnitude == 4.0  # 1910.28(b)(1)(i)
+    # The SI figures the text prints beside them.
+    assert FALL_PROTECTION_LADDER_HEIGHT.to("m").magnitude == pytest.approx(7.3, abs=0.02)
+    assert FALL_PROTECTION_EDGE_HEIGHT.to("m").magnitude == pytest.approx(1.2, abs=0.02)
+    assert MIN_CLEARANCE_BEHIND.to("cm").magnitude == pytest.approx(18.0, abs=0.3)
+
+
+@pytest.mark.parametrize(
+    ("inches", "status"),
+    [
+        (10.0, CheckStatus.PASS),
+        (14.0, CheckStatus.PASS),
+        (9.9, CheckStatus.FAIL),
+        (14.1, CheckStatus.FAIL),
+    ],
+)
+def test_rung_spacing_is_10_to_14_inches_inclusive(inches, status):
+    card = screen_fixed_ladder(_ladder(rung_spacing=Quantity(magnitude=inches, unit="inch")))
+    assert _entry(card, "ladder rung spacing").status is status
+
+
+def test_the_two_fall_protection_triggers_differ_at_their_boundary():
+    """1910.28(b)(9) is **more than** 24 ft; (b)(1)(i) is 4 ft **or more**.
+
+    A ladder at exactly 24 ft is below its trigger and an edge at exactly 4 ft is at
+    its own, and a pack that read both as ">=" or both as ">" would be wrong about one.
+    """
+    at_the_ladder_trigger = _ladder(
+        height=FALL_PROTECTION_LADDER_HEIGHT, fall_protection=LadderFallProtection.NONE
+    )
+    assert (
+        _entry(screen_fixed_ladder(at_the_ladder_trigger), "ladder fall protection").status
+        is CheckStatus.PASS
+    )
+    over = _ladder(
+        height=Quantity(magnitude=24.1, unit="foot"),
+        fall_protection=LadderFallProtection.NONE,
+    )
+    assert _entry(screen_fixed_ladder(over), "ladder fall protection").status is CheckStatus.FAIL
+
+    at_the_edge_trigger = PlatformEdge(
+        regime=Regime.GENERAL_INDUSTRY,
+        height_above_lower_level=FALL_PROTECTION_EDGE_HEIGHT,
+    )
+    assert screen_platform_edge(at_the_edge_trigger).status is CheckStatus.FAIL
+    under = PlatformEdge(
+        regime=Regime.GENERAL_INDUSTRY,
+        height_above_lower_level=Quantity(magnitude=3.9, unit="foot"),
+    )
+    assert screen_platform_edge(under).status is CheckStatus.PASS
+
+
+def test_a_ladder_below_the_trigger_still_gets_an_entry_saying_so():
+    """Silence reads the same as an oversight to a reader of a 23-foot ladder's card."""
+    entry = _entry(
+        screen_fixed_ladder(_ladder(height=_Q("7 m"), fall_protection=LadderFallProtection.NONE)),
+        "ladder fall protection",
+    )
+    assert entry.status is CheckStatus.PASS
+    assert "requires none of the four systems" in entry.detail
+
+
+@pytest.mark.parametrize(
+    "system",
+    [
+        LadderFallProtection.PERSONAL_FALL_ARREST,
+        LadderFallProtection.LADDER_SAFETY_SYSTEM,
+        LadderFallProtection.CAGE_OR_WELL,
+    ],
+)
+def test_any_of_the_four_systems_satisfies_the_ladder_clause(system):
+    entry = _entry(
+        screen_fixed_ladder(_ladder(height=_Q("12 m"), fall_protection=system)),
+        "ladder fall protection",
+    )
+    assert entry.status is CheckStatus.PASS
+    assert system.value.replace("_", " ") in entry.detail
+
+
+def test_a_tall_ladder_with_nothing_names_the_choice_as_a_person_s():
+    entry = _entry(
+        screen_fixed_ladder(_ladder(height=_Q("12 m"), fall_protection=LadderFallProtection.NONE)),
+        "ladder fall protection",
+    )
+    assert entry.status is CheckStatus.FAIL
+    assert entry.repair_hint is not None
+    assert entry.repair_hint.parameter == "fall_protection"
+    # A direction, not a value: which system is a person's choice and not a number.
+    assert entry.repair_hint.corrective_value is None
+
+
+def test_the_no_cage_clearances_are_only_screened_where_the_clause_applies():
+    """(d)(13) is written for a ladder *without* a cage or well."""
+    plain = screen_fixed_ladder(
+        _ladder(side_clearance=_Q("400 mm"), climbing_side_clearance=_Q("800 mm"))
+    )
+    assert _entry(plain, "ladder side clearance").status is CheckStatus.PASS
+    assert _entry(plain, "ladder climbing side clearance").status is CheckStatus.PASS
+
+    names = {entry.name for entry in screen_fixed_ladder(_ladder()).entries}
+    assert "ladder side clearance" not in names
+
+    with pytest.raises(ValidationError, match="does not apply to it"):
+        _ladder(fall_protection=LadderFallProtection.CAGE_OR_WELL, side_clearance=_Q("400 mm"))
+
+
+def test_an_edge_level_with_what_is_below_it_is_not_an_edge():
+    with pytest.raises(ValidationError, match="not an edge anybody falls from"):
+        PlatformEdge(
+            regime=Regime.GENERAL_INDUSTRY,
+            height_above_lower_level=Quantity(magnitude=0.0, unit="m"),
+        )
+
+
+@pytest.mark.parametrize(
+    "protection",
+    [EdgeProtection.GUARDRAIL, EdgeProtection.SAFETY_NET, EdgeProtection.PERSONAL_FALL_PROTECTION],
+)
+def test_any_of_the_three_systems_satisfies_the_edge_clause(protection):
+    card = screen_platform_edge(
+        PlatformEdge(
+            regime=Regime.GENERAL_INDUSTRY,
+            height_above_lower_level=_Q("3 m"),
+            protection=protection,
+        )
+    )
+    assert card.status is CheckStatus.PASS
+    assert protection.value.replace("_", " ") in card.entries[0].detail
+
+
+def test_a_construction_ladder_or_edge_is_refused_like_everything_else_here():
+    with pytest.raises(RefusalError, match="1926 Subparts M and X"):
+        screen_fixed_ladder(_ladder(regime=Regime.CONSTRUCTION))
+    with pytest.raises(RefusalError, match="1926 Subparts M and X"):
+        screen_platform_edge(
+            PlatformEdge(regime=Regime.CONSTRUCTION, height_above_lower_level=_Q("3 m"))
+        )
+
+
+def test_every_ladder_and_edge_entry_cites_its_paragraph_and_edition():
+    cards = (
+        screen_fixed_ladder(_ladder(side_clearance=_Q("400 mm"))),
+        screen_platform_edge(
+            PlatformEdge(regime=Regime.GENERAL_INDUSTRY, height_above_lower_level=_Q("3 m"))
+        ),
+    )
+    for card in cards:
+        for entry in card.entries:
+            assert entry.reference is not None
+            assert "29 CFR 1910." in entry.reference
+            assert SUBPART_D_EDITION in entry.reference

@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "LadderFallProtection": {
+      "description": "What a fixed ladder over 24 ft has, per 1910.28(b)(9)(i).",
+      "enum": [
+        "none",
+        "personal_fall_arrest_system",
+        "ladder_safety_system",
+        "cage_or_well"
+      ],
+      "title": "LadderFallProtection",
+      "type": "string"
+    },
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Regime": {
+      "description": "Which regulation a walking-working surface is screened against.\n\nDeclared, never inferred. The three are not interchangeable: 1926 Subpart M says\ndifferent numbers for several of the same things, and a guardrail that passes the\nwrong regulation is worse than one nobody checked.",
+      "enum": [
+        "us_general_industry",
+        "us_construction",
+        "user_declared"
+      ],
+      "title": "Regime",
+      "type": "string"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:fixed_ladder:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'fixed_ladder': the fields a Design Spec puts in `element_params` when it declares `element_type: fixed_ladder`. Generated from anvilate.packs.walking_working.FixedLadder.",
+  "properties": {
+    "clearance_behind": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "climbing_side_clearance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "fall_protection": {
+      "$ref": "#/$defs/LadderFallProtection",
+      "default": "none"
+    },
+    "height": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "rail_extension": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "regime": {
+      "$ref": "#/$defs/Regime"
+    },
+    "rung_clear_width": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "rung_spacing": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "side_clearance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "regime",
+    "height",
+    "rung_spacing",
+    "rung_clear_width",
+    "clearance_behind",
+    "rail_extension"
+  ],
+  "title": "FixedLadder",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

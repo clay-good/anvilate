@@ -575,6 +575,30 @@
    "unit": "m * Ω"
   }
  },
+ "fixed_ladder": {
+  "regime": "us_general_industry",
+  "height": {
+   "magnitude": 9.0,
+   "unit": "m"
+  },
+  "rung_spacing": {
+   "magnitude": 300.0,
+   "unit": "mm"
+  },
+  "rung_clear_width": {
+   "magnitude": 420.0,
+   "unit": "mm"
+  },
+  "clearance_behind": {
+   "magnitude": 190.0,
+   "unit": "mm"
+  },
+  "rail_extension": {
+   "magnitude": 1100.0,
+   "unit": "mm"
+  },
+  "fall_protection": "ladder_safety_system"
+ },
  "guardrail_system": {
   "regime": "us_general_industry",
   "post_height": {
@@ -897,6 +921,14 @@
    "magnitude": 12.0,
    "unit": "mm"
   }
+ },
+ "platform_edge": {
+  "regime": "us_general_industry",
+  "height_above_lower_level": {
+   "magnitude": 3.0,
+   "unit": "m"
+  },
+  "protection": "guardrail"
  },
  "pulley": {
   "bore": {

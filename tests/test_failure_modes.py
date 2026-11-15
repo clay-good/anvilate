@@ -496,12 +496,12 @@ def test_every_shipped_element_reaches_a_mode_or_is_recorded_as_debt() -> None:
     # when the fourteen everyday parts shipped: they are drawn and not checked, so each is
     # debt by construction, and recording that is the point of the list. And once more, to
     # 38, with the enclosure lid, for the same reason.
-    # 40 with the guardrail system and the stair: the catalogue is one of *mechanical* failure
+    # 42 with the walking-working pack's four: the catalogue is one of *mechanical* failure
     # modes and carries nothing a guardrail reaches. The ways one fails — a post pulled
     # out of its base, a weld at a rail connection, a run nobody tied to the structure —
     # are real and none of them is in here, and inventing one to keep this number down is
     # the thing the ledger's own header warns against.
-    assert len(recorded) <= 40, f"the uncatalogued list grew to {len(recorded)}"
+    assert len(recorded) <= 42, f"the uncatalogued list grew to {len(recorded)}"
     assert len(reached) >= 6
 
 
@@ -631,10 +631,10 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
     # way a part fails, and a deflection limit is serviceability against a number the
     # document declared. The catalogue carries no mode either could honestly name, and
     # inventing one to keep this number down is the thing the ratchet exists to prevent.
-    # 77 with the guardrail and stair screens, for the same reason their elements are in
+    # 79 with the walking-working pack's four, for the same reason their elements are in
     # the uncatalogued ledger: the catalogue is of mechanical failure modes and carries
     # nothing either reaches.
-    assert len(none) <= 77, f"the declares-none list grew to {len(none)}"
+    assert len(none) <= 79, f"the declares-none list grew to {len(none)}"
     # The page quotes both counts, and it said "five" while fourteen screens declared one.
     page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
     stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"

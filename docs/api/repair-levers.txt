@@ -124,6 +124,8 @@ walking_working.screen_guardrail -> post_section_modulus (solved)
 walking_working.screen_guardrail -> rail_section_modulus (solved)
 walking_working.screen_guardrail -> toeboard_section_modulus (solved)
 walking_working.screen_stair -> tread_capacity (solved)
+walking_working.screen_fixed_ladder -> fall_protection (directional)
+walking_working.screen_platform_edge -> protection (directional)
 ## no lever recorded
 assembly.screen_adjustment_access
 assembly.screen_inspectability
