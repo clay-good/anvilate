@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Eighty pages, arranged by what you are trying to do. The [README](../README.md) is the
+Eighty-one pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -43,6 +43,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Lifting devices](lifting-devices.md) · [Industrial covers](industrial-covers.md) | ASME BTH-1; flat covers and guard panels. |
 | [Machinery](machinery-screening.md) | Drive trains: shafts, gear meshes, keys, bearings, springs. |
 | [Building services](building-services-screening.md) | Noise dose, lighting, ventilation, feeders. |
+| [Walking-working surfaces](walking-working-surfaces.md) | Guardrails to 29 CFR 1910 Subpart D, each number read off the regulation with its paragraph, and the regime declared rather than assumed. |
 | [Opto-mechanics](optomechanics.md) | A lens kept in focus across temperature: depth of focus, the glass thermal constant, and the housing that decides it. |
 | [Thermal](thermal-screening.md) · [Weld fatigue](weld-fatigue-screening.md) · [Fitness-for-service](fitness-for-service-screening.md) · [Embodied carbon](embodied-carbon-screening.md) | Resistance networks, EN 1993-1-9 detail categories, FAD assessment, EN 15978. |
 

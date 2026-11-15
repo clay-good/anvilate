@@ -16,6 +16,7 @@ concrete_bearing
 cover_plate
 driven_pile
 feeder
+guardrail_system
 gusset_plate
 infinite_slope
 lifting_lug

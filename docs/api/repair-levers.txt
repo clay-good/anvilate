@@ -120,6 +120,9 @@ thermal.junction_temperature_scorecard -> thermal_resistance (solved)
 timber.screen_timber_beam -> depth (solved)
 ventilation.screen_ventilation -> provided_outdoor_airflow (solved)
 
+walking_working.screen_guardrail -> post_section_modulus (solved)
+walking_working.screen_guardrail -> rail_section_modulus (solved)
+walking_working.screen_guardrail -> toeboard_section_modulus (solved)
 ## no lever recorded
 assembly.screen_adjustment_access
 assembly.screen_inspectability

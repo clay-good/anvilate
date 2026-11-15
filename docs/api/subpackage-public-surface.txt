@@ -158,6 +158,10 @@ packs.structural.screen_welded_connection
 packs.timber.TimberBeam
 packs.timber.TimberLoad
 packs.timber.screen_timber_beam
+packs.walking_working.SUBPART_D_EDITION
+packs.walking_working.Regime
+packs.walking_working.GuardrailSystem
+packs.walking_working.screen_guardrail
 packs.ventilation.VentilationZone
 packs.ventilation.screen_ventilation
 report.CALC_RECORD_SCHEMA_VERSION

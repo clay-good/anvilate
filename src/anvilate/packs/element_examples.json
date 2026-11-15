@@ -575,6 +575,49 @@
    "unit": "m * Ω"
   }
  },
+ "guardrail_system": {
+  "regime": "us_general_industry",
+  "post_height": {
+   "magnitude": 1070.0,
+   "unit": "mm"
+  },
+  "post_spacing": {
+   "magnitude": 1800.0,
+   "unit": "mm"
+  },
+  "post_section_modulus": {
+   "magnitude": 4930.0,
+   "unit": "mm ** 3"
+  },
+  "post_second_moment": {
+   "magnitude": 119000.0,
+   "unit": "mm ** 4"
+  },
+  "yield_strength": {
+   "magnitude": 355.0,
+   "unit": "MPa"
+  },
+  "elastic_modulus": {
+   "magnitude": 200.0,
+   "unit": "GPa"
+  },
+  "rail_section_modulus": {
+   "magnitude": 4930.0,
+   "unit": "mm ** 3"
+  },
+  "midrail_height": {
+   "magnitude": 530.0,
+   "unit": "mm"
+  },
+  "toeboard_height": {
+   "magnitude": 100.0,
+   "unit": "mm"
+  },
+  "toeboard_section_modulus": {
+   "magnitude": 1670.0,
+   "unit": "mm ** 3"
+  }
+ },
  "gusset_plate": {
   "load": {
    "magnitude": 400.0,

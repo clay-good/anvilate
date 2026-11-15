@@ -201,6 +201,7 @@ _KEY = "machinery.screen_shaft_key"
 _BEAM = "structural.screen_beam_member"
 _BOLTS = "structural.screen_bolted_connection"
 _COLUMN = "structural.screen_column_member"
+_GUARDRAIL = "walking_working.screen_guardrail"
 
 #: The limit states the shipped modules evaluate. A module that adds a check adds it here.
 DEFAULT_LIMIT_STATES = LimitStateRegistry(
@@ -598,6 +599,40 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             "steel.fillet_weld_shear",
             "a fillet weld rupturing in shear through its throat",
             ("structural.screen_welded_connection", "weld shear"),
+        ),
+        # 29 CFR 1910 Subpart D's criteria, each a limit state in the ordinary sense: a
+        # way the thing stops doing its job. The guardrail's are strength and
+        # serviceability; the two height checks are conformance to a stated dimension and
+        # are not limit states, which is why they are not here.
+        _state(
+            "walking_working.guardrail_top_rail_strength",
+            "a guardrail post or top rail yielding under the 200 lbf the clause states",
+            (_GUARDRAIL, "post under the top rail load"),
+            (_GUARDRAIL, "top rail between posts"),
+            implementation="analysis.bending_stress",
+        ),
+        _state(
+            "walking_working.guardrail_deflection",
+            "a loaded guardrail's top rail deflecting below the height the clause states",
+            (_GUARDRAIL, "deflected height"),
+        ),
+        _state(
+            "walking_working.guardrail_height",
+            "a guardrail whose top rail sits outside the height band the clause states, "
+            "so it guards against a fall it was not sized for",
+            (_GUARDRAIL, "top rail height"),
+        ),
+        _state(
+            "walking_working.toeboard_height",
+            "a toeboard shorter than the clause states, so an object at its foot can pass over it",
+            (_GUARDRAIL, "toeboard height"),
+        ),
+        _state(
+            "walking_working.guardrail_intermediate_strength",
+            "a midrail or toeboard yielding under the force the clause states for it",
+            (_GUARDRAIL, "midrail"),
+            (_GUARDRAIL, "toeboard"),
+            implementation="analysis.bending_stress",
         ),
         _state(
             "ventilation.air_changes",

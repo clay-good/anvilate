@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Regime": {
+      "description": "Which regulation a walking-working surface is screened against.\n\nDeclared, never inferred. The three are not interchangeable: 1926 Subpart M says\ndifferent numbers for several of the same things, and a guardrail that passes the\nwrong regulation is worse than one nobody checked.",
+      "enum": [
+        "us_general_industry",
+        "us_construction",
+        "user_declared"
+      ],
+      "title": "Regime",
+      "type": "string"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:guardrail_system:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'guardrail_system': the fields a Design Spec puts in `element_params` when it declares `element_type: guardrail_system`. Generated from anvilate.packs.walking_working.GuardrailSystem.",
+  "properties": {
+    "elastic_modulus": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "midrail_height": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "post_height": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "post_second_moment": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "post_section_modulus": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "post_spacing": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "rail_section_modulus": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "regime": {
+      "$ref": "#/$defs/Regime"
+    },
+    "toeboard_height": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "toeboard_section_modulus": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "yield_strength": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "regime",
+    "post_height",
+    "post_spacing",
+    "post_section_modulus",
+    "post_second_moment",
+    "yield_strength",
+    "elastic_modulus",
+    "rail_section_modulus"
+  ],
+  "title": "GuardrailSystem",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}
