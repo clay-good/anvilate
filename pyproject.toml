@@ -62,6 +62,10 @@ dev = [
     # read back every 3MF file the exporter writes. The package never imports it.
     "lib3mf>=2.4",
     "jsonschema>=4.21",
+    # The independent referee for `anvilate.frame` (MIT, Copyright 2018 D. Craig Brinck).
+    # Every verification case in tests/test_frame.py is also solved by Pynite and the two
+    # have to agree; the package never imports it, and the closed-form cases run without it.
+    "PyNiteFEA>=3.2",
     "mypy>=1.11",
     "build123d<0.12,>=0.11.1",
     "cadquery-ocp-novtk<8,>=7.9",

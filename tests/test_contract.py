@@ -4264,6 +4264,10 @@ def test_the_repository_root_holds_only_files_that_belong_there():
         "SECURITY.md",
         "LICENSE",
         "README.md",
+        # The file `pre-commit` reads out of a repository it is pointed at. It only works
+        # from the root — that is where the tool looks — and it is what makes
+        # docs/parts-as-code.md's three-line config work for somebody else's repository.
+        ".pre-commit-hooks.yaml",
         # The standard manifest consumed by the official MCP Registry publisher.
         "server.json",
         "package-lock.json",

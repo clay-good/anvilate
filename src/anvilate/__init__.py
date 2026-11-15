@@ -50,6 +50,9 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.ci` — parts as code: a finding on the line of the spec field that
   caused it, SARIF and JUnit for the dashboards, and a committed baseline of card
   digests so "what changed" is a different question from "what fails".
+- :mod:`anvilate.frame` — the member forces a frame carries, solved rather than typed:
+  a first-order three-dimensional direct-stiffness analysis in pure Python, with a
+  mechanism named instead of solved around and the equilibrium residual reported.
 - :mod:`anvilate.contracts` — the Spec IR and the scorecard published as versioned
   JSON Schema 2020-12 artifacts, generated from the models and held against them.
 - :mod:`anvilate._assembly_declarations` — the private home of the parts, states and
