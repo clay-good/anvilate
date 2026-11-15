@@ -2959,7 +2959,8 @@ def test_initialize_hands_the_agent_its_rules_and_the_live_catalogue():
     )
     text = init["result"]["instructions"]
     assert text == agent_instructions()
-    assert "constraints.min_safety_factor" in text and "max_safety_factor is only" in text
+    assert "constraints.min_safety_factor" in text
+    assert "max_safety_factor is an upper limit only" in text
     resolver = default_standards_resolver()
     for material in resolver.known_materials():
         assert material in text

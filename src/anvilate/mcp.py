@@ -1253,14 +1253,14 @@ _AGENT_RULES = """Anvilate is a local, deterministic engineering checker: you wr
 Design Spec, it validates and screens it. describe_part gives a part's fields and an
 example spec; run_validation and build_part each return a subject the other tools
 take. Fix what a refusal names and call again; never report a check that did not run.
-- Write only what the user stated: no invented interfaces, dimensions, exports or loads. Ask
-  for a missing load, material or interface; do not guess it.
-- A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0, "origin":
-  "user_stated"}); max_safety_factor is only an explicit upper limit.
+- Write only what the user stated: never invent an interface, dimension, export or
+  load. Ask for a missing one; do not guess it.
+- A stated minimum safety factor is constraints.min_safety_factor ({"value": 2.0,
+  "origin": "user_stated"}); max_safety_factor is an upper limit only.
 - To screen or draw a part, set element_type to a part below and its fields in
-  element_params. acceptance.tiers is ["T1_analytical"] for a check or screen.
-- Copy ids exactly as listed. A quantity is {"magnitude": 50, "unit": "kN"} in the
-  user's units; a product of units uses "*": "kN*m"."""
+  element_params. acceptance.tiers is ["T1_analytical"].
+- Copy ids exactly. A quantity is {"magnitude": 50, "unit": "kN"} in the user's units;
+  a product of units uses "*": "kN*m"."""
 
 # Claude Code 2.1 keeps the first 2,048 characters of a server's instructions and drops the
 # rest ("Server instructions truncated from 10192 to 2048 chars", its debug log, 2026-10-09).
@@ -1269,6 +1269,14 @@ take. Fix what a refusal names and call again; never report a check that did not
 # padeye guessed `padeye`, `lug` and `pad_eye`. The rules, element names and material ids
 # come first and are held under this limit by a test; the detail after it is also what the
 # refusals name, so a client that cuts it loses speed, not the way forward.
+#
+# THE BUDGET IS NEARLY SPENT. Forty-seven element names and twenty-five material ids are
+# 1,200 of the 2,048, and the rules above were tightened in 2026-11 to make room for the
+# walking-working pack's two. The next element or two will not fit, and the answer then is
+# to move the MATERIALS line below the detail marker and leave the element names: an agent
+# that guesses an element name gets a refusal listing them, and one that guesses a material
+# id gets the same — but the element name is what it needs to write anything at all. The
+# test below is what will say when the day comes, rather than a client silently truncating.
 CLIENT_INSTRUCTIONS_LIMIT = 2048
 
 

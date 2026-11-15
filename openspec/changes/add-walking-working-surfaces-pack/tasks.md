@@ -14,7 +14,7 @@ in `src/anvilate/packs/industrial.py`, and `add-frame-analysis`.
 
 - [x] 2.1 Guardrail system element: posts, top rail, midrail, toeboard; 200 lbf and 150 lbf
       cases at the worst point; deflection rule
-- [ ] 2.2 Stair system element: stringers, treads, landings, stair rail; concentrated and
+- [x] 2.2 Stair system element: stringers, treads, landings, stair rail; concentrated and
       factored live loads; angle, riser, tread, width, headroom, landing rules
 - [ ] 2.3 Fixed ladder element: rung spacing, clear width, clearances, side rail extension;
       the 24 ft fall-protection trigger

@@ -202,6 +202,7 @@ _BEAM = "structural.screen_beam_member"
 _BOLTS = "structural.screen_bolted_connection"
 _COLUMN = "structural.screen_column_member"
 _GUARDRAIL = "walking_working.screen_guardrail"
+_STAIR = "walking_working.screen_stair"
 
 #: The limit states the shipped modules evaluate. A module that adds a check adds it here.
 DEFAULT_LIMIT_STATES = LimitStateRegistry(
@@ -626,6 +627,27 @@ DEFAULT_LIMIT_STATES = LimitStateRegistry(
             "walking_working.toeboard_height",
             "a toeboard shorter than the clause states, so an object at its foot can pass over it",
             (_GUARDRAIL, "toeboard height"),
+        ),
+        _state(
+            "walking_working.stair_geometry",
+            "a stair whose slope, riser, tread, width or headroom is outside what the "
+            "clause states, so it is harder to climb safely than the rule allows",
+            (_STAIR, "angle"),
+            (_STAIR, "riser height"),
+            (_STAIR, "tread depth"),
+            (_STAIR, "width"),
+            (_STAIR, "headroom"),
+        ),
+        _state(
+            "walking_working.stair_landing",
+            "a landing shallower than the clause states, or narrower than its own stair",
+            (_STAIR, "landing depth"),
+            (_STAIR, "landing width"),
+        ),
+        _state(
+            "walking_working.stair_tread_load",
+            "a stair tread failing under the load the clause requires it to carry",
+            (_STAIR, "tread load"),
         ),
         _state(
             "walking_working.guardrail_intermediate_strength",

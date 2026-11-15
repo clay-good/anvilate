@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "Quantity": {
+      "description": "A physical value: a magnitude and the unit it was expressed in.\n\nConstruct directly (``Quantity(magnitude=75, unit=\"kip\")``) or parse from\ntext (``Quantity.parse(\"75 kip\")``). The stored ``unit`` string is exactly\nwhat the user wrote, canonicalized only to Pint's spelling of it.",
+      "properties": {
+        "magnitude": {
+          "title": "Magnitude",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "magnitude",
+        "unit"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Regime": {
+      "description": "Which regulation a walking-working surface is screened against.\n\nDeclared, never inferred. The three are not interchangeable: 1926 Subpart M says\ndifferent numbers for several of the same things, and a guardrail that passes the\nwrong regulation is worse than one nobody checked.",
+      "enum": [
+        "us_general_industry",
+        "us_construction",
+        "user_declared"
+      ],
+      "title": "Regime",
+      "type": "string"
+    },
+    "StairKind": {
+      "description": "Which of 1910.25's stair paragraphs governs. The angles and treads differ.",
+      "enum": [
+        "standard",
+        "ship"
+      ],
+      "title": "StairKind",
+      "type": "string"
+    }
+  },
+  "$id": "urn:anvilate:schema:elements:stair_system:1.1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate pack element 'stair_system': the fields a Design Spec puts in `element_params` when it declares `element_type: stair_system`. Generated from anvilate.packs.walking_working.StairSystem.",
+  "properties": {
+    "angle": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "anticipated_live_load": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "headroom": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "kind": {
+      "$ref": "#/$defs/StairKind",
+      "default": "standard"
+    },
+    "landing_depth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "regime": {
+      "$ref": "#/$defs/Regime"
+    },
+    "riser_height": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "tread_capacity": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "tread_depth": {
+      "$ref": "#/$defs/Quantity"
+    },
+    "width": {
+      "$ref": "#/$defs/Quantity"
+    }
+  },
+  "required": [
+    "regime",
+    "angle",
+    "riser_height",
+    "tread_depth",
+    "width",
+    "headroom",
+    "tread_capacity",
+    "anticipated_live_load"
+  ],
+  "title": "StairSystem",
+  "type": "object",
+  "x-anvilate-version": "1.1.0"
+}

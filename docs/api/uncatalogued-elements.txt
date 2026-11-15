@@ -32,6 +32,7 @@ shaft_key
 shallow_footing
 shear_plate
 spacer
+stair_system
 standoff
 stepped_shaft
 structure

@@ -114,3 +114,4 @@ structural.screen_welded_connection
 thermal.junction_temperature_scorecard
 ventilation.screen_ventilation
 walking_working.screen_guardrail
+walking_working.screen_stair

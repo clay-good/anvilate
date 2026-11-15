@@ -1182,6 +1182,42 @@
   "size_factor": 1.0,
   "surface_condition_factor": 1.0
  },
+ "stair_system": {
+  "regime": "us_general_industry",
+  "kind": "standard",
+  "angle": {
+   "magnitude": 38.0,
+   "unit": "degree"
+  },
+  "riser_height": {
+   "magnitude": 180.0,
+   "unit": "mm"
+  },
+  "tread_depth": {
+   "magnitude": 280.0,
+   "unit": "mm"
+  },
+  "width": {
+   "magnitude": 900.0,
+   "unit": "mm"
+  },
+  "headroom": {
+   "magnitude": 2100.0,
+   "unit": "mm"
+  },
+  "tread_capacity": {
+   "magnitude": 6.0,
+   "unit": "kN"
+  },
+  "anticipated_live_load": {
+   "magnitude": 1.2,
+   "unit": "kN"
+  },
+  "landing_depth": {
+   "magnitude": 900.0,
+   "unit": "mm"
+  }
+ },
  "standoff": {
   "across_flats": {
    "magnitude": 8.0,

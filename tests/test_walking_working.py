@@ -12,7 +12,18 @@ from pydantic import ValidationError
 
 from anvilate.packs.walking_working import (
     DEFLECTED_HEIGHT_FLOOR,
+    LIVE_LOAD_FACTOR,
+    MAX_RISER,
     MIDRAIL_FORCE,
+    MIN_CONCENTRATED_LOAD,
+    MIN_HEADROOM,
+    MIN_LANDING_DEPTH,
+    MIN_STAIR_WIDTH,
+    MIN_TREAD_DEPTH,
+    SHIP_MIN_TREAD_DEPTH,
+    SHIP_MIN_TREAD_WIDTH,
+    SHIP_STAIR_ANGLE_RANGE,
+    STAIR_ANGLE_RANGE,
     SUBPART_D_EDITION,
     TOEBOARD_FORCE,
     TOEBOARD_HEIGHT,
@@ -21,7 +32,10 @@ from anvilate.packs.walking_working import (
     TOP_RAIL_TOLERANCE,
     GuardrailSystem,
     Regime,
+    StairKind,
+    StairSystem,
     screen_guardrail,
+    screen_stair,
 )
 from anvilate.refusal import RefusalError
 from anvilate.scorecard import CheckStatus
@@ -366,3 +380,163 @@ def test_the_docs_page_quotes_the_clauses_own_numbers():
     for clause in re.findall(r"\| (1910\.\d+\([^)]+\)[^|]*?) \|", page):
         assert f"29 CFR {clause.strip()}" in cited, f"the page names {clause} and nothing cites it"
     assert len(cited) >= 5
+
+
+# --- stairways, 29 CFR 1910.25 ---------------------------------------------------------
+
+
+def _stair(**overrides: object) -> StairSystem:
+    """A 38-degree steel stair: 180 mm risers, 280 mm treads, 900 mm wide."""
+    fields: dict[str, object] = {
+        "regime": Regime.GENERAL_INDUSTRY,
+        "kind": StairKind.STANDARD,
+        "angle": _Q("38 degree"),
+        "riser_height": _Q("180 mm"),
+        "tread_depth": _Q("280 mm"),
+        "width": _Q("900 mm"),
+        "headroom": _Q("2100 mm"),
+        "tread_capacity": _Q("6 kN"),
+        "anticipated_live_load": _Q("1.2 kN"),
+        "landing_depth": _Q("900 mm"),
+    }
+    fields.update(overrides)
+    return StairSystem(**fields)  # type: ignore[arg-type]
+
+
+def test_every_stair_constant_is_what_the_clause_says():
+    assert STAIR_ANGLE_RANGE == (30.0, 50.0)  # 1910.25(c)(1)
+    assert SHIP_STAIR_ANGLE_RANGE == (50.0, 70.0)  # 1910.25(e)(1)
+    assert MAX_RISER.to("inch").magnitude == 9.5  # 1910.25(c)(2)
+    assert MIN_TREAD_DEPTH.to("inch").magnitude == 9.5  # 1910.25(c)(3)
+    assert MIN_STAIR_WIDTH.to("inch").magnitude == 22.0  # 1910.25(c)(4)
+    assert SHIP_MIN_TREAD_DEPTH.to("inch").magnitude == 4.0  # 1910.25(e)(3)
+    assert SHIP_MIN_TREAD_WIDTH.to("inch").magnitude == 18.0  # 1910.25(e)(4)
+    assert MIN_HEADROOM.to("inch").magnitude == 80.0  # 6 ft 8 in, 1910.25(b)(2)
+    assert MIN_LANDING_DEPTH.to("inch").magnitude == 30.0  # 1910.25(b)(4)
+    assert LIVE_LOAD_FACTOR == 5.0  # 1910.25(b)(6)
+    assert MIN_CONCENTRATED_LOAD.to("lbf").magnitude == 1000.0  # 1910.25(b)(6)
+    # The SI figures the clause prints beside them.
+    assert MIN_HEADROOM.to("cm").magnitude == pytest.approx(203.0, abs=0.5)
+    assert MIN_LANDING_DEPTH.to("cm").magnitude == pytest.approx(76.0, abs=0.5)
+    # The clause prints "(454 kg)" beside the 1,000 lb, which is a mass beside a force;
+    # 1,000 lbf is the weight of 454 kg, and that is the reading taken here.
+    assert MIN_CONCENTRATED_LOAD.to("N").magnitude == pytest.approx(454.0 * 9.80665, rel=2e-3)
+
+
+@pytest.mark.parametrize(
+    ("degrees", "status"),
+    [
+        (30.0, CheckStatus.PASS),
+        (50.0, CheckStatus.PASS),
+        (29.9, CheckStatus.FAIL),
+        (50.1, CheckStatus.FAIL),
+    ],
+)
+def test_a_standard_stair_runs_between_30_and_50_degrees_inclusive(degrees, status):
+    card = screen_stair(_stair(angle=Quantity(magnitude=degrees, unit="degree")))
+    assert _entry(card, "stair angle").status is status
+
+
+def test_a_ship_stair_is_judged_by_its_own_paragraph():
+    """50 to 70 degrees, 4 in treads, 18 in tread width — all different numbers."""
+    steep = _stair(
+        kind=StairKind.SHIP,
+        angle=_Q("60 degree"),
+        tread_depth=_Q("120 mm"),
+        width=_Q("500 mm"),
+    )
+    card = screen_stair(steep)
+    assert _entry(card, "stair angle").status is CheckStatus.PASS
+    assert _entry(card, "stair tread depth").status is CheckStatus.PASS
+    assert _entry(card, "stair width").status is CheckStatus.PASS
+    # And the same geometry as a standard stair fails all three.
+    standard = screen_stair(
+        _stair(angle=_Q("60 degree"), tread_depth=_Q("120 mm"), width=_Q("500 mm"))
+    )
+    for name in ("stair angle", "stair tread depth", "stair width"):
+        assert _entry(standard, name).status is CheckStatus.FAIL, name
+    # The 18 in is the TREAD's width on a ship stair and the stair's between barriers on
+    # a standard one, and the card says which.
+    assert "tread width" in _entry(card, "stair width").detail
+    assert "between vertical barriers" in _entry(standard, "stair width").detail
+
+
+def test_no_geometry_entry_renders_a_comparison_that_contradicts_its_verdict():
+    """A two-sided band reported against one bound says the opposite of its own status."""
+    for stair in (
+        _stair(angle=_Q("25 degree")),
+        _stair(angle=_Q("55 degree")),
+        _stair(riser_height=_Q("300 mm")),
+        _stair(tread_depth=_Q("150 mm")),
+        _stair(headroom=_Q("1900 mm")),
+        _stair(),
+    ):
+        for entry in screen_stair(stair).entries:
+            if entry.comparison is None:
+                continue
+            assert entry.comparison.passes() is (entry.status is CheckStatus.PASS), entry.name
+
+
+def test_the_load_rule_is_both_halves_and_the_governing_one_is_named():
+    """(b)(6) is five times the live load AND never less than 1,000 lb."""
+    # A light stair: the 1,000 lb floor governs.
+    light = _entry(screen_stair(_stair(anticipated_live_load=_Q("0.5 kN"))), "stair tread load")
+    assert "concentrated-load floor" in light.detail
+    assert light.safety_factor == pytest.approx(
+        _Q("6 kN").to("N").magnitude / MIN_CONCENTRATED_LOAD.to("N").magnitude, rel=1e-9
+    )
+    # A heavily loaded one: five times the live load governs.
+    heavy = _entry(screen_stair(_stair(anticipated_live_load=_Q("2 kN"))), "stair tread load")
+    assert "5 times the declared live load" in heavy.detail
+    assert heavy.safety_factor == pytest.approx(6000.0 / 10000.0, rel=1e-9)
+    # Both cards name the other half, so a reader can see the one that did not govern.
+    assert "1000 lbf" in heavy.detail
+    assert "N" in light.detail
+
+
+def test_a_light_stair_that_cannot_take_the_concentrated_floor_fails():
+    """The case the floor was written for: a card screening only five-times would pass it."""
+    entry = _entry(
+        screen_stair(_stair(anticipated_live_load=_Q("0.2 kN"), tread_capacity=_Q("3 kN"))),
+        "stair tread load",
+    )
+    assert entry.status is CheckStatus.FAIL
+    assert entry.repair_hint is not None
+    assert entry.repair_hint.parameter == "tread_capacity"
+    repaired = _stair(
+        anticipated_live_load=_Q("0.2 kN"),
+        tread_capacity=Quantity(magnitude=entry.repair_hint.corrective_value, unit="N"),
+    )
+    landed = _entry(screen_stair(repaired), "stair tread load")
+    assert landed.status is CheckStatus.PASS
+    assert landed.safety_factor == pytest.approx(1.0, rel=1e-9)
+
+
+def test_a_run_with_no_landing_gets_no_landing_entry():
+    names = {entry.name for entry in screen_stair(_stair(landing_depth=None)).entries}
+    assert "stair landing depth" not in names
+    assert "stair landing width" not in names
+
+
+def test_a_landing_narrower_than_its_own_stair_fails_the_width_half():
+    """(b)(4) is two rules: at least 30 in deep, and at least the width of the stair."""
+    card = screen_stair(_stair(width=_Q("1500 mm"), landing_depth=_Q("900 mm")))
+    assert _entry(card, "stair landing depth").status is CheckStatus.PASS
+    assert _entry(card, "stair landing width").status is CheckStatus.FAIL
+
+
+def test_a_stair_at_ninety_degrees_is_a_ladder_and_says_so():
+    with pytest.raises(ValidationError, match="1910.23 governs that"):
+        _stair(angle=_Q("90 degree"))
+
+
+def test_a_construction_stair_is_refused_like_a_construction_guardrail():
+    with pytest.raises(RefusalError, match="1926 Subparts M and X"):
+        screen_stair(_stair(regime=Regime.CONSTRUCTION))
+
+
+def test_every_stair_entry_cites_its_paragraph_and_its_edition():
+    for entry in screen_stair(_stair()).entries:
+        assert entry.reference is not None
+        assert "29 CFR 1910.25" in entry.reference
+        assert SUBPART_D_EDITION in entry.reference

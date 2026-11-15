@@ -58,12 +58,52 @@ the number, and the entry says so.
 A failing strength check names the section modulus to move and the value that lands the
 margin exactly — the stress is linear in 1/Z, so the value is a solve and not a search.
 
+## What a stair is checked against
+
+```yaml
+element_type: stair_system
+element_params:
+  regime: us_general_industry
+  kind: standard                  # or `ship`, which has its own paragraph
+  angle: {magnitude: 38, unit: degree}
+  riser_height: {magnitude: 180, unit: mm}
+  tread_depth: {magnitude: 280, unit: mm}
+  width: {magnitude: 900, unit: mm}
+  headroom: {magnitude: 2100, unit: mm}
+  tread_capacity: {magnitude: 6, unit: kN}
+  anticipated_live_load: {magnitude: 1.2, unit: kN}
+  landing_depth: {magnitude: 900, unit: mm}
+```
+
+| Check | Clause | Standard | Ship |
+| --- | --- | --- | --- |
+| Slope from the horizontal | (c)(1) / (e)(1) | 30 to 50 degrees | 50 to 70 degrees |
+| Riser height | (c)(2) | at most 9.5 in | — |
+| Tread depth | (c)(3) / (e)(3) | at least 9.5 in | at least 4 in |
+| Width | (c)(4) / (e)(4) | at least 22 in **between vertical barriers** | at least 18 in **of tread** |
+| Headroom above a tread | (b)(2) | at least 6 ft 8 in | same |
+| Landing | (b)(4) | at least 30 in deep **and** at least the stair's own width | same |
+| Tread load | (b)(6) | five times the declared live load, **and never less than** a 1,000 lb concentrated load | same |
+
+**(b)(6) is two requirements, not one.** The governing half is found and named, and the
+card says what the other half asked for. A stair sized on the five-times rule alone can
+still fail the 1,000 lb floor, which is the case the floor was written for.
+
+**The width means different things in the two paragraphs.** (c)(4) measures the stair
+between its vertical barriers; (e)(4) measures the tread itself. The card says which it
+measured, and the first draft of these notes had them confused.
+
+A geometry entry's comparison always names **the bound its verdict turned on**. A
+two-sided band reported against one end would render a 25-degree stair as "25 deg vs at
+most 50 deg" beside a FAIL — a sentence contradicting the verdict above it.
+
 ## Not in this pack yet
 
-Stairs, fixed ladders and platform edges: 1910.25, 1910.23 and 1910.28(b) are read and
-recorded in the change's design notes, and the elements are not built. A guardrail run as
-a combination of real tube posts and rails, with the post bases on anchors, is likewise
-recorded and not built.
+Fixed ladders and platform edges: 1910.23 and 1910.28(b) are read and recorded in the
+change's design notes, and the elements are not built. A guardrail run as a combination
+of real tube posts and rails, with the post bases on anchors, is likewise recorded and
+not built. Spiral and alternating-tread stairs are read and not built; `kind` carries the
+two this pack screens.
 
 ## What this pack does not do
 

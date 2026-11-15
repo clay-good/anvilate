@@ -51,6 +51,20 @@ __all__ = [
     "Regime",
     "GuardrailSystem",
     "screen_guardrail",
+    "STAIR_ANGLE_RANGE",
+    "SHIP_STAIR_ANGLE_RANGE",
+    "MAX_RISER",
+    "MIN_TREAD_DEPTH",
+    "SHIP_MIN_TREAD_DEPTH",
+    "MIN_STAIR_WIDTH",
+    "SHIP_MIN_TREAD_WIDTH",
+    "MIN_HEADROOM",
+    "MIN_LANDING_DEPTH",
+    "LIVE_LOAD_FACTOR",
+    "MIN_CONCENTRATED_LOAD",
+    "StairKind",
+    "StairSystem",
+    "screen_stair",
 ]
 
 #: The edition of Subpart D these numbers were read from, as the text states it. Printed
@@ -597,3 +611,340 @@ def _toeboard_height_entry(guardrail: GuardrailSystem) -> ScorecardEntry:
             "arithmetic between the two numbers"
         ),
     )
+
+
+# --- stairways, 29 CFR 1910.25 --------------------------------------------------------
+#
+# Read from https://www.law.cornell.edu/cfr/text/29/1910.25 on 2026-11-15.
+
+#: 1910.25(c)(1): standard stairs are installed at 30 to 50 degrees from the horizontal.
+STAIR_ANGLE_RANGE = (30.0, 50.0)
+#: 1910.25(e)(1): ship stairs, 50 to 70 degrees.
+SHIP_STAIR_ANGLE_RANGE = (50.0, 70.0)
+#: 1910.25(c)(2): maximum riser height 9.5 in.
+MAX_RISER = Quantity(magnitude=9.5, unit="inch")
+#: 1910.25(c)(3): minimum tread depth 9.5 in.
+MIN_TREAD_DEPTH = Quantity(magnitude=9.5, unit="inch")
+#: 1910.25(e)(3): a ship stair's minimum tread depth is 4 in.
+SHIP_MIN_TREAD_DEPTH = Quantity(magnitude=4.0, unit="inch")
+#: 1910.25(c)(4): minimum width 22 in between vertical barriers.
+MIN_STAIR_WIDTH = Quantity(magnitude=22.0, unit="inch")
+#: 1910.25(e)(4): a ship stair's minimum tread width is 18 in.
+SHIP_MIN_TREAD_WIDTH = Quantity(magnitude=18.0, unit="inch")
+#: 1910.25(b)(2): vertical clearance above any tread, at least 6 ft 8 in.
+MIN_HEADROOM = Quantity(magnitude=80.0, unit="inch")
+#: 1910.25(b)(4): landings at least the stair's width and at least 30 in deep.
+MIN_LANDING_DEPTH = Quantity(magnitude=30.0, unit="inch")
+#: 1910.25(b)(6): at least five times the anticipated live load, and never less than a
+#: 1,000 lb concentrated load at any point. Both halves, because the clause is both.
+LIVE_LOAD_FACTOR = 5.0
+MIN_CONCENTRATED_LOAD = Quantity(magnitude=1000.0, unit="lbf")
+
+_STAIR_SOURCE = "the stair as declared: its geometry, its loads and its kind"
+
+
+class StairKind(StrEnum):
+    """Which of 1910.25's stair paragraphs governs. The angles and treads differ."""
+
+    #: (c) standard stairs — the default, and the one (b)(7) says to use.
+    STANDARD = "standard"
+    #: (e) ship stairs, permitted only where (b)(8) allows.
+    SHIP = "ship"
+
+
+class StairSystem(GuardedInputs):
+    """A run of stairs, and what 1910.25 needs to judge it.
+
+    ``anticipated_live_load`` is the load the stair is designed for, which is the
+    document's to state: (b)(6) asks for five times it *and* never less than a 1,000 lb
+    concentrated load, so the governing one of the two is found rather than assumed.
+    ``tread_capacity`` is what one tread can actually carry, which is what both are
+    screened against.
+
+    ``landing_depth`` is ``None`` on a run with no landing, and the landing entries are
+    then absent rather than passing.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    regime: Regime
+    kind: StairKind = StairKind.STANDARD
+    angle: Quantity
+    riser_height: Quantity
+    tread_depth: Quantity
+    width: Quantity
+    headroom: Quantity
+    tread_capacity: Quantity
+    anticipated_live_load: Quantity
+    landing_depth: Quantity | None = None
+
+    @model_validator(mode="after")
+    def _dimensions_are_what_they_say(self) -> StairSystem:
+        for value, name, dimension in (
+            (self.riser_height, "riser_height", "[length]"),
+            (self.tread_depth, "tread_depth", "[length]"),
+            (self.width, "width", "[length]"),
+            (self.headroom, "headroom", "[length]"),
+            (self.tread_capacity, "tread_capacity", "[force]"),
+            (self.anticipated_live_load, "anticipated_live_load", "[force]"),
+            (self.landing_depth, "landing_depth", "[length]"),
+        ):
+            if value is None:
+                continue
+            if not value.has_dimension(dimension):
+                raise _refuse(
+                    f"{name} is a {dimension}; got {value.dimensionality}",
+                    subject=name,
+                    source=_STAIR_SOURCE,
+                )
+            if value.magnitude <= 0:
+                raise _refuse(
+                    f"{name} is positive; got {value}", subject=name, source=_STAIR_SOURCE
+                )
+        if str(self.angle.pint.dimensionality) != "dimensionless":
+            raise _refuse(
+                f"angle is an angle; got {self.angle.dimensionality}",
+                subject="angle",
+                source=_STAIR_SOURCE,
+            )
+        degrees = self.angle.to("degree").magnitude
+        if not 0.0 < degrees < 90.0:
+            raise _refuse(
+                f"a stair's angle from the horizontal is between 0 and 90 degrees; got "
+                f"{degrees:g}. At 90 it is a ladder, and 1910.23 governs that",
+                subject="angle",
+                source=_STAIR_SOURCE,
+            )
+        return self
+
+
+def _band_entry(
+    name: str,
+    measured: Quantity,
+    *,
+    low: float | None,
+    high: float | None,
+    unit: str,
+    paragraph: str,
+    what: str,
+    label: str,
+) -> ScorecardEntry:
+    """One geometry rule: a measured dimension against the band the clause states.
+
+    The comparison names **the bound the verdict turned on**, not an arbitrary one. A
+    two-sided band — a stair's 30 to 50 degrees — reported against its upper bound alone
+    would render a 25-degree stair as "25 deg vs at most 50 deg" beside a FAIL, which is
+    a sentence that contradicts the verdict printed above it. Nothing in the library
+    refuses that pair, so it is this function's job not to build one.
+    """
+    value = measured.to(unit).magnitude
+    if low is not None and value < low:
+        status, said = CheckStatus.FAIL, f"below the {low:g} {unit} the clause states"
+        limit, sense = Quantity(magnitude=low, unit=unit), LimitSense.AT_LEAST
+    elif high is not None and value > high:
+        status, said = CheckStatus.FAIL, f"above the {high:g} {unit} the clause states"
+        limit, sense = Quantity(magnitude=high, unit=unit), LimitSense.AT_MOST
+    elif high is not None:
+        status, said = CheckStatus.PASS, _within(low, high, unit)
+        limit, sense = Quantity(magnitude=high, unit=unit), LimitSense.AT_MOST
+    else:
+        status, said = CheckStatus.PASS, _within(low, high, unit)
+        limit, sense = Quantity(magnitude=low or 0.0, unit=unit), LimitSense.AT_LEAST
+    return ScorecardEntry(
+        name=name,
+        status=status,
+        detail=f"{label} {measured}, {said}",
+        reference=_clause(paragraph, what),
+        comparison=Comparison(
+            # In the clause's own unit, the one the status above was decided in. Leaving
+            # the measured value in the document's unit made `passes()` convert a second
+            # time, and a landing exactly as deep as its stair is wide came out as a
+            # passing entry whose own comparison said it failed.
+            measured=Quantity(magnitude=value, unit=unit),
+            limit=limit,
+            sense=sense,
+            measured_label=label,
+            limit_label="the limit the clause states",
+        ),
+        underived=_underived(
+            "the clause states a dimension and the check is the comparison; there is no "
+            "arithmetic between the two numbers"
+        ),
+    )
+
+
+def _within(low: float | None, high: float | None, unit: str) -> str:
+    """What a passing dimension is inside, said as the clause says it."""
+    if low is not None and high is not None:
+        return f"inside the {low:g} to {high:g} {unit} the clause states"
+    if high is not None:
+        return f"at or under the {high:g} {unit} the clause states"
+    return f"at or over the {low:g} {unit} the clause states"
+
+
+def screen_stair(stair: StairSystem, *, required_safety_factor: float = 1.0) -> Scorecard:
+    """Screen a :class:`StairSystem` against 29 CFR 1910.25 and return its card.
+
+    The geometry rules of (b) and of the paragraph the stair's kind selects, then the
+    load rule of (b)(6) — which is **two** requirements, not one: five times the
+    anticipated live load, and never less than a 1,000 lb concentrated load. The
+    governing one is found and named, because a stair sized on the five-times rule alone
+    can still fail the floor, and a card reporting only one of the two has answered half
+    the clause.
+    """
+    _general_industry(stair.regime, "stair")
+    ship = stair.kind is StairKind.SHIP
+    low, high = SHIP_STAIR_ANGLE_RANGE if ship else STAIR_ANGLE_RANGE
+    entries = [
+        _band_entry(
+            "stair angle",
+            stair.angle,
+            low=low,
+            high=high,
+            unit="degree",
+            paragraph="25(e)(1)" if ship else "25(c)(1)",
+            what=f"{'ship' if ship else 'standard'} stair slope",
+            label="slope from the horizontal",
+        ),
+        _band_entry(
+            "stair riser height",
+            stair.riser_height,
+            low=None,
+            high=MAX_RISER.to("inch").magnitude,
+            unit="inch",
+            paragraph="25(c)(2)",
+            what="maximum riser height",
+            label="riser height",
+        ),
+        _band_entry(
+            "stair tread depth",
+            stair.tread_depth,
+            low=(SHIP_MIN_TREAD_DEPTH if ship else MIN_TREAD_DEPTH).to("inch").magnitude,
+            high=None,
+            unit="inch",
+            paragraph="25(e)(3)" if ship else "25(c)(3)",
+            what="minimum tread depth",
+            label="tread depth",
+        ),
+        _band_entry(
+            "stair width",
+            stair.width,
+            low=(SHIP_MIN_TREAD_WIDTH if ship else MIN_STAIR_WIDTH).to("inch").magnitude,
+            high=None,
+            unit="inch",
+            paragraph="25(e)(4)" if ship else "25(c)(4)",
+            # The two clauses measure different things and the card says which: (c)(4) is
+            # the stair's width between vertical barriers, (e)(4) is the tread's own width.
+            what="minimum tread width" if ship else "minimum width between vertical barriers",
+            label="tread width" if ship else "width between vertical barriers",
+        ),
+        _band_entry(
+            "stair headroom",
+            stair.headroom,
+            low=MIN_HEADROOM.to("inch").magnitude,
+            high=None,
+            unit="inch",
+            paragraph="25(b)(2)",
+            what="vertical clearance above any tread",
+            label="vertical clearance above the tread",
+        ),
+    ]
+    if stair.landing_depth is not None:
+        entries.append(
+            _band_entry(
+                "stair landing depth",
+                stair.landing_depth,
+                low=MIN_LANDING_DEPTH.to("inch").magnitude,
+                high=None,
+                unit="inch",
+                paragraph="25(b)(4)",
+                what="landing depth in the direction of travel",
+                label="landing depth",
+            )
+        )
+        entries.append(
+            _band_entry(
+                "stair landing width",
+                stair.landing_depth,
+                low=stair.width.to("inch").magnitude,
+                high=None,
+                unit="inch",
+                paragraph="25(b)(4)",
+                what="landing at least the width of the stair",
+                label="landing depth against the stair's own width",
+            )
+        )
+    entries.append(_tread_load_entry(stair, required_safety_factor))
+    return Scorecard(entries=tuple(entries))
+
+
+def _tread_load_entry(stair: StairSystem, required_safety_factor: float) -> ScorecardEntry:
+    """1910.25(b)(6): five times the live load, and never less than 1,000 lb.
+
+    Two requirements in one sentence, and the governing one is whichever is larger. A
+    card that screened only the five-times rule would pass a lightly loaded stair that
+    cannot take the concentrated load the clause floors it at, which is exactly the case
+    the floor was written for.
+    """
+    factored = Quantity(
+        magnitude=stair.anticipated_live_load.to("N").magnitude * LIVE_LOAD_FACTOR, unit="N"
+    )
+    floor = MIN_CONCENTRATED_LOAD
+    governing, why = (
+        (factored, f"{LIVE_LOAD_FACTOR:g} times the declared live load")
+        if factored.to("N").magnitude >= floor.to("N").magnitude
+        else (floor, "the concentrated-load floor the clause states")
+    )
+    computed = stair.tread_capacity.to("N").magnitude / governing.to("N").magnitude
+    reference = _clause("25(b)(6)", "five times the live load, never less than 1,000 lb")
+    entry = ScorecardEntry.from_safety_factor(
+        "stair tread load", computed=computed, required=required_safety_factor
+    ).model_copy(
+        update={
+            "reference": reference,
+            "detail": (
+                f"tread capacity {stair.tread_capacity} against {governing}, which is "
+                f"{why}; the other half of the clause asks for "
+                f"{floor if governing is factored else factored}"
+            ),
+            "derivation": Derivation(
+                symbolic="U = R/P_req",
+                inputs=(
+                    SymbolValue(
+                        symbol="R",
+                        description="what one tread can carry",
+                        value=stair.tread_capacity,
+                        unit="N",
+                    ),
+                    SymbolValue(
+                        symbol="P_req",
+                        description=f"the governing half of (b)(6): {why}",
+                        value=governing,
+                        unit="N",
+                    ),
+                ),
+                result=SymbolValue(
+                    symbol="U",
+                    description="tread capacity as a multiple of what the clause requires",
+                    value=computed,
+                ),
+                citation=reference,
+            ),
+        }
+    )
+    if entry.status is CheckStatus.FAIL:
+        return entry.model_copy(
+            update={
+                "repair_hint": RepairHint.solved(
+                    "tread_capacity",
+                    direction=Direction.INCREASE,
+                    value=governing.to("N").magnitude * required_safety_factor,
+                    unit="N",
+                    provenance=(
+                        "governing half of 1910.25(b)(6) at the required margin, which the "
+                        "tread has to carry"
+                    ),
+                )
+            }
+        )
+    return entry

@@ -404,15 +404,16 @@ MODULE_MANIFESTS = ModuleRegistry(
         ),
         _manifest(
             "walking_working",
-            covers=("guardrail_system",),
-            screens=("screen_guardrail",),
+            covers=("guardrail_system", "stair_system"),
+            screens=("screen_guardrail", "screen_stair"),
             # No `standards`: 29 CFR 1910 Subpart D is a regulation, not a standards body
             # with editions, and `standards.effectivity` says so in as many words. The
             # noise pack cites 1910.95 the same way.
             unit_default=UnitSystem.US,
             summary=(
                 "walking-working surfaces to 29 CFR 1910 Subpart D: guardrail height, "
-                "strength and deflection against the clause's own forces"
+                "strength and deflection, and stair geometry and tread load, against "
+                "the clauses' own numbers"
             ),
         ),
         _manifest(
