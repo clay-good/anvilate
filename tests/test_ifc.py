@@ -133,7 +133,8 @@ def test_each_mapped_element_is_valid_and_reads_back_as_the_solid_it_came_from(
         predefined,
         object_type,
     )
-    assert measured.tag == "PN-p1"
+    # The element's Tag is this instance; the part number is in the property sets.
+    assert measured.tag == "p1"
     # The same 1% the 3MF mesh is held to against the solid, and the centroid within a
     # thousandth of the part's size.
     assert measured.volume_mm3 == pytest.approx(built.volume_mm3, rel=0.01)
@@ -433,7 +434,7 @@ def test_a_combinations_fasteners_are_mechanical_fasteners_in_their_holes():
     for element in model.by_type("IfcMechanicalFastener"):
         assert set(element_util.get_psets(element)) == {SCREENING_PSET}
     for m, part, body in zip(measure_ifc(data), hardware, built.hardware, strict=True):
-        assert m.tag == part.part_number == body.designation
+        assert m.tag == part.tag and part.part_number == body.designation
         _near(m, body.shape.bounding_box(), 0.05)
 
 
@@ -461,3 +462,98 @@ def test_combine_writes_an_ifc_assembly_and_a_product_is_told_to_write_step(tmp_
         "--output", str(product),
     )  # fmt: skip
     assert code == 3 and not product.exists() and "a product document writes a STEP" in err
+
+
+def test_a_stub_as_long_as_its_flange_is_wide_is_still_swept_along_its_length():
+    """Review finding: the axis was the extent nearest the length, so an IPE 200 column
+    100 mm long (the flange is 100 mm wide) was swept across its flange."""
+    import yaml
+
+    from anvilate.export.ifc import ifc_part
+
+    document = yaml.safe_load(_example("column_member").read_text(encoding="utf-8"))
+    document["element_params"]["length"] = {"magnitude": 100.0, "unit": "mm"}
+    spec = load_spec_yaml(yaml.safe_dump(document))
+    built = build_spec(spec)
+    part = ifc_part(spec, built, screen_spec(spec))
+    assert part.profile.axis == (0.0, 0.0, 1.0) and part.profile.across == (1.0, 0.0, 0.0)
+    data = render_ifc([part], name="stub", authorization=_authorized(screen_spec(spec)))
+    (measured,) = measure_ifc(data)
+    box = built.shape.bounding_box()
+    _near(measured, box, 1e-6)
+
+
+def test_two_exports_with_one_name_and_one_tag_do_not_share_an_id():
+    """Review finding: GlobalIds were seeded by the file's name and the part's tag alone, so
+    two different parts exported as `frame`/`p1` became one object to a federating tool."""
+    plate, _b, card = _part("base_plate")
+    beam, _b2, card2 = _part("beam_member")
+    one = ifcopenshell.file.from_string(
+        render_ifc([plate], name="frame", authorization=_authorized(card)).decode()
+    )
+    two = ifcopenshell.file.from_string(
+        render_ifc([beam], name="frame", authorization=_authorized(card2)).decode()
+    )
+    ids = {e.GlobalId for e in one.by_type("IfcRoot")}
+    assert not ids & {e.GlobalId for e in two.by_type("IfcRoot")}
+
+
+@pytest.mark.parametrize(
+    ("change", "match"),
+    [
+        ({"length": 0.0}, "cannot be swept"),
+        ({"dimensions": {"width": math.nan}}, "cannot be swept"),
+        ({"across": (0.0, 0.0, 1.0)}, "cannot be swept"),
+    ],
+)
+def test_a_profile_that_cannot_be_swept_is_refused(change, match):
+    import dataclasses
+
+    import yaml
+
+    from anvilate.export.ifc import ifc_part
+
+    document = yaml.safe_load(_example("column_member").read_text(encoding="utf-8"))
+    spec = load_spec_yaml(yaml.safe_dump(document))
+    card = screen_spec(spec)
+    part = ifc_part(spec, build_spec(spec), card)
+    if "dimensions" in change:
+        change = {"dimensions": {**part.profile.dimensions, **change["dimensions"]}}
+    broken = dataclasses.replace(part, profile=dataclasses.replace(part.profile, **change))
+    with pytest.raises(RefusalError, match=match):
+        render_ifc([broken], name="x", authorization=_authorized(card))
+
+
+def test_a_placement_that_scales_or_is_not_finite_is_refused():
+    import dataclasses
+
+    part, _built, card = _part("base_plate")
+    identity = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    for placement in (
+        (((2.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)), (0.0, 0.0, 0.0)),
+        (identity, (0.0, math.inf, 0.0)),
+    ):
+        with pytest.raises(RefusalError, match="not a rotation and a finite shift"):
+            render_ifc(
+                [dataclasses.replace(part, placement=placement)],
+                name="x",
+                authorization=_authorized(card),
+            )
+    with pytest.raises(RefusalError, match="an assembly needs a name"):
+        render_ifc([part], name="x", authorization=_authorized(card), assembly=" ")
+
+
+def test_each_part_of_a_combination_carries_its_own_card():
+    """Review finding: every part carried the combination's card digest, so one element's
+    property set described the whole assembly's verdict."""
+    from anvilate import __version__
+    from anvilate.export.ifc import combination_ifc_parts
+    from anvilate.review import artifact_digest
+
+    built = _combination("portal_frame")
+    for part, placed in zip(combination_ifc_parts(built), built.parts, strict=False):
+        own = screen_spec(placed.spec)
+        assert part.card_digest == "sha256:" + artifact_digest(
+            own, toolchain=f"anvilate {__version__}"
+        )
+        assert part.extra["CardStatus"] == own.status.value

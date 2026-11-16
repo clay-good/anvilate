@@ -100,7 +100,7 @@ _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
                 "STAPLE",
                 "STUDSHEARCONNECTOR",
             }
-        ),  # fmt: skip
+        ),
         "IfcBeam": frozenset({"BEAM", "JOIST", "HOLLOWCORE", "LINTEL", "SPANDREL", "T_BEAM"}),
         "IfcColumn": frozenset({"COLUMN", "PILASTER"}),
         "IfcMember": frozenset(
@@ -118,7 +118,7 @@ _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
                 "STRUT",
                 "STUD",
             }
-        ),  # fmt: skip
+        ),
         "IfcPlate": frozenset({"CURTAIN_PANEL", "SHEET"}),
     },
     "IFC4X3_ADD2": {
@@ -140,7 +140,7 @@ _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
                 "STAPLE",
                 "STUDSHEARCONNECTOR",
             }
-        ),  # fmt: skip
+        ),
         "IfcBeam": frozenset(
             {
                 "BEAM",
@@ -156,7 +156,7 @@ _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
                 "SPANDREL",
                 "T_BEAM",
             }
-        ),  # fmt: skip
+        ),
         "IfcColumn": frozenset(
             {"COLUMN", "PIERSTEM", "PIERSTEM_SEGMENT", "PILASTER", "STANDCOLUMN"}
         ),
@@ -182,7 +182,7 @@ _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
                 "SUSPENSION_CABLE",
                 "TIEBAR",
             }
-        ),  # fmt: skip
+        ),
         "IfcPlate": frozenset(
             {
                 "BASE_PLATE",
@@ -195,7 +195,7 @@ _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
                 "STIFFENER_PLATE",
                 "WEB_PLATE",
             }
-        ),  # fmt: skip
+        ),
     },
 }
 
@@ -246,9 +246,11 @@ class IfcSweptProfile:
 class IfcPart:
     """One part to export: its identity, its mesh in millimetres, and what was found on it.
 
-    ``tag`` identifies the part within the file and seeds its ``GlobalId``. ``vertices`` and
-    ``triangles`` are a closed, outward-facing mesh in millimetres in the file's frame.
-    ``card_digest`` is the digest of the scorecard the verdict came from, when there is one.
+    ``tag`` identifies this instance within the file: it is the element's ``Tag``. The
+    part number, which several instances may share, is ``part_number``. ``vertices`` and
+    ``triangles`` are a closed, outward-facing mesh in millimetres in the part's own frame,
+    which is the file's unless ``placement`` moves it; a ``profile`` replaces the mesh as
+    the written geometry. ``card_digest`` is the digest of this part's own scorecard.
     """
 
     tag: str
@@ -311,6 +313,23 @@ def ifc_class_for(element_type: str, schema: IfcSchema = "IFC4") -> tuple[str, s
     return ifc_class, "USERDEFINED", predefined
 
 
+def _content_digest(name: str, schema: str, assembly: str | None, parts: Sequence[IfcPart]) -> str:
+    """A digest of everything a file is written from, which its GlobalIds are seeded by."""
+    digest = hashlib.sha256(f"{name}\x1e{schema}\x1e{assembly}".encode())
+    for part in parts:
+        digest.update(
+            repr(
+                (
+                    part.tag, part.name, part.element_type, part.material, part.mass_kg,
+                    part.part_number, part.card_digest, sorted(part.extra.items()),
+                    part.profile, part.placement, tuple(map(tuple, part.vertices)),
+                    tuple(map(tuple, part.triangles)),
+                )
+            ).encode()
+        )  # fmt: skip
+    return digest.hexdigest()
+
+
 def _guid(*seed: str) -> str:
     import ifcopenshell.guid
 
@@ -358,11 +377,64 @@ def _checked(part: IfcPart) -> None:
                 subject=f"the {part.tag} mesh",
                 source=_MESH_SOURCE,
             )
+    if part.profile is not None:
+        _checked_profile(part.tag, part.profile)
+    if part.placement is not None:
+        _checked_placement(part.tag, part.placement)
     if part.mass_kg is not None and not (math.isfinite(part.mass_kg) and part.mass_kg > 0):
         raise _refuse(
             f"part {part.tag!r} states a mass of {part.mass_kg} kg; a mass is positive",
             subject=f"the {part.tag} mass",
             source=_MESH_SOURCE,
+        )
+
+
+def _unit(vector: Sequence[float]) -> bool:
+    return (
+        len(vector) == 3
+        and all(map(math.isfinite, vector))
+        and (abs(math.fsum(c * c for c in vector) - 1.0) < 1e-9)
+    )
+
+
+def _checked_profile(tag: str, profile: IfcSweptProfile) -> None:
+    sizes = {**profile.dimensions, "length": profile.length}
+    # A fillet may be zero (a welded box's square corner); every other size is positive.
+    bad = [
+        key
+        for key, value in sizes.items()
+        if not math.isfinite(value) or value < 0 or (value == 0 and "fillet" not in key)
+    ]
+    axis, across = profile.axis, profile.across
+    square = (
+        _unit(axis)
+        and _unit(across)
+        and abs(sum(a * b for a, b in zip(axis, across, strict=True))) < 1e-9
+    )
+    if bad or not square or not all(map(math.isfinite, profile.start)):
+        what = f"sizes {bad}" if bad else "its axis and across directions or its start"
+        raise _refuse(
+            f"part {tag!r} has a profile whose {what} cannot be swept: sizes are finite and "
+            "positive, and the axis and the across direction are perpendicular unit vectors",
+            subject=f"the {tag} profile",
+            source=_MESH_SOURCE,
+        )
+
+
+def _checked_placement(tag: str, placement: Any) -> None:
+    rows, shift = placement
+    columns = [tuple(row[i] for row in rows) for i in range(3)] if len(rows) == 3 else []
+    orthonormal = len(columns) == 3 and all(
+        abs(sum(a * b for a, b in zip(columns[i], columns[j], strict=True)) - (i == j)) < 1e-6
+        for i in range(3)
+        for j in range(3)
+    )
+    if not orthonormal or len(shift) != 3 or not all(map(math.isfinite, shift)):
+        raise _refuse(
+            f"part {tag!r} has a placement that is not a rotation and a finite shift; an IFC "
+            "placement cannot scale or shear a part",
+            subject=f"the {tag} placement",
+            source="the rotation and translation the combination's mates solved",
         )
 
 
@@ -380,8 +452,9 @@ def render_ifc(
     name, and the assembly, not each part, is what the storey contains.
 
     Each part is one element of the class its element maps to (:func:`ifc_class_for`),
-    with a faceted B-rep, its material, the schema's common property set and the
-    ``Anvilate_Screening`` set, contained in one storey of one building on one site.
+    with its swept profile or, without one, a faceted B-rep of its mesh, its material, the
+    schema's common property set and the ``Anvilate_Screening`` set, contained in one
+    storey of one building on one site.
     Lengths are millimetres and masses kilograms, declared in the file's unit assignment.
     """
     if not isinstance(authorization, ExportAuthorization):
@@ -394,6 +467,8 @@ def render_ifc(
         raise _refuse("name must label the file's project", subject="name", source=_MESH_SOURCE)
     if not parts:
         raise _refuse("an IFC file holds at least one part", subject="parts", source=_MESH_SOURCE)
+    if assembly is not None and not assembly.strip():
+        raise _refuse("an assembly needs a name", subject="assembly", source=_MESH_SOURCE)
     classes = []
     for part in parts:
         _checked(part)
@@ -412,8 +487,13 @@ def render_ifc(
     _header(f, name.strip(), authorization)
     project_name = name.strip()
 
+    # Every GlobalId is seeded by what the file holds, not only by its name: two exports
+    # that share a name and a tag are different objects and must not share an id, and the
+    # same parts still give the same ids, so the same bytes.
+    content = _content_digest(project_name, schema, assembly, parts)
+
     def owned(entity: str, seed: str, **attributes: Any) -> Any:
-        return f.create_entity(entity, GlobalId=_guid(project_name, entity, seed), **attributes)
+        return f.create_entity(entity, GlobalId=_guid(content, entity, seed), **attributes)
 
     units = f.create_entity(
         "IfcUnitAssignment",
@@ -476,7 +556,7 @@ def render_ifc(
             ifc_class,
             part.tag,
             Name=part.name,
-            Tag=part.part_number or part.tag,
+            Tag=part.tag,
             ObjectType=object_type,
             PredefinedType=predefined,
             ObjectPlacement=f.create_entity(
@@ -490,7 +570,7 @@ def render_ifc(
         if part.material:
             if part.material not in materials:
                 materials[part.material] = f.create_entity("IfcMaterial", Name=part.material)
-        _property_sets(f, owned, element, part, ifc_class, authorization, schema)
+        _property_sets(f, owned, element, part, ifc_class, authorization)
     for material_name, material in sorted(materials.items()):
         users = [e for e, p in zip(elements, parts, strict=True) if p.material == material_name]
         owned(
@@ -501,8 +581,6 @@ def render_ifc(
         )
     contained = elements
     if assembly is not None:
-        if not assembly.strip():
-            raise _refuse("an assembly needs a name", subject="assembly", source=_MESH_SOURCE)
         whole = owned(
             "IfcElementAssembly",
             "assembly",
@@ -629,7 +707,6 @@ def _property_sets(
     part: IfcPart,
     ifc_class: str,
     authorization: ExportAuthorization,
-    schema: str,
 ) -> None:
     def single(prop: str, value: Any) -> Any:
         return f.create_entity("IfcPropertySingleValue", Name=prop, NominalValue=value)
@@ -671,7 +748,6 @@ def _property_sets(
             RelatingPropertyDefinition=pset,
             RelatedObjects=[element],
         )
-    del schema
 
 
 def measure_ifc(data: bytes) -> list[IfcElementMeasure]:
@@ -763,19 +839,13 @@ def ifc_part(
     scorecard; its digest is the one a review of it would cite.
     """
     from .. import __version__ as version
+    from ..combination import _mass
     from ..geometry import _mesh_for_3mf
     from ..review import artifact_digest
-    from ..standards.materials import default_materials_db
 
     vertices, triangles = _mesh_for_3mf(built)
     material = getattr(getattr(spec, "material", None), "ref", None)
-    mass = None
-    if material:
-        try:
-            density = default_materials_db().get(str(material)).density.quantity
-            mass = float(built.volume_mm3) * density.to("kg/mm**3").magnitude
-        except (KeyError, ValueError):
-            mass = None
+    mass = _mass(spec, built) if material else None
     return IfcPart(
         tag=tag or built.name,
         name=built.name,
@@ -834,32 +904,31 @@ def _rolled(named: str, profile: Any, built: Any) -> IfcSweptProfile | None:
     """A table profile: a rolled I shape, or an AISC HSS (which needs the fetched table)."""
     from ..standards.profiles import HollowProfile, RolledProfile
 
-    mm = _mm
     kind: Literal["I", "rectangle_hollow", "circle_hollow"]
     if isinstance(profile, RolledProfile):
         kind = "I"
         dimensions = {
-            "width": mm(profile.flange_width),
-            "depth": mm(profile.depth),
-            "web": mm(profile.web_thickness),
-            "flange": mm(profile.flange_thickness),
-            "fillet": mm(profile.root_radius),
+            "width": _mm(profile.flange_width),
+            "depth": _mm(profile.depth),
+            "web": _mm(profile.web_thickness),
+            "flange": _mm(profile.flange_thickness),
+            "fillet": _mm(profile.root_radius),
         }
     elif isinstance(profile, HollowProfile) and profile.breadth is not None:
-        wall = mm(profile.wall_thickness)
+        wall = _mm(profile.wall_thickness)
         kind = "rectangle_hollow"
         # AISC's rolled HSS corner: an outside radius of twice the design wall, the rule
         # the section's own properties are computed on.
         dimensions = {
-            "width": mm(profile.breadth),
-            "depth": mm(profile.depth),
+            "width": _mm(profile.breadth),
+            "depth": _mm(profile.depth),
             "wall": wall,
             "inner_fillet": wall,
             "outer_fillet": 2 * wall,
         }
     elif isinstance(profile, HollowProfile):
         kind = "circle_hollow"
-        dimensions = {"diameter": mm(profile.depth), "wall": mm(profile.wall_thickness)}
+        dimensions = {"diameter": _mm(profile.depth), "wall": _mm(profile.wall_thickness)}
     else:
         return None
     return _framed(named, kind, dimensions, built)
@@ -876,10 +945,37 @@ def _framed(
     low, high = (box.min.X, box.min.Y, box.min.Z), (box.max.X, box.max.Y, box.max.Z)
     extent = [b - a for a, b in zip(low, high, strict=True)]
     length = float(built.dimensions_mm.get("length", max(extent)))
-    along = min(range(3), key=lambda i: abs(extent[i] - length))
-    others = [i for i in range(3) if i != along]
     width = dimensions.get("width", dimensions.get("diameter", 0.0))
-    side = min(others, key=lambda i: abs(extent[i] - width))
+    depth = dimensions.get("depth", dimensions.get("diameter", 0.0))
+
+    def misfit(along: int, side: int) -> float:
+        # Every extent has to agree, not only the length: a stub as long as its flange is
+        # wide would otherwise be swept across the flange.
+        (other,) = {0, 1, 2} - {along, side}
+        return abs(extent[along] - length) + abs(extent[side] - width) + abs(extent[other] - depth)
+
+    area = built.dimensions_mm.get("section_area")
+
+    def end_misfit(along: int) -> float:
+        # A box can fit two ways (a stub as long as its flange is wide), and only the true
+        # axis has an end face as big as the section.
+        if area is None:
+            return 0.0
+        end = 0.0
+        for face in built.shape.faces():
+            centre = face.center()
+            normal = tuple(face.normal_at(centre))
+            if (
+                abs(abs(normal[along]) - 1.0) < 1e-6
+                and abs(tuple(centre)[along] - low[along]) < 1e-6
+            ):
+                end += face.area
+        return abs(end - area)
+
+    along, side = min(
+        ((a, b) for a in range(3) for b in range(3) if a != b),
+        key=lambda pair: (round(misfit(*pair), 6), end_misfit(pair[0])),
+    )
     unit = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
     start = [(a + b) / 2 for a, b in zip(low, high, strict=True)]
     start[along] = low[along]
@@ -900,26 +996,35 @@ def combination_ifc_parts(built: Any) -> list[IfcPart]:
     Each part is exported as :func:`ifc_part` makes it, in its own frame, with the
     rotation and shift the combination solved for it as its placement. Each fastener is an
     ``IfcMechanicalFastener`` from its tabulated envelope, placed the same way and tagged by
-    the mate it sits in. Pass the result to :func:`render_ifc` with ``assembly=`` the
-    combination's name; the card is the combination's own.
+    the mate it sits in (its designation is its part number). Each part carries its own
+    card's digest and status. Pass the result to :func:`render_ifc` with ``assembly=`` the
+    combination's name; the export gate is the combination's card.
     """
-    from types import SimpleNamespace
-
-    from ..geometry import _mesh_for_3mf
+    from ..geometry import BuiltGeometry, _mesh_for_3mf
+    from ..screening import screen_spec
 
     parts = []
     for placed in built.parts:
-        part = ifc_part(placed.spec, placed.built, built.card, tag=placed.id, part_number=placed.id)
+        # Each part's own card: the combination's verdict covers the assembly, and an
+        # element's property set says what was found on that element.
+        card = screen_spec(placed.spec)
+        part = ifc_part(placed.spec, placed.built, card, tag=placed.id, part_number=placed.id)
         rows = tuple(tuple(row) for row in placed.rotation)
-        parts.append(_replace(part, placement=(rows, tuple(placed.translation))))
+        parts.append(
+            _replace(
+                part,
+                placement=(rows, tuple(placed.translation)),
+                extra={"CardStatus": card.status.value, "Assembly": built.name},
+            )
+        )
     counts: dict[str, int] = {}
     for body in built.hardware:
         counts[body.mate] = counts.get(body.mate, 0) + 1
         tag = f"{body.mate}:{body.kind}:{counts[body.mate]}"
-        # The mesher reads four things off a built part; a fastener's envelope has them all.
-        envelope: Any = SimpleNamespace(
-            is_valid=body.solid.is_valid, shape=body.solid, volume_mm3=body.solid.volume, name=tag
-        )
+        envelope = BuiltGeometry(
+            name=tag, pattern="hardware", shape=body.solid, faces={}, dimensions_mm={},
+            envelope=True,
+        )  # fmt: skip
         vertices, triangles = _mesh_for_3mf(envelope)
         rows = tuple(tuple(row) for row in body.rotation)
         parts.append(
