@@ -134,3 +134,12 @@ def test_the_page_quotes_the_residual_this_import_computes(table):
             "N·mm about")  # fmt: skip
     assert said == "100 N, and 8,000 N·mm about" and said in " ".join(page.split())
     assert "pull 1,500 N each" in page and "push 1,000 N" in page
+
+
+def test_an_import_and_each_load_read_as_what_they_hold(table):
+    imported = _read(table)
+    assert str(imported) == (
+        f"2 case(s) at 2 interface(s) from gpforce.csv (sha256 {imported.source.sha256[:12]}) "
+        "from a declared solver 2026.1, N-mm, in basic; unbalanced: overload"
+    )
+    assert str(imported.at("base")[0]) == "limit at base: F (0, 0, 1000) N, M (0, -1e+05, 0) N*mm"

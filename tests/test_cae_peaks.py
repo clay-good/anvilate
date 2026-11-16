@@ -102,3 +102,8 @@ def test_the_page_states_the_spec_scenario_this_computes(peaks):
                                 tolerance=0.15)  # fmt: skip
     assert f"{found.difference:.0%} above" == "40% above"
     assert "140 MPa against a 100 MPa hand estimate is 40% above it" in " ".join(page.split())
+
+
+def test_a_peak_and_its_import_read_as_what_they_hold(peaks):
+    assert str(peaks.peaks[0]) == "limit: peak stress 140 N/mm**2 in web root"
+    assert str(peaks).startswith("4 peak value(s) from peaks.csv (sha256 ")
