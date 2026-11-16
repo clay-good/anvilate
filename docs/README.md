@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Eighty-one pages, arranged by what you are trying to do. The [README](../README.md) is the
+Eighty-two pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -64,6 +64,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Margins of safety](margin-of-safety.md) | The aerospace margin table: limit and ultimate kept apart, a cited factor set, the governing case of hundreds, as CSV, XLSX and a report section. |
 | [Structural hand methods](structural-hand-methods.md) | Laminates, random vibration, preloaded joints, fastener groups, sandwich panels, crippling, plasticity and thin-cylinder buckling, each read from a public-domain NASA document and pinned to it. |
 | [Frame analysis](frame-analysis.md) | The member forces a frame carries, solved in the core: five closed forms and an independent solver that agrees, a mechanism named rather than solved around, and what the external doorway is still for. |
+| [CAE handoff](cae-handoff.md) | A frame written as an input deck for your own solver, keyword or bulk data, in stated units, one load case per step, marked unsolved input. |
 | [Durability screening](durability-screening.md) | Rainflow cycles from a load history, modes held clear of excitation, and what a drop does to what is inside. |
 | [DFM rules](dfm-rules.md) | The built solid read the way a shop quoting it would: inside corners, hole depth, bends, draft and overhang, against a profile you can load. |
 | [Load combinations](load-combinations.md) | The governing combination named, including the uplift case a gravity-only check misses. |

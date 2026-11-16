@@ -390,6 +390,10 @@ explore.DesignPoint
 explore.StudyResult
 explore.run_study
 explore.halton_sequence
+cae.DECK_UNITS
+cae.DeckError
+cae.AnalysisDeck
+cae.frame_deck
 frame.MAX_NODES
 frame.Freedom
 frame.FrameNode

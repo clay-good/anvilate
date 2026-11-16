@@ -181,6 +181,11 @@ solve says the loaded longitudinal takes about ten times the bending of the far 
 member checks run on those moments and say so, and the skid fails on strength while
 passing serviceability.
 
+## Handing the frame to your own solver
+
+[CAE handoff](cae-handoff.md) writes the same frame as a keyword or bulk-data deck, one
+element per member as here, so your solver's answer and this one should agree.
+
 ## Out of scope
 
 Plates and shells. Dynamics. Nonlinear material. Buckling eigenvalues. Anything that

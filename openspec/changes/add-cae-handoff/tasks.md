@@ -7,10 +7,18 @@ Depends on the meshing pipeline in `validation-gauntlet` T3 and on
 
 - [ ] 1.1 Keyword-format `.inp` writer: mesh, materials, sections, supports, loads by
       tagged face, steps per load case
+      (a declared frame is written: one B33 per member, general sections, releases,
+      supports, node, member and gravity loads, a step per frame; solid meshes and
+      loads by tagged face wait on the meshing pipeline of `add-local-fea`)
 - [ ] 1.2 Bulk-data `.bdf` writer with the same content, subcases per load case
-- [ ] 1.3 Unit-system header and sidecar; refusal when a value cannot be expressed
+      (the same frame deck in large-field bulk data: CBAR, PBAR, MAT1, SPC1, FORCE,
+      MOMENT, PLOAD1, GRAV, a subcase per frame; solid meshes wait as in 1.1)
+- [x] 1.3 Unit-system header and sidecar; refusal when a value cannot be expressed
 - [ ] 1.4 Deck marked as unsolved input in the deck and in the bundle
-- [ ] 1.5 Round-trip test: each deck parses in an open reader with the expected counts
+      (marked in the deck's header and its sidecar; the evidence bundle does not list
+      decks yet)
+- [x] 1.5 Round-trip test: each deck parses in an open reader with the expected counts
+      (pyNastran reads the bulk data, meshio the keyword deck; both dev-only)
 
 ## 2. Imports
 
