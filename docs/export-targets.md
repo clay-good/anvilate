@@ -38,7 +38,7 @@ command-line and product paths are the next slices of `add-ifc-structural-export
 | --- | --- |
 | Class per element | `IFC_ELEMENT_CLASSES`: beams `IfcBeam`, columns and beam-columns `IfcColumn`, tension members and tubes `IfcMember`, base, cover, gusset and shear plates `IfcPlate`. An element with no class is refused naming it, never written as a proxy. |
 | Predefined type per schema | IFC 4.3 added `BASE_PLATE`, `GUSSET_PLATE` and `COVER_PLATE` to `IfcPlateTypeEnum`; IFC4 has none of them, so in IFC4 a base plate is `USERDEFINED` with `ObjectType` `BASE_PLATE`. Both enumerations were read from the schemas IfcOpenShell 0.9.0 ships, and a test reads them back. |
-| Geometry | A faceted B-rep (`IfcFacetedBrep`) of the same welded, closed, outward mesh the 3MF writer is held to, in millimetres, declared in the unit assignment with kilograms. A rolled section's profile and extrusion is not written yet. |
+| Geometry | A member on a rolled or named section is its profile and an extrusion (`SweptSolid`): IPE and HEA as `IfcIShapeProfileDef` with the root radius, `BOX`, `TUBE` and `NPS ... SCH ...` as the rectangular and circular hollow profiles, and an AISC HSS (once its consented table is fetched) with AISC's corner radii. Everything else is a faceted B-rep (`IfcFacetedBrep`) of the welded, closed, outward mesh the 3MF writer is held to. Millimetres and kilograms, declared in the unit assignment. |
 | Properties | `Pset_<Class>Common` (`Reference` = part number, `LoadBearing`) and `Anvilate_Screening`: element, validation status, the watermark pairs, part number, material, mass and card digest. |
 | Watermark | The export gate's lines go into `FILE_DESCRIPTION`, its status into `FILE_NAME`'s authorization field, and both into the property set. |
 | Same parts, same bytes | `GlobalId`s are derived from the part's identity and the header timestamp is fixed. |
@@ -46,7 +46,13 @@ command-line and product paths are the next slices of `add-ifc-structural-export
 Every mapped element's worked example is written in both IFC4 and IFC 4.3, validated by
 IfcOpenShell's own checker with the EXPRESS rules on, re-read through IfcOpenShell's
 geometry kernel, and its volume held within 1% of the built solid (the 3MF bound) and its
-centroid within a thousandth of the part's size. A viewer import check is not yet recorded.
+centroid within a thousandth of the part's size. A swept member is also held to the built
+member's bounds on every axis, so a section laid in on its side fails even though its volume
+and centroid would agree; round sections get 1% of their diameter, because the reader returns
+the circle as a polygon. `ifc_part(spec, built, card)` builds the part from a spec: its mesh,
+material, mass from the bundled density, the card's review digest, and the swept profile when
+there is one. The AISC HSS branch is checked by hand against a fetched table and not in CI,
+which never holds that table. A viewer import check is not yet recorded.
 
 ## What was confirmed
 

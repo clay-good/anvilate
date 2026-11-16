@@ -43,7 +43,9 @@ export.ifc.IFC_ELEMENT_CLASSES
 export.ifc.IFC_SCHEMAS
 export.ifc.IfcElementMeasure
 export.ifc.IfcPart
+export.ifc.IfcSweptProfile
 export.ifc.ifc_class_for
+export.ifc.ifc_part
 export.ifc.measure_ifc
 export.ifc.render_ifc
 export.qif.QIF_NAMESPACE

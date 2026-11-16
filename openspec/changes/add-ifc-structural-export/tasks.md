@@ -6,7 +6,8 @@ Builds on the export layer in `src/anvilate/export` and the release package.
 
 - [x] 1.1 Archetype-to-IFC class map with predefined types; refusal for an archetype with no
       mapping — `IFC_ELEMENT_CLASSES`; a 4.3-only type is `USERDEFINED` + `ObjectType` in IFC4
-- [ ] 1.2 Standard profile definitions for rolled sections; B-rep for the rest
+- [x] 1.2 Standard profile definitions for rolled sections; B-rep for the rest — I shapes,
+      BOX/TUBE/pipe and AISC HSS as profile + `IfcExtrudedAreaSolid`, bounds-checked
 - [x] 1.3 Property sets: standard common sets and the Anvilate set — `Pset_<Class>Common`
       (`Reference`, `LoadBearing`) and `Anvilate_Screening`
 

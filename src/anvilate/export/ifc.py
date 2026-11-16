@@ -46,7 +46,9 @@ __all__ = [
     "IFC_SCHEMAS",
     "IfcElementMeasure",
     "IfcPart",
+    "IfcSweptProfile",
     "ifc_class_for",
+    "ifc_part",
     "measure_ifc",
     "render_ifc",
 ]
@@ -178,6 +180,27 @@ def _refuse(message: str, *, subject: str, source: str, action: str = "replace")
 
 
 @dataclass(frozen=True)
+class IfcSweptProfile:
+    """A rolled section swept along a straight axis, as IFC's own profile definitions.
+
+    ``kind`` is ``I`` (``IfcIShapeProfileDef``: ``width``, ``depth``, ``web``, ``flange``,
+    ``fillet``), ``rectangle_hollow`` (``IfcRectangleHollowProfileDef``: ``width``,
+    ``depth``, ``wall``, ``inner_fillet``, ``outer_fillet``) or ``circle_hollow``
+    (``IfcCircleHollowProfileDef``: ``diameter``, ``wall``), every size in millimetres.
+    The profile's ``width`` lies along ``across``, and the section is swept ``length`` mm
+    along ``axis`` from ``start``, the point on the axis where the member begins.
+    """
+
+    kind: Literal["I", "rectangle_hollow", "circle_hollow"]
+    designation: str
+    dimensions: Mapping[str, float]
+    length: float
+    axis: tuple[float, float, float]
+    across: tuple[float, float, float]
+    start: tuple[float, float, float]
+
+
+@dataclass(frozen=True)
 class IfcPart:
     """One part to export: its identity, its mesh in millimetres, and what was found on it.
 
@@ -196,6 +219,7 @@ class IfcPart:
     part_number: str | None = None
     card_digest: str | None = None
     extra: Mapping[str, str] = field(default_factory=dict)
+    profile: IfcSweptProfile | None = None
 
 
 @dataclass(frozen=True)
@@ -208,6 +232,8 @@ class IfcElementMeasure:
     object_type: str | None
     volume_mm3: float
     centroid_mm: tuple[float, float, float]
+    bounds_mm: tuple[tuple[float, float, float], tuple[float, float, float]]
+    representation: str
 
 
 def ifc_class_for(element_type: str, schema: IfcSchema = "IFC4") -> tuple[str, str, str | None]:
@@ -379,26 +405,10 @@ def render_ifc(
     elements = []
     materials: dict[str, Any] = {}
     for part, (ifc_class, predefined, object_type) in zip(parts, classes, strict=True):
-        points = [
-            f.create_entity("IfcCartesianPoint", Coordinates=tuple(map(float, v)))
-            for v in part.vertices
-        ]
-        faces = [
-            f.create_entity(
-                "IfcFace",
-                Bounds=[
-                    f.create_entity(
-                        "IfcFaceOuterBound",
-                        Bound=f.create_entity("IfcPolyLoop", Polygon=[points[i] for i in tri]),
-                        Orientation=True,
-                    )
-                ],
-            )
-            for tri in part.triangles
-        ]
-        solid = f.create_entity(
-            "IfcFacetedBrep", Outer=f.create_entity("IfcClosedShell", CfsFaces=faces)
-        )
+        if part.profile is not None:
+            solid, kind = _swept(f, part.profile), "SweptSolid"
+        else:
+            solid, kind = _faceted(f, part), "Brep"
         shape = f.create_entity(
             "IfcProductDefinitionShape",
             Representations=[
@@ -406,7 +416,7 @@ def render_ifc(
                     "IfcShapeRepresentation",
                     ContextOfItems=body,
                     RepresentationIdentifier="Body",
-                    RepresentationType="Brep",
+                    RepresentationType=kind,
                     Items=[solid],
                 )
             ],
@@ -443,6 +453,80 @@ def render_ifc(
         RelatedElements=elements,
     )
     return f.to_string().encode("utf-8")
+
+
+def _faceted(f: Any, part: IfcPart) -> Any:
+    """The part's mesh as a faceted B-rep, one face per triangle on shared points."""
+    points = [
+        f.create_entity("IfcCartesianPoint", Coordinates=tuple(map(float, v)))
+        for v in part.vertices
+    ]
+    faces = [
+        f.create_entity(
+            "IfcFace",
+            Bounds=[
+                f.create_entity(
+                    "IfcFaceOuterBound",
+                    Bound=f.create_entity("IfcPolyLoop", Polygon=[points[i] for i in tri]),
+                    Orientation=True,
+                )
+            ],
+        )
+        for tri in part.triangles
+    ]
+    return f.create_entity(
+        "IfcFacetedBrep", Outer=f.create_entity("IfcClosedShell", CfsFaces=faces)
+    )
+
+
+def _swept(f: Any, profile: IfcSweptProfile) -> Any:
+    """The profile definition the receiving tool keeps as a section, extruded along its axis."""
+    size = profile.dimensions
+    centre = f.create_entity(
+        "IfcAxis2Placement2D",
+        Location=f.create_entity("IfcCartesianPoint", Coordinates=(0.0, 0.0)),
+    )
+    common = {"ProfileType": "AREA", "ProfileName": profile.designation, "Position": centre}
+    if profile.kind == "I":
+        area = f.create_entity(
+            "IfcIShapeProfileDef",
+            **common,
+            OverallWidth=size["width"],
+            OverallDepth=size["depth"],
+            WebThickness=size["web"],
+            FlangeThickness=size["flange"],
+            FilletRadius=size["fillet"] or None,
+        )
+    elif profile.kind == "rectangle_hollow":
+        area = f.create_entity(
+            "IfcRectangleHollowProfileDef",
+            **common,
+            XDim=size["width"],
+            YDim=size["depth"],
+            WallThickness=size["wall"],
+            InnerFilletRadius=size["inner_fillet"] or None,
+            OuterFilletRadius=size["outer_fillet"] or None,
+        )
+    else:
+        area = f.create_entity(
+            "IfcCircleHollowProfileDef",
+            **common,
+            Radius=size["diameter"] / 2,
+            WallThickness=size["wall"],
+        )
+    position = f.create_entity(
+        "IfcAxis2Placement3D",
+        Location=f.create_entity("IfcCartesianPoint", Coordinates=tuple(profile.start)),
+        Axis=f.create_entity("IfcDirection", DirectionRatios=tuple(profile.axis)),
+        RefDirection=f.create_entity("IfcDirection", DirectionRatios=tuple(profile.across)),
+    )
+    return f.create_entity(
+        "IfcExtrudedAreaSolid",
+        SweptArea=area,
+        Position=position,
+        ExtrudedDirection=f.create_entity("IfcDirection", DirectionRatios=(0.0, 0.0, 1.0)),
+        Depth=float(profile.length),
+    )
 
 
 def _header(f: Any, name: str, authorization: ExportAuthorization) -> None:
@@ -519,18 +603,28 @@ def measure_ifc(data: bytes) -> list[IfcElementMeasure]:
     settings.set("use-world-coords", True)
     measured = []
     for element in model.by_type("IfcElement"):
+        nan = (math.nan, math.nan, math.nan)
+        bounds = (nan, nan)
+        kind = ""
         if element.Representation is None:
-            volume, centroid = 0.0, (math.nan, math.nan, math.nan)
+            volume, centroid = 0.0, nan
         else:
+            kind = element.Representation.Representations[0].RepresentationType
             shape: Any = ifcopenshell.geom.create_shape(settings, element)
             verts, faces = shape.geometry.verts, shape.geometry.faces
             # The kernel works in metres whatever the file declares.
             scale = 1000.0
+            points = [
+                (verts[i] * scale, verts[i + 1] * scale, verts[i + 2] * scale)
+                for i in range(0, len(verts), 3)
+            ]
             volume, centroid = _integrals(
-                [(verts[i] * scale, verts[i + 1] * scale, verts[i + 2] * scale)
-                 for i in range(0, len(verts), 3)],
+                points,
                 [(faces[i], faces[i + 1], faces[i + 2]) for i in range(0, len(faces), 3)],
-            )  # fmt: skip
+            )
+            low = tuple(min(p[axis] for p in points) for axis in range(3))
+            high = tuple(max(p[axis] for p in points) for axis in range(3))
+            bounds = (low, high)  # type: ignore[assignment]
         measured.append(
             IfcElementMeasure(
                 ifc_class=element.is_a(),
@@ -539,6 +633,8 @@ def measure_ifc(data: bytes) -> list[IfcElementMeasure]:
                 object_type=element.ObjectType,
                 volume_mm3=volume,
                 centroid_mm=centroid,
+                bounds_mm=bounds,
+                representation=kind,
             )
         )
     return measured
@@ -563,3 +659,150 @@ def _integrals(
     if volume == 0.0:
         return 0.0, (math.nan, math.nan, math.nan)
     return volume, (moment[0] / volume, moment[1] / volume, moment[2] / volume)
+
+
+def ifc_part(
+    spec: Any,
+    built: Any,
+    card: Any,
+    *,
+    tag: str | None = None,
+    part_number: str | None = None,
+) -> IfcPart:
+    """The :class:`IfcPart` a built spec exports as: its mesh, identity, mass and verdict.
+
+    A member on a section the bundled table names as a rolled I shape or HSS also carries
+    that section as an :class:`IfcSweptProfile`, framed from the built solid, so the file
+    holds the profile and its extrusion rather than the faces. ``card`` is the part's
+    scorecard; its digest is the one a review of it would cite.
+    """
+    from .. import __version__ as version
+    from ..geometry import _mesh_for_3mf
+    from ..review import artifact_digest
+    from ..standards.materials import default_materials_db
+
+    vertices, triangles = _mesh_for_3mf(built)
+    material = getattr(getattr(spec, "material", None), "ref", None)
+    mass = None
+    if material:
+        try:
+            density = default_materials_db().get(str(material)).density.quantity
+            mass = float(built.volume_mm3) * density.to("kg/mm**3").magnitude
+        except (KeyError, ValueError):
+            mass = None
+    return IfcPart(
+        tag=tag or built.name,
+        name=built.name,
+        element_type=spec.element_type,
+        vertices=vertices,
+        triangles=triangles,
+        material=str(material) if material else None,
+        mass_kg=mass,
+        part_number=part_number,
+        card_digest="sha256:" + artifact_digest(card, toolchain=f"anvilate {version}"),
+        profile=_profile_of(spec, built),
+    )
+
+
+def _profile_of(spec: Any, built: Any) -> IfcSweptProfile | None:
+    """The rolled section a member is drawn from, as a swept profile, or ``None``."""
+    named = (spec.element_params or {}).get("section")
+    if not isinstance(named, str):
+        return None
+    from ..packs.structural import _hollow_bar, _pipe_record
+    from ..standards.profiles import resolve_profile
+
+    kind: Literal["I", "rectangle_hollow", "circle_hollow"]
+    # A tube, a box or a pipe named by its dimensions or its schedule needs no table. The
+    # box is welded from plates, so its corners are square, as it is drawn.
+    hollow = _hollow_bar(named)
+    pipe = _pipe_record(named)
+    if hollow is not None and len(hollow) == 2:
+        kind, dimensions = "circle_hollow", {"diameter": hollow[0], "wall": hollow[1]}
+    elif hollow is not None:
+        kind = "rectangle_hollow"
+        dimensions = {
+            "width": hollow[0],
+            "depth": hollow[1],
+            "wall": hollow[2],
+            "inner_fillet": 0.0,
+            "outer_fillet": 0.0,
+        }
+    elif pipe is not None:
+        outside, inside = _mm(pipe.outside_diameter), _mm(pipe.inside_diameter)
+        kind, dimensions = "circle_hollow", {"diameter": outside, "wall": (outside - inside) / 2}
+    else:
+        try:
+            profile = resolve_profile(named)
+        except (KeyError, ValueError):
+            return None
+        return _rolled(named, profile, built)
+    return _framed(named, kind, dimensions, built)
+
+
+def _mm(value: Any) -> float:
+    return float(getattr(value, "quantity", value).to("mm").magnitude)
+
+
+def _rolled(named: str, profile: Any, built: Any) -> IfcSweptProfile | None:
+    """A table profile: a rolled I shape, or an AISC HSS (which needs the fetched table)."""
+    from ..standards.profiles import HollowProfile, RolledProfile
+
+    mm = _mm
+    kind: Literal["I", "rectangle_hollow", "circle_hollow"]
+    if isinstance(profile, RolledProfile):
+        kind = "I"
+        dimensions = {
+            "width": mm(profile.flange_width),
+            "depth": mm(profile.depth),
+            "web": mm(profile.web_thickness),
+            "flange": mm(profile.flange_thickness),
+            "fillet": mm(profile.root_radius),
+        }
+    elif isinstance(profile, HollowProfile) and profile.breadth is not None:
+        wall = mm(profile.wall_thickness)
+        kind = "rectangle_hollow"
+        # AISC's rolled HSS corner: an outside radius of twice the design wall, the rule
+        # the section's own properties are computed on.
+        dimensions = {
+            "width": mm(profile.breadth),
+            "depth": mm(profile.depth),
+            "wall": wall,
+            "inner_fillet": wall,
+            "outer_fillet": 2 * wall,
+        }
+    elif isinstance(profile, HollowProfile):
+        kind = "circle_hollow"
+        dimensions = {"diameter": mm(profile.depth), "wall": mm(profile.wall_thickness)}
+    else:
+        return None
+    return _framed(named, kind, dimensions, built)
+
+
+def _framed(
+    named: str,
+    kind: Literal["I", "rectangle_hollow", "circle_hollow"],
+    dimensions: dict[str, float],
+    built: Any,
+) -> IfcSweptProfile:
+    """The profile placed as the built member is: along its length, width across its width."""
+    box = built.shape.bounding_box()
+    low, high = (box.min.X, box.min.Y, box.min.Z), (box.max.X, box.max.Y, box.max.Z)
+    extent = [b - a for a, b in zip(low, high, strict=True)]
+    length = float(built.dimensions_mm.get("length", max(extent)))
+    along = min(range(3), key=lambda i: abs(extent[i] - length))
+    others = [i for i in range(3) if i != along]
+    width = dimensions.get("width", dimensions.get("diameter", 0.0))
+    side = min(others, key=lambda i: abs(extent[i] - width))
+    unit = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
+    start = [(a + b) / 2 for a, b in zip(low, high, strict=True)]
+    start[along] = low[along]
+    return IfcSweptProfile(
+        kind=kind,
+        designation=named,
+        dimensions=dimensions,
+        length=length,
+        axis=unit[along],
+        across=unit[side],
+        start=(start[0], start[1], start[2]),
+    )

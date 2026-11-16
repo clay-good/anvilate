@@ -223,3 +223,70 @@ def test_two_parts_with_one_tag_are_refused():
     part, _built, card = _part("base_plate")
     with pytest.raises(RefusalError, match="used twice"):
         render_ifc([part, part], name="x", authorization=_authorized(card))
+
+
+@pytest.mark.parametrize(
+    ("section", "kind", "profile_def"),
+    [
+        ("IPE 200", "I", "IfcIShapeProfileDef"),
+        ("HEA 200", "I", "IfcIShapeProfileDef"),
+        ("BOX 100x50x4", "rectangle_hollow", "IfcRectangleHollowProfileDef"),
+        ("TUBE 60x4", "circle_hollow", "IfcCircleHollowProfileDef"),
+        ("NPS 4 SCH 40", "circle_hollow", "IfcCircleHollowProfileDef"),
+    ],
+)
+def test_a_rolled_member_keeps_its_section_as_a_profile_and_an_extrusion(
+    section, kind, profile_def
+):
+    """add-ifc-structural-export 1.2: the receiving tool reports the section, not faces.
+
+    The bounds are held to the built member's on every axis, so a section laid in on its
+    side, which volume and centroid alone would not notice, fails here.
+    """
+    import yaml
+
+    from anvilate.export.ifc import ifc_part
+
+    document = yaml.safe_load(_example("beam_member").read_text(encoding="utf-8"))
+    document["element_params"]["section"] = section
+    spec = load_spec_yaml(yaml.safe_dump(document))
+    built = build_spec(spec)
+    card = screen_spec(spec)
+    part = ifc_part(spec, built, card, part_number="B-1")
+    assert part.profile is not None and part.profile.kind == kind
+    data = render_ifc([part], name="frame", authorization=_authorized(card))
+    assert _problems(data) == []
+    model = ifcopenshell.file.from_string(data.decode("utf-8"))
+    (profile,) = model.by_type(profile_def)
+    assert profile.ProfileName == section
+    assert len(model.by_type("IfcExtrudedAreaSolid")) == 1
+    assert not model.by_type("IfcFacetedBrep")
+    (measured,) = measure_ifc(data)
+    assert measured.representation == "SweptSolid"
+    box = built.shape.bounding_box()
+    # A round section is read back as the reader's polygon, whose corners fall inside the
+    # circle; a flat-sided one is held to the micrometre.
+    slack = 0.01 * part.profile.dimensions["diameter"] if kind == "circle_hollow" else 1e-6
+    for got, want in zip(measured.bounds_mm, (tuple(box.min), tuple(box.max)), strict=True):
+        assert got == pytest.approx(want, abs=slack)
+    assert measured.volume_mm3 == pytest.approx(built.volume_mm3, rel=0.01)
+
+
+def test_the_adapter_carries_the_parts_identity_mass_and_card_digest():
+    from anvilate import __version__
+    from anvilate.export.ifc import ifc_part
+    from anvilate.review import artifact_digest
+
+    spec = load_spec_yaml(_example("base_plate").read_text(encoding="utf-8"))
+    built = build_spec(spec)
+    card = screen_spec(spec)
+    part = ifc_part(spec, built, card, tag="bp", part_number="BP-100")
+    assert (part.tag, part.part_number, part.element_type) == ("bp", "BP-100", "base_plate")
+    assert part.material == str(spec.material.ref)
+    # ASTM A36 at 7,850 kg/m³: the plate's own volume times the bundled density.
+    assert part.mass_kg == pytest.approx(built.volume_mm3 * 7.85e-6, rel=1e-3)
+    assert part.card_digest == "sha256:" + artifact_digest(
+        card, toolchain=f"anvilate {__version__}"
+    )
+    # A plate names no rolled section, so it is its faces.
+    assert part.profile is None
