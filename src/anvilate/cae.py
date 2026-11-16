@@ -56,6 +56,11 @@ __all__ = [
     "ImportedGroupCase",
     "ImportedGroupResult",
     "fastener_group_on_import",
+    "RegionPeak",
+    "RegionImport",
+    "RegionComparison",
+    "read_region_peaks",
+    "compare_region_peak",
 ]
 
 #: The consistent unit system every deck is written in, by quantity.
@@ -871,4 +876,205 @@ def fastener_group_on_import(
         governing_case=top.case if top else None,
         governing_index=top.governing_index if top else None,
         not_evaluated=tuple(c.case for c in cases if not c.evaluated),
+    )  # fmt: skip
+
+
+# --- peak values in a region -------------------------------------------------------------
+
+_QUANTITIES = ("stress", "strain", "displacement")
+
+
+class RegionPeak(StatableModel):
+    """One peak value a solver reported in a named region, in one case."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    region: Named
+    quantity: Literal["stress", "strain", "displacement"]
+    value: Quantity
+
+    def __str__(self) -> str:
+        return f"{self.case}: peak {self.quantity} {self.value} in {self.region}"
+
+
+class RegionImport(StatableModel):
+    """Peak values read back from the user's solver, with where they came from."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source: ResultSource
+    peaks: tuple[RegionPeak, ...] = Field(min_length=1)
+
+    def __str__(self) -> str:
+        return f"{len(self.peaks)} peak value(s) from {self.source}"
+
+
+class RegionComparison(StatableModel):
+    """An imported peak as a cited input: its own verdict, and the hand estimate beside it.
+
+    ``within_limit`` is the imported value held to ``limit`` when one is given (a
+    displacement or stress at most it), and ``None`` otherwise. ``difference`` is the
+    imported value over the estimate, less one; ``agrees`` is whether its size is within
+    ``tolerance``. Neither value replaces the other: a disagreement is a finding about one
+    of them, and both are named.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    region: Named
+    quantity: Named
+    imported: Quantity
+    estimate: Quantity
+    estimate_source: Named
+    difference: float
+    tolerance: float
+    agrees: bool
+    limit: Quantity | None = None
+    limit_source: str | None = None
+    within_limit: bool | None = None
+    source: ResultSource
+
+    def __str__(self) -> str:
+        side = "above" if self.difference > 0 else "below"
+        said = (f"{self.case}, {self.region}: the solver's peak {self.quantity} {self.imported} "
+                f"is {abs(self.difference):.0%} {side} the estimate {self.estimate} "
+                f"({self.estimate_source})")  # fmt: skip
+        said += (", within the stated tolerance" if self.agrees else
+                 f": they DISAGREE past the {self.tolerance:.0%} tolerance")  # fmt: skip
+        if self.limit is not None:
+            verdict = "within" if self.within_limit else "PAST"
+            said += f"; {verdict} the limit {self.limit} ({self.limit_source})"
+        return f"{said}; from {self.source}"
+
+
+def read_region_peaks(
+    path: str | Path,
+    *,
+    solver: str,
+    version: str,
+    units: str | None,
+    coordinate_system: str,
+) -> RegionImport:
+    """Peak values read from a CSV with ``case, region, quantity, value`` columns.
+
+    ``quantity`` is ``stress``, ``strain`` or ``displacement``. Stress is in the declared
+    system's force over length squared, displacement in its length, strain a ratio. A
+    file without its unit system is refused, naming it, as for interface forces.
+    """
+    if not isinstance(path, (str, Path)):
+        raise _refuse("path must be the path of a CSV file", subject="path")
+    name = Path(path).name
+    if units is None:
+        raise _refuse(f"{name} declares no unit system; a result file states its own, one of "
+                      f"{', '.join(_SYSTEMS)}", subject="units")  # fmt: skip
+    if units not in _SYSTEMS:
+        raise _refuse(f"{name}: units {units!r} is not one of {', '.join(_SYSTEMS)}",
+                      subject="units")  # fmt: skip
+    raw = Path(path).read_bytes()
+    source = ResultSource(file=name, sha256=hashlib.sha256(raw).hexdigest(), solver=solver,
+                          version=version, units=units,
+                          coordinate_system=coordinate_system)  # fmt: skip
+    force, length = _SYSTEMS[units]
+    unit_of = {"stress": f"{force}/{length}**2", "strain": "dimensionless",
+               "displacement": length}  # fmt: skip
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as failure:
+        raise _refuse(f"{name} is not UTF-8 text", subject="path") from failure
+    reader = csv.DictReader(io.StringIO(text))
+    header = [h.strip().lower() for h in (reader.fieldnames or ())]
+    missing = [c for c in ("case", "region", "quantity", "value") if c not in header]
+    if missing:
+        raise _refuse(f"{name} has no {', '.join(missing)} column; its header is "
+                      f"{reader.fieldnames}", subject="path")  # fmt: skip
+    reader.fieldnames = header
+    peaks = []
+    for line, row in enumerate(reader, start=2):
+        case, region = (row.get("case") or "").strip(), (row.get("region") or "").strip()
+        quantity = (row.get("quantity") or "").strip().lower()
+        cell = (row.get("value") or "").strip()
+        if not case or not region:
+            raise _refuse(f"{name} line {line} names no case or no region", subject="path")
+        if quantity not in _QUANTITIES:
+            raise _refuse(f"{name} line {line}: quantity {quantity!r} is one of "
+                          f"{', '.join(_QUANTITIES)}", subject="path")  # fmt: skip
+        try:
+            number = float(cell)
+        except ValueError as failure:
+            raise _refuse(f"{name} line {line}: value {cell!r} is not a number",
+                          subject="path") from failure  # fmt: skip
+        if not math.isfinite(number):
+            raise _refuse(f"{name} line {line}: value is {cell}", subject="path")
+        value = Quantity(magnitude=number, unit=unit_of[quantity])
+        peaks.append(RegionPeak.model_validate(
+            {"case": case, "region": region, "quantity": quantity, "value": value}))  # fmt: skip
+    if not peaks:
+        raise _refuse(f"{name} holds a header and no rows", subject="path")
+    return RegionImport(source=source, peaks=tuple(peaks))
+
+
+def compare_region_peak(
+    imported: RegionImport,
+    *,
+    region: str,
+    quantity: Literal["stress", "strain", "displacement"],
+    estimate: Quantity,
+    estimate_source: str,
+    tolerance: float,
+    case: str | None = None,
+    limit: Quantity | None = None,
+    limit_source: str | None = None,
+) -> RegionComparison:
+    """An imported peak beside the closed-form estimate for the same region.
+
+    ``case`` picks one case; left out, the case with the largest magnitude governs.
+    ``tolerance`` is the fraction the two may differ by and still agree, and is the
+    caller's to state. ``limit``, with its ``limit_source``, gives the imported value a
+    verdict of its own; it is never applied to the estimate in its place.
+    """
+    if not isinstance(imported, RegionImport):
+        raise _refuse("imported must be a RegionImport from read_region_peaks",
+                      subject="imported")  # fmt: skip
+    if not isinstance(tolerance, (int, float)) or not 0 < tolerance < 1:
+        raise _refuse(f"tolerance is a fraction between 0 and 1; got {tolerance!r}",
+                      subject="tolerance")  # fmt: skip
+    found = [p for p in imported.peaks if p.region == region and p.quantity == quantity
+             and (case is None or p.case == case)]  # fmt: skip
+    if not found:
+        held = sorted({f"{p.region} {p.quantity}" for p in imported.peaks})
+        raise _refuse(f"no peak {quantity} was read in region {region!r}"
+                      + (f" for case {case!r}" if case else "") + f"; the file holds "
+                      f"{', '.join(held)}", subject="region")  # fmt: skip
+    peak = max(found, key=lambda p: abs(p.value.magnitude))
+    if not isinstance(estimate, Quantity) or not estimate.has_dimension(
+        str(peak.value.pint.dimensionality)
+    ):
+        raise _refuse(f"estimate must be a quantity of the same kind as the peak "
+                      f"{quantity} ({peak.value.unit}); got {estimate!r}",
+                      subject="estimate")  # fmt: skip
+    if not isinstance(estimate_source, str) or not estimate_source.strip():
+        raise _refuse("estimate_source names the check the estimate came from",
+                      subject="estimate_source")  # fmt: skip
+    expected = estimate.to(peak.value.unit).magnitude
+    if expected == 0 or not math.isfinite(expected):
+        raise _refuse(f"the estimate is {estimate}; a ratio to it needs a finite, nonzero "
+                      "value", subject="estimate")  # fmt: skip
+    difference = abs(peak.value.magnitude) / abs(expected) - 1.0
+    within = None
+    if limit is not None:
+        if not isinstance(limit, Quantity) or not limit.has_dimension(
+            str(peak.value.pint.dimensionality)
+        ):
+            raise _refuse(f"limit must be a quantity of the same kind as the peak {quantity}",
+                          subject="limit")  # fmt: skip
+        if not limit_source:
+            raise _refuse("a limit names its source", subject="limit_source")
+        within = abs(peak.value.magnitude) <= limit.to(peak.value.unit).magnitude
+    return RegionComparison(
+        case=peak.case, region=region, quantity=quantity, imported=peak.value,
+        estimate=estimate, estimate_source=estimate_source, difference=difference,
+        tolerance=tolerance, agrees=abs(difference) <= tolerance, limit=limit,
+        limit_source=limit_source, within_limit=within, source=imported.source,
     )  # fmt: skip

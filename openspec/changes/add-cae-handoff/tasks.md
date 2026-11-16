@@ -29,7 +29,8 @@ Depends on the meshing pipeline in `validation-gauntlet` T3 and on
 - [x] 2.2 Provenance per import: file hash, declared solver and version, case identity,
       coordinate system, units
 - [x] 2.3 Free-body equilibrium residual check
-- [ ] 2.4 Region peak-value reads as cited inputs; disagreement findings
+- [x] 2.4 Region peak-value reads as cited inputs; disagreement findings
+      (from a CSV of case, region, quantity and value, like 2.1)
 
 ## 3. Screens
 

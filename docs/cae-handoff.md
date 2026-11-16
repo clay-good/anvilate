@@ -109,6 +109,32 @@ Each case keeps its shear, twist, tension and out-of-plane moment, and the resul
 where every load came from. The test pattern is four bolts at ±20 mm under a 1 kN side
 load 100 mm out: 250 N direct and 883.9 N from the twist put the worst bolt at 1,075.3 N.
 
+## A peak value as a cited input
+
+A peak stress, strain or displacement your solver found in a region comes back as an
+input to a check, never as a replacement for one. Write it as a CSV with `case, region,
+quantity, value`, in the unit system you declare.
+
+```python
+from anvilate.cae import compare_region_peak, read_region_peaks
+
+peaks = read_region_peaks("peaks.csv", solver="your solver", version="2026.1",
+                          units="N-mm", coordinate_system="basic")
+compare_region_peak(peaks, region="web root", quantity="stress", case="limit",
+                    estimate=bending_stress, estimate_source="Mc/I", tolerance=0.15,
+                    limit=allowable, limit_source="yield over 1.25")
+```
+
+| Read | What it gives |
+| --- | --- |
+| The imported peak | its own verdict against `limit`, when you give one with its source |
+| The hand estimate for the same region | beside it, never overwritten: the ratio, and whether they agree within your `tolerance` |
+| No `case` | the case with the largest magnitude |
+
+The spec's scenario is the test: 140 MPa against a 100 MPa hand estimate is 40% above it,
+and at a 15% tolerance both are reported and the disagreement is named. Which one is
+wrong is a finding for you to settle; the comparison does not pick.
+
 ## What is refused
 
 | Refused | Because |
@@ -144,5 +170,5 @@ test corrects that one entry rather than bending the deck to it.
 
 Solid and shell meshes of a built part (they wait on the meshing pipeline in local FEA),
 loads by tagged face, reading a solver's native result files (the CSV above is the
-doorway until then), the lug, fitting, weld-group and bearing screens on imported cases (the fastener
-pattern takes them today), and peak values read from a tagged region.
+doorway until then), and the lug, fitting, weld-group and bearing screens on imported cases (the fastener
+pattern takes them today).

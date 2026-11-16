@@ -403,6 +403,11 @@ cae.read_interface_forces
 cae.ImportedGroupCase
 cae.ImportedGroupResult
 cae.fastener_group_on_import
+cae.RegionPeak
+cae.RegionImport
+cae.RegionComparison
+cae.read_region_peaks
+cae.compare_region_peak
 frame.MAX_NODES
 frame.Freedom
 frame.FrameNode
