@@ -48,8 +48,40 @@ system is refused by name, as is one that is not finite.
 ## A deck is input, not evidence
 
 The header of every deck says **UNSOLVED INPUT**, and so does its sidecar. Writing a
-deck changes no check on any card. Reading your solver's results back as cited inputs
-is the next part of this handoff, and is not built yet.
+deck changes no check on any card. A result counts only when it is read back, below,
+with the file's hash and what produced it.
+
+## Reading interface loads back
+
+Your solver's answer comes back as the forces on one free body, case by case: the forces
+at each interface you cut it at, and any load applied to it. Write them as a CSV with
+`case, interface, point, x, y, z, fx, fy, fz, mx, my, mz`, one row per point, which every
+solver's grid-point force output can become.
+
+```python
+from anvilate.cae import read_interface_forces
+
+imported = read_interface_forces("gpforce.csv", solver="your solver", version="2026.1",
+                                 units="N-mm", coordinate_system="basic")
+imported.at("base")    # each case's resultant at the base, about its points' centroid
+imported.unbalanced    # the cases whose free body does not sum to zero
+```
+
+| Read back | How |
+| --- | --- |
+| Each interface, each case | the summed force, and the moment about the centroid of that interface's points, in N and N·mm |
+| Each case's balance | the summed force and moment over the whole free body, held to `tolerance` (0.001 by default) times the largest force and the largest moment any one row brings |
+| Where it came from | the file's SHA-256, the solver and version as you declared them, the unit system, the coordinate system |
+
+**A file without its unit system is refused**, naming the file and the systems it may
+declare: N-mm, N-m, kN-mm, kN-m, lbf-in, lbf-ft, kip-in and kip-ft. The coordinate system
+is recorded and not acted on: nothing here rotates a force.
+
+**An unbalanced case is reported, never corrected.** The bracket in the tests carries
+1 kN at its tip, 100 mm out, on four bolts at ±20 mm: the bolts at +20 pull 1,500 N each
+and those at −20 push 1,000 N, and the case balances. Raise the tip to 1.1 kN without
+changing the bolts and the case is named with its residual: 100 N, and 8,000 N·mm about
+the points' centroid 80 mm away.
 
 ## What is refused
 
@@ -60,6 +92,8 @@ is the next part of this handoff, and is not built yet.
 | Two load cases with one name | each case is named after its frame |
 | A released translation, in a keyword deck | its releases are rotations only; the bulk-data deck's pin flags take all six |
 | A deck written to a file of the other format | `portal.inp` that holds bulk data is a deck nobody can open |
+| A result file with no unit system, or one not listed | a number without its units is the error this whole handoff exists to stop |
+| A result row whose value is not a finite number, or that names no case or interface | it is refused at its line, not skipped |
 
 ## How it is checked
 
@@ -83,5 +117,6 @@ test corrects that one entry rather than bending the deck to it.
 ## Not yet
 
 Solid and shell meshes of a built part (they wait on the meshing pipeline in local FEA),
-loads by tagged face, and reading interface forces and peak values back from result
-files.
+loads by tagged face, reading a solver's native result files (the CSV above is the
+doorway until then), feeding an imported case to the joint and fitting screens, and peak
+values read from a tagged region.

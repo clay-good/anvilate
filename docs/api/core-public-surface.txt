@@ -394,6 +394,12 @@ cae.DECK_UNITS
 cae.DeckError
 cae.AnalysisDeck
 cae.frame_deck
+cae.RESULT_UNITS
+cae.ResultSource
+cae.InterfaceLoad
+cae.CaseBalance
+cae.InterfaceImport
+cae.read_interface_forces
 frame.MAX_NODES
 frame.Freedom
 frame.FrameNode

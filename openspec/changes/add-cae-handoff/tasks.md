@@ -24,9 +24,11 @@ Depends on the meshing pipeline in `validation-gauntlet` T3 and on
 
 - [ ] 2.1 Interface force reader for open result formats (grid-point forces,
       keyword-format result files), as an optional extra
-- [ ] 2.2 Provenance per import: file hash, declared solver and version, case identity,
+      (a CSV of grid-point forces on a free body is read; the solvers' native result
+      files are not, and no solver is installed here to make one to test against)
+- [x] 2.2 Provenance per import: file hash, declared solver and version, case identity,
       coordinate system, units
-- [ ] 2.3 Free-body equilibrium residual check
+- [x] 2.3 Free-body equilibrium residual check
 - [ ] 2.4 Region peak-value reads as cited inputs; disagreement findings
 
 ## 3. Screens

@@ -26,24 +26,33 @@ beam releases are rotational only, so a released translation is refused there.
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 
-from ._models import StatableModel, each_one
+from ._models import Named, StatableModel, each_one
 from .frame import Frame, FrameMember, Freedom, _geometry_of
 from .refusal import RefusalError, Remedy
+from .units import Quantity
 
 __all__ = [
     "DECK_UNITS",
     "DeckError",
     "AnalysisDeck",
     "frame_deck",
+    "RESULT_UNITS",
+    "ResultSource",
+    "InterfaceLoad",
+    "CaseBalance",
+    "InterfaceImport",
+    "read_interface_forces",
 ]
 
 #: The consistent unit system every deck is written in, by quantity.
@@ -457,3 +466,259 @@ def _bdf(model: Frame, frames: Sequence[Frame]) -> str:
         lines += _card("LOAD", k, *combined)
     lines.append("ENDDATA")
     return "\n".join(lines) + "\n"
+
+
+# --- results read back -------------------------------------------------------------------
+
+#: The unit systems an imported result may declare, as its force and length units.
+RESULT_UNITS: tuple[tuple[str, str, str], ...] = (
+    ("N-mm", "N", "mm"),
+    ("N-m", "N", "m"),
+    ("kN-mm", "kN", "mm"),
+    ("kN-m", "kN", "m"),
+    ("lbf-in", "lbf", "inch"),
+    ("lbf-ft", "lbf", "foot"),
+    ("kip-in", "kip", "inch"),
+    ("kip-ft", "kip", "foot"),
+)
+_SYSTEMS = {name: (force, length) for name, force, length in RESULT_UNITS}
+_COLUMNS = ("case", "interface", "point", "x", "y", "z", "fx", "fy", "fz", "mx", "my", "mz")
+
+
+class ResultSource(StatableModel):
+    """Where an imported result came from, as the import declared it and as its bytes are.
+
+    ``sha256`` is the file's own digest. ``solver`` and ``version`` are as declared:
+    nothing here can check them, so they are recorded and named, not vouched for.
+    ``coordinate_system`` is the one the forces are in; nothing here rotates them.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    file: Named
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    solver: Named
+    version: Named
+    units: Named
+    coordinate_system: Named
+
+    @field_validator("units")
+    @classmethod
+    def _a_system(cls, value: str) -> str:
+        if value not in _SYSTEMS:
+            raise _refuse(f"units {value!r} is not one of {', '.join(_SYSTEMS)}",
+                          subject="units")  # fmt: skip
+        return value
+
+    def __str__(self) -> str:
+        return (f"{self.file} (sha256 {self.sha256[:12]}) from {self.solver} {self.version}, "
+                f"{self.units}, in {self.coordinate_system}")  # fmt: skip
+
+
+class InterfaceLoad(StatableModel):
+    """The resultant at one interface in one load case, in N and N*mm.
+
+    ``moment_nmm`` is about ``about_mm``, the centroid of the interface's points, so it
+    is the moment a joint screen at that interface reads. ``points`` counts the rows
+    summed into it.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    interface: Named
+    force_n: tuple[float, float, float]
+    moment_nmm: tuple[float, float, float]
+    about_mm: tuple[float, float, float]
+    points: int = Field(ge=1)
+
+    def __str__(self) -> str:
+        f = ", ".join(f"{v:.4g}" for v in self.force_n)
+        m = ", ".join(f"{v:.4g}" for v in self.moment_nmm)
+        return f"{self.case} at {self.interface}: F ({f}) N, M ({m}) N*mm"
+
+
+class CaseBalance(StatableModel):
+    """One case's free body: what its forces and moments leave over, against its tolerance.
+
+    ``residual_force_n`` is the length of the summed force; ``residual_moment_nmm`` that
+    of the summed moment about the centroid of every point in the case. Each is held to
+    ``tolerance`` times the largest force, or the largest moment, any one row brings.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    residual_force_n: float
+    residual_moment_nmm: float
+    largest_force_n: float
+    largest_moment_nmm: float
+    tolerance: float
+    balanced: bool
+
+    def __str__(self) -> str:
+        verdict = "balances" if self.balanced else "DOES NOT BALANCE"
+        return (f"{self.case} {verdict}: residual {self.residual_force_n:.4g} N against the "
+                f"largest {self.largest_force_n:.4g} N, {self.residual_moment_nmm:.4g} N*mm "
+                f"against {self.largest_moment_nmm:.4g} N*mm, at {self.tolerance:g}")  # fmt: skip
+
+
+class InterfaceImport(StatableModel):
+    """Interface loads read back from the user's solver, with where they came from.
+
+    One :class:`InterfaceLoad` per case and interface, and one :class:`CaseBalance` per
+    case. ``unbalanced`` names the cases whose free body leaves more than the tolerance.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source: ResultSource
+    loads: tuple[InterfaceLoad, ...]
+    balance: tuple[CaseBalance, ...]
+
+    @property
+    def cases(self) -> tuple[str, ...]:
+        """The load cases, in the order the file gives them."""
+        return tuple(b.case for b in self.balance)
+
+    @property
+    def unbalanced(self) -> tuple[str, ...]:
+        """The cases whose free body does not balance within the tolerance."""
+        return tuple(b.case for b in self.balance if not b.balanced)
+
+    def at(self, interface: str) -> tuple[InterfaceLoad, ...]:
+        """Every case's load at ``interface``, in case order."""
+        found = tuple(load for load in self.loads if load.interface == interface)
+        if not found:
+            names = sorted({load.interface for load in self.loads})
+            raise _refuse(f"no load was read at interface {interface!r}; the file holds "
+                          f"{', '.join(names)}", subject="interface")  # fmt: skip
+        return found
+
+    def __str__(self) -> str:
+        off = f"; unbalanced: {', '.join(self.unbalanced)}" if self.unbalanced else ""
+        interfaces = len({load.interface for load in self.loads})
+        return (f"{len(self.balance)} case(s) at {interfaces} interface(s) from "
+                f"{self.source}{off}")  # fmt: skip
+
+
+def read_interface_forces(
+    path: str | Path,
+    *,
+    solver: str,
+    version: str,
+    units: str | None,
+    coordinate_system: str,
+    tolerance: float = 1e-3,
+) -> InterfaceImport:
+    """Interface loads read from a CSV of the forces on one free body, case by case.
+
+    Columns: ``case, interface, point, x, y, z, fx, fy, fz, mx, my, mz``. Each row is
+    the force and moment acting **on the free body** at one point: the forces at its cut
+    interfaces, and any load applied to it under an interface name of its own. Every
+    solver's grid-point force output can be written this way.
+
+    ``units`` is the system the file is in, one of :data:`RESULT_UNITS`; a file read
+    without one is refused, naming it. The rows are converted to N and N*mm, and each
+    interface's resultant is taken about the centroid of its own points. Each case's
+    free body is held to ``tolerance``: a case whose forces do not sum to zero is
+    reported with its residual, never dropped and never corrected.
+    """
+    if not isinstance(path, (str, Path)):
+        raise _refuse("path must be the path of a CSV file", subject="path")
+    name = Path(path).name
+    if units is None:
+        raise _refuse(f"{name} declares no unit system; a result file states its own, one of "
+                      f"{', '.join(_SYSTEMS)}", subject="units")  # fmt: skip
+    if units not in _SYSTEMS:
+        raise _refuse(f"{name}: units {units!r} is not one of {', '.join(_SYSTEMS)}",
+                      subject="units")  # fmt: skip
+    if not isinstance(tolerance, (int, float)) or not 0 < tolerance < 1:
+        raise _refuse(f"tolerance is a fraction between 0 and 1; got {tolerance!r}",
+                      subject="tolerance")  # fmt: skip
+    raw = Path(path).read_bytes()
+    source = ResultSource(file=name, sha256=hashlib.sha256(raw).hexdigest(), solver=solver,
+                          version=version, units=units,
+                          coordinate_system=coordinate_system)  # fmt: skip
+    force_unit, length_unit = _SYSTEMS[units]
+    to_n = Quantity(magnitude=1.0, unit=force_unit).to("N").magnitude
+    to_mm = Quantity(magnitude=1.0, unit=length_unit).to("mm").magnitude
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as failure:
+        raise _refuse(f"{name} is not UTF-8 text", subject="path") from failure
+    reader = csv.DictReader(io.StringIO(text))
+    header = [h.strip().lower() for h in (reader.fieldnames or ())]
+    missing = [c for c in _COLUMNS if c not in header]
+    if missing:
+        raise _refuse(f"{name} has no {', '.join(missing)} column; its header is "
+                      f"{reader.fieldnames}", subject="path")  # fmt: skip
+    reader.fieldnames = header
+    rows: dict[str, list[tuple[str, list[float], list[float], list[float]]]] = {}
+    for line, row in enumerate(reader, start=2):
+        values = []
+        for column in _COLUMNS[3:]:
+            cell = (row.get(column) or "").strip()
+            try:
+                number = float(cell)
+            except ValueError as failure:
+                raise _refuse(f"{name} line {line}: {column} {cell!r} is not a number",
+                              subject="path") from failure  # fmt: skip
+            if not math.isfinite(number):
+                raise _refuse(f"{name} line {line}: {column} is {cell}", subject="path")
+            values.append(number)
+        case, interface = (row.get("case") or "").strip(), (row.get("interface") or "").strip()
+        if not case or not interface:
+            raise _refuse(f"{name} line {line} names no case or no interface", subject="path")
+        point = [v * to_mm for v in values[0:3]]
+        force = [v * to_n for v in values[3:6]]
+        moment = [v * to_n * to_mm for v in values[6:9]]
+        rows.setdefault(case, []).append((interface, point, force, moment))
+    if not rows:
+        raise _refuse(f"{name} holds a header and no rows", subject="path")
+    loads, balance = [], []
+    for case, entries in rows.items():
+        for interface in dict.fromkeys(e[0] for e in entries):
+            mine = [e for e in entries if e[0] == interface]
+            centre = _centroid([e[1] for e in mine])
+            f, m = _resultant(mine, centre)
+            loads.append(InterfaceLoad(case=case, interface=interface,
+                                       force_n=_rounded(f), moment_nmm=_rounded(m),
+                                       about_mm=_rounded(centre), points=len(mine)))  # fmt: skip
+        balance.append(_balance(case, entries, tolerance))
+    return InterfaceImport(source=source, loads=tuple(loads), balance=tuple(balance))
+
+
+def _centroid(points: list[list[float]]) -> list[float]:
+    return [sum(p[i] for p in points) / len(points) for i in range(3)]
+
+
+def _arm(point: list[float], centre: list[float], force: list[float]) -> list[float]:
+    r = [point[i] - centre[i] for i in range(3)]
+    return [r[1] * force[2] - r[2] * force[1], r[2] * force[0] - r[0] * force[2],
+            r[0] * force[1] - r[1] * force[0]]  # fmt: skip
+
+
+def _resultant(entries: list, centre: list[float]) -> tuple[list[float], list[float]]:
+    force = [sum(e[2][i] for e in entries) for i in range(3)]
+    moment = [0.0, 0.0, 0.0]
+    for _interface, point, f, m in entries:
+        turn = _arm(point, centre, f)
+        moment = [moment[i] + m[i] + turn[i] for i in range(3)]
+    return force, moment
+
+
+def _balance(case: str, entries: list, tolerance: float) -> CaseBalance:
+    centre = _centroid([e[1] for e in entries])
+    force, moment = _resultant(entries, centre)
+    largest_f = max(math.hypot(*e[2]) for e in entries)
+    largest_m = max(math.hypot(*e[3]) + math.hypot(*_arm(e[1], centre, e[2])) for e in entries)
+    residual_f, residual_m = math.hypot(*force), math.hypot(*moment)
+    balanced = residual_f <= tolerance * largest_f and residual_m <= tolerance * largest_m
+    return CaseBalance(case=case, residual_force_n=residual_f, residual_moment_nmm=residual_m,
+                       largest_force_n=largest_f, largest_moment_nmm=largest_m,
+                       tolerance=tolerance, balanced=balanced)  # fmt: skip
+
+
+def _rounded(vector: list[float]) -> tuple[float, float, float]:
+    return (round(vector[0], 9), round(vector[1], 9), round(vector[2], 9))
