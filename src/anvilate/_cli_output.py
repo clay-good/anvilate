@@ -36,10 +36,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.69.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.70.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.69.0"]
-SchemaVersion = Literal["1.69.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.70.0"]
+SchemaVersion = Literal["1.70.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -144,7 +144,7 @@ class ProductCheckOutput(_WireModel):
 
 class BuildArtifact(_WireModel):
     path: str
-    format: Literal["step", "3mf"]
+    format: Literal["step", "3mf", "ifc"]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     pattern: GeometryPattern
     volume_mm3: Annotated[float, Field(gt=0)]
@@ -165,12 +165,12 @@ class BuildOutput(_WireModel):
 
 
 class GeometryExportOutput(_WireModel):
-    """``export --artifact step|3mf``: the part itself, written to one file."""
+    """``export --artifact step|3mf|ifc``: the part itself, written to one file."""
 
     schema_: SchemaId = Field(alias="schema")
     schema_version: SchemaVersion
     command: Literal["export"]
-    artifact: Literal["step", "3mf"]
+    artifact: Literal["step", "3mf", "ifc"]
     name: Named
     source: Named
     built: BuildArtifact

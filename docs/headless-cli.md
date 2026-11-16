@@ -437,7 +437,7 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.69.0",
+{"schema": "urn:anvilate:schema:cli-output:1.70.0",
  "schema_version": "1.67.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
@@ -689,7 +689,7 @@ file's bytes: two YAML files differing only in whitespace are one revision, and 
 surface holds the parsed document rather than the file it came from.
 
 `export_artifact` over MCP produces the same artifacts, held equal by a test: the three
-`export` names above, plus STEP and 3MF (which `build` writes here) and the part sheet
+`export` names above, plus STEP and 3MF (which `build` writes here), IFC, and the part sheet
 (which `view` writes). The two surfaces agree on the bundle by value: `export_artifact`
 returns the same bundle document for the same spec, compared in
 `tests/test_surface_parity.py`. Where a document goes differs. The CLI prints it or writes
@@ -1070,6 +1070,13 @@ roll-up and cannot be deleted by deleting the checks.
 write the same files, from the one command that writes everything else a spec makes. The
 flags below (`--unvalidated`, `--ap214`, `--force`) mean the same there. `anvilate build`
 stays for one release as the same writer.
+
+`anvilate export --artifact ifc --output part.ifc` writes a structural part as an IFC4
+element (`pip install -e ".[geometry,ifc]"`): a beam, column, member or plate with its
+material, mass, part card digest and the export watermark, and a member on a named section
+as its profile and an extrusion. An element IFC has no class for is refused before it is
+built, by name; see [export targets](export-targets.md#ifc-for-a-structural-part-in-a-building-model).
+`build` does not write IFC.
 
 Install the optional kernel and build either checked-in geometry spec. Both state a safety
 factor and pass their screens, so each builds a validated STEP in one command:

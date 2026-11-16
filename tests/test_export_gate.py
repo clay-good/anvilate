@@ -522,7 +522,7 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
 
     Asked per format, which is what the surface actually publishes:
 
-    * ``step``, ``3mf``, ``dxf`` and ``qif`` are CAD artifacts, and ``artifact-export``
+    * ``step``, ``3mf``, ``dxf``, ``ifc`` and ``qif`` are CAD artifacts, and ``artifact-export``
       gates those on the acceptance checks passing. Each is written to the server's output
       folder only after ``authorize_export`` accepts the card, and their exporters take a
       mandatory ``authorization``, so none can be wired without one.
@@ -548,7 +548,7 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
     from anvilate.mcp import _FROM_BUILT_PART
 
     gated_cad = (published & set(_FROM_BUILT_PART)) | (published & {"qif"})
-    assert gated_cad == {"step", "3mf", "dxf", "qif"}, published
+    assert gated_cad == {"step", "3mf", "dxf", "ifc", "qif"}, published
     assert published - gated_cad == {"evidence_bundle", "part_sheet"}
 
     # The CAD half over *this* surface: refused here, and each exporter takes the
@@ -559,6 +559,7 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
     for symbol_path in (
         "anvilate.export.dxf:export_plate_dxf",
         "anvilate.export.dxf:render_geometry_dxf",
+        "anvilate.export.ifc:render_ifc",
         "anvilate.export.qif:export_qif_results",
         "anvilate.geometry:write_step",
         "anvilate.geometry:render_3mf",

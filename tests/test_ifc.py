@@ -290,3 +290,56 @@ def test_the_adapter_carries_the_parts_identity_mass_and_card_digest():
     )
     # A plate names no rolled section, so it is its faces.
     assert part.profile is None
+
+
+def test_the_command_line_writes_a_member_as_ifc_and_refuses_an_element_it_cannot(tmp_path):
+    """`anvilate export --artifact ifc`: the same gate and watermark as STEP, and an element
+    with no IFC class is refused before it is built, not after being told to override."""
+    import json
+
+    from cli_output import run_cli
+
+    column = _example("column_member")
+    target = tmp_path / "column.ifc"
+    code, raw, err = run_cli(
+        "export", str(column), "--artifact", "ifc", "--output", str(target),
+        "--format", "json", "--unvalidated",
+    )  # fmt: skip
+    assert code == 0, err
+    payload = json.loads(raw)
+    assert payload["artifact"] == "ifc" and payload["built"]["format"] == "ifc"
+    data = target.read_bytes()
+    assert _problems(data) == []
+    (measured,) = measure_ifc(data)
+    assert (measured.ifc_class, measured.representation) == ("IfcColumn", "SweptSolid")
+    gear = tmp_path / "gear.ifc"
+    code, _raw, err = run_cli(
+        "export", str(_example("spur_gear_mesh")), "--artifact", "ifc", "--output", str(gear)
+    )
+    assert code == 3 and not gear.exists()
+    assert "'spur_gear_mesh' has no IFC class" in err and "--unvalidated" not in err
+
+
+def test_the_mcp_tool_writes_ifc_to_the_output_folder(tmp_path, monkeypatch):
+    import json
+
+    from anvilate.mcp import handle_request
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path / "out"))
+
+    def call(name, arguments):
+        return handle_request(
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+             "params": {"name": name, "arguments": arguments}}
+        )  # fmt: skip
+
+    import yaml
+
+    spec = yaml.safe_load(_example("tube").read_text(encoding="utf-8"))
+    handle = call("build_part", {"spec": spec})["result"]["structuredContent"]["subject"]
+    result = call("export_artifact", {"subject": handle, "format": "ifc"})["result"]
+    body = result["structuredContent"]
+    assert body["format"] == "ifc" and body["validated"] is False, json.dumps(body)
+    data = Path(body["file"]["path"]).read_bytes()
+    assert _problems(data) == []
+    assert [m.ifc_class for m in measure_ifc(data)] == ["IfcMember"]

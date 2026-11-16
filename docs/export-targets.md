@@ -31,8 +31,9 @@ retains the same properties and validation gate.
 
 `anvilate.export.ifc.render_ifc(parts, name=..., authorization=..., schema="IFC4")` writes
 structural parts as the elements a building model holds, through IfcOpenShell (LGPL-3.0, the
-optional `ifc` extra: `pip install 'anvilate[ifc]'`). It is a library function today; the
-command-line and product paths are the next slices of `add-ifc-structural-export`.
+optional `ifc` extra: `pip install 'anvilate[ifc]'`). `anvilate export --artifact ifc --output
+part.ifc` and the MCP `export_artifact` tool (`format: ifc`) write one part; a product of
+several parts is the next slice of `add-ifc-structural-export`.
 
 | What | How |
 | --- | --- |

@@ -242,7 +242,7 @@ RESULT_BUDGET_CHARS = 60_000
 # What `export_artifact` produces, and which handle each is made from: a screening result
 # (the card and its spec) or a built part.
 _FROM_SCREENING = ("evidence_bundle", "qif", "part_sheet")
-_FROM_BUILT_PART = ("step", "3mf", "dxf")
+_FROM_BUILT_PART = ("step", "3mf", "dxf", "ifc")
 _EXPORT_FORMATS = (*_FROM_SCREENING, *_FROM_BUILT_PART)
 
 # One file written to the output folder, as every tool that writes one reports it.
@@ -3081,6 +3081,12 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
             name = f"{stem}.step"
         elif artifact == "3mf":
             data, name = render_3mf(built, authorization=authorization), f"{stem}.3mf"
+        elif artifact == "ifc":
+            from .export.ifc import ifc_part, render_ifc
+
+            part = ifc_part(spec, built, card)
+            data = render_ifc([part], name=spec.name, authorization=authorization)
+            name = f"{stem}.ifc"
         else:
             from .export.dxf import render_geometry_dxf
 
@@ -3127,7 +3133,7 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
     reporting that a part failed is the one a refusal would withhold. QIF is a statement
     about a part that may be built from it, so it is gated on the card.
 
-    **From a built-part handle:** STEP, 3MF and DXF, gated the same way
+    **From a built-part handle:** STEP, 3MF, DXF and IFC, gated the same way
     (:func:`_export_built_part`).
     """
     from .bundle import BundleSections, combinations_for

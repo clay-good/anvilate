@@ -235,11 +235,12 @@ _MCP_FORMAT_COMMAND = {
     "dxf": "export --artifact dxf",
     "step": "export --artifact step --output part.step",
     "3mf": "export --artifact 3mf --output part.3mf",
+    "ifc": "export --artifact ifc --output part.ifc",
     "part_sheet": "view",
 }
-_ARTIFACTS = ("evidence-bundle", "dxf", "qif", "step", "3mf")
-# The two that are the part itself, written to a file `--output` names.
-_GEOMETRY_ARTIFACTS = {"step": (".step", ".stp"), "3mf": (".3mf",)}
+_ARTIFACTS = ("evidence-bundle", "dxf", "qif", "step", "3mf", "ifc")
+# The three that are the part itself, written to a file `--output` names.
+_GEOMETRY_ARTIFACTS = {"step": (".step", ".stp"), "3mf": (".3mf",), "ifc": (".ifc",)}
 
 _COMMAND_EXAMPLES = {
     "check": "anvilate check parts/bracket.yaml --show-work",
@@ -621,7 +622,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export.add_argument(
         "--output",
         type=Path,
-        help="for --artifact step or 3mf: the file to write (.step, .stp or .3mf)",
+        help="for --artifact step, 3mf or ifc: the file to write (.step, .stp, .3mf or .ifc)",
     )
     export.add_argument(
         "--unvalidated",
@@ -3607,14 +3608,18 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
     )
 
     suffix = args.output.suffix.lower()
-    if suffix not in {".step", ".stp", ".3mf"}:
-        print(f"anvilate {command}: --output must end in .step, .stp or .3mf", file=err)
+    # IFC is written by `export --artifact ifc`; `build` keeps the two it has always had.
+    suffixes = {".step", ".stp", ".3mf"} | ({".ifc"} if command == "export" else set())
+    if suffix not in suffixes:
+        wanted = ".step, .stp, .3mf or .ifc" if command == "export" else ".step, .stp or .3mf"
+        print(f"anvilate {command}: --output must end in {wanted}", file=err)
         return EXIT_BAD_REQUEST
     as_3mf = suffix == ".3mf"
-    if as_3mf and args.ap214:
+    as_ifc = suffix == ".ifc"
+    if (as_3mf or as_ifc) and args.ap214:
         print(
-            f"anvilate {command}: --ap214 chooses a STEP schema and the output is 3MF; drop "
-            "--ap214, or write a .step file",
+            f"anvilate {command}: --ap214 chooses a STEP schema and the output is "
+            f"{'3MF' if as_3mf else 'IFC'}; drop --ap214, or write a .step file",
             file=err,
         )
         return EXIT_BAD_REQUEST
@@ -3633,6 +3638,16 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
     spec = _load(args.spec, err=err, command=command)
     if isinstance(spec, int):
         return spec
+    if as_ifc:
+        # Before the build and the gate: an element IFC has no class for is refused as it
+        # stands, not after being told to pass --unvalidated for a file it will never get.
+        from .export.ifc import ifc_class_for
+
+        try:
+            ifc_class_for(spec.element_type)
+        except ValueError as failure:
+            print(f"anvilate {command}: {failure}", file=err)
+            return EXIT_BAD_REQUEST
     # One build, so no count: the line names what is running rather than a percentage the
     # kernel cannot report.
     _progress(err, f"building geometry for {args.spec}")
@@ -3656,7 +3671,8 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
     except ExportRefused as refused:
         print(
             f"anvilate {command}: {refused.unmet}.\n"
-            "Pass --unvalidated only after reviewing the scorecard; the STEP will be "
+            "Pass --unvalidated only after reviewing the scorecard; the "
+            f"{'3MF' if as_3mf else 'IFC' if as_ifc else 'STEP'} will be "
             "watermarked and is not released for fabrication.",
             file=err,
         )
@@ -3672,8 +3688,15 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
 
     step_schema: Literal["ap242", "ap214"] = "ap214" if args.ap214 else "ap242"
     try:
-        if as_3mf:
-            data = render_3mf(built, authorization=authorization)
+        if as_3mf or as_ifc:
+            if as_3mf:
+                data = render_3mf(built, authorization=authorization)
+            else:
+                from .export.ifc import ifc_part, render_ifc
+
+                data = render_ifc(
+                    [ifc_part(spec, built, card)], name=spec.name, authorization=authorization
+                )
             # Written beside the target and renamed into place, so an interrupted run leaves
             # no partial file presented as complete (interaction-quality 7.2), under a name
             # unique to this run, so a concurrent build of the same target cannot clobber it.
@@ -3709,7 +3732,7 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
         "source": str(args.spec),
         "artifact": {
             "path": str(args.output),
-            "format": "3mf" if as_3mf else "step",
+            "format": "3mf" if as_3mf else "ifc" if as_ifc else "step",
             "sha256": digest,
             "pattern": built.pattern,
             "volume_mm3": built.volume_mm3,
@@ -3725,7 +3748,7 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
             document = machine_document(
                 "export",
                 {"name": result["name"], "source": result["source"], "built": result["artifact"]},
-                artifact="3mf" if as_3mf else "step",
+                artifact="3mf" if as_3mf else "ifc" if as_ifc else "step",
             )
         else:
             document = machine_document("build", result)
@@ -3737,6 +3760,9 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
 
             print(f"  3MF           {args.output}", file=out)
             print(f"  standard      {THREEMF_STANDARD}", file=out)
+        elif as_ifc:
+            print(f"  IFC           {args.output}", file=out)
+            print("  schema        IFC4", file=out)
         else:
             print(f"  STEP          {args.output}", file=out)
             print(f"  schema        {step_schema.upper()}", file=out)
