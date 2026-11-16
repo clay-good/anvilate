@@ -32,8 +32,13 @@ retains the same properties and validation gate.
 `anvilate.export.ifc.render_ifc(parts, name=..., authorization=..., schema="IFC4")` writes
 structural parts as the elements a building model holds, through IfcOpenShell (LGPL-3.0, the
 optional `ifc` extra: `pip install 'anvilate[ifc]'`). `anvilate export --artifact ifc --output
-part.ifc` and the MCP `export_artifact` tool (`format: ifc`) write one part; a product of
-several parts is the next slice of `add-ifc-structural-export`.
+part.ifc` and the MCP `export_artifact` tool (`format: ifc`) write one part, and `anvilate
+combine frame.combination.yaml --output frame.ifc` writes a combination as one
+`IfcElementAssembly`: each part at the rotation and shift its mates solved, its id as its
+tag, and each bolt, nut and washer an `IfcMechanicalFastener` from its tabulated envelope
+(`BOLT`; a nut and a washer are `USERDEFINED`, which neither schema enumerates). A
+combination holding a part IFC has no class for, such as the bracket on its mounting plate,
+is refused naming it. A product document still writes STEP only, and says so.
 
 | What | How |
 | --- | --- |

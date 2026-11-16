@@ -103,8 +103,23 @@ def test_an_element_with_no_class_is_refused_and_not_written_as_a_proxy():
         ifc_class_for("base_plate", "IFC2X3")  # type: ignore[arg-type]
 
 
+_HARDWARE = ("bolt", "key", "nut", "pin", "washer")
+# The elements a spec document can name; the rest of the map is a combination's hardware.
+_ELEMENTS = tuple(sorted(set(IFC_ELEMENT_CLASSES) - set(_HARDWARE)))
+
+
+def test_the_map_is_spec_elements_and_combination_hardware():
+    import typing
+
+    from anvilate.combination import HardwareBody
+
+    kinds = typing.get_args(typing.get_type_hints(HardwareBody)["kind"])
+    assert set(_HARDWARE) == set(kinds)
+    assert all(_example(element).exists() for element in _ELEMENTS)
+
+
 @pytest.mark.parametrize("schema", IFC_SCHEMAS)
-@pytest.mark.parametrize("element_type", sorted(IFC_ELEMENT_CLASSES))
+@pytest.mark.parametrize("element_type", _ELEMENTS)
 def test_each_mapped_element_is_valid_and_reads_back_as_the_solid_it_came_from(
     element_type, schema
 ):
@@ -343,3 +358,106 @@ def test_the_mcp_tool_writes_ifc_to_the_output_folder(tmp_path, monkeypatch):
     data = Path(body["file"]["path"]).read_bytes()
     assert _problems(data) == []
     assert [m.ifc_class for m in measure_ifc(data)] == ["IfcMember"]
+
+
+def _combination(name: str):
+    import yaml
+
+    from anvilate.combination import build_combination, parse_combination
+
+    path = _REPO / "examples" / "combinations" / f"{name}.combination.yaml"
+    return build_combination(parse_combination(yaml.safe_load(path.read_text(encoding="utf-8"))))
+
+
+def _near(measured, box, slack):
+    for got, want in zip(measured.bounds_mm, (tuple(box.min), tuple(box.max)), strict=True):
+        assert got == pytest.approx(want, abs=slack), (measured.tag, got, want)
+
+
+@pytest.mark.parametrize(("name", "slack"), [("portal_frame", 1e-6), ("guardrail_run", 0.05)])
+def test_a_combination_is_one_assembly_with_each_part_where_its_mates_put_it(name, slack):
+    """add-ifc-structural-export 2.2: aggregation, transforms preserved, part ids as tags.
+
+    The portal frame's beam is turned and lifted by its mates; read back from the file it is
+    where the combination put it, to the micrometre. The guardrail's round tubes come back
+    as the mesh's polygon, so within a twentieth of a millimetre.
+    """
+    from anvilate.export.ifc import combination_ifc_parts
+
+    built = _combination(name)
+    data = render_ifc(
+        combination_ifc_parts(built),
+        name=built.name,
+        authorization=_authorized(built.card),
+        assembly=built.name,
+    )
+    assert _problems(data) == []
+    model = ifcopenshell.file.from_string(data.decode("utf-8"))
+    (assembly,) = model.by_type("IfcElementAssembly")
+    (aggregates,) = [
+        rel for rel in model.by_type("IfcRelAggregates") if rel.RelatingObject == assembly
+    ]
+    assert sorted(e.Tag for e in aggregates.RelatedObjects) == sorted(p.id for p in built.parts)
+    (contained,) = model.by_type("IfcRelContainedInSpatialStructure")
+    assert list(contained.RelatedElements) == [assembly]
+    placed = {part.id: part.shape.bounding_box() for part in built.parts}
+    measured = [m for m in measure_ifc(data) if m.ifc_class != "IfcElementAssembly"]
+    assert sorted(m.tag for m in measured) == sorted(placed)
+    for m in measured:
+        _near(m, placed[m.tag], slack)
+
+
+def test_a_combinations_fasteners_are_mechanical_fasteners_in_their_holes():
+    """The bracket's bolts, nuts and washers, each from its envelope and where it sits.
+
+    The bracket and its plate are mechanical parts IFC has no class for here, so the whole
+    combination is refused naming the first; the hardware is checked on its own.
+    """
+    from anvilate.export.ifc import combination_ifc_parts
+
+    built = _combination("bracket_on_plate")
+    parts = combination_ifc_parts(built)
+    with pytest.raises(RefusalError, match="'mounting_plate' has no IFC class"):
+        render_ifc(parts, name="x", authorization=_authorized(built.card), assembly="x")
+    hardware = [p for p in parts if p.element_type in {"bolt", "nut", "washer"}]
+    assert len(hardware) == len(built.hardware) > 0
+    data = render_ifc(hardware, name="fasteners", authorization=_authorized(built.card))
+    assert _problems(data) == []
+    model = ifcopenshell.file.from_string(data.decode("utf-8"))
+    kinds = sorted(
+        {(e.PredefinedType, e.ObjectType) for e in model.by_type("IfcMechanicalFastener")}
+    )
+    assert kinds == [("BOLT", None), ("USERDEFINED", "NUT"), ("USERDEFINED", "WASHER")]
+    import ifcopenshell.util.element as element_util
+
+    for element in model.by_type("IfcMechanicalFastener"):
+        assert set(element_util.get_psets(element)) == {SCREENING_PSET}
+    for m, part, body in zip(measure_ifc(data), hardware, built.hardware, strict=True):
+        assert m.tag == part.part_number == body.designation
+        _near(m, body.shape.bounding_box(), 0.05)
+
+
+def test_combine_writes_an_ifc_assembly_and_a_product_is_told_to_write_step(tmp_path):
+    from cli_output import run_cli
+
+    target = tmp_path / "frame.ifc"
+    code, out, err = run_cli(
+        "combine", str(_REPO / "examples/combinations/portal_frame.combination.yaml"),
+        "--output", str(target),
+    )  # fmt: skip
+    assert code == 0, err
+    assert f"wrote {target} (VALIDATED)" in out
+    model = ifcopenshell.file.from_string(target.read_text(encoding="utf-8"))
+    assert len(model.by_type("IfcElementAssembly")) == 1
+    bracket = tmp_path / "bracket.ifc"
+    code, _out, err = run_cli(
+        "combine", str(_REPO / "examples/combinations/bracket_on_plate.combination.yaml"),
+        "--output", str(bracket), "--unvalidated",
+    )  # fmt: skip
+    assert code == 3 and not bracket.exists() and "'mounting_plate' has no IFC class" in err
+    product = tmp_path / "cart.ifc"
+    code, _out, err = run_cli(
+        "combine", str(_REPO / "examples/products/cart_frame.product.yaml"),
+        "--output", str(product),
+    )  # fmt: skip
+    assert code == 3 and not product.exists() and "a product document writes a STEP" in err

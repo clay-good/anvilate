@@ -15,7 +15,9 @@ Builds on the export layer in `src/anvilate/export` and the release package.
 
 - [x] 2.1 IFC4 writer through the optional toolkit; units declared; header with the
       watermark when unvalidated
-- [ ] 2.2 Products as aggregation with transforms and part numbers as tags
+- [ ] 2.2 Products as aggregation with transforms and part numbers as tags — done for
+      combinations (`combination_ifc_parts`, `IfcElementAssembly`, fasteners); a product
+      document is refused for IFC until its tree is mapped
 - [ ] 2.3 IFC 4.3 as a declared option; unsupported capabilities refused by name
       — `schema="IFC4X3_ADD2"` writes and validates; nothing it lacks has been met yet,
       so no refusal exists to test

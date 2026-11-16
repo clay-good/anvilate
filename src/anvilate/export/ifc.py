@@ -35,6 +35,7 @@ import hashlib
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from dataclasses import replace as _replace
 from typing import Any, Literal
 
 from .. import __version__
@@ -47,6 +48,7 @@ __all__ = [
     "IfcElementMeasure",
     "IfcPart",
     "IfcSweptProfile",
+    "combination_ifc_parts",
     "ifc_class_for",
     "ifc_part",
     "measure_ifc",
@@ -71,6 +73,13 @@ IFC_ELEMENT_CLASSES: Mapping[str, tuple[str, str]] = {
     "shear_plate": ("IfcPlate", "SHEAR_PLATE"),
     "tension_member": ("IfcMember", "MEMBER"),
     "tube": ("IfcMember", "MEMBER"),
+    # A combination's hardware, by the kind it is drawn as. IFC enumerates bolts and dowels;
+    # a nut, a washer and a key are fasteners it has no member for.
+    "bolt": ("IfcMechanicalFastener", "BOLT"),
+    "key": ("IfcMechanicalFastener", "KEY"),
+    "nut": ("IfcMechanicalFastener", "NUT"),
+    "pin": ("IfcMechanicalFastener", "DOWEL"),
+    "washer": ("IfcMechanicalFastener", "WASHER"),
 }
 
 # The predefined types each schema enumerates for the classes above, as IfcOpenShell
@@ -78,6 +87,20 @@ IFC_ELEMENT_CLASSES: Mapping[str, tuple[str, str]] = {
 # drift from what the writer is checked against.
 _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
     "IFC4": {
+        "IfcMechanicalFastener": frozenset(
+            {
+                "ANCHORBOLT",
+                "BOLT",
+                "DOWEL",
+                "NAIL",
+                "NAILPLATE",
+                "RIVET",
+                "SCREW",
+                "SHEARCONNECTOR",
+                "STAPLE",
+                "STUDSHEARCONNECTOR",
+            }
+        ),  # fmt: skip
         "IfcBeam": frozenset({"BEAM", "JOIST", "HOLLOWCORE", "LINTEL", "SPANDREL", "T_BEAM"}),
         "IfcColumn": frozenset({"COLUMN", "PILASTER"}),
         "IfcMember": frozenset(
@@ -99,6 +122,25 @@ _ENUMERATED: Mapping[str, Mapping[str, frozenset[str]]] = {
         "IfcPlate": frozenset({"CURTAIN_PANEL", "SHEET"}),
     },
     "IFC4X3_ADD2": {
+        "IfcMechanicalFastener": frozenset(
+            {
+                "ANCHORBOLT",
+                "BOLT",
+                "CHAIN",
+                "COUPLER",
+                "DOWEL",
+                "NAIL",
+                "NAILPLATE",
+                "RAILFASTENING",
+                "RAILJOINT",
+                "RIVET",
+                "ROPE",
+                "SCREW",
+                "SHEARCONNECTOR",
+                "STAPLE",
+                "STUDSHEARCONNECTOR",
+            }
+        ),  # fmt: skip
         "IfcBeam": frozenset(
             {
                 "BEAM",
@@ -220,6 +262,11 @@ class IfcPart:
     card_digest: str | None = None
     extra: Mapping[str, str] = field(default_factory=dict)
     profile: IfcSweptProfile | None = None
+    # Where the part is: its rotation's rows and its shift in mm, from its own frame (the
+    # one its mesh and profile are in) to the file's. ``None`` is where it was built.
+    placement: tuple[tuple[tuple[float, float, float], ...], tuple[float, float, float]] | None = (
+        None
+    )
 
 
 @dataclass(frozen=True)
@@ -325,8 +372,12 @@ def render_ifc(
     name: str,
     authorization: ExportAuthorization,
     schema: IfcSchema = "IFC4",
+    assembly: str | None = None,
 ) -> bytes:
     """``parts`` as the bytes of one IFC file of the declared ``schema``.
+
+    With ``assembly`` the parts are aggregated under one ``IfcElementAssembly`` of that
+    name, and the assembly, not each part, is what the storey contains.
 
     Each part is one element of the class its element maps to (:func:`ifc_class_for`),
     with a faceted B-rep, its material, the schema's common property set and the
@@ -429,7 +480,9 @@ def render_ifc(
             ObjectType=object_type,
             PredefinedType=predefined,
             ObjectPlacement=f.create_entity(
-                "IfcLocalPlacement", PlacementRelTo=placement, RelativePlacement=world
+                "IfcLocalPlacement",
+                PlacementRelTo=placement,
+                RelativePlacement=_placed(f, part.placement) or world,
             ),
             Representation=shape,
         )
@@ -446,13 +499,40 @@ def render_ifc(
             RelatingMaterial=material,
             RelatedObjects=users,
         )
+    contained = elements
+    if assembly is not None:
+        if not assembly.strip():
+            raise _refuse("an assembly needs a name", subject="assembly", source=_MESH_SOURCE)
+        whole = owned(
+            "IfcElementAssembly",
+            "assembly",
+            Name=assembly.strip(),
+            ObjectPlacement=placement,
+            PredefinedType="NOTDEFINED",
+        )
+        owned("IfcRelAggregates", "assembly", RelatingObject=whole, RelatedObjects=elements)
+        contained = [whole]
     owned(
         "IfcRelContainedInSpatialStructure",
         "storey",
         RelatingStructure=storey,
-        RelatedElements=elements,
+        RelatedElements=contained,
     )
     return f.to_string().encode("utf-8")
+
+
+def _placed(f: Any, placement: Any) -> Any:
+    """A part's rotation and shift as an axis placement: its z and x axes, and its origin."""
+    if placement is None:
+        return None
+    rows, shift = placement
+    column = [tuple(float(row[i]) for row in rows) for i in range(3)]
+    return f.create_entity(
+        "IfcAxis2Placement3D",
+        Location=f.create_entity("IfcCartesianPoint", Coordinates=tuple(map(float, shift))),
+        Axis=f.create_entity("IfcDirection", DirectionRatios=column[2]),
+        RefDirection=f.create_entity("IfcDirection", DirectionRatios=column[0]),
+    )
 
 
 def _faceted(f: Any, part: IfcPart) -> Any:
@@ -575,7 +655,13 @@ def _property_sets(
         screening.append(single("CardDigest", f.create_entity("IfcIdentifier", part.card_digest)))
     for key, value in sorted(part.extra.items()):
         screening.append(single(key, f.create_entity("IfcText", value)))
-    for pset_name, properties in ((common_name, common), (SCREENING_PSET, screening)):
+    # The common set the schema defines for a beam, column, member or plate holds a
+    # reference and whether it bears load. A fastener's holds its nominal sizes instead (and
+    # IFC 4.3 has none), so a fastener gets only the screening set.
+    sets = [(SCREENING_PSET, screening)]
+    if ifc_class != "IfcMechanicalFastener":
+        sets.insert(0, (common_name, common))
+    for pset_name, properties in sets:
         pset = owned(
             "IfcPropertySet", f"{part.tag}:{pset_name}", Name=pset_name, HasProperties=properties
         )
@@ -806,3 +892,46 @@ def _framed(
         across=unit[side],
         start=(start[0], start[1], start[2]),
     )
+
+
+def combination_ifc_parts(built: Any) -> list[IfcPart]:
+    """A built combination's parts and hardware, each where its mates put it.
+
+    Each part is exported as :func:`ifc_part` makes it, in its own frame, with the
+    rotation and shift the combination solved for it as its placement. Each fastener is an
+    ``IfcMechanicalFastener`` from its tabulated envelope, placed the same way and tagged by
+    the mate it sits in. Pass the result to :func:`render_ifc` with ``assembly=`` the
+    combination's name; the card is the combination's own.
+    """
+    from types import SimpleNamespace
+
+    from ..geometry import _mesh_for_3mf
+
+    parts = []
+    for placed in built.parts:
+        part = ifc_part(placed.spec, placed.built, built.card, tag=placed.id, part_number=placed.id)
+        rows = tuple(tuple(row) for row in placed.rotation)
+        parts.append(_replace(part, placement=(rows, tuple(placed.translation))))
+    counts: dict[str, int] = {}
+    for body in built.hardware:
+        counts[body.mate] = counts.get(body.mate, 0) + 1
+        tag = f"{body.mate}:{body.kind}:{counts[body.mate]}"
+        # The mesher reads four things off a built part; a fastener's envelope has them all.
+        envelope: Any = SimpleNamespace(
+            is_valid=body.solid.is_valid, shape=body.solid, volume_mm3=body.solid.volume, name=tag
+        )
+        vertices, triangles = _mesh_for_3mf(envelope)
+        rows = tuple(tuple(row) for row in body.rotation)
+        parts.append(
+            IfcPart(
+                tag=tag,
+                name=body.designation,
+                element_type=body.kind,
+                vertices=vertices,
+                triangles=triangles,
+                part_number=body.designation,
+                placement=(rows, tuple(body.translation)),
+                extra={"Envelope": "the tabulated envelope, not the threaded form"},
+            )
+        )
+    return parts

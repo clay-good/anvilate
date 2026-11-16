@@ -149,6 +149,9 @@ What holds each post down is the anchorage example,
   mate takes it off, and the hardware out along its own holes in the order it goes in.
 - **A parts list.** Every part with its pattern, material and mass, and every fastener
   with its designation and count.
+- **An IFC assembly**, when `--output` ends in `.ifc` and every part is a structural one
+  (the portal frame and the guardrail run are): see
+  [export targets](export-targets.md#ifc-for-a-structural-part-in-a-building-model).
 - **A STEP assembly.** AP242, each part a named component with its own placement, each
   kind of fastener one product placed once per hole. It opens as an assembly whose
   components can be selected and hidden, not as one fused body.

@@ -677,7 +677,11 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=f"Example: {_COMMAND_EXAMPLES['combine']}",
     )
     combine.add_argument("combination", type=Path, help="the combination document (YAML or JSON)")
-    combine.add_argument("--output", type=Path, help="write the STEP assembly here")
+    combine.add_argument(
+        "--output",
+        type=Path,
+        help="write the assembly here: STEP, or IFC when it ends in .ifc (structural parts)",
+    )
     combine.add_argument(
         "--picture", type=Path, help="write the numbered drawing here (.png or .svg)"
     )
@@ -1241,7 +1245,24 @@ def _combine(args: argparse.Namespace, *, out, err) -> int:
         except ValueError as failure:
             print(f"anvilate combine: {failure}. Remove --unvalidated.", file=err)
             return EXIT_BAD_REQUEST
-        write_step_assembly(built, args.output, authorization=authorization)
+        if args.output.suffix.lower() == ".ifc":
+            from .export.dxf import _atomic_path
+            from .export.ifc import combination_ifc_parts, render_ifc
+
+            try:
+                data = render_ifc(
+                    combination_ifc_parts(built),
+                    name=built.name,
+                    authorization=authorization,
+                    assembly=built.name,
+                )
+            except ValueError as refused:
+                print(f"anvilate combine: {refused}", file=err)
+                return EXIT_BAD_REQUEST
+            with _atomic_path(args.output) as staging:
+                staging.write_bytes(data)
+        else:
+            write_step_assembly(built, args.output, authorization=authorization)
         print(f"wrote {args.output} ({authorization.status})", file=out)
     return EXIT_CODES[built.card.status]
 
@@ -3924,6 +3945,13 @@ def _combine_product(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate combine: {args.combination}: {refused}", file=err)
         return EXIT_BAD_REQUEST
     print(summary, file=out)
+    if args.output is not None and args.output.suffix.lower() == ".ifc":
+        print(
+            "anvilate combine: a product document writes a STEP assembly; IFC is written for a "
+            "combination of structural parts. Name a .step file",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
     if args.output is not None:
         try:
             authorization = authorize_export(placed.card.flattened(), override=args.unvalidated)

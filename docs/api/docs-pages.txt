@@ -33,7 +33,7 @@ evidence-attestation.md | Getting the answer out | evidence-bundle, example-high
 evidence-bundle.md | Getting the answer out | example-highlights, headless-cli, quickstart | -
 example-highlights.md | Start here | README | -
 export-gating.md | Getting the answer out | evidence-bundle, headless-cli, mcp-tool-contracts | -
-export-targets.md | Getting the answer out | headless-cli | -
+export-targets.md | Getting the answer out | combinations, headless-cli | -
 failure-mode-coverage.md | Deciding what the answer is worth | dfm-rules, headless-cli, published-contracts, spec-screening | -
 fitness-for-service-screening.md | Screening by discipline | example-highlights | -
 frame-analysis.md | Deciding what the answer is worth | product-screening | -
