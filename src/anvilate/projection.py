@@ -423,17 +423,55 @@ def _view_markup(
         # and not a bolt's shank inside its hole.
         nearest, farthest = max(d for d, _c in mine), min(d for d, _c in mine)
         front = [c for d, c in mine if d >= nearest - 0.25 * (nearest - farthest)]
-        widest = max(front, key=_triangle_area)
-        centre = sheet.at(
-            (sum(point[0] for point in widest) / 3, sum(point[1] for point in widest) / 3)
+        # Widest first, then the rest of its faces that are seen, widest first. A balloon
+        # that would land on an earlier one takes the next of these that is clear, so it
+        # stays on its part: stepping sideways put a thin post's number in empty space,
+        # and in the iso view a tall post's nearest band is only its top, where the rail
+        # on it is already numbered.
+        widest = sorted(front, key=_triangle_area, reverse=True)
+        seen = [
+            c
+            for c in sorted((c for _d, c in mine), key=_triangle_area, reverse=True)[:64]
+            if _shows(tag, _centroid(c), faces)
+        ]
+        candidates = [sheet.at(_centroid(c)) for c in widest + seen]
+        clear = size * 2.6
+        centre = next(
+            (c for c in candidates if all(math.dist(c, other) >= clear for other in drawn)),
+            None,
         )
-        # Bodies stacked in one hole would have their balloons on top of each other, so a
-        # balloon that lands on an earlier one steps to the right of it.
-        while any(math.dist(centre, other) < size * 2.6 for other in drawn):
-            centre = (centre[0] + size * 2.6, centre[1])
+        if centre is None:
+            # No face of its own is clear (a washer under its bolt's head), so the balloon
+            # steps to the right of the one it would cover and a leader goes back to it.
+            anchor = centre = candidates[0]
+            while any(math.dist(centre, other) < clear for other in drawn):
+                centre = (centre[0] + clear, centre[1])
+            out.append(
+                f'<path data-leader="{label}" d="{_polyline([anchor, centre])}" '
+                f'fill="none" stroke="{_INK}"/>'
+            )
         drawn.append(centre)
         out += _balloon(label, centre, size)
     return out
+
+
+def _centroid(corners: Sequence[Point]) -> Point:
+    return (sum(p[0] for p in corners) / 3, sum(p[1] for p in corners) / 3)
+
+
+def _shows(tag: str, point: Point, faces: Sequence[tuple[float, str, str, Any]]) -> bool:
+    """Whether the face nearest the eye at ``point`` is one of the body ``tag``'s."""
+    over = [(depth, face_tag) for depth, _tone, face_tag, c in faces if _covers(c, point)]
+    return bool(over) and max(over, key=lambda pair: pair[0])[1] == tag
+
+
+def _covers(corners: Sequence[Point], point: Point) -> bool:
+    (ax, ay), (bx, by), (cx, cy) = corners
+    px, py = point
+    one = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+    two = (cx - bx) * (py - by) - (cy - by) * (px - bx)
+    three = (ax - cx) * (py - cy) - (ay - cy) * (px - cx)
+    return (one >= 0 and two >= 0 and three >= 0) or (one <= 0 and two <= 0 and three <= 0)
 
 
 def _triangle_area(corners: Sequence[Point]) -> float:

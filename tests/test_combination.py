@@ -525,6 +525,47 @@ def test_each_balloon_sits_on_its_own_part_and_no_two_share_a_place():
     assert centres["1"][1] > centres["2"][1]
 
 
+def _inside(point, polygon) -> bool:
+    x, y = point
+    inside = False
+    for (ax, ay), (bx, by) in zip(polygon, polygon[1:] + polygon[:1], strict=True):
+        if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
+            inside = not inside
+    return inside
+
+
+@pytest.mark.parametrize("name", _WORKED)
+def test_each_balloon_is_on_a_face_of_the_part_it_numbers(name):
+    """A balloon that met an earlier one stepped sideways with no leader, off its part:
+    the guardrail's far post and the portal frame's beam were numbered in empty space.
+
+    A balloon is on a face of its part, or, where none of its seen faces is clear (the
+    bracket's bolt under its washer), a leader runs to it from one.
+    """
+    from anvilate.combination import _numbered
+
+    built = _built(name)
+    _bodies, marks = _numbered(built)
+    owner = dict(marks)
+    svg = render_combination(built, width_px=900, format="svg")[0].decode("utf-8")
+    faces: dict[str, list] = {}
+    for tag, points in re.findall(r'<polygon data-face="(\d+)" points="([^"]+)"', svg):
+        faces.setdefault(tag, []).append(
+            [tuple(map(float, point.split(","))) for point in points.split()]
+        )
+    leaders = {
+        label: tuple(map(float, re.findall(r"[-\d.]+", path)[:2]))
+        for label, path in re.findall(r'data-leader="(\d+)" d="([^"]+)"', svg)
+    }
+    for label, points in re.findall(r'data-balloon="(\d+)" points="([^"]+)"', svg):
+        pairs = [tuple(map(float, point.split(","))) for point in points.split()]
+        centre = (sum(x for x, _y in pairs) / len(pairs), sum(y for _x, y in pairs) / len(pairs))
+        start = leaders.get(label, centre)
+        mine = faces[str(owner[label])]
+        assert any(_inside(start, polygon) for polygon in mine), (name, label, start)
+    assert len(leaders) == (1 if name == "bracket_on_plate" else 0)
+
+
 def _doweled(pin: str = "ISO2338-4", length: float = 8.0, hole: float = 4.0):
     """The bracket on its plate, with two dowel holes beside the bolts and a pin in each.
 
