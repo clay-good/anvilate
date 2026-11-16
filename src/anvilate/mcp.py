@@ -756,11 +756,13 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 "Export what the engineer takes away. From a run_validation subject: the "
                 "evidence bundle (returned, and written), a QIF results file, or the one-page "
                 "part sheet. From a build_part subject: the STEP file to open in CAD, a 3MF "
-                "mesh, or a DXF profile for a flat part. From a build_combination subject: "
+                "mesh, a DXF profile for a flat part, or IFC for a structural part going into "
+                "a building model (ifc_schema IFC4, the default, or IFC4X3_ADD2). From a "
+                "build_combination subject: "
                 "step, an assembly with each part a named component. Files are written to "
                 "the server's "
                 "output folder and the result names each path, size and SHA-256; no tool "
-                "takes a destination. STEP, 3MF, DXF and QIF are written only when the "
+                "takes a destination. STEP, 3MF, DXF, IFC and QIF are written only when the "
                 "part's checks pass, and this surface grants no override. A part that is "
                 "drawn and has no screen is written marked unvalidated, and the result "
                 "says so."
@@ -769,6 +771,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 {
                     "subject": _SUBJECT_SCHEMA,
                     "format": {"type": "string", "enum": list(_EXPORT_FORMATS)},
+                    "ifc_schema": {"type": "string", "enum": ["IFC4", "IFC4X3_ADD2"]},
                 },
                 required=["subject", "format"],
             ),
@@ -3013,7 +3016,7 @@ def _needs_output_folder(artifact: str) -> None:
         )
 
 
-def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
+def _export_built_part(artifact: str, handle: str, *, ifc_schema: str = "IFC4") -> dict[str, Any]:
     """STEP, 3MF or DXF for a built part, written to the output folder when its card passes.
 
     The handle names the spec that was built, so the gate screens that spec, as
@@ -3085,7 +3088,9 @@ def _export_built_part(artifact: str, handle: str) -> dict[str, Any]:
             from .export.ifc import ifc_part, render_ifc
 
             part = ifc_part(spec, built, card)
-            data = render_ifc([part], name=spec.name, authorization=authorization)
+            data = render_ifc(
+                [part], name=spec.name, authorization=authorization, schema=ifc_schema
+            )
             name = f"{stem}.ifc"
         else:
             from .export.dxf import render_geometry_dxf
@@ -3145,8 +3150,15 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
 
     artifact = arguments["format"]
     handle = arguments["subject"]
+    ifc_schema = arguments.get("ifc_schema")
+    if ifc_schema is not None and artifact != "ifc":
+        # A schema for a file that is not IFC would be dropped without a word.
+        raise _InvalidArguments(
+            [f"ifc_schema: chooses an IFC schema, and the format is {artifact}"],
+            operation="export_artifact",
+        )
     if artifact in _FROM_BUILT_PART:
-        return _export_built_part(artifact, handle)
+        return _export_built_part(artifact, handle, ifc_schema=ifc_schema or "IFC4")
     try:
         record = _screening(handle)
     except UnknownSubject as unknown:

@@ -18,9 +18,11 @@ Builds on the export layer in `src/anvilate/export` and the release package.
 - [ ] 2.2 Products as aggregation with transforms and part numbers as tags — done for
       combinations (`combination_ifc_parts`, `IfcElementAssembly`, fasteners); a product
       document is refused for IFC until its tree is mapped
-- [ ] 2.3 IFC 4.3 as a declared option; unsupported capabilities refused by name
-      — `schema="IFC4X3_ADD2"` writes and validates; nothing it lacks has been met yet,
-      so no refusal exists to test
+- [x] 2.3 IFC 4.3 as a declared option; unsupported capabilities refused by name
+      — `--ifc-schema IFC4X3_ADD2` on `export` and `combine`, `ifc_schema` on MCP; a schema
+      named for a non-IFC output is refused. Every mapped element writes and validates in
+      4.3, so the one capability it lacks (`Pset_MechanicalFastenerCommon`) is omitted for
+      fasteners in both schemas rather than refused
 
 ## 3. Proof
 

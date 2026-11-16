@@ -36,7 +36,7 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `run_validation` | pipeline | `spec`, `tiers` (optional) | `scorecard`, `subject` | yes | 218 characters | 2 s | check |
 | `run_fea_validation` | pipeline | `spec`, `convergence_tol` (optional) | `scorecard` | yes | 470 characters | a task | none |
 | `read_scorecard` | pipeline | `subject` | `scorecard` | no | 195 characters | 1 s | none |
-| `export_artifact` | pipeline | `subject`, `format` | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 676 characters | 2 s | export, combination |
+| `export_artifact` | pipeline | `subject`, `format`, `ifc_schema` (optional) | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 783 characters | 2 s | export, combination |
 | `build_combination` | combination | `combination`, `library` (optional), `node` (optional) | `combination`, `scorecard`, `subject`, `product`, `node` | yes | 939 characters | 15 s | combination |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
 | `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 854 characters | 10 s | context |
@@ -62,11 +62,11 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | --- | --- | --- |
 | `build` | build an audited Design Spec geometry pattern as STEP or 3MF | `--ap214`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |
 | `check` | compile a spec document and screen it, printing the scorecard | `--baseline`, `--format`, `--junit`, `--module`, `--node`, `--sarif`, `--sarif-category`, `--show-work`, `--summary`, `--write-baseline` |
-| `combine` | place several parts by the features they share, and check where they meet | `--exploded`, `--force`, `--output`, `--picture`, `--unvalidated` |
+| `combine` | place several parts by the features they share, and check where they meet | `--exploded`, `--force`, `--ifc-schema`, `--output`, `--picture`, `--unvalidated` |
 | `confirm` | confirm, at this terminal, values your agent read off a picture or a PDF | none |
 | `diff` | compare two spec documents and the verdicts they screen to | `--format`, `--module` |
 | `doctor` | check which Anvilate runtime capabilities are ready | `--format` |
-| `export` | write a downstream artifact from a screened spec | `--ap214`, `--artifact`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |
+| `export` | write a downstream artifact from a screened spec | `--ap214`, `--artifact`, `--force`, `--format`, `--ifc-schema`, `--module`, `--output`, `--unvalidated` |
 | `fetch` | download a dataset Anvilate may read but not ship, once, with your consent | `--consent`, `--format` |
 | `interfaces` | detect planar faces and through-hole patterns in a mating STEP | `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--confirmed-by`, `--fit`, `--format`, `--limit`, `--locator`, `--mating-plane`, `--max-gap`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--name`, `--requirement`, `--solid` |
 | `parts` | list the parts a spec can declare, or describe one | none |

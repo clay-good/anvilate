@@ -2846,12 +2846,12 @@ def test_export_refuses_a_geometry_request_it_cannot_carry_out_as_asked(tmp_path
         (("--artifact", "step"), "writes a file; name it with --output"),
         (("--artifact", "3mf", "--output", step), "ending in .3mf, and --output is part.step"),
         (("--artifact", "step", "--output", str(tmp_path / "part.3mf")), "ending in .step or"),
-        (("--artifact", "dxf", "--force"), "--force is for --artifact step or 3mf"),
+        (("--artifact", "dxf", "--force"), "--force is for --artifact step, 3mf or ifc"),
         (
             ("--artifact", "qif", "--unvalidated", "--ap214"),
-            "--unvalidated, --ap214 are for --artifact step or 3mf",
+            "--unvalidated, --ap214 are for --artifact step, 3mf or ifc",
         ),
-        (("--output", step), "--output is for --artifact step or 3mf"),
+        (("--output", step), "--output is for --artifact step, 3mf or ifc"),
     ):
         code, out, err = _run("export", str(spec), *arguments)
         assert code == EXIT_BAD_REQUEST and out == "", arguments

@@ -630,6 +630,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="for step or 3mf: write a watermarked file when the scorecard does not pass",
     )
     export.add_argument(
+        "--ifc-schema",
+        choices=("IFC4", "IFC4X3_ADD2"),
+        help="for an .ifc output: the IFC schema, IFC4 (ISO 16739-1:2018, the default) or "
+        "IFC 4.3 (ISO 16739-1:2024, as IfcOpenShell names it)",
+    )
+    export.add_argument(
         "--ap214",
         action="store_true",
         help="for step: the explicit AP214 fallback for a legacy receiver (AP242 is the default)",
@@ -696,6 +702,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="write the STEP assembly marked unvalidated when the card does not pass",
     )
     combine.add_argument("--force", action="store_true", help="replace an existing output")
+    combine.add_argument(
+        "--ifc-schema",
+        choices=("IFC4", "IFC4X3_ADD2"),
+        help="for an .ifc output: the IFC schema, IFC4 (ISO 16739-1:2018, the default) or "
+        "IFC 4.3 (ISO 16739-1:2024, as IfcOpenShell names it)",
+    )
 
     read = commands.add_parser(
         "read",
@@ -1203,6 +1215,15 @@ def _combine(args: argparse.Namespace, *, out, err) -> int:
             f"anvilate combine: --picture takes a .png or .svg file; got {args.picture}", file=err
         )
         return EXIT_BAD_REQUEST
+    if args.ifc_schema is not None and (
+        args.output is None or args.output.suffix.lower() != ".ifc"
+    ):
+        print(
+            "anvilate combine: --ifc-schema chooses the schema of an .ifc --output, and none is "
+            "named; drop --ifc-schema, or write an .ifc file",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
     try:
         document = parse_yaml(args.combination.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, ValueError, yaml.YAMLError) as failure:
@@ -1255,6 +1276,7 @@ def _combine(args: argparse.Namespace, *, out, err) -> int:
                     name=built.name,
                     authorization=authorization,
                     assembly=built.name,
+                    schema=args.ifc_schema or "IFC4",
                 )
             except ValueError as refused:
                 print(f"anvilate combine: {refused}", file=err)
@@ -3216,6 +3238,7 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
             ("--output", args.output is not None),
             ("--unvalidated", args.unvalidated),
             ("--ap214", args.ap214),
+            ("--ifc-schema", args.ifc_schema is not None),
             ("--force", args.force),
         )
         if value
@@ -3223,7 +3246,7 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
     if given:
         print(
             f"anvilate export: {', '.join(given)} "
-            f"{'is' if len(given) == 1 else 'are'} for --artifact step or 3mf, and this is "
+            f"{'is' if len(given) == 1 else 'are'} for --artifact step, 3mf or ifc, and this is "
             f"--artifact {args.artifact}, which is printed; redirect it to keep it",
             file=err,
         )
@@ -3637,6 +3660,16 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
         return EXIT_BAD_REQUEST
     as_3mf = suffix == ".3mf"
     as_ifc = suffix == ".ifc"
+    # `build` has no such flag; on `export` a schema for a file that is not IFC is refused
+    # rather than dropped without a word.
+    ifc_schema = getattr(args, "ifc_schema", None)
+    if ifc_schema is not None and not as_ifc:
+        print(
+            f"anvilate {command}: --ifc-schema chooses an IFC schema and the output is "
+            f"{args.output.name}; drop --ifc-schema, or write an .ifc file",
+            file=err,
+        )
+        return EXIT_BAD_REQUEST
     if (as_3mf or as_ifc) and args.ap214:
         print(
             f"anvilate {command}: --ap214 chooses a STEP schema and the output is "
@@ -3665,7 +3698,7 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
         from .export.ifc import ifc_class_for
 
         try:
-            ifc_class_for(spec.element_type)
+            ifc_class_for(spec.element_type, ifc_schema or "IFC4")
         except ValueError as failure:
             print(f"anvilate {command}: {failure}", file=err)
             return EXIT_BAD_REQUEST
@@ -3716,7 +3749,10 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
                 from .export.ifc import ifc_part, render_ifc
 
                 data = render_ifc(
-                    [ifc_part(spec, built, card)], name=spec.name, authorization=authorization
+                    [ifc_part(spec, built, card)],
+                    name=spec.name,
+                    authorization=authorization,
+                    schema=ifc_schema or "IFC4",
                 )
             # Written beside the target and renamed into place, so an interrupted run leaves
             # no partial file presented as complete (interaction-quality 7.2), under a name
@@ -3783,7 +3819,7 @@ def _build(args: argparse.Namespace, *, out, err, command: str = "build") -> int
             print(f"  standard      {THREEMF_STANDARD}", file=out)
         elif as_ifc:
             print(f"  IFC           {args.output}", file=out)
-            print("  schema        IFC4", file=out)
+            print(f"  schema        {ifc_schema or 'IFC4'}", file=out)
         else:
             print(f"  STEP          {args.output}", file=out)
             print(f"  schema        {step_schema.upper()}", file=out)

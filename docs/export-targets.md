@@ -38,7 +38,9 @@ combine frame.combination.yaml --output frame.ifc` writes a combination as one
 tag, and each bolt, nut and washer an `IfcMechanicalFastener` from its tabulated envelope
 (`BOLT`; a nut and a washer are `USERDEFINED`, which neither schema enumerates). A
 combination holding a part IFC has no class for, such as the bracket on its mounting plate,
-is refused naming it. A product document still writes STEP only, and says so.
+is refused naming it. A product document still writes STEP only, and says so. IFC4 is the default; `--ifc-schema
+IFC4X3_ADD2` (MCP: `ifc_schema`) writes IFC 4.3, where a base plate is its own `BASE_PLATE`
+type, and naming a schema for a file that is not IFC is refused rather than ignored.
 
 | What | How |
 | --- | --- |

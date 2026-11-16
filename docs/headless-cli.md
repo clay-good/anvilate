@@ -9,7 +9,7 @@ has not shipped exits 4 naming that gap.
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
 | `check` | one or more specs, or a directory; or one product document | `--format`, `--show-work`, `--module`, `--node`, `--sarif`, `--sarif-category`, `--junit`, `--baseline`, `--write-baseline`, `--summary` | every check passed, or passed with margin to spare |
-| `export` | one or more specs, or a directory; one spec for `step` or `3mf` | `--artifact`, `--format`, `--module`; for `step` and `3mf`: `--output`, `--unvalidated`, `--ap214`, `--force` | the bundle rolled up clean; for `step` or `3mf`, the file was written |
+| `export` | one or more specs, or a directory; one spec for `step`, `3mf` or `ifc` | `--artifact`, `--format`, `--module`; for `step`, `3mf` and `ifc`: `--output`, `--unvalidated`, `--force`; `--ap214` for `step`, `--ifc-schema` for `ifc` | the bundle rolled up clean; for `step`, `3mf` or `ifc`, the file was written |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format`, `--module` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214`, `--module` | a valid, watermarked STEP artifact was written |
@@ -18,7 +18,7 @@ has not shipped exits 4 naming that gap.
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `confirm` | the subject handle an MCP result returned | none | every value an agent read was confirmed at this interactive terminal |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
-| `combine` | a combination document, or a product document | `--output`, `--picture`, `--exploded`, `--unvalidated`, `--force` | the combination's or product's card passes |
+| `combine` | a combination document, or a product document | `--output`, `--picture`, `--exploded`, `--unvalidated`, `--force`, `--ifc-schema` | the combination's or product's card passes |
 | `read` | a CAD file, or a folder | `--against`, `--material`, `--unit` | the file was measured, or the folder listed |
 | `parts` | an element type, or none to list them | none | the catalog, or that element's fields and example, was printed |
 
@@ -1075,7 +1075,7 @@ stays for one release as the same writer.
 element (`pip install -e ".[geometry,ifc]"`): a beam, column, member or plate with its
 material, mass, part card digest and the export watermark, and a member on a named section
 as its profile and an extrusion. An element IFC has no class for is refused before it is
-built, by name; see [export targets](export-targets.md#ifc-for-a-structural-part-in-a-building-model).
+built, by name. `--ifc-schema IFC4X3_ADD2` writes IFC 4.3 instead (on `combine` too); see [export targets](export-targets.md#ifc-for-a-structural-part-in-a-building-model).
 `build` does not write IFC.
 
 Install the optional kernel and build either checked-in geometry spec. Both state a safety

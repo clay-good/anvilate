@@ -7,6 +7,7 @@ and centroid compared with the built solid it came from.
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -557,3 +558,61 @@ def test_each_part_of_a_combination_carries_its_own_card():
             own, toolchain=f"anvilate {__version__}"
         )
         assert part.extra["CardStatus"] == own.status.value
+
+
+def test_the_schema_is_a_declared_option_on_both_surfaces_and_only_for_ifc(tmp_path, monkeypatch):
+    """add-ifc-structural-export 2.3: IFC 4.3 on request, and a schema for a file that is
+    not IFC refused rather than dropped without a word."""
+    import yaml
+
+    from anvilate.mcp import handle_request
+    from cli_output import run_cli
+
+    plate = _example("base_plate")
+    target = tmp_path / "plate.ifc"
+    code, out, err = run_cli(
+        "export", str(plate), "--artifact", "ifc", "--output", str(target),
+        "--ifc-schema", "IFC4X3_ADD2", "--unvalidated",
+    )  # fmt: skip
+    if code != 0:  # a passing card refuses --unvalidated; write it without
+        code, out, err = run_cli(
+            "export", str(plate), "--artifact", "ifc", "--output", str(target),
+            "--ifc-schema", "IFC4X3_ADD2",
+        )  # fmt: skip
+    assert code == 0, err
+    assert "IFC4X3_ADD2" in out
+    model = ifcopenshell.file.from_string(target.read_text(encoding="utf-8"))
+    assert model.schema_identifier == "IFC4X3_ADD2"
+    (plate_element,) = model.by_type("IfcPlate")
+    assert (plate_element.PredefinedType, plate_element.ObjectType) == ("BASE_PLATE", None)
+    assert _problems(target.read_bytes()) == []
+
+    step = tmp_path / "plate.step"
+    code, _out, err = run_cli(
+        "export", str(plate), "--artifact", "step", "--output", str(step),
+        "--ifc-schema", "IFC4X3_ADD2",
+    )  # fmt: skip
+    assert code == 3 and not step.exists() and "--ifc-schema chooses an IFC schema" in err
+    code, _out, err = run_cli(
+        "combine", str(_REPO / "examples/combinations/portal_frame.combination.yaml"),
+        "--ifc-schema", "IFC4X3_ADD2",
+    )  # fmt: skip
+    assert code == 3 and "--ifc-schema chooses the schema of an .ifc --output" in err
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path / "out"))
+
+    def call(name, arguments):
+        return handle_request(
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+             "params": {"name": name, "arguments": arguments}}
+        )  # fmt: skip
+
+    spec = yaml.safe_load(_example("tube").read_text(encoding="utf-8"))
+    handle = call("build_part", {"spec": spec})["result"]["structuredContent"]["subject"]
+    body = call(
+        "export_artifact", {"subject": handle, "format": "ifc", "ifc_schema": "IFC4X3_ADD2"}
+    )["result"]["structuredContent"]
+    written = Path(body["file"]["path"]).read_text(encoding="utf-8")
+    assert ifcopenshell.file.from_string(written).schema_identifier == "IFC4X3_ADD2"
+    refused = call("export_artifact", {"subject": handle, "format": "step", "ifc_schema": "IFC4"})
+    assert "ifc_schema" in json.dumps(refused) and "error" in json.dumps(refused)
