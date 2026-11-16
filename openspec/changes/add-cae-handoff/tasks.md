@@ -14,9 +14,9 @@ Depends on the meshing pipeline in `validation-gauntlet` T3 and on
       (the same frame deck in large-field bulk data: CBAR, PBAR, MAT1, SPC1, FORCE,
       MOMENT, PLOAD1, GRAV, a subcase per frame; solid meshes wait as in 1.1)
 - [x] 1.3 Unit-system header and sidecar; refusal when a value cannot be expressed
-- [ ] 1.4 Deck marked as unsolved input in the deck and in the bundle
-      (marked in the deck's header and its sidecar; the evidence bundle does not list
-      decks yet)
+- [x] 1.4 Deck marked as unsolved input in the deck and in the bundle
+      (the deck's header and sidecar; the bundle lists each deck under `decks`, outside
+      the roll-up, evidence-bundle schema 1.33.0)
 - [x] 1.5 Round-trip test: each deck parses in an open reader with the expected counts
       (pyNastran reads the bulk data, meshio the keyword deck; both dev-only)
 
@@ -37,5 +37,5 @@ Depends on the meshing pipeline in `validation-gauntlet` T3 and on
 - [ ] 3.1 Joint and fitting screens accept imported loads
       (a fastener pattern does, case by case, with the import's provenance; lugs,
       fittings, weld groups and bearings do not yet)
-- [ ] 3.2 A docs page for CAE handoff: exporting a deck, importing loads, what a deck
+- [x] 3.2 A docs page for CAE handoff: exporting a deck, importing loads, what a deck
       does and does not prove

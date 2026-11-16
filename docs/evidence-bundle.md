@@ -58,6 +58,12 @@ a reader can tell "no spec" from "a key I forgot to look for". `additionalProper
 open, as on the scorecard contract, so a client pinned to an earlier version keeps reading a later bundle
 that gained a section.
 
+**An input deck is listed, never counted.** A deck written for your own solver
+([CAE handoff](cae-handoff.md)) goes in `decks`, each with its file, format, digest and load
+cases, rendered under "unsolved input decks" as UNSOLVED INPUT. It stays out of the roll-up
+and out of the attestation predicate: nothing on the card rests on a deck until its results
+are read back.
+
 ### The work, not just the verdict
 
 A check that carries a derivation renders it under its line — the formula, the values put

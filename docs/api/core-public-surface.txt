@@ -393,6 +393,7 @@ explore.halton_sequence
 cae.DECK_UNITS
 cae.DeckError
 cae.AnalysisDeck
+cae.DeckRecord
 cae.frame_deck
 cae.RESULT_UNITS
 cae.ResultSource

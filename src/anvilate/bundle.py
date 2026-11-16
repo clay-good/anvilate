@@ -64,6 +64,7 @@ from .attestation import (
     Subject,
     canonical_json,
 )
+from .cae import DeckRecord
 from .callouts import CalloutSet, callout_scorecard
 from .evidence import SourceRecord
 from .explore import StudyResult
@@ -256,6 +257,10 @@ class BundleDocument(BaseModel):
     # Absent unless the bundle records them. The bundled tables the run could read, each
     # pinned by version and digest, so a data change is a visible provenance change.
     datasets: tuple[DatasetVersion, ...] | None = None
+    # Absent unless the bundle records them. Each input deck written for the user's own
+    # solver, marked unsolved: listed so a reviewer sees a deck exists and that nothing on
+    # this card rests on it until its results are read back.
+    decks: tuple[DeckRecord, ...] | None = None
 
 
 def _check_block(entry: ScorecardEntry, *, system: UnitSystem | None) -> tuple[str, ...]:
@@ -376,6 +381,10 @@ class BundleSections(RevalidatedModel):
     # bytes (`anvilate.standards.datasets`). Out of the roll-up on the same terms as `spec`:
     # it says which data the run could read, and a signed digest must not move for it.
     datasets: tuple[DatasetVersion, ...] = ()
+    # Input decks written for the user's own solver (`anvilate.cae`). Out of the roll-up on
+    # the same terms as `spec`: a deck is unsolved input, and a signed digest must not move
+    # because a bundle says one was written.
+    decks: tuple[DeckRecord, ...] = ()
 
     @model_validator(mode="after")
     def _an_order_of_checks_the_card_carries(self) -> BundleSections:
@@ -725,6 +734,7 @@ class BundleSections(RevalidatedModel):
                 *self.citations_block(),
                 *self.carbon_block(),
                 *self.datasets_block(),
+                *self.decks_block(),
                 *self.confirmations_block(),
                 *self.spec_block(),
                 SCREENING_DISCLAIMER,
@@ -751,6 +761,12 @@ class BundleSections(RevalidatedModel):
         if not self.datasets:
             return ()
         return ("datasets:", *(f"  {pin}" for pin in self.datasets))
+
+    def decks_block(self) -> tuple[str, ...]:
+        """Each input deck written for the user's solver, as unsolved input; nothing when none."""
+        if not self.decks:
+            return ()
+        return ("unsolved input decks:", *(f"  {deck}" for deck in self.decks))
 
     def carbon_block(self) -> tuple[str, ...]:
         """The embodied-carbon estimate, each line with the factor it used; nothing otherwise.
@@ -910,6 +926,8 @@ class BundleSections(RevalidatedModel):
             document["carbon"] = self.carbon.model_dump(mode="json")
         if self.datasets:
             document["datasets"] = [pin.model_dump(mode="json") for pin in self.datasets]
+        if self.decks:
+            document["decks"] = [deck.model_dump(mode="json") for deck in self.decks]
         return document
 
     def to_json_dict(self) -> dict[str, object]:

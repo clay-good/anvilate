@@ -47,8 +47,10 @@ system is refused by name, as is one that is not finite.
 
 ## A deck is input, not evidence
 
-The header of every deck says **UNSOLVED INPUT**, and so does its sidecar. Writing a
-deck changes no check on any card. A result counts only when it is read back, below,
+The header of every deck says **UNSOLVED INPUT**, and so does its sidecar.
+`deck.record("portal.bdf")` is the line an [evidence bundle](evidence-bundle.md) lists it
+under, as unsolved input and outside the roll-up. Writing a deck changes no check on any
+card. A result counts only when it is read back, below,
 with the file's hash and what produced it.
 
 ## Reading interface loads back

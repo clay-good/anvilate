@@ -222,7 +222,9 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.16.0"
 # 1.31.0 follows Scorecard 1.15.0, and adds the reviewer dossier's credibility factor
 # sets and its escaped-defect candidates; both default empty.
 # 1.32.0 follows Scorecard 1.16.0.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.32.0"
+# 1.33.0 adds `decks`, absent when none: input decks written for the user's own solver,
+# listed as unsolved input and outside the roll-up.
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.33.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"

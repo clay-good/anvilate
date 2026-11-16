@@ -12,7 +12,7 @@ aluminum-screening.md | Screening by discipline | example-highlights | -
 analysis-interop.md | Declaring the part | example-highlights, frame-analysis | -
 assembly-order.md | Deciding what the answer is worth | published-contracts | -
 building-services-screening.md | Screening by discipline | nothing | -
-cae-handoff.md | Deciding what the answer is worth | README, frame-analysis | -
+cae-handoff.md | Deciding what the answer is worth | README, evidence-bundle, frame-analysis | -
 calculation-reports.md | Start here | citations, evidence-bundle, example-highlights, failure-mode-coverage, headless-cli, margin-ledger, repair-feedback, requirements-ingestion | -
 changes.md | Start here | products, release-package | -
 check-dependencies.md | Deciding what the answer is worth | constraint-topology, example-highlights, frame-analysis, optomechanics, published-contracts | -
@@ -31,7 +31,7 @@ discipline-modules.md | Deciding what the answer is worth | README, contributing
 durability-screening.md | Deciding what the answer is worth | nothing | -
 embodied-carbon-screening.md | Screening by discipline | example-highlights | -
 evidence-attestation.md | Getting the answer out | evidence-bundle, example-highlights, quality-interchange | -
-evidence-bundle.md | Getting the answer out | example-highlights, headless-cli, quickstart | -
+evidence-bundle.md | Getting the answer out | cae-handoff, example-highlights, headless-cli, quickstart | -
 example-highlights.md | Start here | README | -
 export-gating.md | Getting the answer out | evidence-bundle, headless-cli, mcp-tool-contracts | -
 export-targets.md | Getting the answer out | combinations, headless-cli | -

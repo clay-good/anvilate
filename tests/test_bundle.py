@@ -1184,6 +1184,7 @@ def _every_section() -> BundleSections:
         evaluation_order=("net tension", "pin bearing"),
         carbon=_carbon_estimate(),
         datasets=__import__("anvilate.standards.datasets").standards.datasets.bundled_datasets(),
+        decks=(_deck_record(),),
         citations=(
             SourceRecord(
                 ref="AA-6061-T6",
@@ -1192,6 +1193,26 @@ def _every_section() -> BundleSections:
                 sources=("Aluminum Design Manual 2020, Table A.3.4",),
             ),
         ),
+    )
+
+
+def _deck_record():
+    from anvilate.cae import DeckRecord
+
+    return DeckRecord(file="portal.bdf", format="bdf", sha256="ab" * 32, nodes=4, elements=3,
+                      cases=("wind", "gravity"))  # fmt: skip
+
+
+def test_a_deck_is_listed_as_unsolved_input_and_moves_no_signed_digest():
+    with_deck = _sections(decks=(_deck_record(),))
+    assert with_deck.to_json_dict() == _sections().to_json_dict()
+    assert with_deck.to_document_dict()["decks"][0]["unsolved"] is True
+    assert "decks" not in _sections().to_document_dict()
+    lines = with_deck.render_document().splitlines()
+    at = lines.index("unsolved input decks:")
+    assert lines[at + 1] == (
+        "  portal.bdf: bdf deck, 4 nodes, 3 elements, 2 load case(s) (wind, gravity), "
+        "sha256 abababababab: UNSOLVED INPUT, no check rests on it"
     )
 
 

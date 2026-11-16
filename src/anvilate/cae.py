@@ -46,6 +46,7 @@ __all__ = [
     "DECK_UNITS",
     "DeckError",
     "AnalysisDeck",
+    "DeckRecord",
     "frame_deck",
     "RESULT_UNITS",
     "ResultSource",
@@ -94,6 +95,26 @@ def _refuse(message: str, *, subject: str) -> DeckError:
     return DeckError(message, remedies=(Remedy(action="replace", subject=subject, source=_SOURCE),))
 
 
+class DeckRecord(StatableModel):
+    """A written deck as an evidence bundle lists it: which file, what it holds, and that
+    it is unsolved input. ``unsolved`` is always true; nothing on a card rests on it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    file: Named
+    format: Literal["inp", "bdf"]
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    nodes: int = Field(ge=1)
+    elements: int = Field(ge=1)
+    cases: tuple[Named, ...]
+    unsolved: Literal[True] = True
+
+    def __str__(self) -> str:
+        return (f"{self.file}: {self.format} deck, {self.nodes} nodes, {self.elements} "
+                f"elements, {len(self.cases)} load case(s) ({', '.join(self.cases)}), sha256 "
+                f"{self.sha256[:12]}: UNSOLVED INPUT, no check rests on it")  # fmt: skip
+
+
 class AnalysisDeck(StatableModel):
     """A written deck: its format, its text, and what a reader needs to trust it.
 
@@ -128,6 +149,11 @@ class AnalysisDeck(StatableModel):
             },
             indent=2,
         )
+
+    def record(self, file: str) -> DeckRecord:
+        """This deck as an evidence bundle lists it, under the file name it was written to."""
+        return DeckRecord(file=file, format=self.format, sha256=self.digest, nodes=self.nodes,
+                          elements=self.elements, cases=self.cases)  # fmt: skip
 
     def write(self, path: str | Path) -> tuple[Path, Path]:
         """Write the deck at ``path`` and its sidecar beside it as ``<path>.units.json``."""
