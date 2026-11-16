@@ -33,7 +33,7 @@ import json
 import math
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, field_validator
 
@@ -53,6 +53,9 @@ __all__ = [
     "CaseBalance",
     "InterfaceImport",
     "read_interface_forces",
+    "ImportedGroupCase",
+    "ImportedGroupResult",
+    "fastener_group_on_import",
 ]
 
 #: The consistent unit system every deck is written in, by quantity.
@@ -722,3 +725,150 @@ def _balance(case: str, entries: list, tolerance: float) -> CaseBalance:
 
 def _rounded(vector: list[float]) -> tuple[float, float, float]:
     return (round(vector[0], 9), round(vector[1], 9), round(vector[2], 9))
+
+
+# --- joint screens on imported loads -----------------------------------------------------
+
+
+class ImportedGroupCase(StatableModel):
+    """One imported case on a fastener pattern: the loads it put there, and the verdict.
+
+    Loads are on the pattern, in N and N*mm, about its weighted centroid. ``evaluated`` is
+    false, with ``note`` saying why, for a case whose free body did not balance or that
+    carries a moment about an in-plane axis, which the group method does not distribute.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    evaluated: bool
+    note: str = Field(default="", max_length=400)
+    shear_x_n: float
+    shear_y_n: float
+    twist_nmm: float
+    tension_n: float
+    out_of_plane_nmm: float
+    governing: str | None = None
+    governing_index: float | None = None
+    governing_shear_n: float | None = None
+
+
+class ImportedGroupResult(StatableModel):
+    """A fastener pattern screened case by case on loads read back from a solver.
+
+    ``governing_case`` is the evaluated case with the highest NASA-STD-5020B interaction
+    index; ``not_evaluated`` names the rest. ``source`` is where every load came from.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    interface: Named
+    source: ResultSource
+    cases: tuple[ImportedGroupCase, ...]
+    governing_case: str | None
+    governing_index: float | None
+    not_evaluated: tuple[str, ...] = ()
+
+    def __str__(self) -> str:
+        if self.governing_case is None:
+            head = f"{self.interface}: no case evaluated"
+        else:
+            worst = next(c for c in self.cases if c.case == self.governing_case)
+            head = (f"{self.interface}: case {self.governing_case} governs, fastener "
+                    f"{worst.governing} at interaction {self.governing_index:.3f} "
+                    "(NASA-STD-5020B, without the bending term)")  # fmt: skip
+        skipped = f"; not evaluated: {', '.join(self.not_evaluated)}" if self.not_evaluated else ""
+        return f"{head}{skipped}; loads from {self.source}"
+
+
+def fastener_group_on_import(
+    fasteners: Sequence[Any],
+    imported: InterfaceImport,
+    interface: str,
+    *,
+    coordinate_system: str,
+    away: Literal["+z", "-z"],
+) -> ImportedGroupResult:
+    """Each imported case's load at ``interface``, shared over a fastener pattern.
+
+    The pattern lies in the x-y plane of ``coordinate_system``, its fasteners placed in
+    that system, and it must be the system the import declared: nothing here rotates a
+    load, so a different one is refused naming both. ``away`` is the direction the joined
+    part leaves the pattern; the tension on the pattern is the pull along it, and a push
+    bears on the plates and carries none.
+
+    An imported load is the force **on** the free body at the interface, so the pattern
+    carries its opposite. The in-plane shear and the twist about z go to
+    :func:`~anvilate.analysis.fastener_group.fastener_group_loads`, which shares them by
+    NASA TM X-73305 §B1.1.1 and checks each fastener by NASA-STD-5020B §4.4.4. A case
+    whose free body did not balance, or that carries a moment about an in-plane axis
+    beyond the import's own tolerance, is not evaluated and says why.
+    """
+    from .analysis.fastener_group import GroupFastener, fastener_group_loads
+
+    group = each_one(fasteners, GroupFastener, named="fasteners")
+    if not group:
+        raise _refuse("fasteners must hold the pattern's fasteners", subject="fasteners")
+    if not isinstance(imported, InterfaceImport):
+        raise _refuse("imported must be an InterfaceImport from read_interface_forces",
+                      subject="imported")  # fmt: skip
+    if coordinate_system != imported.source.coordinate_system:
+        raise _refuse(f"the pattern is in {coordinate_system!r} and the loads in "
+                      f"{imported.source.coordinate_system!r}; nothing here rotates a load "
+                      "between them", subject="coordinate_system")  # fmt: skip
+    if away not in ("+z", "-z"):
+        raise _refuse(f"away is '+z' or '-z'; got {away!r}", subject="away")
+    loads = imported.at(interface)
+    balance = {b.case: b for b in imported.balance}
+    xs = [f.x.to("mm").magnitude for f in group]
+    ys = [f.y.to("mm").magnitude for f in group]
+    weights = [f._weight(by_stiffness=all(g.stiffness is not None for g in group)) for f in group]
+    total = sum(weights)
+    centre = [sum(w * x for w, x in zip(weights, xs, strict=True)) / total,
+              sum(w * y for w, y in zip(weights, ys, strict=True)) / total, 0.0]  # fmt: skip
+    normal = 1.0 if away == "+z" else -1.0
+    cases = []
+    for load in loads:
+        # The pattern carries the opposite of the force on the free body, moved to its
+        # centroid. The z of that centroid is taken as the interface's own.
+        centre[2] = load.about_mm[2]
+        force = [-v for v in load.force_n]
+        moment = [-v for v in load.moment_nmm]
+        moment = [m + a for m, a in zip(moment, _arm(list(load.about_mm), centre, force),
+                                        strict=True)]  # fmt: skip
+        tension = max(0.0, force[2] * normal)
+        prying = math.hypot(moment[0], moment[1])
+        said = balance[load.case]
+        common: dict[str, Any] = {
+            "case": load.case, "shear_x_n": force[0], "shear_y_n": force[1],
+            "twist_nmm": moment[2], "tension_n": tension, "out_of_plane_nmm": prying,
+        }  # fmt: skip
+        if not said.balanced:
+            short = f"its free body leaves {said.residual_force_n:.4g} N unbalanced"
+            cases.append(ImportedGroupCase(evaluated=False, note=short, **common))
+            continue
+        if prying > said.tolerance * said.largest_moment_nmm:
+            cases.append(ImportedGroupCase(evaluated=False, note=(
+                f"it carries {prying:.4g} N*mm about an in-plane axis, which the group "
+                "method does not distribute into the fasteners"), **common))  # fmt: skip
+            continue
+        result = fastener_group_loads(
+            group, shear_x=Quantity(magnitude=force[0], unit="N"),
+            shear_y=Quantity(magnitude=force[1], unit="N"),
+            moment=Quantity(magnitude=moment[2], unit="N*mm"),
+            load_x=Quantity(magnitude=centre[0], unit="mm"),
+            load_y=Quantity(magnitude=centre[1], unit="mm"),
+            tension=Quantity(magnitude=tension, unit="N"),
+        )  # fmt: skip
+        worst = next(f for f in result.fasteners if f.name == result.governing)
+        cases.append(ImportedGroupCase(evaluated=True, governing=result.governing,
+                                       governing_index=result.governing_index,
+                                       governing_shear_n=worst.shear, **common))  # fmt: skip
+    evaluated = [c for c in cases if c.evaluated]
+    top = max(evaluated, key=lambda c: c.governing_index or 0.0) if evaluated else None
+    return ImportedGroupResult(
+        interface=interface, source=imported.source, cases=tuple(cases),
+        governing_case=top.case if top else None,
+        governing_index=top.governing_index if top else None,
+        not_evaluated=tuple(c.case for c in cases if not c.evaluated),
+    )  # fmt: skip

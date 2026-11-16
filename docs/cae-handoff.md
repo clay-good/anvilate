@@ -83,6 +83,32 @@ and those at −20 push 1,000 N, and the case balances. Raise the tip to 1.1 kN 
 changing the bolts and the case is named with its residual: 100 N, and 8,000 N·mm about
 the points' centroid 80 mm away.
 
+## A fastener pattern on the imported loads
+
+`fastener_group_on_import` takes each case's load at one interface and shares it over a
+bolt pattern by the [fastener group](structural-hand-methods.md) method: NASA TM X-73305
+§B1.1.1 for the shares, NASA-STD-5020B §4.4.4 for each fastener's interaction.
+
+```python
+from anvilate.cae import fastener_group_on_import
+
+result = fastener_group_on_import(pattern, imported, "base",
+                                  coordinate_system="basic", away="+z")
+result.governing_case, result.governing_index, result.not_evaluated
+```
+
+| Rule | Why |
+| --- | --- |
+| The pattern must be in the import's coordinate system | nothing here rotates a load; a different system is refused, naming both |
+| The pattern carries the opposite of the force on the free body | an imported load is what the pattern does to the part |
+| `away` is the direction the part leaves the pattern; tension is the pull along it | a push bears on the plates and carries no bolt tension |
+| A case that carries a moment about an in-plane axis is not evaluated | the group method shares shear, twist and tension, not prying; dropping that moment would pass a joint it does not check |
+| A case whose free body did not balance is not evaluated | its loads are not a load case yet |
+
+Each case keeps its shear, twist, tension and out-of-plane moment, and the result names
+where every load came from. The test pattern is four bolts at ±20 mm under a 1 kN side
+load 100 mm out: 250 N direct and 883.9 N from the twist put the worst bolt at 1,075.3 N.
+
 ## What is refused
 
 | Refused | Because |
@@ -118,5 +144,5 @@ test corrects that one entry rather than bending the deck to it.
 
 Solid and shell meshes of a built part (they wait on the meshing pipeline in local FEA),
 loads by tagged face, reading a solver's native result files (the CSV above is the
-doorway until then), feeding an imported case to the joint and fitting screens, and peak
-values read from a tagged region.
+doorway until then), the lug, fitting, weld-group and bearing screens on imported cases (the fastener
+pattern takes them today), and peak values read from a tagged region.

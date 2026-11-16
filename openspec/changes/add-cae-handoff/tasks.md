@@ -34,5 +34,7 @@ Depends on the meshing pipeline in `validation-gauntlet` T3 and on
 ## 3. Screens
 
 - [ ] 3.1 Joint and fitting screens accept imported loads
+      (a fastener pattern does, case by case, with the import's provenance; lugs,
+      fittings, weld groups and bearings do not yet)
 - [ ] 3.2 A docs page for CAE handoff: exporting a deck, importing loads, what a deck
       does and does not prove

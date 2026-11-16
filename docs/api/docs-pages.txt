@@ -75,7 +75,7 @@ semantic-gdt.md | Declaring the part | evidence-bundle, example-highlights, spec
 service-life-planning.md | Deciding what the answer is worth | model-credibility | -
 spec-screening.md | Start here | README, agent-mcp-integration, combinations, headless-cli, mcp-tool-contracts, published-contracts, quickstart | -
 standards-effectivity.md | Declaring the part | discipline-modules, example-highlights, machinery-screening | -
-structural-hand-methods.md | Deciding what the answer is worth | nothing | -
+structural-hand-methods.md | Deciding what the answer is worth | cae-handoff | -
 thermal-screening.md | Screening by discipline | example-highlights | -
 timber-screening.md | Screening by discipline | example-highlights | -
 typed-callouts.md | Declaring the part | evidence-bundle, example-highlights, quality-interchange | -

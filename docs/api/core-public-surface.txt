@@ -400,6 +400,9 @@ cae.InterfaceLoad
 cae.CaseBalance
 cae.InterfaceImport
 cae.read_interface_forces
+cae.ImportedGroupCase
+cae.ImportedGroupResult
+cae.fastener_group_on_import
 frame.MAX_NODES
 frame.Freedom
 frame.FrameNode
