@@ -385,6 +385,7 @@ _ARTIFACT_WRITES = (
     "saveas(",  # ezdxf
     "ET.tostring(",  # an XML document returned as a string
     "tostring(",  # the same, imported directly
+    "to_string(",  # IfcOpenShell's STEP physical file, returned as a string
     ".write_text(",
     ".write_bytes(",
     ".writestr(",  # zipfile — 3MF and any other package format
@@ -459,7 +460,7 @@ def test_every_export_entry_point_that_emits_an_artifact_takes_an_authorization(
         for name, fn in entry_points.items()
         if name.rsplit(".", 1)[-1] not in _NOT_AN_ARTIFACT_WRITER and _writes_a_file_or_document(fn)
     }
-    assert len(emitters) == 7, f"expected the seven artifact writers, found {sorted(emitters)}"
+    assert len(emitters) == 8, f"expected the eight artifact writers, found {sorted(emitters)}"
     for name, function in sorted(emitters.items()):
         parameters = inspect.signature(function).parameters
         assert "authorization" in parameters, (

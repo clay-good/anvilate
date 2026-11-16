@@ -39,6 +39,13 @@ export.gate.ExportRecord
 export.gate.ExportRefused
 export.gate.SCREENING_NOTICE
 export.gate.authorize_export
+export.ifc.IFC_ELEMENT_CLASSES
+export.ifc.IFC_SCHEMAS
+export.ifc.IfcElementMeasure
+export.ifc.IfcPart
+export.ifc.ifc_class_for
+export.ifc.measure_ifc
+export.ifc.render_ifc
 export.qif.QIF_NAMESPACE
 export.qif.QIF_VERSION
 export.qif.QifCharacteristicMapping

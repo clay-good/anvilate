@@ -23,9 +23,30 @@ read every file back with lib3mf, the 3MF Consortium's reference implementation,
 mode: no warnings, a manifold and oriented mesh, and the same metadata. `anvilate build` writes it when
 `--output` ends in `.3mf`. There is no Beam Lattice content.
 The other shipped formats are
-[DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
+[IFC](#ifc-for-a-structural-part-in-a-building-model), [DXF plate export](../src/anvilate/export/dxf.py) and [QIF Results](quality-interchange.md).
 AP242 is the default; local `anvilate build --ap214` is the explicit legacy fallback and
 retains the same properties and validation gate.
+
+## IFC, for a structural part in a building model
+
+`anvilate.export.ifc.render_ifc(parts, name=..., authorization=..., schema="IFC4")` writes
+structural parts as the elements a building model holds, through IfcOpenShell (LGPL-3.0, the
+optional `ifc` extra: `pip install 'anvilate[ifc]'`). It is a library function today; the
+command-line and product paths are the next slices of `add-ifc-structural-export`.
+
+| What | How |
+| --- | --- |
+| Class per element | `IFC_ELEMENT_CLASSES`: beams `IfcBeam`, columns and beam-columns `IfcColumn`, tension members and tubes `IfcMember`, base, cover, gusset and shear plates `IfcPlate`. An element with no class is refused naming it, never written as a proxy. |
+| Predefined type per schema | IFC 4.3 added `BASE_PLATE`, `GUSSET_PLATE` and `COVER_PLATE` to `IfcPlateTypeEnum`; IFC4 has none of them, so in IFC4 a base plate is `USERDEFINED` with `ObjectType` `BASE_PLATE`. Both enumerations were read from the schemas IfcOpenShell 0.9.0 ships, and a test reads them back. |
+| Geometry | A faceted B-rep (`IfcFacetedBrep`) of the same welded, closed, outward mesh the 3MF writer is held to, in millimetres, declared in the unit assignment with kilograms. A rolled section's profile and extrusion is not written yet. |
+| Properties | `Pset_<Class>Common` (`Reference` = part number, `LoadBearing`) and `Anvilate_Screening`: element, validation status, the watermark pairs, part number, material, mass and card digest. |
+| Watermark | The export gate's lines go into `FILE_DESCRIPTION`, its status into `FILE_NAME`'s authorization field, and both into the property set. |
+| Same parts, same bytes | `GlobalId`s are derived from the part's identity and the header timestamp is fixed. |
+
+Every mapped element's worked example is written in both IFC4 and IFC 4.3, validated by
+IfcOpenShell's own checker with the EXPRESS rules on, re-read through IfcOpenShell's
+geometry kernel, and its volume held within 1% of the built solid (the 3MF bound) and its
+centroid within a thousandth of the part's size. A viewer import check is not yet recorded.
 
 ## What was confirmed
 

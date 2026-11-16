@@ -48,6 +48,10 @@ geometry = [
 # DXF drawing export (ezdxf is MIT, pure-Python). The core stays dependency-light;
 # import anvilate.export.dxf only pulls ezdxf when this extra is installed.
 export = ["ezdxf>=1.1"]
+# IFC export of structural parts (IfcOpenShell, LGPL-3.0-or-later: the same license class
+# as the OCCT bindings the geometry extra already imports, loaded in-process and never
+# modified). The minor line is pinned: the file it writes is product behavior.
+ifc = ["ifcopenshell<0.10,>=0.9"]
 # Reading PDF requirement sheets (MIT). Text only: a scanned page is reported, never guessed at.
 pdf = ["pdfminer.six>=20231228"]
 # `jsonschema` is a dev dependency and not a runtime one: it validates the published
@@ -66,6 +70,8 @@ dev = [
     # Every verification case in tests/test_frame.py is also solved by Pynite and the two
     # have to agree; the package never imports it, and the closed-form cases run without it.
     "PyNiteFEA>=3.2",
+    # The IFC writer's tests write, validate and re-read every mapped element with it.
+    "ifcopenshell<0.10,>=0.9",
     "mypy>=1.11",
     "build123d<0.12,>=0.11.1",
     "cadquery-ocp-novtk<8,>=7.9",
