@@ -70,9 +70,9 @@ dev = [
     # Every verification case in tests/test_frame.py is also solved by Pynite and the two
     # have to agree; the package never imports it, and the closed-form cases run without it.
     "PyNiteFEA>=3.2",
-    # The CAE deck writer's referees, used only by the tests to read back every deck it
-    # writes: pyNastran (BSD-3-Clause) for bulk data, meshio (MIT) for the keyword format.
-    "pyNastran>=1.4",
+    # The CAE deck writer's keyword-format referee (MIT), used only by the tests to read
+    # back every .inp it writes. Its bulk-data referee, pyNastran, pins NumPy below 2,
+    # which build123d here cannot share; it runs in CI's optional-adapters job instead.
     "meshio>=5.3",
     # The IFC writer's tests write, validate and re-read every mapped element with it.
     "ifcopenshell<0.10,>=0.9",

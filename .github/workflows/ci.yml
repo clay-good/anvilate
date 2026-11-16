@@ -399,7 +399,9 @@ jobs:
         # Not the dev extra: build123d 0.11 requires NumPy 2, so `.[dev]` beside this pin is
         # unresolvable, and the job failed at install every week without running either test.
         # Both tests import only the core package.
-        run: pip install -e . pytest sectionproperties pycufsm "numpy<2"
+        # pyNastran 1.4 pins NumPy below 2 as well, so the CAE decks' bulk-data referee
+        # runs here and not in the dev extra.
+        run: pip install -e . pytest sectionproperties pycufsm pyNastran meshio "numpy<2"
       - name: Read a real meshed section through the adapter
         run: |
           set -o pipefail
@@ -422,5 +424,14 @@ jobs:
           grep -qE "^1 passed" cufsm.txt
           if grep -q skipped cufsm.txt; then
             echo "pyCUFSM did not import; the adapter was not exercised"
+            exit 1
+          fi
+      - name: Read every CAE deck back through pyNastran and meshio
+        run: |
+          set -o pipefail
+          pytest -q -rs tests/test_cae_deck.py | tee decks.txt
+          grep -qE "^[0-9]+ passed" decks.txt
+          if grep -q skipped decks.txt; then
+            echo "a deck reader did not import; a deck was not read back"
             exit 1
           fi

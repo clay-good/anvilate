@@ -3551,7 +3551,7 @@ def test_the_ci_skip_gate_allows_exactly_what_the_scheduled_jobs_install():
     allowed = set(
         re.findall(
             r'"([\w.]+)"',
-            re.search(r"_SCHEDULED_ONLY_IMPORTS = frozenset\(\{([^}]*)\}", conftest).group(1),
+            re.search(r"_SCHEDULED_ONLY_IMPORTS = frozenset\(\s*\{([^}]*)\}", conftest).group(1),
         )
     )
     assert allowed, "the conftest gate no longer declares an allow-list"

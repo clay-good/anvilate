@@ -64,8 +64,10 @@ is the next part of this handoff, and is not built yet.
 ## How it is checked
 
 Every deck in the tests is read back by a reader written elsewhere: **pyNastran**
-(BSD-3-Clause) for bulk data and **meshio** (MIT) for the keyword format. Both are dev
-dependencies only; the package imports neither. The read-back has to find:
+(BSD-3-Clause) for bulk data and **meshio** (MIT) for the keyword format; the package
+imports neither. meshio is in the dev extra. pyNastran 1.4 pins NumPy below 2, which the
+geometry extra cannot share, so its read-back runs in CI's scheduled optional-adapters
+job, which fails if either reader is missing. The read-back has to find:
 
 - the node count and the coordinates in millimetres;
 - the section on the right bending axis;

@@ -75,7 +75,9 @@ def _written(deck: AnalysisDeck, tmp_path, stem: str = "portal"):
 
 @pytest.fixture
 def bdf(tmp_path):
-    reader = pytest.importorskip("pyNastran.bdf.bdf")
+    pytest.importorskip("pyNastran")  # CI's optional-adapters job: it pins NumPy below 2
+    from pyNastran.bdf import bdf as reader
+
     deck = frame_deck(_cases(), format="bdf")
     path, sidecar = _written(deck, tmp_path)
     model = reader.read_bdf(str(path), xref=True, debug=None)
