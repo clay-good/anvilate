@@ -13,20 +13,37 @@ attributes, every value with its source.
   its material declares, citing both. A need's limit is the user's, with its source; an
   attribute the material does not declare is not evaluated, naming it.
 
-Substance-list screening (REACH, RoHS, the automotive declarable list) and galvanic
-compatibility wait on lists and tables fetched or read from their publishers.
+- :func:`screen_substances` holds every item's composition against the substance lists
+  you hold, each loaded with :func:`load_substance_list` from the publisher's own file and
+  pinned by its version and SHA-256, and reports each listed substance above its threshold
+  with the item, its concentration, the threshold, and the list version and hash. An
+  exemption counts only when you declare it with its reference.
+
+Fetching those lists from their publishers, with consent where the terms require it, is
+not built: the list is a file you have, and Anvilate ships none.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
+import csv
+import hashlib
+import io
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any, Literal
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field, ValidationError, model_validator
 
-from ._models import Named, StatableModel
+from ._models import Named, Provenance, RevalidatedModel, StatableModel, each_one
 from .derivation import DerivationAbsence, Underived
-from .product import UL94_CLASSES, MaterialDeclaration, Product, _refuse, place_product
+from .product import (
+    UL94_CLASSES,
+    MaterialDeclaration,
+    Product,
+    _cas_problem,
+    _refuse,
+    place_product,
+)
 from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
 
 __all__ = [
@@ -36,6 +53,11 @@ __all__ = [
     "material_of",
     "composition_export",
     "screen_material_needs",
+    "ListedSubstance",
+    "SubstanceList",
+    "Exemption",
+    "load_substance_list",
+    "screen_substances",
 ]
 
 _COMPARED = Underived(
@@ -218,3 +240,237 @@ def _compare(name: str, item: str, material: str, label: str, need: Any, attribu
                f"the need is {need.value} ({need.source})")  # fmt: skip
     return ScorecardEntry(name=name, status=CheckStatus.PASS if ok else CheckStatus.FAIL,
                           detail=f"{item}: {why}", underived=_COMPARED)  # fmt: skip
+
+
+# --- substance lists ------------------------------------------------------------------------
+
+_LISTED = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason="the material's declared composition matched by CAS number against the list held",
+)
+
+
+class ListedSubstance(RevalidatedModel):
+    """One substance on a list: its CAS number, its name, and the concentration above
+    which it is reported, as a mass fraction (RoHS Annex II's lead is 0.001, its cadmium
+    0.0001; a REACH candidate substance in an article is 0.001)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    cas: str
+    name: Named
+    threshold: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def _a_real_number(self) -> ListedSubstance:
+        problem = _cas_problem(self.cas)
+        if problem:
+            raise _refuse(f"listed substance {self.name}'s CAS number {self.cas} {problem}",
+                          subject="substances")  # fmt: skip
+        return self
+
+
+class SubstanceList(RevalidatedModel):
+    """A substance list as you hold it: which list, which version, the SHA-256 of the file
+    it was read from, and what its thresholds are a fraction of.
+
+    ``basis`` is what a threshold is measured against. RoHS Annex II limits a substance in
+    each **homogeneous material**; REACH Article 33 counts a candidate substance in each
+    **article**. ``source`` is where the file came from, as a citation.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    version: Named
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    basis: Literal["homogeneous material", "article"]
+    substances: tuple[ListedSubstance, ...] = Field(min_length=1, max_length=20000)
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _each_once(self) -> SubstanceList:
+        numbers = [s.cas for s in self.substances]
+        twice = sorted({n for n in numbers if numbers.count(n) > 1})
+        if twice:
+            raise _refuse(f"list {self.name} {self.version} names {twice} more than once; "
+                          "one threshold per substance", subject="substances")  # fmt: skip
+        return self
+
+
+class Exemption(RevalidatedModel):
+    """A listed substance you declare exempt, on one list, with the reference it rests on.
+
+    ``items`` limits it to those items; empty, it covers every item. The reference is
+    yours to hold (an Annex III entry and its expiry, say): the screen names it and does
+    not judge it.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    list: Named
+    cas: str
+    items: tuple[Named, ...] = ()
+    reference: Provenance
+
+    @model_validator(mode="after")
+    def _a_real_number(self) -> Exemption:
+        problem = _cas_problem(self.cas)
+        if problem:
+            raise _refuse(f"the exemption's CAS number {self.cas} {problem}",
+                          subject="exemptions")  # fmt: skip
+        return self
+
+
+def load_substance_list(
+    path: str | Path,
+    *,
+    name: str,
+    version: str,
+    basis: Literal["homogeneous material", "article"],
+    source: str,
+) -> SubstanceList:
+    """A substance list read from a CSV file with ``cas``, ``name`` and ``threshold`` columns.
+
+    The threshold is a mass fraction (0.001 for 0.1%). The file's SHA-256 is computed from
+    its bytes and carried on the list, so every hit names exactly what it was held against.
+    """
+    if not isinstance(path, (str, Path)):
+        raise _refuse("path must be the path of a CSV file", subject="path")
+    raw = Path(path).read_bytes()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as failure:
+        raise _refuse(f"{path} is not UTF-8 text", subject="path") from failure
+    reader = csv.DictReader(io.StringIO(text))
+    missing = sorted({"cas", "name", "threshold"} - set(reader.fieldnames or ()))
+    if missing:
+        raise _refuse(f"{path} has no {', '.join(missing)} column; its header is "
+                      f"{reader.fieldnames}", subject="path")  # fmt: skip
+    entries = []
+    for row, line in enumerate(reader, start=2):
+        try:
+            threshold = float((line["threshold"] or "").strip())
+        except ValueError as failure:
+            raise _refuse(f"{path} line {row}: threshold {line['threshold']!r} is not a "
+                          "number", subject="path") from failure  # fmt: skip
+        try:
+            entries.append(ListedSubstance(cas=(line["cas"] or "").strip(),
+                                           name=(line["name"] or "").strip(),
+                                           threshold=threshold))  # fmt: skip
+        except ValidationError as failure:
+            raise _refuse(f"{path} line {row}: {_first(failure)}", subject="path") from failure
+    try:
+        return SubstanceList(name=name, version=version, sha256=hashlib.sha256(raw).hexdigest(),
+                             basis=basis, substances=tuple(entries), source=source)  # fmt: skip
+    except ValidationError as failure:
+        field = str(failure.errors()[0]["loc"][0]) if failure.errors()[0]["loc"] else ""
+        subject = field if field in ("name", "version", "basis", "source") else "path"
+        raise _refuse(f"{path}: {_first(failure)}", subject=subject) from failure
+
+
+def _first(failure: ValidationError) -> str:
+    first = failure.errors()[0]
+    where = ".".join(str(p) for p in first["loc"])
+    message = str(first["msg"]).removeprefix("Value error, ")
+    return f"{where} {message}" if where else message
+
+
+def screen_substances(
+    product: Product,
+    lists: Sequence[SubstanceList],
+    *,
+    exemptions: Sequence[Exemption] = (),
+) -> tuple[ScorecardEntry, ...]:
+    """Every item's declared composition against each substance list, one entry per item
+    and list.
+
+    A substance above its threshold fails the item, naming the substance, its
+    concentration, the threshold and its basis, and the list's version and hash, unless an
+    exemption declared for that list and substance covers the item, which is then named. An
+    item whose material declares no composition is not evaluated: nothing is passed
+    unread. An item is one material, so its concentration in the article and in its
+    homogeneous material are both the material's declared fraction.
+    """
+    if not isinstance(product, Product):
+        raise _refuse("product must be a Product from parse_product", subject="product")
+    lists = each_one(lists, SubstanceList, named="lists")
+    exemptions = each_one(exemptions, Exemption, named="exemptions")
+    names = [x.name for x in lists]
+    twice = sorted({n for n in names if names.count(n) > 1})
+    if twice:
+        raise _refuse(f"lists {twice} are given more than once; hold one version of each",
+                      subject="lists")  # fmt: skip
+    items = {i.name for i in product.instances}
+    for exemption in exemptions:
+        if exemption.list not in names:
+            raise _refuse(f"an exemption is on list {exemption.list!r}, which is not among "
+                          f"the lists screened ({', '.join(names)})",
+                          subject="exemptions")  # fmt: skip
+        stray = sorted(set(exemption.items) - items)
+        if stray:
+            raise _refuse(f"an exemption names {stray}, which are not items of "
+                          f"'{product.name}'", subject="exemptions")  # fmt: skip
+    declared = _declared(product)
+    definitions = {d.id: d for d in product.definitions}
+    entries = []
+    for instance in product.instances:
+        definition = definitions[instance.item]
+        if definition.product is not None or definition.reference is not None:
+            # A sub-product is screened item by item in its own declaration, and a
+            # reference assembly is not made here.
+            continue
+        item = instance.name
+        material = material_of(product, item)
+        record = declared.get(material) if material is not None else None
+        for held in lists:
+            name = f"{item} {held.name}"
+            pinned = f"{held.name} {held.version} (sha256 {held.sha256[:12]})"
+            if record is None or not record.composition:
+                entries.append(ScorecardEntry(
+                    name=name, status=CheckStatus.NOT_EVALUATED,
+                    detail=f"{item}'s material {material or '(none named)'} declares no "
+                    f"composition to hold against {pinned}",
+                    needs=(_need(f"screening.materials[{material}].composition",
+                                 "the material's substances by CAS number and mass "
+                                 "fraction, cited"),),
+                ))  # fmt: skip
+                continue
+            entries.append(_listed(name, item, record, held, pinned, exemptions))
+    return tuple(entries)
+
+
+def _listed(name: str, item: str, record: MaterialDeclaration, held: SubstanceList,
+            pinned: str, exemptions: Sequence[Exemption]) -> ScorecardEntry:  # fmt: skip
+    limits = {s.cas: s for s in held.substances}
+    over, exempt, under = [], [], []
+    for substance in record.composition:
+        listed = limits.get(substance.cas)
+        if listed is None:
+            continue
+        said = (f"{listed.name} (CAS {substance.cas}) at {substance.fraction:.4%} of the "
+                f"{held.basis}, threshold {listed.threshold:.4%}")  # fmt: skip
+        if substance.fraction <= listed.threshold:
+            under.append(said)
+            continue
+        cover = next((e for e in exemptions if e.list == held.name and e.cas == substance.cas
+                      and (not e.items or item in e.items)), None)  # fmt: skip
+        if cover is not None:
+            exempt.append(f"{said}, exempt under {cover.reference}")
+        else:
+            over.append(said)
+    against = (f"{item}'s material {record.material} ({record.composition_source}) against "
+               f"{pinned}, from {held.source}")  # fmt: skip
+    parts = []
+    if over:
+        parts.append("above its threshold: " + "; ".join(over))
+    if exempt:
+        parts.append("declared exempt: " + "; ".join(exempt))
+    if under:
+        parts.append("listed, at or below its threshold: " + "; ".join(under))
+    if not parts:
+        parts.append(f"none of its {len(record.composition)} declared substances is among "
+                     f"the {len(held.substances)} listed")  # fmt: skip
+    return ScorecardEntry(name=name, status=CheckStatus.FAIL if over else CheckStatus.PASS,
+                          detail=f"{against}: " + "; ".join(parts),
+                          underived=_LISTED)  # fmt: skip

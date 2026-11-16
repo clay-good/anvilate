@@ -36,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any, Literal
@@ -824,6 +825,31 @@ class Substance(StatableModel):
     cas: str = Field(pattern=r"^\d{2,7}-\d{2}-\d$")
     name: Named
     fraction: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _a_real_number(self) -> Substance:
+        problem = _cas_problem(self.cas)
+        if problem:
+            raise _refuse(f"substance {self.name}'s CAS number {self.cas} {problem}",
+                          subject="screening.materials")  # fmt: skip
+        return self
+
+
+def _cas_problem(cas: str) -> str | None:
+    """Why ``cas`` is not a CAS Registry Number, or None when it is one.
+
+    The last digit is a check digit: the other digits, read from the right and weighted
+    1, 2, 3 and on, sum to it modulo 10. A transposed or mistyped number fails it, and a
+    substance screen matches by number, so a typo would otherwise be a silent miss.
+    """
+    if not isinstance(cas, str) or not re.fullmatch(r"\d{2,7}-\d{2}-\d", cas):
+        return "is not written as a CAS number (digits-dd-d)"
+    digits = cas.replace("-", "")
+    body, check = digits[:-1], int(digits[-1])
+    total = sum(int(d) * w for w, d in enumerate(reversed(body), start=1))
+    if total % 10 != check:
+        return f"fails its check digit (the digits give {total % 10}, not {check})"
+    return None
 
 
 class MaterialDeclaration(StatableModel):

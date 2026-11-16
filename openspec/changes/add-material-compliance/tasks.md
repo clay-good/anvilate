@@ -15,7 +15,10 @@ Depends on `add-product-structure` (BOM lines) and `add-interface-contracts`
 - [ ] 2.1 Consent-gated, digest-pinned fetchers for the REACH candidate list, REACH
       Annex XVII, RoHS Annex II, and the automotive declarable-substance list (terms
       recorded; nothing bundled)
-- [ ] 2.2 Per-line substance screen with article concentration and list version
+- [x] 2.2 Per-line substance screen with article concentration and list version
+      (a list is a CSV you load, pinned by its version and SHA-256; an item is one
+      material, so its article and homogeneous-material concentrations are one fraction;
+      CAS check digits are checked everywhere a number is matched)
 
 ## 3. Exports
 

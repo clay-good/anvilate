@@ -43,6 +43,7 @@ beam.deflection_scorecard
 callouts.callout_scorecard
 cold_formed_steel.dsm_scorecard
 compliance.screen_material_needs
+compliance.screen_substances
 dynamics.frequency_scorecard
 dynamics.half_sine_shock_scorecard
 dynamics.isolation_scorecard

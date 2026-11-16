@@ -113,7 +113,50 @@ environment is carried and reported rather than acted on beyond note (g).
 to which name in the series, is still the caller's: this screens a couple you hand it,
 not a product you declare.
 
+## Substance lists
+
+Each item's declared composition is held against the substance lists **you** hold, and
+every hit names the item, the substance, its concentration, the threshold, and the list's
+version and hash. Anvilate ships no list: you load the publisher's file, written as a CSV
+of `cas`, `name` and `threshold` (a mass fraction, 0.001 for 0.1%).
+
+```python
+from anvilate.compliance import Exemption, load_substance_list, screen_substances
+
+rohs = load_substance_list("rohs-annex-ii.csv", name="RoHS Annex II", version="2015/863",
+                           basis="homogeneous material",
+                           source="Directive 2011/65/EU Annex II as amended")
+screen_substances(product, [rohs], exemptions=[
+    Exemption(list="RoHS Annex II", cas="7439-92-1", items=("fitting",),
+              reference="RoHS Annex III 6(c), copper alloy up to 4% lead"),
+])
+```
+
+| Item's material | Entry |
+| --- | --- |
+| a listed substance above its threshold, no exemption | **fail**, naming each one |
+| above its threshold, under an exemption you declared for that list and substance | pass, naming the exemption's reference |
+| listed substances at or below their thresholds, or none | pass, naming what was found |
+| no composition declared | **not evaluated**, naming the composition to declare |
+
+- **The hash is the file's.** `load_substance_list` takes the SHA-256 of the bytes it read,
+  and each entry names the version and the hash's first twelve digits, so a verdict says
+  exactly which list it was held against.
+- **The basis is the list's.** RoHS Annex II limits a substance in each homogeneous
+  material; REACH Article 33 counts a candidate substance in each article. An item is one
+  material here, so both are the material's declared fraction; the entry names the basis.
+- **A threshold is not exceeded by reaching it.** Lead at exactly 0.1% passes; at 0.1001%
+  it fails.
+- **A CAS number carries a check digit**, and every one is checked: in a composition, on
+  a list, and in an exemption. Matching is by number, so a typo would otherwise be a
+  silent miss.
+- **An exemption is your declaration.** The screen names its reference and does not judge
+  whether it applies or has expired.
+- A sub-product is screened in its own declaration, and a reference assembly not at all.
+
 ## Not yet
 
-Screening the composition against substance lists (REACH candidate list, RoHS, the
-automotive declarable list) waits on lists read from their publishers.
+Fetching the lists from their publishers (the REACH candidate list and Annex XVII, RoHS
+Annex II, the automotive declarable-substance list), with consent where the terms
+require it, is not built. Nor is naming both versions when a screen is held against a
+list older than the one you have cached.

@@ -108,8 +108,9 @@ that already ran and does one more thing with them:
   with fastener envelopes, checked where they meet, drawn numbered and written as a STEP
   assembly.
 - :mod:`anvilate.compliance` — what a product's materials are made of and withstand: a
-  composition export by CAS number, recycled plastic by mass, and each material need held
-  against the attribute its material declares, both cited.
+  composition export by CAS number, recycled plastic by mass, each material need held
+  against the attribute its material declares, both cited, and each composition against
+  the substance lists you load, pinned by version and hash.
 - :mod:`anvilate.context` — a project folder as context: which files are whose to read,
   and measured facts from the STEP, DXF, STL and 3MF files in it, confined to the folders
   the server was started with.

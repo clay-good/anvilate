@@ -162,6 +162,11 @@ compliance.CompositionReport
 compliance.material_of
 compliance.composition_export
 compliance.screen_material_needs
+compliance.ListedSubstance
+compliance.SubstanceList
+compliance.Exemption
+compliance.load_substance_list
+compliance.screen_substances
 compilation.CONSTRAINT_TAX_CITATION
 compilation.COMPILATION_TASK_SET_VERSION
 compilation.CompilationAttempt
