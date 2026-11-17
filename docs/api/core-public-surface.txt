@@ -840,6 +840,11 @@ verification.VerificationPlan
 verification.DEFAULT_ARCHETYPES
 verification.plan_verification
 verification.record_outcome
+verification.DVPR_COLUMNS
+verification.DvprDeclaration
+verification.dvpr_rows
+verification.dvpr_csv
+verification.dvpr_xlsx
 service_life.RCM_CITATION
 service_life.LifeKind
 service_life.LifeQuantity

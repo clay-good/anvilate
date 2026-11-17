@@ -82,7 +82,7 @@ typed-callouts.md | Declaring the part | evidence-bundle, example-highlights, qu
 uncertainty-margins.md | Deciding what the answer is worth | example-highlights, quality-interchange | -
 units-and-quantities.md | Start here | quickstart | -
 valid-is-not-correct.md | Driving it from an agent | agent-driving-evals | -
-verification-planning.md | Deciding what the answer is worth | evidence-bundle, example-highlights, model-credibility, quality-interchange | -
+verification-planning.md | Deciding what the answer is worth | README, evidence-bundle, example-highlights, model-credibility, quality-interchange | -
 voice.md | Deciding what the answer is worth | nothing | -
 walking-working-surfaces.md | Screening by discipline | example-highlights | -
 weld-fatigue-screening.md | Screening by discipline | example-highlights | -

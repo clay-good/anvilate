@@ -35,9 +35,9 @@ from collections.abc import Mapping, Sequence
 from datetime import date
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from ._models import Named, Provenance, RevalidatedModel, each_one
+from ._models import Named, Provenance, RevalidatedModel, StatableModel, each_one
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard, ScorecardEntry
 from .units import Quantity
@@ -54,6 +54,11 @@ __all__ = [
     "DEFAULT_ARCHETYPES",
     "plan_verification",
     "record_outcome",
+    "DVPR_COLUMNS",
+    "DvprDeclaration",
+    "dvpr_rows",
+    "dvpr_csv",
+    "dvpr_xlsx",
 ]
 
 # ASME B30.20 caps the proof load for a below-the-hook lifting device at 125% of the
@@ -515,3 +520,128 @@ def record_outcome(
             )
         }
     )
+
+
+# --- DVP&R ---------------------------------------------------------------------------------
+
+#: The DVP&R's columns, in order: one row per verification item.
+DVPR_COLUMNS = (
+    "requirement",
+    "item path",
+    "test archetype",
+    "procedure reference",
+    "acceptance criterion",
+    "sample size",
+    "timing",
+    "owner",
+    "recorded result",
+)
+
+
+class _DvprInputError(RefusalError, ValueError):
+    """A DVP&R input that cannot be used without correction."""
+
+
+class DvprDeclaration(StatableModel):
+    """What a validation engineer declares for one verification item: how many samples,
+    when, and who. Each is left blank on the DVP&R when not declared, never filled in."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    sample_size: int | None = Field(default=None, ge=1)
+    timing: Named | None = None
+    owner: Named | None = None
+
+
+def dvpr_rows(
+    plan: VerificationPlan,
+    *,
+    item_path: str,
+    declared: Mapping[str, DvprDeclaration] | None = None,
+) -> tuple[tuple[str, ...], ...]:
+    """The plan as DVP&R rows, one per verification item, in :data:`DVPR_COLUMNS` order.
+
+    The requirement is the checks the item stands behind, and the acceptance criterion
+    comes from them, with the accuracy the instrument must meet. ``item_path`` is the part
+    the plan belongs to. ``declared`` gives an item's sample size, timing and owner by its
+    name; what is not declared is left blank for the user. The recorded result is blank
+    until an outcome is recorded, and names the performer, the date and the instrument
+    once it is.
+    """
+    if not isinstance(plan, VerificationPlan):
+        raise _DvprInputError("plan must be a VerificationPlan from plan_verification",
+                                 remedies=(Remedy(action="replace", subject="plan",
+                                                  source=_DVPR_SOURCE),))  # fmt: skip
+    if not isinstance(item_path, str) or not item_path.strip():
+        raise _DvprInputError("item_path names the part the plan belongs to",
+                                 remedies=(Remedy(action="add", subject="item_path",
+                                                  source=_DVPR_SOURCE),))  # fmt: skip
+    declared = dict(declared or {})
+    names = {item.name for item in plan.items}
+    stray = sorted(set(declared) - names)
+    if stray:
+        raise _DvprInputError(
+            f"declared names {stray}, which are not items of this plan ({sorted(names)})",
+            remedies=(Remedy(action="replace", subject="declared", source=_DVPR_SOURCE),),
+        )
+    rows = []
+    for item in plan.items:
+        said = declared.get(item.name) or DvprDeclaration()
+        if not isinstance(said, DvprDeclaration):
+            raise _DvprInputError(
+                f"declared[{item.name!r}] must be a DvprDeclaration",
+                remedies=(Remedy(action="replace", subject="declared", source=_DVPR_SOURCE),),
+            )
+        acceptance = item.acceptance
+        if item.required_accuracy:
+            acceptance += f"; instrument: {item.required_accuracy}"
+        result = ""
+        if item.outcome is not None:
+            done = item.outcome
+            verdict = "pass" if done.passed else "FAIL"
+            result = (f"{verdict}: {done.measured} ({done.performed_on.isoformat()}, "
+                      f"{done.performed_by}, {done.instrument})")  # fmt: skip
+        rows.append((
+            "; ".join(item.driving_checks), item_path, item.archetype.title,
+            item.archetype.citation, acceptance,
+            "" if said.sample_size is None else str(said.sample_size),
+            said.timing or "", said.owner or "", result,
+        ))  # fmt: skip
+    return tuple(rows)
+
+
+_DVPR_SOURCE = "the verification plan and the validation engineer's declarations"
+_FORMULA_LEADS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def dvpr_csv(
+    plan: VerificationPlan,
+    *,
+    item_path: str,
+    declared: Mapping[str, DvprDeclaration] | None = None,
+) -> str:
+    """The DVP&R as CSV, a header row then :func:`dvpr_rows`. A cell a spreadsheet would
+    read as a formula is written as text."""
+    import csv
+    import io
+
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(DVPR_COLUMNS)
+    for row in dvpr_rows(plan, item_path=item_path, declared=declared):
+        writer.writerow([("'" + c) if c.startswith(_FORMULA_LEADS) else c for c in row])
+    return out.getvalue()
+
+
+def dvpr_xlsx(
+    plan: VerificationPlan,
+    *,
+    item_path: str,
+    declared: Mapping[str, DvprDeclaration] | None = None,
+) -> bytes:
+    """The DVP&R as an XLSX workbook with one sheet, written with the standard library."""
+    from .margin_of_safety import _workbook
+
+    rows = dvpr_rows(plan, item_path=item_path, declared=declared)
+    numeric = {DVPR_COLUMNS.index("sample size")}
+    return _workbook((("DVP&R", [list(DVPR_COLUMNS), *(list(r) for r in rows)], numeric),))

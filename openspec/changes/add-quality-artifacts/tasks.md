@@ -17,7 +17,9 @@
 
 ## 3. Plans and records
 
-- [ ] 3.1 DVP&R export of the verification plan
+- [x] 3.1 DVP&R export of the verification plan
+      (CSV and XLSX, one row per item; no archetype routes a fatigue check yet, so the
+      spec scenario's durability row waits on a durability archetype)
 - [ ] 3.2 Control-plan seed export
 - [ ] 3.3 Risk records (ISO 14971 / ISO 12100 structure) with linked controls
 

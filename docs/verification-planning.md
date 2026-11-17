@@ -104,6 +104,33 @@ same result as a quantity — and the outcome can be compared with the check tha
 it: see [model credibility](model-credibility.md). An outcome with no number stays a valid
 record and shows as performed and *uncorrelated*, never as agreeing.
 
+## The plan as a DVP&R
+
+A validation engineer runs a design verification plan and report (DVP&R) from a
+spreadsheet. `dvpr_csv` and `dvpr_xlsx` write the plan as one, one row per verification
+item:
+
+```python
+from anvilate.verification import DvprDeclaration, dvpr_csv, dvpr_xlsx
+
+dvpr_csv(plan, item_path="lifter/spreader beam",
+         declared={"proof-load": DvprDeclaration(sample_size=1, timing="before first use",
+                                                 owner="test lab")})
+```
+
+| Column | From |
+| --- | --- |
+| requirement | the checks the item stands behind |
+| item path | the part, as you name it |
+| test archetype, procedure reference | the archetype's title and the clause it cites |
+| acceptance criterion | the plan's own, with the accuracy the instrument must meet: for the lifter, apply 125 kN, 1.25 x its 100 kN rated load |
+| sample size, timing, owner | what you declare for the item, **blank** otherwise; never filled in |
+| recorded result | blank until an outcome is recorded; then the verdict, what was measured, the date, the performer and the instrument |
+
+A declaration for an item the plan does not hold is refused, and a cell a spreadsheet
+would read as a formula is written as text. A check the plan routes to no archetype (a
+fatigue check, today) has no row: it is in the matrix as analysis-only or unresolved.
+
 See [`examples/lifter_verification_matrix.py`](../examples/lifter_verification_matrix.py).
 
 Out of scope: executing tests, acquiring lab data, and any claim of qualification or
