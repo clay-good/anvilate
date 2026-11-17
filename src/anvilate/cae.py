@@ -57,6 +57,9 @@ __all__ = [
     "ImportedGroupCase",
     "ImportedGroupResult",
     "fastener_group_on_import",
+    "ImportedWeldCase",
+    "ImportedWeldResult",
+    "weld_group_on_import",
     "RegionPeak",
     "RegionImport",
     "RegionComparison",
@@ -808,7 +811,8 @@ class ImportedGroupResult(StatableModel):
             head = (f"{self.interface}: case {self.governing_case} governs, fastener "
                     f"{worst.governing} at interaction {self.governing_index:.3f} "
                     "(NASA-STD-5020B, without the bending term)")  # fmt: skip
-        skipped = f"; not evaluated: {', '.join(self.not_evaluated)}" if self.not_evaluated else ""
+        skipped = ", ".join(self.not_evaluated)
+        skipped = f"; not evaluated: {skipped}" if skipped else ""
         return f"{head}{skipped}; loads from {self.source}"
 
 
@@ -1104,3 +1108,190 @@ def compare_region_peak(
         tolerance=tolerance, agrees=abs(difference) <= tolerance, limit=limit,
         limit_source=limit_source, within_limit=within, source=imported.source,
     )  # fmt: skip
+
+
+# --- a weld group on imported loads ------------------------------------------------------
+
+
+class ImportedWeldCase(StatableModel):
+    """One imported case on a fillet-weld group: the load it put there and the verdict.
+
+    ``shear_n`` is the in-plane force on the weld, ``twist_nmm`` its moment about the weld
+    line's centroid, and ``eccentricity_mm`` their ratio, the offset the elastic method
+    takes. ``evaluated`` is false, with ``note`` saying why, for a case the elastic method
+    cannot take: unbalanced, pulling the weld out of its plane, bending it about an
+    in-plane axis, or twisting it with no shear to set a direction.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    evaluated: bool
+    note: str = Field(default="", max_length=400)
+    shear_n: float
+    twist_nmm: float
+    out_of_plane_n: float
+    out_of_plane_nmm: float
+    eccentricity_mm: float | None = None
+    peak_stress_mpa: float | None = None
+    ratio: float | None = None
+
+
+class ImportedWeldResult(StatableModel):
+    """A fillet-weld group screened case by case on loads read back from a solver."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    interface: Named
+    source: ResultSource
+    allowable_mpa: float
+    allowable_source: Named
+    cases: tuple[ImportedWeldCase, ...]
+    governing_case: str | None
+    governing_ratio: float | None
+    not_evaluated: tuple[str, ...] = ()
+
+    @property
+    def passes(self) -> bool | None:
+        """Whether every evaluated case is within the allowable; None when none was."""
+        return None if self.governing_ratio is None else self.governing_ratio <= 1.0
+
+    def __str__(self) -> str:
+        if self.governing_case is None:
+            head = f"{self.interface}: no case evaluated"
+        else:
+            worst = next(c for c in self.cases if c.case == self.governing_case)
+            verdict = "within" if self.passes else "PAST"
+            head = (f"{self.interface}: case {self.governing_case} governs at "
+                    f"{worst.peak_stress_mpa:.4g} MPa on the throat, {verdict} the "
+                    f"{self.allowable_mpa:.4g} MPa allowable "
+                    f"({self.allowable_source})")  # fmt: skip
+        skipped = ", ".join(self.not_evaluated)
+        skipped = f"; not evaluated: {skipped}" if skipped else ""
+        return f"{head}{skipped}; loads from {self.source}"
+
+
+def weld_group_on_import(
+    segments: Sequence[tuple[tuple[Quantity, Quantity], tuple[Quantity, Quantity]]],
+    imported: InterfaceImport,
+    interface: str,
+    *,
+    coordinate_system: str,
+    leg_size: Quantity,
+    allowable: Quantity,
+    allowable_source: str,
+) -> ImportedWeldResult:
+    """Each imported case's load at ``interface``, on a fillet-weld group by the elastic
+    method (:func:`~anvilate.analysis.eccentric_weld_group_peak_stress`).
+
+    The weld lines lie in the x-y plane of ``coordinate_system``, which must be the one
+    the import declared. The weld carries the opposite of the force on the free body. Its
+    in-plane force and its twist about the weld line's own centroid become the elastic
+    method's load and eccentricity, with the segments turned so the load lies along +y:
+    the method is stated for that direction, and turning the geometry rather than the
+    load keeps it exact. A case the method cannot take is reported not evaluated, with
+    the reason: an unbalanced free body, a force or moment out of the weld's plane beyond
+    the import's tolerance, or a twist with no shear.
+    """
+    from .analysis.weld import eccentric_weld_group_peak_stress
+
+    if not isinstance(imported, InterfaceImport):
+        raise _refuse("imported must be an InterfaceImport from read_interface_forces",
+                      subject="imported")  # fmt: skip
+    if coordinate_system != imported.source.coordinate_system:
+        raise _refuse(f"the weld group is in {coordinate_system!r} and the loads in "
+                      f"{imported.source.coordinate_system!r}; nothing here rotates a load "
+                      "between them", subject="coordinate_system")  # fmt: skip
+    for quantity, name in ((leg_size, "leg_size"), (allowable, "allowable")):
+        if not isinstance(quantity, Quantity):
+            raise _refuse(f"{name} must be a quantity", subject=name)
+    if not allowable.has_dimension("[pressure]") or not allowable.magnitude > 0:
+        raise _refuse(f"allowable is a positive stress; got {allowable}", subject="allowable")
+    if not isinstance(allowable_source, str) or not allowable_source.strip():
+        raise _refuse("allowable_source names where the allowable comes from",
+                      subject="allowable_source")  # fmt: skip
+    lines = _segments_mm(segments)
+    loads = imported.at(interface)
+    balance = {b.case: b for b in imported.balance}
+    total = sum(math.dist(a, b) for a, b in lines)
+    centre = [sum(math.dist(a, b) * (a[i] + b[i]) / 2 for a, b in lines) / total
+              for i in range(2)] + [0.0]  # fmt: skip
+    allow = allowable.to("MPa").magnitude
+    cases = []
+    for load in loads:
+        centre[2] = load.about_mm[2]
+        force = [-v for v in load.force_n]
+        moment = [-v for v in load.moment_nmm]
+        moment = [m + a for m, a in zip(moment, _arm(list(load.about_mm), centre, force),
+                                        strict=True)]  # fmt: skip
+        shear = math.hypot(force[0], force[1])
+        said = balance[load.case]
+        common: dict[str, Any] = {
+            "case": load.case, "shear_n": shear, "twist_nmm": moment[2],
+            "out_of_plane_n": abs(force[2]),
+            "out_of_plane_nmm": math.hypot(moment[0], moment[1]),
+        }  # fmt: skip
+        reason = ""
+        if not said.balanced:
+            reason = f"its free body leaves {said.residual_force_n:.4g} N unbalanced"
+        elif abs(force[2]) > said.tolerance * said.largest_force_n:
+            reason = (f"it pulls {abs(force[2]):.4g} N out of the weld's plane, which the "
+                      "elastic in-plane method does not take")  # fmt: skip
+        elif common["out_of_plane_nmm"] > said.tolerance * said.largest_moment_nmm:
+            reason = (f"it bends the weld {common['out_of_plane_nmm']:.4g} N*mm about an "
+                      "in-plane axis, which the elastic in-plane method does not take")  # fmt: skip
+        elif shear <= said.tolerance * said.largest_force_n:
+            reason = "it twists the weld with no shear to set the load's direction"
+        if reason:
+            cases.append(ImportedWeldCase(evaluated=False, note=reason, **common))
+            continue
+        # Turn the geometry so the load lies along +y; the twist and its arm do not change.
+        angle = math.atan2(force[0], force[1])
+        turned = tuple(tuple(_turn(p, centre, angle) for p in line) for line in lines)
+        eccentricity = moment[2] / shear
+        peak = eccentric_weld_group_peak_stress(
+            segments=turned, load=Quantity(magnitude=shear, unit="N"),
+            eccentricity=Quantity(magnitude=eccentricity, unit="mm"), leg_size=leg_size,
+        ).to("MPa").magnitude  # fmt: skip
+        cases.append(ImportedWeldCase(evaluated=True, eccentricity_mm=eccentricity,
+                                      peak_stress_mpa=peak, ratio=peak / allow,
+                                      **common))  # fmt: skip
+    evaluated = [c for c in cases if c.evaluated]
+    top = max(evaluated, key=lambda c: c.ratio or 0.0) if evaluated else None
+    return ImportedWeldResult(
+        interface=interface, source=imported.source, allowable_mpa=allow,
+        allowable_source=allowable_source, cases=tuple(cases),
+        governing_case=top.case if top else None,
+        governing_ratio=top.ratio if top else None,
+        not_evaluated=tuple(c.case for c in cases if not c.evaluated),
+    )  # fmt: skip
+
+
+def _segments_mm(segments: Any) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    if isinstance(segments, (str, bytes)) or not isinstance(segments, Sequence) or not segments:
+        raise _refuse("segments lists the weld lines, each ((x1, y1), (x2, y2))",
+                      subject="segments")  # fmt: skip
+    lines = []
+    for index, segment in enumerate(segments):
+        try:
+            (x1, y1), (x2, y2) = segment
+            a = (x1.to("mm").magnitude, y1.to("mm").magnitude)
+            b = (x2.to("mm").magnitude, y2.to("mm").magnitude)
+        except (TypeError, ValueError, AttributeError) as failure:
+            raise _refuse(f"segments[{index}] is not ((x1, y1), (x2, y2)) in lengths",
+                          subject="segments") from failure  # fmt: skip
+        if math.dist(a, b) <= 0:
+            raise _refuse(f"segments[{index}] has no length", subject="segments")
+        lines.append((a, b))
+    return lines
+
+
+def _turn(
+    point: tuple[float, float], centre: list[float], angle: float
+) -> tuple[Quantity, Quantity]:
+    """``point`` turned by ``angle`` about ``centre``: the turn that carries the load's
+    direction onto +y (a load along +x turns a quarter counter-clockwise)."""
+    x, y = point[0] - centre[0], point[1] - centre[1]
+    c, s = math.cos(angle), math.sin(angle)
+    return (Quantity(magnitude=centre[0] + c * x - s * y, unit="mm"),
+            Quantity(magnitude=centre[1] + s * x + c * y, unit="mm"))  # fmt: skip

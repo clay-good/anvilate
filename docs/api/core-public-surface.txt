@@ -404,6 +404,9 @@ cae.read_interface_forces
 cae.ImportedGroupCase
 cae.ImportedGroupResult
 cae.fastener_group_on_import
+cae.ImportedWeldCase
+cae.ImportedWeldResult
+cae.weld_group_on_import
 cae.RegionPeak
 cae.RegionImport
 cae.RegionComparison

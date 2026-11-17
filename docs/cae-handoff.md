@@ -111,6 +111,19 @@ Each case keeps its shear, twist, tension and out-of-plane moment, and the resul
 where every load came from. The test pattern is four bolts at ±20 mm under a 1 kN side
 load 100 mm out: 250 N direct and 883.9 N from the twist put the worst bolt at 1,075.3 N.
 
+## A weld group on the imported loads
+
+`weld_group_on_import` does the same for a fillet-weld group, by the elastic method
+(`eccentric_weld_group_peak_stress`), against an allowable you declare with its source.
+The weld carries the opposite of the force on the free body; its in-plane force and its
+twist about the weld line's own centroid become the method's load and eccentricity, with
+the weld lines turned so the load lies along +y, the direction the method is stated for.
+
+A case that pulls the weld out of its plane, bends it about an in-plane axis, twists it
+with no shear to set a direction, or whose free body did not balance is reported not
+evaluated, with the reason. Two 100 mm welds at ±50 mm under 1 kN at 100 mm put
+14.58 N/mm on a corner: 4.124 MPa on a 5 mm leg's throat.
+
 ## A peak value as a cited input
 
 A peak stress, strain or displacement your solver found in a region comes back as an
@@ -172,5 +185,5 @@ test corrects that one entry rather than bending the deck to it.
 
 Solid and shell meshes of a built part (they wait on the meshing pipeline in local FEA),
 loads by tagged face, reading a solver's native result files (the CSV above is the
-doorway until then), and the lug, fitting, weld-group and bearing screens on imported cases (the fastener
-pattern takes them today).
+doorway until then), and the lug, fitting and bearing screens on imported cases (fastener patterns and weld
+groups take them today).
