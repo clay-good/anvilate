@@ -9,7 +9,7 @@ with it.
 | Export | Feeds | Built from | Stays with you |
 | --- | --- | --- | --- |
 | [DVP&R](verification-planning.md#the-plan-as-a-dvpr), CSV or XLSX | the design verification plan and report a validation engineer runs | the verification plan: each test item, its requirement, procedure and acceptance criterion | sample size, timing, owner, and running the test |
-| Trace, CSV | a requirements tool's link table | your requirements, the scorecard and the verification plan | the requirements themselves, and whether a covered requirement is met |
+| Trace, CSV or ReqIF 1.2 | a requirements tool's link table, or the tool itself through ReqIF | your requirements, the scorecard and the verification plan | the requirements themselves, and whether a covered requirement is met |
 
 ## Requirement trace
 
@@ -27,6 +27,7 @@ report = trace_requirements([
 report.uncovered        # ('R-2',)
 report.untraced_checks  # every check no requirement names
 report.to_csv()
+report.to_reqif(as_of=date(2026, 11, 16), title="Lifter trace")
 ```
 
 | A row says | When |
@@ -40,7 +41,20 @@ A check brings the test items standing behind it, and a test item brings its rec
 outcome. A name that is neither a check on the card nor an item of the plan is refused:
 a trace to something that does not exist reads as coverage and is none.
 
+## The trace as ReqIF
+
+`to_reqif` writes the trace as a ReqIF 1.2 document, the OMG exchange format requirements
+tools import. Each requirement is a spec object whose `ReqIF.ForeignID` is its id and whose
+string attributes carry its text, source, coverage, status, checks, test items and
+evidence, so an uncovered requirement arrives marked uncovered. The untraced checks are a
+specification of their own, so they are not lost in the crossing.
+
+The document carries no clock: `as_of` stamps its creation time and every element's last
+change, and the same trace on the same day is the same bytes. Every emitted document is
+validated against OMG's published `reqif.xsd` in CI's scheduled interchange job, alongside
+the QIF and DCC schemas.
+
 ## Not yet
 
 FMEA rows and their rating scales, special-characteristic marks and the control-plan seed
-they feed, stable characteristic numbering, risk records, and the trace as ReqIF.
+they feed, stable characteristic numbering, and risk records.

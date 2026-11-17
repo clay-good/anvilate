@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import csv
 import io
+import xml.etree.ElementTree as ET
 from collections.abc import Sequence
+from datetime import date
 
 from pydantic import ConfigDict, Field
 
@@ -34,6 +36,7 @@ from .scorecard import CheckStatus, Scorecard, _status_rank
 from .verification import VerificationPlan
 
 __all__ = [
+    "REQIF_NAMESPACE",
     "TRACE_COLUMNS",
     "Requirement",
     "TraceRow",
@@ -141,6 +144,23 @@ class TraceReport(StatableModel):
             writer.writerow(_safe(("", "", "", "untraced", "", check, "", "")))
         return out.getvalue()
 
+    def to_reqif(self, *, as_of: date, title: str) -> str:
+        """The trace as a ReqIF 1.2 document (OMG ReqIF 20110401), for a requirements tool.
+
+        Each requirement is a ``SPEC-OBJECT`` whose ``ReqIF.ForeignID`` is its id and
+        whose string attributes carry its text, source, coverage, status, checks, test
+        items and evidence, so an uncovered requirement arrives marked uncovered. The
+        untraced checks are a second specification of their own, so they are not lost in
+        the crossing. ``as_of`` stamps the header's creation time and every element's last
+        change: the document carries no clock, and the same trace on the same day is the
+        same bytes.
+        """
+        if not isinstance(as_of, date):
+            raise _refuse("as_of must be a date", subject="as_of")
+        if not isinstance(title, str) or not title.strip():
+            raise _refuse("title names the document", subject="title")
+        return _reqif(self, stamp=f"{as_of.isoformat()}T00:00:00Z", title=title)
+
     def __str__(self) -> str:
         loose = (f"; untraced checks: {', '.join(self.untraced_checks)}"
                  if self.untraced_checks else "")  # fmt: skip
@@ -204,3 +224,78 @@ def trace_requirements(
         ))  # fmt: skip
     untraced = tuple(name for name in checks if name not in named)
     return TraceReport(rows=tuple(rows), untraced_checks=untraced)
+
+
+# --- ReqIF -----------------------------------------------------------------------------------
+
+#: The namespace of ReqIF 1.2, as OMG publishes its schema.
+REQIF_NAMESPACE = "http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
+
+#: Each string attribute a requirement carries into ReqIF, by its LONG-NAME. The first two
+#: are the names requirements tools read by convention (the ReqIF Implementation Guide's
+#: ``ReqIF.ForeignID`` and ``ReqIF.Text``); the rest are this trace's own.
+_REQIF_ATTRIBUTES = ("ReqIF.ForeignID", "ReqIF.Text", "Source", "Coverage", "Status",
+                     "Checks", "Verification items", "Evidence")  # fmt: skip
+
+
+def _reqif(report: TraceReport, *, stamp: str, title: str) -> str:
+    ET.register_namespace("", REQIF_NAMESPACE)
+
+    def tag(name: str) -> str:
+        return f"{{{REQIF_NAMESPACE}}}{name}"
+
+    def sub(parent: ET.Element, name: str, text: str | None = None, **attrs: str) -> ET.Element:
+        element = ET.SubElement(
+            parent, tag(name), {k.replace("_", "-"): v for k, v in attrs.items()}
+        )
+        if text is not None:
+            element.text = text
+        return element
+
+    def identified(parent: ET.Element, name: str, identifier: str, **attrs: str) -> ET.Element:
+        return sub(parent, name, IDENTIFIER=identifier, LAST_CHANGE=stamp, **attrs)
+
+    root = ET.Element(tag("REQ-IF"))
+    header = sub(sub(root, "THE-HEADER"), "REQ-IF-HEADER", IDENTIFIER="header")
+    sub(header, "CREATION-TIME", stamp)
+    sub(header, "REQ-IF-TOOL-ID", "Anvilate")
+    sub(header, "REQ-IF-VERSION", "1.0")  # fixed by the schema, and in this order
+    sub(header, "SOURCE-TOOL-ID", "Anvilate requirement trace")
+    sub(header, "TITLE", title)
+    content = sub(sub(root, "CORE-CONTENT"), "REQ-IF-CONTENT")
+    identified(sub(content, "DATATYPES"), "DATATYPE-DEFINITION-STRING", "dt-string",
+               LONG_NAME="String", MAX_LENGTH="32000")  # fmt: skip
+    types = sub(content, "SPEC-TYPES")
+    object_type = identified(types, "SPEC-OBJECT-TYPE", "type-requirement",
+                             LONG_NAME="Traced requirement")  # fmt: skip
+    attributes = sub(object_type, "SPEC-ATTRIBUTES")
+    for index, name in enumerate(_REQIF_ATTRIBUTES):
+        definition = identified(attributes, "ATTRIBUTE-DEFINITION-STRING", f"attr-{index}",
+                                LONG_NAME=name)  # fmt: skip
+        sub(sub(definition, "TYPE"), "DATATYPE-DEFINITION-STRING-REF", "dt-string")
+    identified(types, "SPECIFICATION-TYPE", "type-specification", LONG_NAME="Trace")
+    objects = sub(content, "SPEC-OBJECTS")
+    rows = [(row.requirement, row.text, row.source, row.coverage, row.status.value,
+             "; ".join(row.checks), "; ".join(row.verification_items),
+             "; ".join(row.evidence)) for row in report.rows]  # fmt: skip
+    loose = [(check, "", "", "untraced", "", check, "", "") for check in report.untraced_checks]
+    specifications = sub(content, "SPECIFICATIONS")
+    for key, label, group in (("req", title, rows), ("untraced", "Untraced checks", loose)):
+        hierarchy = None
+        if group:
+            specification = identified(specifications, "SPECIFICATION", f"spec-{key}",
+                                       LONG_NAME=label)  # fmt: skip
+            sub(sub(specification, "TYPE"), "SPECIFICATION-TYPE-REF", "type-specification")
+            hierarchy = sub(specification, "CHILDREN")
+        for number, cells in enumerate(group, start=1):
+            identifier = f"{key}-{number}"
+            spec_object = identified(objects, "SPEC-OBJECT", identifier, LONG_NAME=cells[0])
+            values = sub(spec_object, "VALUES")
+            for index, cell in enumerate(cells):
+                value = sub(values, "ATTRIBUTE-VALUE-STRING", THE_VALUE=cell)
+                sub(sub(value, "DEFINITION"), "ATTRIBUTE-DEFINITION-STRING-REF", f"attr-{index}")
+            sub(sub(spec_object, "TYPE"), "SPEC-OBJECT-TYPE-REF", "type-requirement")
+            node = identified(hierarchy, "SPEC-HIERARCHY", f"node-{identifier}")  # type: ignore[arg-type]
+            sub(sub(node, "OBJECT"), "SPEC-OBJECT-REF", identifier)
+    ET.indent(root)
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode") + "\n"

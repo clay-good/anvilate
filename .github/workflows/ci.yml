@@ -75,7 +75,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install
-        run: pip install -e ".[dev]" lxml
+        run: pip install -e ".[dev]" lxml xmlschema
       # qifstandards.org has answered the runner with a 200 that is not the zip (2026-10-05),
       # while serving the real file elsewhere. The package is pinned by digest and cached,
       # so the host is asked only on a cache miss, and a wrong body says what it was.
@@ -144,6 +144,26 @@ jobs:
           mkdir -p sarif
           curl -sSfL -o sarif/sarif-schema-2.1.0.json \
             https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json
+      - name: Fetch the OMG ReqIF 1.2 schema
+        run: |
+          mkdir -p reqif
+          curl -sSfL -o reqif/reqif.xsd https://www.omg.org/spec/ReqIF/20110401/reqif.xsd
+      - name: Validate the requirement trace as ReqIF
+        # The ReqIF schema includes the XHTML modules from w3.org by URL; xmlschema fetches
+        # them, so this one test is allowed the network.
+        env:
+          ANVILATE_REQIF_XSD: reqif
+          ANVILATE_ALLOW_NETWORK: "1"
+        run: |
+          set -o pipefail
+          pytest -q -rs \
+            "tests/test_trace.py::test_the_reqif_file_validates_against_the_published_schema" \
+            | tee reqif.txt
+          grep -qE "^1 passed" reqif.txt
+          if grep -q skipped reqif.txt; then
+            echo "the ReqIF schema or its validator did not arrive; nothing was validated"
+            exit 1
+          fi
       - name: Validate emitted documents against the published schemas
         env:
           ANVILATE_QIF_XSD: qif/xsd

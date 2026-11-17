@@ -838,6 +838,7 @@ verification.VerificationItem
 verification.VerificationOutcome
 verification.VerificationPlan
 verification.DEFAULT_ARCHETYPES
+trace.REQIF_NAMESPACE
 trace.TRACE_COLUMNS
 trace.Requirement
 trace.TraceRow

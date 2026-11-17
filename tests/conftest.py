@@ -97,7 +97,7 @@ def _manifest() -> set[str]:
 # `tests/test_contract.py` holds this set against what the workflow's scheduled jobs
 # actually install, so it cannot quietly grow an entry no job backs.
 _SCHEDULED_ONLY_IMPORTS = frozenset(
-    {"lxml", "lxml.etree", "sectionproperties", "pycufsm", "pyNastran"}
+    {"lxml", "lxml.etree", "sectionproperties", "pycufsm", "pyNastran", "xmlschema"}
 )
 
 _import_skips: set[str] = set()

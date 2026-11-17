@@ -26,8 +26,10 @@
 ## 4. Traceability
 
 - [x] 4.1 Trace from requirement to evidence; uncovered and untraced markers
-      (`anvilate.trace`, as CSV; ReqIF is 4.2)
-- [ ] 4.2 ReqIF export, schema-validated against the published ReqIF XSD
+      (`anvilate.trace`, as CSV and ReqIF)
+- [x] 4.2 ReqIF export, schema-validated against the published ReqIF XSD
+      (validated locally and in CI's scheduled interchange job, by xmlschema, which
+      fetches the XHTML modules the schema includes)
 - [ ] 4.3 A docs page for quality artifacts: which industry form each export feeds, and
       what stays with the user's QMS
       (written for the DVP&R and the trace; it grows with each export)
