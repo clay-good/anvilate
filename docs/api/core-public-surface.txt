@@ -407,6 +407,9 @@ cae.fastener_group_on_import
 cae.ImportedWeldCase
 cae.ImportedWeldResult
 cae.weld_group_on_import
+cae.ImportedLugCase
+cae.ImportedLugResult
+cae.lug_on_import
 cae.RegionPeak
 cae.RegionImport
 cae.RegionComparison

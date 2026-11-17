@@ -40,6 +40,7 @@ from pydantic import ConfigDict, Field, field_validator
 from ._models import Named, StatableModel, each_one
 from .frame import Frame, FrameMember, Freedom, _geometry_of
 from .refusal import RefusalError, Remedy
+from .scorecard import Scorecard
 from .units import Quantity
 
 __all__ = [
@@ -60,6 +61,9 @@ __all__ = [
     "ImportedWeldCase",
     "ImportedWeldResult",
     "weld_group_on_import",
+    "ImportedLugCase",
+    "ImportedLugResult",
+    "lug_on_import",
     "RegionPeak",
     "RegionImport",
     "RegionComparison",
@@ -1295,3 +1299,133 @@ def _turn(
     c, s = math.cos(angle), math.sin(angle)
     return (Quantity(magnitude=centre[0] + c * x - s * y, unit="mm"),
             Quantity(magnitude=centre[1] + s * x + c * y, unit="mm"))  # fmt: skip
+
+
+# --- a lifting lug on imported loads -----------------------------------------------------
+
+
+class ImportedLugCase(StatableModel):
+    """One imported case on a lifting lug: the pull along its axis, what lies across it,
+    and the lug's card under that pull. ``card`` is absent, with ``note`` saying why, for a
+    case the axial screen cannot take."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    evaluated: bool
+    note: str = Field(default="", max_length=400)
+    axial_n: float
+    transverse_n: float
+    card: Scorecard | None = None
+
+
+class ImportedLugResult(StatableModel):
+    """A lifting lug screened case by case on loads read back from a solver.
+
+    ``governing_case`` is the evaluated case whose card's governing check has the lowest
+    safety factor; ``not_evaluated`` names the cases the axial screen could not take.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    lug: Named
+    interface: Named
+    source: ResultSource
+    cases: tuple[ImportedLugCase, ...]
+    governing_case: str | None
+    governing_factor: float | None
+    not_evaluated: tuple[str, ...] = ()
+
+    def __str__(self) -> str:
+        if self.governing_case is None:
+            head = f"{self.lug} at {self.interface}: no case evaluated"
+        else:
+            worst = next(c for c in self.cases if c.case == self.governing_case)
+            check = worst.card.governing() if worst.card is not None else None
+            named = f", {check.name}" if check is not None else ""
+            head = (f"{self.lug} at {self.interface}: case {self.governing_case} governs"
+                    f"{named} at a safety factor of {self.governing_factor:.3g}")  # fmt: skip
+        skipped = ", ".join(self.not_evaluated)
+        skipped = f"; not evaluated: {skipped}" if skipped else ""
+        return f"{head}{skipped}; loads from {self.source}"
+
+
+def lug_on_import(
+    lug: Any,
+    imported: InterfaceImport,
+    interface: str,
+    *,
+    coordinate_system: str,
+    axis: tuple[float, float, float],
+    required_safety_factor: float,
+) -> ImportedLugResult:
+    """Each imported case's load at ``interface`` on a lifting lug, by
+    :func:`~anvilate.packs.structural.screen_lifting_lug` (ASME BTH-1 net tension and pin
+    bearing).
+
+    The free body is the part that carries the lug, so the force read at its interface is
+    the pin's force on the lug. ``axis`` is the lug's outward axis, from its base toward
+    the pin, in ``coordinate_system``, which must be the import's; the lug is screened on
+    the pull along it. The screen is axial: a case with a component across the axis beyond
+    the import's tolerance (an oblique pull, which a lug's own oblique interaction answers
+    and this screen does not), or that pushes the lug rather than pulls it, is reported
+    not evaluated, with the reason. Each case's lug is built anew from the declaration with
+    the case's load, so the lug's own rules run on it.
+    """
+    from .packs.structural import LiftingLug, screen_lifting_lug
+
+    if not isinstance(lug, LiftingLug):
+        raise _refuse("lug must be a LiftingLug", subject="lug")
+    if not isinstance(imported, InterfaceImport):
+        raise _refuse("imported must be an InterfaceImport from read_interface_forces",
+                      subject="imported")  # fmt: skip
+    if coordinate_system != imported.source.coordinate_system:
+        raise _refuse(f"the lug is in {coordinate_system!r} and the loads in "
+                      f"{imported.source.coordinate_system!r}; nothing here rotates a load "
+                      "between them", subject="coordinate_system")  # fmt: skip
+    try:
+        length = math.sqrt(sum(float(c) ** 2 for c in axis))
+        unit = [float(c) / length for c in axis] if len(axis) == 3 else []
+    except (TypeError, ValueError, ZeroDivisionError) as failure:
+        raise _refuse(f"axis is a direction of three components; got {axis!r}",
+                      subject="axis") from failure  # fmt: skip
+    if len(unit) != 3 or not all(math.isfinite(c) for c in unit):
+        raise _refuse(f"axis is a direction of three components; got {axis!r}", subject="axis")
+    balance = {b.case: b for b in imported.balance}
+    declared = lug.model_dump()
+    cases = []
+    for load in imported.at(interface):
+        force = load.force_n
+        axial = sum(f * u for f, u in zip(force, unit, strict=True))
+        across = math.sqrt(max(0.0, sum(f * f for f in force) - axial * axial))
+        said = balance[load.case]
+        reason = ""
+        if not said.balanced:
+            reason = f"its free body leaves {said.residual_force_n:.4g} N unbalanced"
+        elif across > said.tolerance * said.largest_force_n:
+            reason = (f"it pulls {across:.4g} N across the lug's axis, an oblique load the "
+                      "axial screen does not take")  # fmt: skip
+        elif axial <= 0:
+            reason = "it pushes the lug along its axis rather than pulling it"
+        if reason:
+            cases.append(ImportedLugCase(case=load.case, evaluated=False, note=reason,
+                                         axial_n=axial, transverse_n=across))  # fmt: skip
+            continue
+        pulled = LiftingLug(**(declared | {"load": Quantity(magnitude=axial, unit="N")}))
+        card = screen_lifting_lug(pulled, required_safety_factor=required_safety_factor)
+        cases.append(ImportedLugCase(case=load.case, evaluated=True, axial_n=axial,
+                                     transverse_n=across, card=card))  # fmt: skip
+    factors = [(c, _least_factor(c.card)) for c in cases if c.card is not None]
+    factors = [(c, f) for c, f in factors if f is not None]
+    top = min(factors, key=lambda pair: pair[1]) if factors else None
+    return ImportedLugResult(
+        lug=lug.name, interface=interface, source=imported.source, cases=tuple(cases),
+        governing_case=top[0].case if top else None,
+        governing_factor=top[1] if top else None,
+        not_evaluated=tuple(c.case for c in cases if not c.evaluated),
+    )  # fmt: skip
+
+
+def _least_factor(card: Scorecard | None) -> float | None:
+    found = [e.safety_factor for e in card.entries if e.safety_factor is not None] if card else []
+    return min(found) if found else None

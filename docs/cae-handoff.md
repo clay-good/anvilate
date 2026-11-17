@@ -124,6 +124,17 @@ with no shear to set a direction, or whose free body did not balance is reported
 evaluated, with the reason. Two 100 mm welds at ±50 mm under 1 kN at 100 mm put
 14.58 N/mm on a corner: 4.124 MPa on a 5 mm leg's throat.
 
+## A lifting lug on the imported loads
+
+`lug_on_import` screens a `LiftingLug` (ASME BTH-1 net tension and pin bearing) on each
+case's pull. The free body is the part that carries the lug, so the force at the lug's
+interface is the pin's force on it; `axis` is the lug's outward direction, and the lug is
+screened on the pull along it, rebuilt from its declaration for each case so its own
+rules run on the load. An oblique pull, which the lug's own oblique interaction answers
+and this axial screen does not, and a push are each reported not evaluated. A 60 kN pull
+on an 80 mm, 20 mm thick A36 lug with a 30 mm hole puts 100 MPa on the pin, a safety
+factor of 2.5.
+
 ## A peak value as a cited input
 
 A peak stress, strain or displacement your solver found in a region comes back as an
@@ -185,5 +196,5 @@ test corrects that one entry rather than bending the deck to it.
 
 Solid and shell meshes of a built part (they wait on the meshing pipeline in local FEA),
 loads by tagged face, reading a solver's native result files (the CSV above is the
-doorway until then), and the lug, fitting and bearing screens on imported cases (fastener patterns and weld
-groups take them today).
+doorway until then), and the fitting and bearing screens on imported cases (fastener patterns, weld groups
+and lifting lugs take them today).
