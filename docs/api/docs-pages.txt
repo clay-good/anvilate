@@ -46,7 +46,7 @@ industrial-covers.md | Screening by discipline | nothing | -
 interfaces.md | Start here | product-screening, products | -
 lifting-devices.md | Screening by discipline | example-highlights | -
 load-combinations.md | Deciding what the answer is worth | example-highlights | -
-machinery-screening.md | Screening by discipline | combinations | -
+machinery-screening.md | Screening by discipline | cae-handoff, combinations | -
 margin-ledger.md | Deciding what the answer is worth | calculation-reports, example-highlights, headless-cli, model-credibility, performance-budgets, product-screening, published-contracts | -
 margin-of-safety.md | Deciding what the answer is worth | README, structural-hand-methods | -
 masonry-screening.md | Screening by discipline | nothing | -

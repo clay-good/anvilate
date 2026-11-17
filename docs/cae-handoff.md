@@ -135,6 +135,15 @@ and this axial screen does not, and a push are each reported not evaluated. A 60
 on an 80 mm, 20 mm thick A36 lug with a 30 mm hole puts 100 MPa on the pin, a safety
 factor of 2.5.
 
+## A rolling bearing on the imported loads
+
+`bearing_on_import` splits each case's force at a bearing on its shaft `axis`: the
+component along it is the axial load and the rest the radial, both as magnitudes, and the
+bearing is screened by the [machinery](machinery-screening.md) rating-life and static
+checks, rebuilt for each case. A single rolling bearing carries no moment, so a case with
+one at the bearing is reported not evaluated. 4.2 kN across the shaft and 1.1 kN along it
+on the machinery page's bearing is P = 3.947 kN, the card that page works.
+
 ## A peak value as a cited input
 
 A peak stress, strain or displacement your solver found in a region comes back as an
@@ -196,5 +205,5 @@ test corrects that one entry rather than bending the deck to it.
 
 Solid and shell meshes of a built part (they wait on the meshing pipeline in local FEA),
 loads by tagged face, reading a solver's native result files (the CSV above is the
-doorway until then), and the fitting and bearing screens on imported cases (fastener patterns, weld groups
-and lifting lugs take them today).
+doorway until then), and a fitting screen on imported cases (fastener patterns, weld groups, lifting lugs and
+rolling bearings take them today).

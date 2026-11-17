@@ -410,6 +410,9 @@ cae.weld_group_on_import
 cae.ImportedLugCase
 cae.ImportedLugResult
 cae.lug_on_import
+cae.ImportedBearingCase
+cae.ImportedBearingResult
+cae.bearing_on_import
 cae.RegionPeak
 cae.RegionImport
 cae.RegionComparison

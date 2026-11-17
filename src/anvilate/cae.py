@@ -64,6 +64,9 @@ __all__ = [
     "ImportedLugCase",
     "ImportedLugResult",
     "lug_on_import",
+    "ImportedBearingCase",
+    "ImportedBearingResult",
+    "bearing_on_import",
     "RegionPeak",
     "RegionImport",
     "RegionComparison",
@@ -1383,14 +1386,7 @@ def lug_on_import(
         raise _refuse(f"the lug is in {coordinate_system!r} and the loads in "
                       f"{imported.source.coordinate_system!r}; nothing here rotates a load "
                       "between them", subject="coordinate_system")  # fmt: skip
-    try:
-        length = math.sqrt(sum(float(c) ** 2 for c in axis))
-        unit = [float(c) / length for c in axis] if len(axis) == 3 else []
-    except (TypeError, ValueError, ZeroDivisionError) as failure:
-        raise _refuse(f"axis is a direction of three components; got {axis!r}",
-                      subject="axis") from failure  # fmt: skip
-    if len(unit) != 3 or not all(math.isfinite(c) for c in unit):
-        raise _refuse(f"axis is a direction of three components; got {axis!r}", subject="axis")
+    unit = _direction(axis)
     balance = {b.case: b for b in imported.balance}
     declared = lug.model_dump()
     cases = []
@@ -1429,3 +1425,135 @@ def lug_on_import(
 def _least_factor(card: Scorecard | None) -> float | None:
     found = [e.safety_factor for e in card.entries if e.safety_factor is not None] if card else []
     return min(found) if found else None
+
+
+# --- a rolling bearing on imported loads -------------------------------------------------
+
+
+class ImportedBearingCase(StatableModel):
+    """One imported case on a rolling bearing: its radial and axial load, and its card.
+    ``card`` is absent, with ``note`` saying why, for a case the bearing screen cannot take."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case: Named
+    evaluated: bool
+    note: str = Field(default="", max_length=400)
+    radial_n: float
+    axial_n: float
+    moment_nmm: float
+    card: Scorecard | None = None
+
+
+class ImportedBearingResult(StatableModel):
+    """A rolling bearing screened case by case on loads read back from a solver.
+
+    ``governing_case`` is the evaluated case whose card holds the lowest safety factor,
+    rating life or static capacity.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    interface: Named
+    source: ResultSource
+    cases: tuple[ImportedBearingCase, ...]
+    governing_case: str | None
+    governing_factor: float | None
+    not_evaluated: tuple[str, ...] = ()
+
+    def __str__(self) -> str:
+        if self.governing_case is None:
+            head = f"bearing at {self.interface}: no case evaluated"
+        else:
+            worst = next(c for c in self.cases if c.case == self.governing_case)
+            check = worst.card.governing() if worst.card is not None else None
+            named = f", {check.name}" if check is not None else ""
+            head = (f"bearing at {self.interface}: case {self.governing_case} governs{named} "
+                    f"at a safety factor of {self.governing_factor:.3g}, on "
+                    f"{worst.radial_n:.4g} N radial and {worst.axial_n:.4g} N axial")  # fmt: skip
+        skipped = ", ".join(self.not_evaluated)
+        skipped = f"; not evaluated: {skipped}" if skipped else ""
+        return f"{head}{skipped}; loads from {self.source}"
+
+
+def bearing_on_import(
+    unit: Any,
+    imported: InterfaceImport,
+    interface: str,
+    *,
+    coordinate_system: str,
+    axis: tuple[float, float, float],
+    required_safety_factor: float = 1.0,
+) -> ImportedBearingResult:
+    """Each imported case's load at ``interface`` on a rolling bearing, by
+    :func:`~anvilate.packs.machinery.screen_rolling_bearing` (L10 rating life and static
+    capacity).
+
+    The force at the bearing's interface splits on its shaft ``axis``, in
+    ``coordinate_system``, which must be the import's: the component along the axis is
+    the axial load and the rest the radial, both as magnitudes. A single rolling bearing
+    carries no moment, so a case with one at the bearing beyond the import's tolerance is
+    reported not evaluated, as is a case whose free body did not balance. Each case's
+    bearing is built anew from the declaration with the case's loads, so its own rules run
+    on them.
+    """
+    from .packs.machinery import RollingBearing, screen_rolling_bearing
+
+    if not isinstance(unit, RollingBearing):
+        raise _refuse("unit must be a RollingBearing", subject="unit")
+    if not isinstance(imported, InterfaceImport):
+        raise _refuse("imported must be an InterfaceImport from read_interface_forces",
+                      subject="imported")  # fmt: skip
+    if coordinate_system != imported.source.coordinate_system:
+        raise _refuse(f"the bearing is in {coordinate_system!r} and the loads in "
+                      f"{imported.source.coordinate_system!r}; nothing here rotates a load "
+                      "between them", subject="coordinate_system")  # fmt: skip
+    direction = _direction(axis)
+    balance = {b.case: b for b in imported.balance}
+    declared = {name: getattr(unit, name) for name in type(unit).model_fields}
+    cases = []
+    for load in imported.at(interface):
+        force = load.force_n
+        along = sum(f * u for f, u in zip(force, direction, strict=True))
+        radial = math.sqrt(max(0.0, sum(f * f for f in force) - along * along))
+        moment = math.hypot(*load.moment_nmm)
+        said = balance[load.case]
+        common: dict[str, Any] = {"case": load.case, "radial_n": radial, "axial_n": abs(along),
+                                  "moment_nmm": moment}  # fmt: skip
+        reason = ""
+        if not said.balanced:
+            reason = f"its free body leaves {said.residual_force_n:.4g} N unbalanced"
+        elif moment > said.tolerance * said.largest_moment_nmm:
+            reason = (f"it puts {moment:.4g} N*mm of moment on the bearing, which a single "
+                      "rolling bearing does not carry")  # fmt: skip
+        if reason:
+            cases.append(ImportedBearingCase(evaluated=False, note=reason, **common))
+            continue
+        loaded = RollingBearing(**(declared | {"radial_load": Quantity(magnitude=radial, unit="N"),
+                                               "axial_load": Quantity(magnitude=abs(along),
+                                                                      unit="N")}))  # fmt: skip
+        card = screen_rolling_bearing(loaded, required_safety_factor=required_safety_factor)
+        cases.append(ImportedBearingCase(evaluated=True, card=card, **common))
+    factors = [(c, _least_factor(c.card)) for c in cases if c.card is not None]
+    factors = [(c, f) for c, f in factors if f is not None]
+    top = min(factors, key=lambda pair: pair[1]) if factors else None
+    return ImportedBearingResult(
+        interface=interface, source=imported.source, cases=tuple(cases),
+        governing_case=top[0].case if top else None,
+        governing_factor=top[1] if top else None,
+        not_evaluated=tuple(c.case for c in cases if not c.evaluated),
+    )  # fmt: skip
+
+
+def _direction(axis: Any) -> list[float]:
+    """``axis`` as a unit vector, or a refusal naming it."""
+    try:
+        components = [float(c) for c in axis]
+        length = math.sqrt(sum(c * c for c in components))
+        unit = [c / length for c in components]
+    except (TypeError, ValueError, ZeroDivisionError) as failure:
+        raise _refuse(f"axis is a direction of three components; got {axis!r}",
+                      subject="axis") from failure  # fmt: skip
+    if len(unit) != 3 or not all(math.isfinite(c) for c in unit):
+        raise _refuse(f"axis is a direction of three components; got {axis!r}", subject="axis")
+    return unit
