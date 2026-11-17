@@ -131,7 +131,8 @@ A declaration for an item the plan does not hold is refused, and a cell a spread
 would read as a formula is written as text. A check the plan routes to no archetype (a
 fatigue check, today) has no row: it is in the matrix as analysis-only or unresolved.
 
-See [`examples/lifter_verification_matrix.py`](../examples/lifter_verification_matrix.py).
+It is one of the [quality artifacts](quality-artifacts.md). See
+[`examples/lifter_verification_matrix.py`](../examples/lifter_verification_matrix.py).
 
 Out of scope: executing tests, acquiring lab data, and any claim of qualification or
 certification. This plans verification; it does not qualify anything.

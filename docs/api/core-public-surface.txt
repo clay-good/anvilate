@@ -838,6 +838,11 @@ verification.VerificationItem
 verification.VerificationOutcome
 verification.VerificationPlan
 verification.DEFAULT_ARCHETYPES
+trace.TRACE_COLUMNS
+trace.Requirement
+trace.TraceRow
+trace.TraceReport
+trace.trace_requirements
 verification.plan_verification
 verification.record_outcome
 verification.DVPR_COLUMNS

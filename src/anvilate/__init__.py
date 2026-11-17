@@ -122,6 +122,8 @@ that already ran and does one more thing with them:
   extracted value stays a draft until a named person confirms it.
 - :mod:`anvilate.interop` — the typed doorway for member forces and section
   properties computed by some other tool.
+- :mod:`anvilate.trace` — each requirement traced to the checks, tests and evidence that
+  address it, the uncovered and the untraced named.
 - :mod:`anvilate.cae` — a declared frame written as an input deck for the analyst's own
   solver, keyword (``.inp``) or bulk data (``.bdf``), marked unsolved input.
 - :mod:`anvilate.loads` — typed load combinations and the governing one, named.
