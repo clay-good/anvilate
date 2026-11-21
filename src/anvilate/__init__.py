@@ -130,6 +130,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.industry` — industry profiles: cited screening rules declared once,
   required checks that always reach the card, layered company profiles and their
   relaxations, never a compliance claim.
+- :mod:`anvilate.capabilities` — the optional extras, and the one command that installs
+  each on this platform, shared by `doctor` and every tool that needs one.
 - :mod:`anvilate.journey` — the next step a workflow result calls for, derived from the
   card alone by a fixed precedence, every tool it names held to the published catalog.
 - :mod:`anvilate.risk` — risk records in the hazard structure ISO 14971 and ISO 12100

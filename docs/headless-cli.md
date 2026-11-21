@@ -14,7 +14,7 @@ has not shipped exits 4 naming that gap.
 | `diff` | two specs | `--format`, `--module` | nothing got worse |
 | `build` | a spec | `--output`, `--force`, `--format`, `--unvalidated`, `--ap214`, `--module` | a valid, watermarked STEP artifact was written |
 | `interfaces` | a mating STEP | `--format`, `--solid`, `--accept`, `--limit`, `--fit`, `--requirement`, `--locator`, `--name`, `--mating-plane`, `--confirmed-by`; kept one release as the same thing: `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--max-gap` | candidates were measured, any requested artifact was explicitly confirmed, and any requested interface check passed |
-| `doctor` | no arguments | `--format` | nothing you can change is wrong (a capability this release does not build is listed as not shipped) |
+| `doctor` | no arguments | `--format` | nothing you can change is wrong (a capability this release does not build is listed as not shipped, and a missing optional extra as optional) |
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `confirm` | the subject handle an MCP result returned | none | every value an agent read was confirmed at this interactive terminal |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
@@ -338,8 +338,12 @@ result shape is published at
 
 `anvilate doctor` checks the five runtime areas the onboarding contract names: FEA solver,
 geometry kernel, MCP server, viewport prerequisites, and bundled database
-integrity. Each gets its own line, and every failure carries a concrete next
-action. With the `geometry` extra installed, the kernel check builds a valid probe solid and
+integrity, then the optional DXF writer, IFC writer and PDF reader. Each gets its own line,
+and every failure carries a concrete next action. An optional extra that is not installed
+reads `optional`, with the one command that installs it on this platform and through the
+channel this copy came from (`pip`, `pipx` or `uv tool`); it does not fail the report, and
+every tool that needs it refuses with the same sentence. An extra that is installed and
+fails its probe does fail it. With the `geometry` extra installed, the kernel check builds a valid probe solid and
 reports the build123d and OCCT binding versions, and the viewport check renders a probe
 image. The FEA check reads `not shipped`, since no solver ships in this release and nothing you
 install changes that; it does not fail the report, so a healthy install exits 0. The
@@ -437,7 +441,7 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.72.0",
+{"schema": "urn:anvilate:schema:cli-output:1.73.0",
  "schema_version": "1.67.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},

@@ -27,6 +27,7 @@ from typing import Annotated, Any, ClassVar, Literal
 from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, model_validator
 
 from ._models import FrozenMap, Named, Provenance, StatableModel, _reason
+from .capabilities import install_remedy
 from .derivation import DerivationAbsence, Underived
 from .export.gate import ExportAuthorization
 from .packs.industrial import CoverPlate
@@ -1166,7 +1167,7 @@ def detect_step_interfaces(path: Path) -> StepInterfaceCandidates:
         from OCP.Message import Message  # type: ignore[import-untyped]
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "STEP interface detection needs the optional dependency; install anvilate[geometry]",
+            f"STEP interface detection needs the optional dependency; {install_remedy('geometry')}",
             subject="the geometry runtime for STEP interface detection",
         ) from failure
     try:
@@ -2334,7 +2335,7 @@ def _kernel():
         from build123d import Align, Box, Cylinder, export_step
     except ImportError as failure:  # pragma: no cover - exercised without the geometry extra
         raise GeometryUnavailable(
-            "3D geometry needs the optional dependency; install anvilate[geometry]",
+            f"3D geometry needs the optional dependency; {install_remedy('geometry')}",
             subject="the geometry runtime for audited solid construction",
         ) from failure
     return Align, Box, Cylinder, export_step
@@ -3013,7 +3014,7 @@ def _write_step_shape(
         from OCP.XSControl import XSControl_WorkSession  # type: ignore[import-untyped]
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "3D geometry needs the optional dependency; install anvilate[geometry]",
+            f"3D geometry needs the optional dependency; {install_remedy('geometry')}",
             subject="the geometry runtime for STEP writing",
         ) from failure
 
@@ -3093,7 +3094,7 @@ def read_step_validation_properties(path: Path) -> StepValidationProperties:
         )
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "STEP validation needs the optional dependency; install anvilate[geometry]",
+            f"STEP validation needs the optional dependency; {install_remedy('geometry')}",
             subject="the geometry runtime for STEP validation-property reading",
         ) from failure
 
@@ -3181,7 +3182,7 @@ def verify_step_integrity(path: Path) -> StepValidationProperties:
         from build123d import CenterOf
     except ImportError as failure:  # pragma: no cover - guarded by the geometry extra
         raise GeometryUnavailable(
-            "STEP validation needs the optional dependency; install anvilate[geometry]",
+            f"STEP validation needs the optional dependency; {install_remedy('geometry')}",
             subject="the geometry runtime for STEP integrity verification",
         ) from failure
     expected = read_step_validation_properties(path)

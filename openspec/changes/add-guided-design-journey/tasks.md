@@ -24,9 +24,9 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
 ## 3. First product and optional pieces
 
 - [ ] 3.1 The gear reducer added to the gallery with a one-request journey, offline
-- [ ] 3.2 `doctor` reports optional capabilities as not installed with a per-platform
+- [x] 3.2 `doctor` reports optional capabilities as not installed with a per-platform
       command, and exits 0 for them
-- [ ] 3.3 One remedy text shared by `doctor` and every tool that needs the capability
+- [x] 3.3 One remedy text shared by `doctor` and every tool that needs the capability
 
 ## 4. Measurement
 

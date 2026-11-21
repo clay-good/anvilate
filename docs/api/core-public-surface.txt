@@ -909,6 +909,12 @@ journey.JOURNEY_STAGES
 journey.StageState
 journey.JourneyState
 journey.journey_state
+capabilities.Capability
+capabilities.CAPABILITIES
+capabilities.capability
+capabilities.install_command
+capabilities.install_remedy
+capabilities.installed
 verification.plan_verification
 verification.record_outcome
 verification.DVPR_COLUMNS

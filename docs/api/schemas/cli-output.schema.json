@@ -366,12 +366,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -675,12 +675,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -978,12 +978,12 @@
           ]
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2704,12 +2704,12 @@
           "$ref": "#/$defs/Regression"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -2852,7 +2852,8 @@
           "enum": [
             "pass",
             "fail",
-            "not_shipped"
+            "not_shipped",
+            "optional"
           ],
           "title": "Status",
           "type": "string"
@@ -2883,12 +2884,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -3079,12 +3080,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -3233,12 +3234,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -3305,12 +3306,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -3588,12 +3589,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -3681,12 +3682,12 @@
           "$ref": "#/$defs/FetchProvenance"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -3968,12 +3969,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -4625,12 +4626,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -5583,12 +5584,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -6061,12 +6062,12 @@
           "default": null
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -6301,12 +6302,12 @@
           "type": "array"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -6425,12 +6426,12 @@
           "type": "string"
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         }
@@ -7519,12 +7520,12 @@
           ]
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -8321,12 +8322,12 @@
           ]
         },
         "schema": {
-          "const": "urn:anvilate:schema:cli-output:1.72.0",
+          "const": "urn:anvilate:schema:cli-output:1.73.0",
           "title": "Schema",
           "type": "string"
         },
         "schema_version": {
-          "const": "1.72.0",
+          "const": "1.73.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -8386,7 +8387,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:cli-output:1.72.0",
+  "$id": "urn:anvilate:schema:cli-output:1.73.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "anyOf": [
     {
@@ -8446,5 +8447,5 @@
   ],
   "description": "Every completed machine-readable Anvilate CLI result. Generated from anvilate._cli_output.CliOutput.",
   "title": "Anvilate CLI output",
-  "x-anvilate-version": "1.72.0"
+  "x-anvilate-version": "1.73.0"
 }

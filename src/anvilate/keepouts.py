@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .capabilities import install_remedy
 from .derivation import DerivationAbsence, Underived
 from .export.dxf import _atomic_path
 from .export.gate import ExportAuthorization
@@ -153,7 +154,7 @@ def _kernel() -> Any:
         import build123d
     except ImportError as failure:  # pragma: no cover - exercised without the geometry extra
         raise GeometryUnavailable(
-            "keepout bodies need the optional dependency; install anvilate[geometry]",
+            f"keepout bodies need the optional dependency; {install_remedy('geometry')}",
             subject="the geometry runtime for keepout-body construction",
         ) from failure
     return build123d

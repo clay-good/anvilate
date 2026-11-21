@@ -35,6 +35,7 @@ from typing import Any, Literal
 from pydantic import ConfigDict, Field
 
 from ._models import FrozenMap, Named, Provenance, StatableModel
+from .capabilities import install_remedy
 from .refusal import RefusalError, Remedy
 
 __all__ = [
@@ -915,7 +916,7 @@ def _step_facts(
         compound = geometry._read_step_geometry(path)
     except ImportError as failure:
         raise _refuse(
-            "reading STEP needs the geometry kernel; install anvilate[geometry]",
+            f"reading STEP needs the geometry kernel; {install_remedy('geometry')}",
             action="install",
             subject="path",
             source="the anvilate[geometry] optional dependency",
@@ -1136,7 +1137,7 @@ def _dxf_facts(path: Path, unit: str | None) -> dict[str, Any]:
         from ezdxf import path as ezpath
     except ImportError as failure:
         raise _refuse(
-            "reading DXF needs the optional dependency; install anvilate[export]",
+            f"reading DXF needs the optional dependency; {install_remedy('export')}",
             action="install",
             subject="path",
             source="the anvilate[export] optional dependency",

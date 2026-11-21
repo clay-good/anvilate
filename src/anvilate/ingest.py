@@ -60,6 +60,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ._models import RevalidatedModel, _reason, cited
+from .capabilities import install_remedy
 from .refusal import RefusalError, Remedy
 from .spec.ir import Environment
 from .units import Quantity, UnitError, render, spoken
@@ -1366,8 +1367,7 @@ def extract_requirements_from_pdf(
         from pdfminer.psexceptions import PSException
     except ImportError as missing:  # pragma: no cover - exercised only without the extra
         raise ImportError(
-            "reading a PDF requirement sheet needs pdfminer.six; install the pdf extra: "
-            "pip install 'anvilate[pdf]'"
+            f"reading a PDF requirement sheet needs pdfminer.six; {install_remedy('pdf')}"
         ) from missing
     drafts: list[DraftSpec] = []
     unparsed: list[UnparsedLine] = []

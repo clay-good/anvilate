@@ -36,10 +36,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.72.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.73.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.72.0"]
-SchemaVersion = Literal["1.72.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.73.0"]
+SchemaVersion = Literal["1.73.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -372,8 +372,10 @@ class CancelledOutput(_WireModel):
 class DoctorCheck(_WireModel):
     name: Named
     #: ``not_shipped`` is a capability this release does not build. Nothing the user does
-    #: changes it, so it does not make the report a failure.
-    status: Literal["pass", "fail", "not_shipped"]
+    #: changes it, so it does not make the report a failure. ``optional`` is an optional
+    #: capability that is not installed: the remedy is the command that installs it, and it
+    #: does not make the report a failure either.
+    status: Literal["pass", "fail", "not_shipped", "optional"]
     detail: Named
     remedy: Named | None
 

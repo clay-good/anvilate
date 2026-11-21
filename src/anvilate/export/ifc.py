@@ -39,6 +39,7 @@ from dataclasses import replace as _replace
 from typing import Any, Literal
 
 from .. import __version__
+from ..capabilities import install_remedy
 from ..refusal import RefusalError, Remedy
 from .gate import ExportAuthorization
 
@@ -341,7 +342,7 @@ def _toolkit() -> Any:
         import ifcopenshell
     except ImportError as missing:  # pragma: no cover - exercised without the extra
         raise _refuse(
-            "IFC export needs IfcOpenShell, the optional 'ifc' extra: pip install 'anvilate[ifc]'",
+            f"IFC export needs IfcOpenShell; {install_remedy('ifc')}",
             subject="the ifc extra",
             source="pyproject.toml [project.optional-dependencies] ifc",
             action="add",

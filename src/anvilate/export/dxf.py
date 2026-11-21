@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 from pydantic import ConfigDict, field_validator
 
 from .._models import RevalidatedModel, each_one
+from ..capabilities import install_remedy
 from ..gdt import FeatureControlFrame
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
@@ -175,9 +176,7 @@ def _require_ezdxf():
     try:
         import ezdxf
     except ImportError as exc:  # pragma: no cover - exercised only without the extra
-        raise ImportError(
-            "DXF export needs ezdxf; install the export extra: pip install 'anvilate[export]'"
-        ) from exc
+        raise ImportError(f"DXF export needs ezdxf; {install_remedy('export')}") from exc
     return ezdxf
 
 

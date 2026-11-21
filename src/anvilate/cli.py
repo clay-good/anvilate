@@ -1081,8 +1081,10 @@ def _derived_remedies(lines: tuple[str, ...], command: str) -> tuple[str, ...]:
                 f"fix the YAML at line {found.group(1)}, column {found.group(2)}: every "
                 "bracket, brace and quote opened before it must close"
             )
-        elif "install anvilate[geometry]" in line or "anvilate[geometry]" in line:
-            remedies.append("install the geometry runtime with `pip install 'anvilate[geometry]'`")
+        elif "anvilate[geometry]" in line:
+            from .capabilities import install_remedy
+
+            remedies.append(install_remedy("geometry"))
         elif "anvilate export has no override" in line:
             remedies.append(
                 "fix the failing checks the card names, or export `--artifact evidence-bundle`, "
@@ -1383,6 +1385,7 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
     """Report each required runtime capability independently and actionably."""
     from importlib.metadata import PackageNotFoundError, version
 
+    from .capabilities import capability, install_command, install_remedy, installed
     from .standards import default_standards_resolver
 
     specs = "https://github.com/clay-good/anvilate/tree/main/openspec/specs"
@@ -1425,14 +1428,26 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
             raise RuntimeError("the viewport probe did not produce an SVG image")
         build123d_version = version("build123d")
         ocp_version = version("cadquery-ocp-novtk")
-    except (ImportError, PackageNotFoundError, RuntimeError) as failure:
+    except (ImportError, PackageNotFoundError) as failure:
+        # The geometry extra is optional: missing, it is reported and the run still passes.
+        # Installed and failing its probe is a broken install, which the next branch fails.
+        remedy = _as_sentence(install_remedy("geometry"))
+        checks.insert(1, {"name": "geometry kernel", "status": "optional",
+                          "detail": f"Not installed ({failure}); the core screens without it.",
+                          "remedy": remedy})  # fmt: skip
+        checks.insert(2, {"name": "viewport prerequisites", "status": "optional",
+                          "detail": "Viewport images need the geometry kernel, not installed.",
+                          "remedy": remedy})  # fmt: skip
+    except RuntimeError as failure:
         checks.insert(
             1,
             {
                 "name": "geometry kernel",
                 "status": "fail",
-                "detail": f"The build123d/OCCT geometry runtime is not ready: {failure}",
-                "remedy": "Install the geometry runtime with `pip install anvilate[geometry]`.",
+                "detail": f"The build123d/OCCT geometry runtime is installed and broken: {failure}",
+                "remedy": _as_sentence(
+                    f"reinstall it: {install_command('geometry')}, then run doctor again"
+                ),
             },
         )
         checks.insert(
@@ -1443,7 +1458,9 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
                 "detail": (
                     f"Viewport rendering is not ready because geometry is unavailable: {failure}"
                 ),
-                "remedy": "Install the geometry runtime with `pip install anvilate[geometry]`.",
+                "remedy": _as_sentence(
+                    f"reinstall it: {install_command('geometry')}, then run doctor again"
+                ),
             },
         )
     else:
@@ -1468,6 +1485,16 @@ def _doctor(args: argparse.Namespace, *, out) -> int:
                 "remedy": None,
             },
         )
+    for extra in ("export", "ifc", "pdf"):
+        found = capability(extra)
+        ready = installed(extra)
+        checks.append({
+            "name": found.name,
+            "status": "pass" if ready else "optional",
+            "detail": (f"{found.module} is installed, for {found.purpose}." if ready
+                       else f"Not installed; needed only for {found.purpose}."),
+            "remedy": None if ready else _as_sentence(install_remedy(extra)),
+        })  # fmt: skip
     resolver = default_standards_resolver()
     material_count = len(resolver.known_materials())
     component_count = len(resolver.known_components())

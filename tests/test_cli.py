@@ -3162,6 +3162,9 @@ def test_doctor_reports_every_required_runtime_area_and_a_fix_for_each_failure()
         "MCP server",
         "viewport prerequisites",
         "database integrity",
+        "DXF writer",
+        "IFC writer",
+        "PDF reader",
     }
     # A healthy install is reported healthy. The solver nothing a user does can supply is
     # named as not shipped, with what to do without it, and it does not fail the report.
@@ -5795,3 +5798,32 @@ def test_check_refuses_a_profile_it_cannot_apply(tmp_path, argv, said):
     lug.write_text(_LUG_SPEC)
     code, _out, err = _run("check", str(lug), *argv)
     assert code == 3 and said in err
+
+
+def test_doctor_reports_a_missing_optional_capability_and_still_passes(monkeypatch):
+    """Guided design journey 3.2/3.3: an extra that is not installed is optional, named with
+    the one command that installs it, and does not fail the report; the remedy is the same
+    sentence the tool that needs it refuses with."""
+    import builtins
+
+    from anvilate.capabilities import install_remedy
+
+    real_import = builtins.__import__
+
+    def without_geometry(name, *args, **kwargs):
+        if name == "build123d" or name.startswith("build123d."):
+            raise ImportError("No module named 'build123d'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", without_geometry)
+    monkeypatch.setattr("anvilate.capabilities.installed", lambda extra: extra != "ifc")
+    code, raw, _error = _run("doctor", "--format", "json")
+    payload = json.loads(raw)
+    by_name = {check["name"]: check for check in payload["checks"]}
+    assert code == EXIT_OK and payload["status"] == "pass"
+    kernel = by_name["geometry kernel"]
+    assert kernel["status"] == "optional" and "core screens without it" in kernel["detail"]
+    assert kernel["remedy"].rstrip(".").lower() == install_remedy("geometry").lower()
+    assert by_name["IFC writer"]["status"] == "optional"
+    assert "anvilate[ifc]" in by_name["IFC writer"]["remedy"]
+    assert by_name["DXF writer"]["status"] == "pass"
