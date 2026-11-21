@@ -48,6 +48,7 @@ __all__ = [
     "Relaxation",
     "ResolvedProfile",
     "ProfiledCard",
+    "ProfileListing",
     "GENERAL",
     "layer",
     "resolve",
@@ -326,6 +327,21 @@ def resolve(profile: IndustryProfile) -> ResolvedProfile:
     return ResolvedProfile(profile=profile, chain=(profile.urn,))
 
 
+class ProfileListing(StatableModel):
+    """What a profile did to one card: its header, every rule it changed relative to the
+    general profile, and the required checks it added or could not run here."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    urn: Named
+    label: Named
+    item_class: Named | None = None
+    header: Named
+    changes: tuple[Named, ...] = ()
+    added: tuple[Named, ...] = ()
+    not_available: tuple[Named, ...] = ()
+
+
 class ProfiledCard(StatableModel):
     """A card with the profile's required checks on it, and the profile it was read under."""
 
@@ -336,6 +352,7 @@ class ProfiledCard(StatableModel):
     item_class: Named | None = None
     added: tuple[Named, ...] = ()
     not_available: tuple[Named, ...] = ()
+    listing: ProfileListing
 
     def __str__(self) -> str:
         lines = [f"screened under {self.profile}; {SCREENING_NOT_CERTIFICATION}"]
@@ -413,6 +430,10 @@ def apply_profile(
     return ProfiledCard(
         card=Scorecard(entries=tuple(entries)) if added else card, profile=p.label,
         item_class=item_class, added=tuple(added), not_available=tuple(absent),
+        listing=ProfileListing(
+            urn=p.urn, label=p.label, item_class=item_class, header=profile.header(),
+            changes=profile.changes(), added=tuple(added), not_available=tuple(absent),
+        ),
     )  # fmt: skip
 
 

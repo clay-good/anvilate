@@ -80,6 +80,7 @@ __all__ = [
     "INDUSTRY_PROFILE_SCHEMA_VERSION",
     "NEXT_STEPS_SCHEMA_VERSION",
     "JOURNEY_STATE_SCHEMA_VERSION",
+    "PROFILE_LISTING_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -103,6 +104,7 @@ __all__ = [
     "industry_profile_json_schema",
     "next_steps_json_schema",
     "journey_state_json_schema",
+    "profile_listing_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -208,6 +210,7 @@ NODE_CARD_SCHEMA_VERSION = "1.4.0"
 INDUSTRY_PROFILE_SCHEMA_VERSION = "1.1.0"
 NEXT_STEPS_SCHEMA_VERSION = "1.0.0"
 JOURNEY_STATE_SCHEMA_VERSION = "1.0.0"
+PROFILE_LISTING_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -634,6 +637,24 @@ def journey_state_json_schema() -> dict[str, Any]:
     )
 
 
+def profile_listing_json_schema() -> dict[str, Any]:
+    """What an industry profile did to one card."""
+    from .industry import ProfileListing
+
+    return _artifact(
+        ProfileListing,
+        name="profile-listing",
+        version=PROFILE_LISTING_SCHEMA_VERSION,
+        description=(
+            "Anvilate profile listing: the industry profile a card was screened under, its "
+            "header with the statement that a profile is not a certification, every rule it "
+            "changed relative to the general profile (each naming its rule and basis, "
+            "relaxations included), and the required checks it added or that this "
+            "installation cannot run. Generated from anvilate.industry.ProfileListing."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -857,6 +878,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "industry-profile.schema.json": industry_profile_json_schema(),
         "next-steps.schema.json": next_steps_json_schema(),
         "journey-state.schema.json": journey_state_json_schema(),
+        "profile-listing.schema.json": profile_listing_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

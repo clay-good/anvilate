@@ -35,6 +35,7 @@ that has never heard of anvilate.
 | [`docs/api/schemas/industry-profile.schema.json`](api/schemas/industry-profile.schema.json) | an industry profile as you write one: each rule cited or labeled a practice default (validation mode) | `INDUSTRY_PROFILE_SCHEMA_VERSION` |
 | [`docs/api/schemas/next-steps.schema.json`](api/schemas/next-steps.schema.json) | the ordered steps a workflow result calls for: the tool, what to pass it, and why | `NEXT_STEPS_SCHEMA_VERSION` |
 | [`docs/api/schemas/journey-state.schema.json`](api/schemas/journey-state.schema.json) | how far a design has come (described to review_ready) and the gaps holding back each later stage | `JOURNEY_STATE_SCHEMA_VERSION` |
+| [`docs/api/schemas/profile-listing.schema.json`](api/schemas/profile-listing.schema.json) | what an industry profile did to one card: its header, every rule it changed, the checks it added or cannot run here | `PROFILE_LISTING_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and

@@ -1719,6 +1719,7 @@ def _released_registry():
         NODE_CARD_SCHEMA_VERSION,
         PART_CATALOG_SCHEMA_VERSION,
         PRODUCT_SUMMARY_SCHEMA_VERSION,
+        PROFILE_LISTING_SCHEMA_VERSION,
         SCORECARD_SCHEMA_VERSION,
         SPEC_SCHEMA_VERSION,
         VIEWPORT_SCHEMA_VERSION,
@@ -1743,6 +1744,7 @@ def _released_registry():
                 _released(f"node-card-{NODE_CARD_SCHEMA_VERSION}.json"),
                 _released(f"next-steps-{NEXT_STEPS_SCHEMA_VERSION}.json"),
                 _released(f"journey-state-{JOURNEY_STATE_SCHEMA_VERSION}.json"),
+                _released(f"profile-listing-{PROFILE_LISTING_SCHEMA_VERSION}.json"),
                 _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
                 _released(f"geometry-measurement-{MEASUREMENT_SCHEMA_VERSION}.json"),
             )

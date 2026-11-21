@@ -22,9 +22,9 @@
 ## 3. Card
 
 - [x] 3.1 Required checks shown when untriggered; not evaluated or not available
-- [ ] 3.2 Attribution of every profile-added rule; "what the profile changed" listing over
+- [x] 3.2 Attribution of every profile-added rule; "what the profile changed" listing over
       the MCP tools and the CLI
-      (attribution and the CLI listing, `anvilate check --profile`, are built; MCP is not)
+      (`anvilate check --profile`, and `run_validation`'s `profile` over MCP)
 - [x] 3.3 Report header naming profile and version, with the screening-not-certification
       statement
 - [x] 3.4 A docs page for industry profiles: choosing one, layering a company profile,

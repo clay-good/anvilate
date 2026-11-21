@@ -297,3 +297,33 @@ def test_a_report_under_a_profile_names_it_and_says_it_is_not_a_certification():
     assert f"Profile statement: {SCREENING_NOT_CERTIFICATION}" in text
     assert label in report.to_html() and "regulator" in report.to_html()
     assert "Screened under" not in CalculationReport(title="plain").to_text()
+
+
+def test_run_validation_screens_under_a_profile_and_lists_what_it_changed():
+    """Industry profiles 3.2 over MCP: the profile's required checks reach the card for the
+    spec's own item class, and the result lists every rule the profile changed."""
+    from pathlib import Path
+
+    from anvilate.industry import ProfileListing
+    from anvilate.mcp import _run_validation
+    from anvilate.spec import load_spec_yaml
+
+    examples = Path(__file__).parents[1] / "examples"
+    spec = load_spec_yaml((examples / "padeye.spec.yaml").read_text())
+    document = {**spec.model_dump(mode="json"), "item_class": "flight box"}
+    result = _run_validation({"spec": document, "profile": "spaceflight"})
+    listing = ProfileListing.model_validate(result["profile"])
+    assert listing.added == ("random vibration", "outgassing")
+    assert listing.header.endswith(SCREENING_NOT_CERTIFICATION)
+    assert any("SF-VIB-1" in line for line in listing.changes)
+    names = [e["name"] for e in result["scorecard"]["entries"]]
+    assert names[-2:] == ["random vibration", "outgassing"]
+    assert "profile" not in _run_validation({"spec": spec.model_dump(mode="json")})
+
+
+def test_the_tools_profile_choices_are_the_shipped_profiles():
+    from anvilate.industry import bundled_profiles
+    from anvilate.mcp import _SHIPPED_PROFILES
+
+    shipped = {p.urn.rpartition(":")[2] for p in bundled_profiles()}
+    assert set(_SHIPPED_PROFILES) == shipped

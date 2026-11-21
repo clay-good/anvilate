@@ -1,0 +1,64 @@
+{
+  "$id": "urn:anvilate:schema:profile-listing:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate profile listing: the industry profile a card was screened under, its header with the statement that a profile is not a certification, every rule it changed relative to the general profile (each naming its rule and basis, relaxations included), and the required checks it added or that this installation cannot run. Generated from anvilate.industry.ProfileListing.",
+  "properties": {
+    "added": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Added",
+      "type": "array"
+    },
+    "changes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "header": {
+      "title": "Header",
+      "type": "string"
+    },
+    "item_class": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Item Class"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
+    "not_available": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Not Available",
+      "type": "array"
+    },
+    "urn": {
+      "title": "Urn",
+      "type": "string"
+    }
+  },
+  "required": [
+    "urn",
+    "label",
+    "header"
+  ],
+  "title": "ProfileListing",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

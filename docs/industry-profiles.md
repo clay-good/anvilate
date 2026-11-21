@@ -62,6 +62,11 @@ anvilate check bracket.yaml --profile spaceflight --item-class "flight box"
 anvilate check bracket.yaml --profile acme-aero.yaml
 ```
 
+Over MCP, `run_validation` takes `profile` (a shipped profile's name) and screens under it
+for the spec's own `item_class`; its result carries `profile`, the same header and changes
+with the checks the profile added
+([profile-listing 1.0.0](api/schemas/profile-listing.schema.json)).
+
 A part can declare its class in its own Design Spec, `item_class: flight box`, and
 `--item-class` is then needed only to override it; a class the profile does not declare is
 refused, naming the file. Without a profile the field is inert. A required check that has
@@ -115,4 +120,4 @@ of changes is empty.
 
 ## Not yet
 
-- Relaxations carried onto the rows of a margin table, and the profile over the MCP tools.
+- Relaxations carried onto the rows of a margin table.

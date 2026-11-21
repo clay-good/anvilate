@@ -238,12 +238,25 @@ _PRODUCT_SUMMARY_REF = "urn:anvilate:schema:product-summary:1.2.0"
 _NODE_CARD_REF = "urn:anvilate:schema:node-card:1.4.0"
 _NEXT_STEPS_REF = "urn:anvilate:schema:next-steps:1.0.0"
 _JOURNEY_STATE_REF = "urn:anvilate:schema:journey-state:1.0.0"
+_PROFILE_LISTING_REF = "urn:anvilate:schema:profile-listing:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
 # result stays well under both, and anything larger is a file in the output folder that the
 # result names. Held over every document in the spec corpus by tests/test_mcp_outputs.py.
 RESULT_BUDGET_CHARS = 60_000
+
+# The industry profiles `run_validation` can screen under, by short name: the files
+# shipped under standards/data/profiles, plus the general profile.
+_SHIPPED_PROFILES = (
+    "general",
+    "automotive",
+    "consumer-product",
+    "industrial-machinery",
+    "medical-device",
+    "spaceflight",
+    "transport-aircraft",
+)
 
 # What `export_artifact` produces, and which handle each is made from: a screening result
 # (the card and its spec) or a built part.
@@ -682,6 +695,15 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                             "screen only these tiers instead of the spec's own acceptance.tiers"
                         ),
                     },
+                    "profile": {
+                        "type": "string",
+                        "enum": list(_SHIPPED_PROFILES),
+                        "description": (
+                            "screen under a shipped industry profile: the checks it requires "
+                            "for the spec's item_class reach the card even when nothing "
+                            "triggered them, and the result lists every rule it changed"
+                        ),
+                    },
                 },
                 required=["spec"],
             ),
@@ -691,6 +713,7 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "subject": _SUBJECT_SCHEMA,
                     "next": {"$ref": _NEXT_STEPS_REF},
                     "journey": {"$ref": _JOURNEY_STATE_REF},
+                    "profile": {"$ref": _PROFILE_LISTING_REF},
                 },
                 required=["scorecard", "subject", "next", "journey"],
             ),
@@ -1093,6 +1116,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _NODE_CARD_REF,
             _NEXT_STEPS_REF,
             _JOURNEY_STATE_REF,
+            _PROFILE_LISTING_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -2937,6 +2961,19 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     from .journey import NextSteps, journey_state, next_steps
 
     screened = screen_spec(spec, **_screening_options(spec))
+    listing = None
+    if arguments.get("profile") is not None:
+        from .industry import apply_profile, industry_profile, resolve
+        from .refusal import RefusalError
+
+        try:
+            profiled = apply_profile(screened, resolve(industry_profile(arguments["profile"])),
+                                     item_class=spec.item_class)  # fmt: skip
+        except RefusalError as refused:
+            raise _InvalidArguments(
+                [f"profile: {refused}"], operation="run_validation"
+            ) from refused
+        screened, listing = profiled.card, profiled.listing.model_dump(mode="json")
     card = screened.model_dump(mode="json")
     steps = NextSteps(steps=next_steps(screened)).model_dump(mode="json")
     # The card is returned *and* published: returned because it is closed-form and the answer
@@ -2955,7 +2992,8 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         _SCREENING, {"spec": spec.model_dump(mode="json"), "scorecard": card}
     )
     journey = journey_state(screened).model_dump(mode="json")
-    return {"scorecard": card, "subject": handle, "next": steps, "journey": journey}
+    result = {"scorecard": card, "subject": handle, "next": steps, "journey": journey}
+    return result if listing is None else {**result, "profile": listing}
 
 
 def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
