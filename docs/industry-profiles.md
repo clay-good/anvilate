@@ -53,6 +53,18 @@ profiled.added           # ('random vibration',) when nothing on the card ran it
 print(profile)           # the header, then everything the profile changed, rule by rule
 ```
 
+From the shell, `--profile` takes a shipped name or a profile file (layered on the shipped
+profile it `extends`), and the card opens with the profile's header and every rule it
+changed; `--format json` carries the same under `profile`:
+
+```text
+anvilate check bracket.yaml --profile spaceflight --item-class "flight box"
+anvilate check bracket.yaml --profile acme-aero.yaml
+```
+
+A required check that has not run leaves the card not evaluated, so the exit code is 2
+until it does.
+
 | A required check | Shows as |
 | --- | --- |
 | already on the card (its `check_id` or name matches `satisfied_by`) | itself, unchanged |
@@ -102,4 +114,4 @@ of changes is empty.
 - Item classes declared on the Design Spec itself; today the class is passed to
   `apply_profile`.
 - Relaxations carried onto the rows of a margin table, and the profile header in reports
-  and over the MCP tools and the CLI.
+  and over the MCP tools.

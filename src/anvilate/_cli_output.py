@@ -36,10 +36,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.71.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.72.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.71.0"]
-SchemaVersion = Literal["1.71.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.72.0"]
+SchemaVersion = Literal["1.72.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -123,11 +123,22 @@ class CheckedSpec(_WireModel):
     failure_modes: FailureModeSummary
 
 
+class ProfileApplied(_WireModel):
+    """The industry profile a check ran under: its header and everything it changed."""
+
+    urn: Named
+    version: Named
+    item_class: Named | None
+    header: Named
+    changes: tuple[Named, ...]
+
+
 class CheckOutput(_WireModel):
     schema_: SchemaId = Field(alias="schema")
     schema_version: SchemaVersion
     command: Literal["check"]
     status: CheckStatus
+    profile: ProfileApplied | None
     specs: tuple[CheckedSpec, ...]
 
 

@@ -8,7 +8,7 @@ has not shipped exits 4 naming that gap.
 
 | Command | Takes | Flags | 0 means |
 | --- | --- | --- | --- |
-| `check` | one or more specs, or a directory; or one product document | `--format`, `--show-work`, `--module`, `--node`, `--sarif`, `--sarif-category`, `--junit`, `--baseline`, `--write-baseline`, `--summary` | every check passed, or passed with margin to spare |
+| `check` | one or more specs, or a directory; or one product document | `--format`, `--show-work`, `--module`, `--node`, `--profile`, `--item-class`, `--sarif`, `--sarif-category`, `--junit`, `--baseline`, `--write-baseline`, `--summary` | every check passed, or passed with margin to spare |
 | `export` | one or more specs, or a directory; one spec for `step`, `3mf` or `ifc` | `--artifact`, `--format`, `--module`; for `step`, `3mf` and `ifc`: `--output`, `--unvalidated`, `--force`; `--ap214` for `step`, `--ifc-schema` for `ifc` | the bundle rolled up clean; for `step`, `3mf` or `ifc`, the file was written |
 | `verify` | a DSSE envelope | `--artifact`, `--hmac-key-file`, `--format` | signature, digests and predicate all checked clean |
 | `diff` | two specs | `--format`, `--module` | nothing got worse |
@@ -437,7 +437,7 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.71.0",
+{"schema": "urn:anvilate:schema:cli-output:1.72.0",
  "schema_version": "1.67.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},

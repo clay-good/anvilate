@@ -230,7 +230,9 @@ def test_json_output_is_the_whole_card_not_a_summary(spec_file):
     # `status` is the run-level verdict the text summary prints; it joined `specs` when the
     # payload stopped dropping the two conclusions the text rendering carries. The keys are
     # asserted exactly rather than by membership, so a third cannot appear unremarked.
-    assert sorted(payload) == ["command", "schema", "schema_version", "specs", "status"]
+    # `profile` is the industry profile the run was screened under, null without one.
+    assert sorted(payload) == ["command", "profile", "schema", "schema_version", "specs", "status"]
+    assert payload["profile"] is None
     assert len(payload["specs"]) == 1
     entry = payload["specs"][0]
     assert sorted(entry) == [
@@ -5740,3 +5742,56 @@ def test_view_escapes_a_spec_name_that_is_markup(tmp_path):
     sheet = (tmp_path / "padeye.html").read_text()
     assert "<script" not in sheet
     assert "&lt;/title&gt;&lt;script&gt;x&lt;/script&gt; — part sheet" in sheet
+
+
+def test_check_under_a_profile_puts_its_required_checks_on_the_card(tmp_path):
+    """Industry profiles 3.2/3.3: the header first, every rule the profile changed, and the
+    checks it requires for the item class on the card even though nothing triggered them."""
+    from anvilate._cli_output import CheckOutput
+    from anvilate.industry import SCREENING_NOT_CERTIFICATION
+
+    lug = tmp_path / "padeye.yaml"
+    lug.write_text(_LUG_SPEC)
+    plain_code, _plain, _ = _run("check", str(lug))
+    code, text, _err = _run("check", str(lug), "--profile", "spaceflight",
+                            "--item-class", "flight box")  # fmt: skip
+    assert text.startswith("screened under Spaceflight hardware 1.0.0")
+    assert SCREENING_NOT_CERTIFICATION in text
+    assert "required check for flight box: random vibration: SF-VIB-1" in text
+    assert "random vibration" in text and "outgassing" in text
+    assert plain_code == 0 and code == 2  # the required checks have not run
+    _code, raw, _ = _run("check", "--format", "json", str(lug), "--profile", "spaceflight",
+                         "--item-class", "flight box")  # fmt: skip
+    document = json.loads(raw)
+    CheckOutput.model_validate(document)
+    assert document["profile"]["urn"] == "urn:anvilate:profile:spaceflight"
+    names = [e["name"] for e in document["specs"][0]["scorecard"]["entries"]]
+    assert names[-2:] == ["random vibration", "outgassing"]
+    _code, raw, _ = _run("check", "--format", "json", str(lug))
+    assert json.loads(raw)["profile"] is None
+
+
+def test_check_layers_a_company_profile_file_and_names_the_relaxation(tmp_path):
+    lug = tmp_path / "padeye.yaml"
+    lug.write_text(_LUG_SPEC)
+    company = tmp_path / "acme.yaml"
+    company.write_text(
+        "urn: urn:acme:profile:acme-aero\nname: ACME aero\nversion: '2'\n"
+        "extends: urn:anvilate:profile:transport-aircraft\n"
+        "factors:\n  - {id: ACME-F-1, name: ultimate, value: 1.4, source: ACME ES-12 §4}\n"
+    )
+    code, text, _err = _run("check", str(lug), "--profile", str(company))
+    assert text.startswith("screened under ACME aero 2")
+    assert "RELAXED ultimate: 1.4 (ACME ES-12 §4) below 1.5 (14 CFR 25.303" in text
+
+
+@pytest.mark.parametrize(("argv", "said"), [
+    (("--item-class", "flight box"), "--item-class needs --profile"),
+    (("--profile", "submarine"), "no shipped profile"),
+    (("--profile", "spaceflight", "--item-class", "chassis part"), "not a class"),
+])  # fmt: skip
+def test_check_refuses_a_profile_it_cannot_apply(tmp_path, argv, said):
+    lug = tmp_path / "padeye.yaml"
+    lug.write_text(_LUG_SPEC)
+    code, _out, err = _run("check", str(lug), *argv)
+    assert code == 3 and said in err

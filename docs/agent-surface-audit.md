@@ -61,7 +61,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | Command | What it is for | Flags |
 | --- | --- | --- |
 | `build` | build an audited Design Spec geometry pattern as STEP or 3MF | `--ap214`, `--force`, `--format`, `--module`, `--output`, `--unvalidated` |
-| `check` | compile a spec document and screen it, printing the scorecard | `--baseline`, `--format`, `--junit`, `--module`, `--node`, `--sarif`, `--sarif-category`, `--show-work`, `--summary`, `--write-baseline` |
+| `check` | compile a spec document and screen it, printing the scorecard | `--baseline`, `--format`, `--item-class`, `--junit`, `--module`, `--node`, `--profile`, `--sarif`, `--sarif-category`, `--show-work`, `--summary`, `--write-baseline` |
 | `combine` | place several parts by the features they share, and check where they meet | `--exploded`, `--force`, `--ifc-schema`, `--output`, `--picture`, `--unvalidated` |
 | `confirm` | confirm, at this terminal, values your agent read off a picture or a PDF | none |
 | `diff` | compare two spec documents and the verdicts they screen to | `--format`, `--module` |

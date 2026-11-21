@@ -498,6 +498,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "stage/drive[2]/motor, rather than the summary tree",
     )
     check.add_argument(
+        "--profile",
+        metavar="NAME_OR_FILE",
+        help="screen under an industry profile: a shipped one by name (spaceflight, "
+        "transport-aircraft, medical-device, industrial-machinery, automotive, "
+        "consumer-product, general) or a profile YAML file, layered on the shipped profile "
+        "it extends. The checks it requires for --item-class reach the card even when "
+        "nothing triggered them",
+    )
+    check.add_argument(
+        "--item-class",
+        metavar="CLASS",
+        help="the class the profile screens these parts as, such as 'flight box'",
+    )
+    check.add_argument(
         "--show-work",
         action="store_true",
         help="print each check's worked calculation — the formula, the values put into "
@@ -3552,6 +3566,44 @@ def _beside(path: Path, spec: Any) -> dict[str, Any]:
     return {"source_roots": (path.resolve().parent,)} if spec.sources else {}
 
 
+def _industry_profile(args: argparse.Namespace, *, err) -> Any:
+    """The resolved industry profile --profile names, ``None`` without one, or an exit code."""
+    name, item_class = getattr(args, "profile", None), getattr(args, "item_class", None)
+    if name is None:
+        if item_class is not None:
+            print("anvilate check: --item-class needs --profile, the profile whose classes "
+                  "it names", file=err)  # fmt: skip
+            return EXIT_BAD_REQUEST
+        return None
+    from .industry import bundled_profiles, industry_profile, layer, load_profile, resolve
+    from .refusal import RefusalError
+
+    try:
+        path = Path(name)
+        if path.suffix in (".yaml", ".yml", ".json") or path.is_file():
+            profile = load_profile(path.read_text(encoding="utf-8"))
+            if profile.extends is None:
+                resolved = resolve(profile)
+            else:
+                parents = {p.urn: p for p in bundled_profiles()}
+                if profile.extends not in parents:
+                    print(f"anvilate check: --profile {name} extends {profile.extends}, which "
+                          f"is not a shipped profile ({sorted(parents)})", file=err)  # fmt: skip
+                    return EXIT_BAD_REQUEST
+                resolved = layer(parents[profile.extends], profile)
+        else:
+            resolved = resolve(industry_profile(name))
+        if item_class is not None and item_class not in resolved.profile.item_classes:
+            print(f"anvilate check: --item-class {item_class!r} is not a class "
+                  f"{resolved.profile.name} declares ({list(resolved.profile.item_classes)})",
+                  file=err)  # fmt: skip
+            return EXIT_BAD_REQUEST
+    except (OSError, UnicodeDecodeError, RefusalError, ValueError) as refused:
+        print(f"anvilate check: --profile {name}: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    return resolved
+
+
 def _modules(args: argparse.Namespace, *, err, command: str) -> tuple[Any, ...] | int:
     """The third-party modules named with --module, enabled; or the exit code once refused."""
     if not args.module:
@@ -4134,6 +4186,9 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
     modules = _modules(args, err=err, command="check")
     if isinstance(modules, int):
         return modules
+    profile = _industry_profile(args, err=err)
+    if isinstance(profile, int):
+        return profile
     from .screening import screen_spec
 
     resolved = _resolve(args.spec, err=err)
@@ -4161,9 +4216,12 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
                 total=len(paths),
             )
         try:
-            results.append(
-                (path, spec, screen_spec(spec, **_with_modules(modules), **_beside(path, spec)))
-            )
+            card = screen_spec(spec, **_with_modules(modules), **_beside(path, spec))
+            if profile is not None:
+                from .industry import apply_profile
+
+                card = apply_profile(card, profile, item_class=args.item_class).card
+            results.append((path, spec, card))
             durations.append(time.monotonic() - started)
         except KeyboardInterrupt:
             raise _Cancelled(
@@ -4185,6 +4243,15 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
             "check",
             {
                 "status": _worst_status(card for _path, _spec, card in results).value,
+                "profile": None
+                if profile is None
+                else {
+                    "urn": profile.profile.urn,
+                    "version": profile.profile.version,
+                    "item_class": args.item_class,
+                    "header": profile.header(),
+                    "changes": list(profile.changes()),
+                },
                 "specs": [
                     {
                         "path": str(path),
@@ -4210,6 +4277,8 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
         # parts in a repository can share a name — a `bracket.yaml` under two assemblies —
         # and the first version printed the name alone, so a repo-wide run produced two
         # identical blocks and no way to tell which was which.
+        if profile is not None:
+            print(str(profile) + "\n", file=out)
         for index, (path, spec, card) in enumerate(results):
             if index:
                 print("", file=out)
