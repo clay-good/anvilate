@@ -2,10 +2,11 @@
 
 ## 1. FMEA
 
-- [ ] 1.1 FMEA row generation from functions, failure-mode catalog, card checks and
-      verification items
-- [ ] 1.2 Anvilate's published occurrence and detection scales, with their derivation
-- [ ] 1.3 Loading of user rating tables and action-priority matrices, with source; no
+- [x] 1.1 FMEA row generation from functions, failure-mode catalog, card checks and
+      verification items (`anvilate.fmea`; the spec's bracket scenario runs on a team
+      catalogue, since the shipped one holds no bend-fatigue or bearing-yield mode)
+- [x] 1.2 Anvilate's published occurrence and detection scales, with their derivation
+- [x] 1.3 Loading of user rating tables and action-priority matrices, with source; no
       licensed table shipped (gated by a test over the bundled data)
 
 ## 2. Characteristics

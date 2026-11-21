@@ -122,6 +122,8 @@ that already ran and does one more thing with them:
   extracted value stays a draft until a named person confirms it.
 - :mod:`anvilate.interop` — the typed doorway for member forces and section
   properties computed by some other tool.
+- :mod:`anvilate.fmea` — design FMEA rows from the failure-mode catalogue, the card and
+  the verification plan, rated on Anvilate's published scales or the user's tables.
 - :mod:`anvilate.trace` — each requirement traced to the checks, tests and evidence that
   address it, the uncovered and the untraced named.
 - :mod:`anvilate.cae` — a declared frame written as an input deck for the analyst's own
