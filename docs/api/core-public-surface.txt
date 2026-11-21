@@ -918,6 +918,8 @@ search.search_diff
 search.apply_search_diff
 search.TABLES
 search.table_choice
+search.study_from_document
+search.spec_evaluator
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep

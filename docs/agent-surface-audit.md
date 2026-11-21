@@ -71,6 +71,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | `interfaces` | detect planar faces and through-hole patterns in a mating STEP | `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--confirmed-by`, `--fit`, `--format`, `--limit`, `--locator`, `--mating-plane`, `--max-gap`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--name`, `--requirement`, `--solid` |
 | `parts` | list the parts a spec can declare, or describe one | none |
 | `read` | measure a STEP, DXF, STL or 3MF file, or list a folder of them | `--against`, `--material`, `--unit` |
+| `study` | search a spec's declared variables for the best design found under a budget | `--format`, `--output` |
 | `verify` | verify an attestation envelope or STEP import integrity | `--artifact`, `--format`, `--hmac-key-file` |
 | `view` | write a one-page HTML part sheet: the drawn part beside its scorecard | `--force`, `--module`, `--no-open`, `--output` |
 

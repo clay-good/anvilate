@@ -37,10 +37,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.77.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.78.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.77.0"]
-SchemaVersion = Literal["1.77.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.78.0"]
+SchemaVersion = Literal["1.78.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -224,6 +224,36 @@ class ReviewPackageOutput(_WireModel):
     command: Literal["export"]
     artifact: Literal["review-package"]
     packages: tuple[ReviewPackageEntry, ...]
+
+
+class StudyBest(_WireModel):
+    values: FrozenMap[str, float]
+    objective: float
+    governing_check: Named | None
+
+
+class StudyChange(_WireModel):
+    path: Named
+    from_: float = Field(alias="from")
+    to: float
+
+
+class StudyOutput(_WireModel):
+    """``study``: the best design found under the budget, and the edit it proposes."""
+
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["study"]
+    name: Named
+    spec: str
+    label: Named
+    evaluations: Annotated[int, Field(ge=0)]
+    confirmed: bool
+    best: StudyBest | None
+    cited: tuple[Named, ...]
+    changes: tuple[StudyChange, ...]
+    record_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None
+    record: str | None
 
 
 class QifOutputEntry(_WireModel):
@@ -479,6 +509,7 @@ CliOutput = (
     | ProductCheckOutput
     | EvidenceBundleOutput
     | ReviewPackageOutput
+    | StudyOutput
     | DxfOutput
     | QifOutput
     | GeometryExportOutput

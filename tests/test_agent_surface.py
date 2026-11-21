@@ -173,6 +173,7 @@ def test_the_budget_names_every_command_a_user_waits_on():
         "export": "a check and a serialisation of its result",
         "interfaces": "bounded by the STEP file it is given",
         "confirm": "waits on a person typing at a terminal, not on the machine",
+        "study": "as long as the evaluation budget the study document itself declares",
     }
     assert budgeted | set(unbudgeted) == commands
     assert not budgeted & set(unbudgeted)

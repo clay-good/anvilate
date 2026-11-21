@@ -6,7 +6,7 @@ spec files and producing the same artifacts, scorecards, and **exit codes** dete
 Until this module there was no ``anvilate`` command at all; the only console script was the
 MCP server.
 
-**Twelve of the twelve are backed today**; a thirteenth command, ``verify``, comes from
+**Thirteen of the thirteen are backed today**; a fourteenth command, ``verify``, comes from
 the attestation capability. ``confirm`` is where a person confirms, at a terminal, the
 values an agent read off a picture. ``parts`` lists what a spec can declare,
 ``read`` measures a CAD
@@ -14,6 +14,7 @@ file or lists a folder of them, ``combine`` places several parts by the features
 share, ``doctor`` reports which optional runtimes are present,
 ``fetch`` is where a user consents to downloading a dataset Anvilate may not ship, and
 ``view`` writes the part sheet: the drawn part beside its scorecard, as one HTML file.
+``study`` runs a declared design search against a spec and prints the edit it proposes.
 ``build`` now produces STEP for audited ``base_plate``, ``cover_plate``, and
 ``transmission_shaft`` patterns. Other element types are refused by name rather than sent
 through an unreviewed generic generator.
@@ -257,6 +258,7 @@ _COMMAND_EXAMPLES = {
     "read": "anvilate read drawings/plate.dxf --unit mm",
     "combine": "anvilate combine bracket_on_plate.combination.yaml --output bracket.step",
     "interfaces": "anvilate interfaces mating.step --format json",
+    "study": "anvilate study lighter-lug.study.yaml --output studies/",
 }
 
 
@@ -779,6 +781,27 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format", choices=("text", "json"), default="text", help="how to render the result"
     )
 
+    study = commands.add_parser(
+        "study",
+        help="search a spec's declared variables for the best design found under a budget",
+        description="Run the design search a study document declares against the spec it "
+        "names: every candidate is screened by the same checks `check` runs, and the best "
+        "feasible design found is printed with the edit it proposes to the spec. The spec is "
+        "not changed. Exit 0 when a feasible design was found, 1 when none was, 3 for a "
+        "study or spec that cannot be read.",
+        epilog=f"Example: {_COMMAND_EXAMPLES['study']}",
+    )
+    study.add_argument("study", type=Path, help="the study document (.study.yaml)")
+    study.add_argument(
+        "--format", choices=("text", "json"), default="text", help="how to render the result"
+    )
+    study.add_argument(
+        "--output",
+        type=Path,
+        metavar="DIR",
+        help="also write the full search record, every point evaluated, into this folder",
+    )
+
     confirm = commands.add_parser(
         "confirm",
         help="confirm, at this terminal, values your agent read off a picture or a PDF",
@@ -970,6 +993,8 @@ def run(
             code = _confirm(args, out=command_out, err=command_err)
         elif args.command == "view":
             code = _view(args, out=command_out, err=command_err)
+        elif args.command == "study":
+            code = _study(args, out=command_out, err=command_err)
         else:
             code = _check(args, out=command_out, err=command_err)
     except (KeyboardInterrupt, _Cancelled) as stopped:
@@ -1038,6 +1063,7 @@ def _requested_command(arguments: list[str]) -> str:
         "read",
         "view",
         "confirm",
+        "study",
         *_UNBUILT,
     }
     return next((argument for argument in arguments if argument in commands), "anvilate")
@@ -3430,6 +3456,67 @@ def _review_packages(results: list, args: argparse.Namespace, *, out, err) -> in
             for file in package["files"]:
                 print(f"  {file['path']}", file=out)
     return EXIT_OK
+
+
+def _study(args: argparse.Namespace, *, out, err) -> int:
+    """``study``: a declared search against a spec, and the edit its best design proposes."""
+    from .refusal import RefusalError
+    from .search import run_search, search_diff, spec_evaluator, study_from_document
+    from .spec import parse_spec
+
+    path = args.study
+    try:
+        data = parse_yaml(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or not isinstance(data.get("spec"), str):
+            print(f"anvilate study: {path}: a study document names the spec it varies under "
+                  "`spec`", file=err)  # fmt: skip
+            return EXIT_BAD_REQUEST
+        spec_path = path.parent / data["spec"]
+        spec_document = parse_yaml(spec_path.read_text(encoding="utf-8"))
+        parse_spec(spec_document)
+        study, base = study_from_document(data, spec_document=spec_document)
+    except (OSError, UnicodeDecodeError, ValueError, RefusalError) as refused:
+        print(f"anvilate study: {path}: {refused}", file=err)
+        return EXIT_BAD_REQUEST
+    result = run_search(study, spec_evaluator(spec_document, objective=study.objective))
+    diff = search_diff(result, base) if result.best is not None else None
+    record = None
+    if args.output is not None:
+        args.output.mkdir(parents=True, exist_ok=True)
+        record = args.output / f"{_safe_name(study.name)}.study-record.json"
+        record.write_text(json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True)
+                          + "\n", encoding="utf-8")  # fmt: skip
+    if args.format == "json":
+        best = None if result.best is None else result.points[result.best]
+        payload = machine_document("study", {
+            "name": study.name,
+            "spec": str(spec_path),
+            "label": result.label,
+            "evaluations": len(result.history),
+            "confirmed": result.confirmed,
+            "best": None if best is None else {
+                "values": dict(best.values), "objective": best.objective,
+                "governing_check": best.governing_check},
+            "cited": [] if result.best is None else list(result.cited(result.best)),
+            "changes": [] if diff is None else [
+                {"path": p, "from": a, "to": b} for p, a, b in diff.changes],
+            "record_sha256": None if diff is None else diff.record_sha256,
+            "record": None if record is None else str(record),
+        })  # fmt: skip
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
+    else:
+        print(str(result), file=out)
+        if diff is not None:
+            print(str(diff), file=out)
+        if record is not None:
+            print(f"record: {record}", file=out)
+    return EXIT_OK if result.best is not None else EXIT_FAILED
+
+
+def _safe_name(name: str) -> str:
+    from ._outputs import safe_stem
+
+    return safe_stem(name)
 
 
 # The byte-order marks a text editor writes ahead of a non-UTF-8 save. Named because the

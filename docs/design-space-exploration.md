@@ -130,6 +130,30 @@ keeping each quantity's unit, and appends to its `study_derived` the study, the 
 digest of the search record and the paths it changed, so a value a study chose never reads
 as one the engineer stated.
 
+From the shell, a study document names the spec it varies, and `anvilate study` runs it
+through the same checks `anvilate check` runs:
+
+```yaml
+anvilate_study: 1
+spec: padeye.spec.yaml          # relative to this file
+name: lighter lug
+objective: element_params.thickness
+seed: 7
+evaluations: 40
+variables:
+  - {name: element_params.thickness, low: 8, high: 30}
+  - {name: element_params.hole_diameter, table: bearings, field: outer_diameter}
+```
+
+```text
+anvilate study lighter-lug.study.yaml --output studies/
+```
+
+It prints the result and the edit it proposes (`element_params.thickness: 20 -> 12.1`), and
+writes every point evaluated to `studies/` when asked. The spec is not changed. A candidate
+the spec's own validators refuse is infeasible, naming the refusal. Exit 0 when a feasible
+design was found, 1 when none was, 3 for a study or spec it cannot read.
+
 The search is held against a published benchmark: the Golinski speed reducer, as Cagnina,
 Esquivel and Coello Coello (Informatica 32, 2008) state it, with the pinion's teeth an
 integer. With seed 7 and 4,000 evaluations it lands within 0.05% of the published best

@@ -59,3 +59,4 @@ combination.py:_stack | {mate.id} bolt length | a capability gap: with no nut de
 combination.py:build_combination | {mate.id} weld | a capability gap: a weld is a declared joint here, and its strength is screened by a welded_connection element with its own load
 packs/parts.py:_bend_radius_entry | name | an answer at one site (the radius is at or over the empirical minimum, which the shop bend table decides); the other site states its need
 industry.py:apply_profile | rule.check | a profile's requirement, not a missing value: the check was never triggered, its inputs are the profile's own words in `needs`, and the check's own screen states its declaration once something runs it
+search.py:evaluate | spec validation | a correction, not a gap: the candidate's own values are what the spec refuses, and the search ranks it infeasible and moves on

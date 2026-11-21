@@ -47,6 +47,8 @@ __all__ = [
     "SearchDiff",
     "TABLES",
     "table_choice",
+    "study_from_document",
+    "spec_evaluator",
     "search_diff",
     "apply_search_diff",
 ]
@@ -564,6 +566,21 @@ def search_diff(result: SearchResult, base: Mapping[str, float]) -> SearchDiff:
                       record_sha256=_record_digest(result), changes=changes)  # fmt: skip
 
 
+def _set(document: dict[str, Any], path: str, value: float) -> None:
+    """Set ``path`` in ``document`` in place; a quantity keeps its unit."""
+    *parents, leaf = path.split(".")
+    node: Any = document
+    for key in parents:
+        node = node.get(key) if isinstance(node, dict) else None
+    if not isinstance(node, dict) or leaf not in node:
+        raise _refuse(f"the document holds no value at {path}; a study moves a value the "
+                      "document states", subject="diff")  # fmt: skip
+    held = node[leaf]
+    node[leaf] = (
+        {**held, "magnitude": value} if isinstance(held, dict) and "magnitude" in held else value
+    )
+
+
 def apply_search_diff(document: Mapping[str, object], diff: SearchDiff) -> dict[str, object]:
     """``document`` (a Design Spec as data) with ``diff`` applied, and the edit recorded.
 
@@ -580,17 +597,7 @@ def apply_search_diff(document: Mapping[str, object], diff: SearchDiff) -> dict[
         raise _refuse("document is a Design Spec as data", subject="document")
     edited = copy.deepcopy(dict(document))
     for path, _old, new in diff.changes:
-        *parents, leaf = path.split(".")
-        node: Any = edited
-        for key in parents:
-            node = node.get(key) if isinstance(node, dict) else None
-        if not isinstance(node, dict) or leaf not in node:
-            raise _refuse(f"the document holds no value at {path}; a study moves a value the "
-                          "document states", subject="diff")  # fmt: skip
-        held = node[leaf]
-        node[leaf] = (
-            {**held, "magnitude": new} if isinstance(held, dict) and "magnitude" in held else new
-        )
+        _set(edited, path, new)
     if diff.changes:
         record = {"study": diff.study, "seed": diff.seed, "record_sha256": diff.record_sha256,
                   "changed": [path for path, _old, _new in diff.changes]}  # fmt: skip
@@ -639,3 +646,104 @@ def table_choice(name: str, *, table: str, field: str, step: float | None = None
     return SearchVariable(name=name, kind=VariableKind.CHOICE, choices=tuple(values),
                           source=source, step=step,
                           rows=tuple(", ".join(found[v]) for v in values))  # fmt: skip
+
+
+def _at(document: Mapping[str, Any], path: str) -> Any:
+    node: Any = document
+    for key in path.split("."):
+        if not isinstance(node, Mapping) or key not in node:
+            raise _refuse(f"the spec holds no value at {path}; a study varies a value the "
+                          "document states", subject="variables")  # fmt: skip
+        node = node[key]
+    return node
+
+
+def _number(held: Any, path: str) -> float:
+    value = held.get("magnitude") if isinstance(held, Mapping) else held
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise _refuse(f"{path} is not a number or a quantity, so a study cannot vary it",
+                      subject="variables")  # fmt: skip
+    return float(value)
+
+
+def study_from_document(
+    data: Mapping[str, Any], *, spec_document: Mapping[str, Any]
+) -> tuple[SearchStudy, dict[str, float]]:
+    """A study document read against the spec it varies: the study, and the base values.
+
+    Each variable is a path in the spec (``element_params.thickness``) with ``low`` and
+    ``high``, a sourced ``choices`` list, or a bundled ``table`` and ``field``. The
+    objective names one of the variables, to minimize or maximize; a value the spec does
+    not state cannot be varied, and is refused.
+    """
+    if not isinstance(data, Mapping):
+        raise _refuse("a study document is one mapping", subject="study")
+    unknown = sorted(set(data) - {"anvilate_study", "spec", "name", "objective", "sense",
+                                  "strategy", "seed", "evaluations", "population",
+                                  "variables"})  # fmt: skip
+    if unknown:
+        raise _refuse(f"the study document has keys {unknown} this reader does not know",
+                      subject="study")  # fmt: skip
+    variables = []
+    for declared in data.get("variables") or ():
+        if not isinstance(declared, Mapping) or "name" not in declared:
+            raise _refuse("each variable is a mapping with a name, the spec path it varies",
+                          subject="variables")  # fmt: skip
+        if "table" in declared:
+            extra = sorted(set(declared) - {"name", "table", "field", "step"})
+            if extra:
+                raise _refuse(f"a table variable takes name, table, field and step; got "
+                              f"{extra}", subject="variables")  # fmt: skip
+            variables.append(table_choice(declared["name"], table=declared["table"],
+                                          field=declared.get("field", ""),
+                                          step=declared.get("step")))  # fmt: skip
+        else:
+            fields = dict(declared)
+            if "choices" in fields:
+                fields.setdefault("kind", VariableKind.CHOICE)
+                fields["choices"] = tuple(fields["choices"])
+            variables.append(SearchVariable(**fields))
+    study = SearchStudy(
+        name=data.get("name", ""), variables=tuple(variables),
+        objective=data.get("objective", ""),
+        **{k: data[k] for k in ("sense", "strategy", "seed", "evaluations", "population")
+           if k in data},
+    )  # fmt: skip
+    if study.objective not in {v.name for v in study.variables}:
+        raise _refuse(f"the objective {study.objective!r} names none of the variables "
+                      f"{[v.name for v in study.variables]}; a study minimizes or maximizes "
+                      "one of them", subject="objective")  # fmt: skip
+    base = {v.name: _number(_at(spec_document, v.name), v.name) for v in study.variables}
+    return study, base
+
+
+def spec_evaluator(
+    spec_document: Mapping[str, Any], *, objective: str
+) -> Callable[[Mapping[str, float]], StudyEvaluation]:
+    """The evaluator a study document runs: set each value in the spec, screen it through
+    the library's own screens, and read the objective variable back. A candidate the spec
+    refuses (a value its own validators reject) is infeasible, naming the refusal."""
+    import copy
+
+    from .scorecard import ScorecardEntry
+    from .screening import screen_spec
+    from .spec import parse_spec
+
+    def evaluate(design: Mapping[str, float]) -> StudyEvaluation:
+        document = copy.deepcopy(dict(spec_document))
+        for path, value in design.items():
+            _set(document, path, value)
+        try:
+            card = screen_spec(parse_spec(document))
+        except ValueError as refused:
+            detail = f"not evaluated: the spec refuses this candidate ({refused})"
+            card = Scorecard(
+                entries=(
+                    ScorecardEntry(
+                        name="spec validation", status=CheckStatus.NOT_EVALUATED, detail=detail
+                    ),
+                )
+            )
+        return StudyEvaluation(objectives={objective: design[objective]}, scorecard=card)
+
+    return evaluate

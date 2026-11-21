@@ -3808,7 +3808,7 @@ def test_the_module_says_how_many_of_its_commands_are_backed():
     words = {
         "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
         "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
-        "thirteen": 13,
+        "thirteen": 13, "fourteen": 14,
     }  # fmt: skip
 
     claimed = re.search(r"\*\*(\w+) of the (\w+) are backed today\*\*", cli.__doc__)
@@ -5875,3 +5875,58 @@ def test_export_writes_a_review_package_and_a_draft_short_of_every_verdict(tmp_p
     assert any(".draft." in p.name for p in folder.iterdir())
     code, _out, err = _run("export", str(lug), "--draft")
     assert code == 3 and "--draft marks a review package" in err
+
+
+def _study_files(tmp_path, *, low=8, high=30, **extra):
+    lug = tmp_path / "padeye.yaml"
+    lug.write_text(_LUG_SPEC)
+    import yaml
+
+    document = {"anvilate_study": 1, "spec": "padeye.yaml", "name": "lighter lug",
+                "objective": "element_params.thickness", "seed": 7, "evaluations": 40,
+                "population": 8,
+                "variables": [{"name": "element_params.thickness", "low": low, "high": high}],
+                **extra}  # fmt: skip
+    study = tmp_path / "lug.study.yaml"
+    study.write_text(yaml.safe_dump(document))
+    return lug, study
+
+
+def test_study_searches_the_spec_and_proposes_an_edit_without_making_it(tmp_path):
+    """Design optimization 2.3, at the shell: the candidates are screened by `check`'s own
+    checks, the result is the best found under the budget, and the spec is not changed."""
+    from anvilate._cli_output import StudyOutput
+
+    lug, study = _study_files(tmp_path)
+    before = lug.read_text()
+    code, raw, _err = _run("study", str(study), "--format", "json", "--output",
+                           str(tmp_path / "out"))  # fmt: skip
+    assert code == 0 and lug.read_text() == before
+    payload = StudyOutput.model_validate(json.loads(raw))
+    assert payload.best is not None and payload.evaluations == 40
+    (change,) = payload.changes
+    assert change.path == "element_params.thickness" and change.to < change.from_
+    assert "optimal" not in payload.label.lower()
+    record = json.loads((tmp_path / "out" / "lighter-lug.study-record.json").read_text())
+    assert len(record["points"]) >= 40
+    code, text, _ = _run("study", str(study))
+    assert "proposes element_params.thickness: 20 ->" in text
+
+
+def test_study_with_no_feasible_design_exits_one(tmp_path):
+    _lug, study = _study_files(tmp_path, low=1, high=2)
+    code, text, _err = _run("study", str(study))
+    assert code == 1 and "no feasible design found in 40 evaluations" in text
+
+
+@pytest.mark.parametrize(("extra", "said"), [
+    ({"objective": "element_params.width"}, "names none of the variables"),
+    ({"variables": [{"name": "element_params.flange", "low": 1, "high": 2}],
+      "objective": "element_params.flange"}, "holds no value"),
+    ({"spec": "missing.yaml"}, "No such file"),
+    ({"colour": "red"}, "does not know"),
+])  # fmt: skip
+def test_study_refuses_a_document_it_cannot_run(tmp_path, extra, said):
+    _lug, study = _study_files(tmp_path, **extra)
+    code, _out, err = _run("study", str(study))
+    assert code == 3 and said in err

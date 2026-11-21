@@ -18,6 +18,7 @@ has not shipped exits 4 naming that gap.
 | `fetch` | a dataset name, or none to list them | `--consent`, `--format` | the dataset is cached and its digest verified (listing always exits 0) |
 | `confirm` | the subject handle an MCP result returned | none | every value an agent read was confirmed at this interactive terminal |
 | `view` | a spec | `--output`, `--no-open`, `--force`, `--module` | the part sheet was written, whatever its verdict |
+| `study` | a study document naming the spec it varies | `--format`, `--output` (a folder for the full record) | a feasible design was found; the spec itself is not changed |
 | `combine` | a combination document, or a product document | `--output`, `--picture`, `--exploded`, `--unvalidated`, `--force`, `--ifc-schema` | the combination's or product's card passes |
 | `read` | a CAD file, or a folder | `--against`, `--material`, `--unit` | the file was measured, or the folder listed |
 | `parts` | an element type, or none to list them | none | the catalog, or that element's fields and example, was printed |
@@ -441,7 +442,7 @@ work it out from `entries` is reimplementing `Scorecard.governing()` at every ca
 reads this output. Both are carried now, per spec and for the run:
 
 ```json
-{"schema": "urn:anvilate:schema:cli-output:1.77.0",
+{"schema": "urn:anvilate:schema:cli-output:1.78.0",
  "schema_version": "1.67.0", "command": "check", "status": "fail",
  "specs": [{"name": "deck_plate", "path": "a.yaml", "status": "not_evaluated",
             "governing": {"name": "T0 geometry", "status": "not_evaluated"},
