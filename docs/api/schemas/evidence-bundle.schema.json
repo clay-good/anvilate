@@ -1270,7 +1270,7 @@
           "$ref": "#/$defs/AcceptanceCriteria"
         },
         "anvilate_spec": {
-          "default": "1.23.0",
+          "default": "1.24.0",
           "title": "Anvilate Spec",
           "type": "string"
         },
@@ -1490,6 +1490,14 @@
             "$ref": "#/$defs/SourceReference"
           },
           "title": "Sources",
+          "type": "array"
+        },
+        "study_derived": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/StudyDerivation"
+          },
+          "title": "Study Derived",
           "type": "array"
         },
         "units": {
@@ -4163,6 +4171,42 @@
       "title": "Study",
       "type": "object"
     },
+    "StudyDerivation": {
+      "additionalProperties": false,
+      "description": "One applied study result: which study, its seed, the digest of its record, and the\ndocument paths it changed. Written by `anvilate.search.apply_search_diff`, never by\nhand: a value a study chose must say so wherever the document is read.",
+      "properties": {
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Changed",
+          "type": "array"
+        },
+        "record_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Record Sha256",
+          "type": "string"
+        },
+        "seed": {
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "study": {
+          "title": "Study",
+          "type": "string"
+        }
+      },
+      "required": [
+        "study",
+        "seed",
+        "record_sha256",
+        "changed"
+      ],
+      "title": "StudyDerivation",
+      "type": "object"
+    },
     "StudyResult": {
       "description": "A completed study: every point evaluated, and the exact front over the feasible ones.\n\n``front`` is the non-dominated subset of the *feasible* points — exact, not\napproximate, because the whole evaluated set is in hand. ``provisional`` is True\nwhenever the sweep did not exhaust the declared grid — because a budget truncated it,\nor because it sampled continuously and never visited the grid at all — and then the\nfront is the best of what ran and nothing stronger. Only an untruncated grid sweep is\ncomplete. Nothing here is described as optimal.",
       "properties": {
@@ -4712,7 +4756,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:evidence-bundle:1.35.0",
+  "$id": "urn:anvilate:schema:evidence-bundle:1.36.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate evidence bundle: every screening layer's contribution for one part, with one rolled-up status, the scorecard, and the spec the verdicts were computed from. A layer that never ran is an absent key, not a null one — the two are different facts and the bundle refuses to collapse them. Carries the screening disclaimer unconditionally. Generated from anvilate.bundle.BundleDocument.",
   "properties": {
@@ -4950,5 +4994,5 @@
   ],
   "title": "BundleDocument",
   "type": "object",
-  "x-anvilate-version": "1.35.0"
+  "x-anvilate-version": "1.36.0"
 }

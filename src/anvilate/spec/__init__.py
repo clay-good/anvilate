@@ -43,6 +43,7 @@ from .ir import (
     ScreeningDepth,
     SourceReference,
     StandardComponentInterface,
+    StudyDerivation,
     SweptProfileKeepout,
     ToleranceDimension,
     ValidationTier,
@@ -67,6 +68,7 @@ from .version import UnsupportedSchemaVersion, migrate_to_current
 
 __all__ = [
     "SCHEMA_VERSION",
+    "StudyDerivation",
     "CircularLocator",
     "DesignSpec",
     "MaterialRef",

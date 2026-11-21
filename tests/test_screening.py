@@ -1723,6 +1723,7 @@ _NOT_A_CLAIM_ABOUT_THE_PART = {
     "units": "the system the quantities are rendered in",
     "exports": "contracts this part publishes for others, not a property of this one",
     "item_class": "which of a bound profile's rules apply; the profile puts them on the card",
+    "study_derived": "a record of which search chose which values, not a claim about the part",
 }
 
 
@@ -2356,6 +2357,10 @@ _NOTHING_TO_SCREEN = {
     "item_class": (
         "the class an industry profile screens the part as; with a profile bound, its "
         "required checks for that class reach the card, and without one it says nothing"
+    ),
+    "study_derived": (
+        "provenance: which applied search chose which values, with its seed and record "
+        "digest; the values themselves are screened where they sit"
     ),
 }
 

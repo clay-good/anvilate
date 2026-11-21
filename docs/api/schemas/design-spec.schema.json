@@ -2105,6 +2105,42 @@
       "title": "StressBlock",
       "type": "object"
     },
+    "StudyDerivation": {
+      "additionalProperties": false,
+      "description": "One applied study result: which study, its seed, the digest of its record, and the\ndocument paths it changed. Written by `anvilate.search.apply_search_diff`, never by\nhand: a value a study chose must say so wherever the document is read.",
+      "properties": {
+        "changed": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Changed",
+          "type": "array"
+        },
+        "record_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Record Sha256",
+          "type": "string"
+        },
+        "seed": {
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "study": {
+          "title": "Study",
+          "type": "string"
+        }
+      },
+      "required": [
+        "study",
+        "seed",
+        "record_sha256",
+        "changed"
+      ],
+      "title": "StudyDerivation",
+      "type": "object"
+    },
     "SweptProfileKeepout": {
       "additionalProperties": false,
       "description": "A rectangular section swept along a straight path: a service-access corridor.",
@@ -2215,7 +2251,7 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:design-spec:1.23.0",
+  "$id": "urn:anvilate:schema:design-spec:1.24.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate Design Spec IR: the typed, versioned description of a part that the screening pipeline consumes. Generated from anvilate.spec.DesignSpec.",
@@ -2224,7 +2260,7 @@
       "$ref": "#/$defs/AcceptanceCriteria"
     },
     "anvilate_spec": {
-      "default": "1.23.0",
+      "default": "1.24.0",
       "title": "Anvilate Spec",
       "type": "string"
     },
@@ -2446,6 +2482,14 @@
       "title": "Sources",
       "type": "array"
     },
+    "study_derived": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/StudyDerivation"
+      },
+      "title": "Study Derived",
+      "type": "array"
+    },
     "units": {
       "$ref": "#/$defs/Provenanced_UnitSystem_"
     }
@@ -2460,5 +2504,5 @@
   ],
   "title": "DesignSpec",
   "type": "object",
-  "x-anvilate-version": "1.23.0"
+  "x-anvilate-version": "1.24.0"
 }

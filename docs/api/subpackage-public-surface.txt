@@ -268,6 +268,7 @@ spec.Origin
 spec.Provenanced
 spec.ReferenceResolver
 spec.SCHEMA_VERSION
+spec.StudyDerivation
 spec.SpecValidationError
 spec.StandardComponentInterface
 spec.StaticReferenceResolver

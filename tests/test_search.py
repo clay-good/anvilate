@@ -251,3 +251,55 @@ def test_the_pressure_vessel_takes_only_stocked_plate_and_lands_on_the_published
     assert best.objective == pytest.approx(_VESSEL_BEST, rel=1e-4)
     assert (best.values["x1"], best.values["x2"]) == (0.8125, 0.4375)
     assert all(p.values["x1"] in _PLATE and p.values["x2"] in _PLATE for p in result.points)
+
+
+def test_a_result_is_a_proposed_edit_and_applying_it_records_the_study():
+    """Design optimization 1.6: the base document does not change until the diff is
+    applied, and the applied edit says which study, seed and record chose the values."""
+    from pathlib import Path
+
+    from anvilate.search import apply_search_diff, search_diff
+    from anvilate.spec import load_spec_yaml, parse_spec
+
+    base = load_spec_yaml((Path(__file__).parents[1] / "examples" / "padeye.spec.yaml")
+                          .read_text()).model_dump(mode="json")  # fmt: skip
+    path = "element_params.thickness"
+    thickness = SearchVariable(name=path, kind=VariableKind.CHOICE,
+                               choices=(16.0, 20.0, 25.0, 30.0),
+                               source="mill plate list MP-1, rev 2")  # fmt: skip
+    study = SearchStudy(name="lighter lug", variables=(thickness,), objective="thickness",
+                        evaluations=12, population=4)  # fmt: skip
+
+    def evaluate(design):
+        t = design[path]
+        card = Scorecard(entries=(ScorecardEntry.from_safety_factor(
+            "bearing", computed=t / 22.0, required=1.0),))  # fmt: skip
+        return StudyEvaluation(objectives={"thickness": t}, scorecard=card)
+
+    result = run_search(study, evaluate)
+    diff = search_diff(result, {path: base["element_params"]["thickness"]["magnitude"]})
+    assert diff.changes == ((path, 20.0, 25.0),)  # the lightest stocked plate that passes
+    lighter = diff
+    edited = apply_search_diff(base, lighter)
+    assert base["element_params"]["thickness"] == {"magnitude": 20.0, "unit": "mm"}  # unchanged
+    assert edited["element_params"]["thickness"] == {"magnitude": 25.0, "unit": "mm"}
+    (record,) = edited["study_derived"]
+    assert record == {"study": "lighter lug", "seed": 0, "record_sha256": diff.record_sha256,
+                      "changed": [path]}  # fmt: skip
+    assert parse_spec(edited).study_derived[0].changed == (path,)
+    assert "proposes element_params.thickness: 20 -> 25" in str(lighter)
+    with pytest.raises(RefusalError, match="holds no value at element_params.flange"):
+        apply_search_diff(base, lighter.model_copy(
+            update={"changes": (("element_params.flange", 1.0, 2.0),)}))  # fmt: skip
+
+
+def test_a_search_with_no_feasible_design_proposes_no_edit():
+    from anvilate.search import search_diff
+
+    def never(design):
+        card = Scorecard(entries=(ScorecardEntry.from_safety_factor("g", computed=0.5,
+                                                                    required=1.0),))  # fmt: skip
+        return StudyEvaluation(objectives={"weight": 1.0}, scorecard=card)
+
+    with pytest.raises(RefusalError, match="proposes no edit"):
+        search_diff(run_search(_reducer(evaluations=20), never), {})

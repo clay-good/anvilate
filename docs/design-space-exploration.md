@@ -122,6 +122,13 @@ print(result)   # the best design found under the stated budget (4000 evaluation
 | Starts | `starts` are evaluated first: the base design, and the design its inverse repairs propose |
 | Result | `BEST_FOUND`, never "optimal": every neighbor (a declared step either way, an integer by one, a choice to its adjacent entries) is evaluated for real, and a feasible better one is named and the result labeled *not locally confirmed* |
 
+A result is a proposed edit, never an applied one. `search_diff(result, base_values)` names
+each variable (by its path in the Design Spec, such as `element_params.thickness`) with its
+base and found value; `apply_search_diff(document, diff)` returns the edited document,
+keeping each quantity's unit, and appends to its `study_derived` the study, the seed, the
+digest of the search record and the paths it changed, so a value a study chose never reads
+as one the engineer stated.
+
 The search is held against a published benchmark: the Golinski speed reducer, as Cagnina,
 Esquivel and Coello Coello (Informatica 32, 2008) state it, with the pinion's teeth an
 integer. With seed 7 and 4,000 evaluations it lands within 0.05% of the published best

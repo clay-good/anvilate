@@ -913,6 +913,9 @@ search.SearchResult
 search.BEST_FOUND
 search.run_search
 search.violation
+search.SearchDiff
+search.search_diff
+search.apply_search_diff
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep

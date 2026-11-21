@@ -18,7 +18,8 @@ independent and optional.
 - [x] 1.4 Inverse-seeded starting points (`starts`, evaluated first; the caller passes
       the base and the repaired design)
 - [x] 1.5 Neighborhood check and the "not locally confirmed" label
-- [ ] 1.6 Result as a spec diff; provenance on apply
+- [x] 1.6 Result as a spec diff; provenance on apply (`search_diff`, `apply_search_diff`;
+      Design Spec 1.24.0 `study_derived`)
 - [x] 1.7 Golinski speed-reducer regression from the published definition; a second
       mixed-variable benchmark
       (both from Cagnina et al., Informatica 32, 2008: the speed reducer within 0.05% of

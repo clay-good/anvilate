@@ -173,7 +173,8 @@ _LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
 # did not. Spelled as literals, a schema bump fails here until someone re-reads the tool
 # contracts and decides what a client pinned to the old one is owed.
 # 1.23.0 adds `item_class`, the class an industry profile screens the part as.
-_SPEC_REF = "urn:anvilate:schema:design-spec:1.23.0"
+# 1.24.0 adds `study_derived`, the record of each applied search result.
+_SPEC_REF = "urn:anvilate:schema:design-spec:1.24.0"
 # 1.6.0 adds a counterbore locator kind and its required through diameter.
 # 1.5.0 adds an optional concentric circular locator: a confirmed pilot bore or boss with
 # its diameter and axial extent. Existing interface contracts remain valid unchanged.
@@ -227,7 +228,8 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.16.0"
 # listed as unsolved input and outside the roll-up.
 # 1.34.0 follows Design Spec 1.23.0.
 # 1.35.0 adds `draft`, absent unless a draft review package wrote the bundle.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.35.0"
+# 1.36.0 follows Design Spec 1.24.0.
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.36.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"

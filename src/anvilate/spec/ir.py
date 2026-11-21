@@ -1215,6 +1215,17 @@ _CONFIRMATION_SOURCE = "the person who checked the value against its source, and
 _PATH_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)((?:\[\d+\])*)$")
 
 
+class StudyDerivation(_Base):
+    """One applied study result: which study, its seed, the digest of its record, and the
+    document paths it changed. Written by `anvilate.search.apply_search_diff`, never by
+    hand: a value a study chose must say so wherever the document is read."""
+
+    study: Named
+    seed: int = Field(ge=0)
+    record_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    changed: tuple[Named, ...] = Field(min_length=1)
+
+
 class SourceReference(_Base):
     """Where one value in the document came from: a file, and who read it out of it.
 
@@ -1345,7 +1356,7 @@ class SourceReference(_Base):
 # older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.23.0"
+SCHEMA_VERSION = "1.24.0"
 
 
 class DesignSpec(_Base):
@@ -1396,6 +1407,9 @@ class DesignSpec(_Base):
     # profile's own vocabulary. Read only when a profile is bound; `anvilate.industry`
     # refuses a class the bound profile does not declare.
     item_class: Named | None = None
+    # Each search result applied to this document, in order: the values those paths hold
+    # were chosen by a study, not stated by the engineer, and the record says which one.
+    study_derived: tuple[StudyDerivation, ...] = ()
     # Performance budgets: a requirement on a COMBINATION of checks, which no per-check
     # screen can see. Declared here rather than under `constraints`, because a budget is not
     # a bound on one number — it carries its own contributors, their sources and the rule

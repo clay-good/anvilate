@@ -25,6 +25,7 @@ from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from enum import StrEnum
 from math import isfinite
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -43,6 +44,9 @@ __all__ = [
     "BEST_FOUND",
     "run_search",
     "violation",
+    "SearchDiff",
+    "search_diff",
+    "apply_search_diff",
 ]
 
 _SOURCE = "the search study: its variables, objective, strategy, seed and budget"
@@ -492,3 +496,85 @@ def run_search(
         neighbors=neighbors, confirmed=confirmed, better_neighbor=better_neighbor,
         exhausted=exhausted,
     )  # fmt: skip
+
+
+class SearchDiff(StatableModel):
+    """A search result as a proposed edit: each variable's base value and found value.
+
+    Variables are named by their path in the Design Spec document (``element_params.
+    thickness``). Nothing changes until :func:`apply_search_diff` is called; the diff
+    carries the study, its seed and the digest of its record, so the edit can say where
+    it came from.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    study: Named
+    seed: int = Field(ge=0)
+    record_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    changes: tuple[tuple[Named, float, float], ...] = ()
+
+    def __str__(self) -> str:
+        if not self.changes:
+            return f"{self.study}: the best design found is the base design; nothing to apply"
+        moved = "; ".join(f"{path}: {old:g} -> {new:g}" for path, old, new in self.changes)
+        return f"{self.study} (seed {self.seed}) proposes {moved}"
+
+
+def _record_digest(result: SearchResult) -> str:
+    from .attestation import canonical_json, sha256_hex
+
+    return sha256_hex(canonical_json(result.model_dump(mode="json")).encode("utf-8"))
+
+
+def search_diff(result: SearchResult, base: Mapping[str, float]) -> SearchDiff:
+    """The edit ``result`` proposes against ``base``, the variables' values in the base
+    document. Refused when the search found no feasible design: there is nothing to apply."""
+    if not isinstance(result, SearchResult):
+        raise _refuse("result must be a SearchResult from run_search", subject="result")
+    if result.best is None:
+        raise _refuse(f"{result.study.name} found no feasible design, so it proposes no edit",
+                      subject="result")  # fmt: skip
+    found = result.points[result.best].values
+    missing = sorted(set(found) - set(base))
+    if missing:
+        raise _refuse(f"base gives no value for {missing}; give each variable's value in the "
+                      "base document", subject="base")  # fmt: skip
+    changes = tuple((name, float(base[name]), value) for name, value in found.items()
+                    if float(base[name]) != value)  # fmt: skip
+    return SearchDiff(study=result.study.name, seed=result.study.seed,
+                      record_sha256=_record_digest(result), changes=changes)  # fmt: skip
+
+
+def apply_search_diff(document: Mapping[str, object], diff: SearchDiff) -> dict[str, object]:
+    """``document`` (a Design Spec as data) with ``diff`` applied, and the edit recorded.
+
+    Each path is set to its found value; a quantity written as ``{magnitude, unit}`` keeps
+    its unit. The document's ``study_derived`` gains one entry naming the study, its seed,
+    its record digest and the paths it changed. A path the document does not hold is
+    refused: a study can only move a value the document states.
+    """
+    import copy
+
+    if not isinstance(diff, SearchDiff):
+        raise _refuse("diff must be a SearchDiff from search_diff", subject="diff")
+    if not isinstance(document, Mapping):
+        raise _refuse("document is a Design Spec as data", subject="document")
+    edited = copy.deepcopy(dict(document))
+    for path, _old, new in diff.changes:
+        *parents, leaf = path.split(".")
+        node: Any = edited
+        for key in parents:
+            node = node.get(key) if isinstance(node, dict) else None
+        if not isinstance(node, dict) or leaf not in node:
+            raise _refuse(f"the document holds no value at {path}; a study moves a value the "
+                          "document states", subject="diff")  # fmt: skip
+        held = node[leaf]
+        node[leaf] = (
+            {**held, "magnitude": new} if isinstance(held, dict) and "magnitude" in held else new
+        )
+    if diff.changes:
+        record = {"study": diff.study, "seed": diff.seed, "record_sha256": diff.record_sha256,
+                  "changed": [path for path, _old, _new in diff.changes]}  # fmt: skip
+        edited["study_derived"] = [*list(edited.get("study_derived") or ()), record]
+    return edited
