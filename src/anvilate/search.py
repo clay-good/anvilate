@@ -48,6 +48,9 @@ __all__ = [
     "TABLES",
     "table_choice",
     "study_from_document",
+    "StudyChangeRow",
+    "StudySummary",
+    "summarize",
     "spec_evaluator",
     "search_diff",
     "apply_search_diff",
@@ -747,3 +750,50 @@ def spec_evaluator(
         return StudyEvaluation(objectives={objective: design[objective]}, scorecard=card)
 
     return evaluate
+
+
+class StudyChangeRow(StatableModel):
+    """One path a study proposes to change, from its base value to the value found."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    path: Named
+    base: float
+    found: float
+
+
+class StudySummary(StatableModel):
+    """A search result small enough to return: the label, the best design found, the rows
+    it cites, and the edit it proposes. The full record goes to a file."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    label: Named
+    evaluations: int = Field(ge=0)
+    confirmed: bool
+    best: FrozenMap[str, float] | None = None
+    objective: float | None = None
+    governing_check: str | None = None
+    better_neighbor: FrozenMap[str, float] | None = None
+    cited: tuple[Named, ...] = ()
+    changes: tuple[StudyChangeRow, ...] = ()
+    record_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+def summarize(result: SearchResult, diff: SearchDiff | None) -> StudySummary:
+    """``result`` and the edit it proposes, bounded for a tool result."""
+    best = None if result.best is None else result.points[result.best]
+    better = (None if result.better_neighbor is None
+              else result.points[result.better_neighbor].values)  # fmt: skip
+    return StudySummary(
+        name=result.study.name, label=result.label, evaluations=len(result.history),
+        confirmed=result.confirmed, best=None if best is None else best.values,
+        objective=None if best is None else best.objective,
+        governing_check=None if best is None else best.governing_check,
+        better_neighbor=better,
+        cited=() if result.best is None else result.cited(result.best),
+        changes=() if diff is None else tuple(
+            StudyChangeRow(path=p, base=a, found=b) for p, a, b in diff.changes),
+        record_sha256=None if diff is None else diff.record_sha256,
+    )  # fmt: skip

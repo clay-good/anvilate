@@ -27,7 +27,8 @@
     "mcp build_combination": {"seconds": 15.0, "why": "Two parts built, placed and intersected; the first geometry call of a session also pays the kernel import."},
     "mcp list_context": {"seconds": 1.0, "why": "A folder's engineering files, classified by name; nothing is opened."},
     "mcp read_cad_file": {"seconds": 10.0, "why": "One CAD file measured; a STEP read pays the kernel import when it is the first geometry call."},
-    "mcp describe_part": {"seconds": 1.0, "why": "One element's fields and its example spec, read before a spec is written."}
+    "mcp describe_part": {"seconds": 1.0, "why": "One element's fields and its example spec, read before a spec is written."},
+    "mcp run_study": {"seconds": 5.0, "why": "A small search: eight candidates screened and their neighbors checked, plus the record written. A study's own budget sets the rest."}
   },
   "time_to_first_part": {"seconds": 600.0, "why": "openspec/specs/onboarding: a fresh install to an exported validated sample part in under 10 minutes."}
 }

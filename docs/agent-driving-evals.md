@@ -80,13 +80,14 @@ agent should have done with the tools and writing it before they could be driven
 been writing it against nothing — the same order
 [the compilation metrics](valid-is-not-correct.md) shipped in.
 
-**The next corpus is written too**, as `agenteval.journey_task_set`: those nine, and ten
+**The next corpus is written too**, as `agenteval.journey_task_set`: those nine, and eleven
 more that ask what a user asks. What can you draw; a plate from words, shown; a flange as a
-STEP file; a shaft, a bent bracket, a box and its lid; a clevis under its load; two parts
-bolted together; a part started from a drawing in a folder; a file weighed. Together they
-reach every tool in the catalog. No measurement has been scored on the added ten: the
-published run is held to the nine it ran. Each of the ten is walked in a test by a correct
-run against the real server, so none is a task that cannot be completed.
+STEP file; a shaft, a bent bracket, a box and its lid; a clevis under its load; a thinner
+lug that still passes, found by a search; two parts bolted together; a part started from a
+drawing in a folder; a file weighed. Together they reach every tool in the catalog. No
+measurement has been scored on the added eleven: the published run is held to the nine it
+ran. Each of the eleven is walked in a test by a correct run against the real server, so
+none is a task that cannot be completed.
 
 **A release is held to the last measurement.** `agenteval.completion_regressions` compares
 two reports for one client and names every task that completed before and does not now, and

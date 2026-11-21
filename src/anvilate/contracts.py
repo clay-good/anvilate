@@ -81,6 +81,7 @@ __all__ = [
     "NEXT_STEPS_SCHEMA_VERSION",
     "JOURNEY_STATE_SCHEMA_VERSION",
     "PROFILE_LISTING_SCHEMA_VERSION",
+    "STUDY_SUMMARY_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -105,6 +106,7 @@ __all__ = [
     "next_steps_json_schema",
     "journey_state_json_schema",
     "profile_listing_json_schema",
+    "study_summary_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -211,6 +213,7 @@ INDUSTRY_PROFILE_SCHEMA_VERSION = "1.1.0"
 NEXT_STEPS_SCHEMA_VERSION = "1.0.0"
 JOURNEY_STATE_SCHEMA_VERSION = "1.0.0"
 PROFILE_LISTING_SCHEMA_VERSION = "1.0.0"
+STUDY_SUMMARY_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -655,6 +658,24 @@ def profile_listing_json_schema() -> dict[str, Any]:
     )
 
 
+def study_summary_json_schema() -> dict[str, Any]:
+    """A design search's result, bounded for a tool result."""
+    from .search import StudySummary
+
+    return _artifact(
+        StudySummary,
+        name="study-summary",
+        version=STUDY_SUMMARY_SCHEMA_VERSION,
+        description=(
+            "Anvilate study summary: a design search's best design found under its stated "
+            "budget (never called optimal), its objective and governing check, whether its "
+            "neighborhood confirmed it, the table rows it cites, and the edit it proposes to "
+            "the spec, path by path, with the digest of the full record. Generated from "
+            "anvilate.search.StudySummary."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -879,6 +900,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "next-steps.schema.json": next_steps_json_schema(),
         "journey-state.schema.json": journey_state_json_schema(),
         "profile-listing.schema.json": profile_listing_json_schema(),
+        "study-summary.schema.json": study_summary_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

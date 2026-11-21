@@ -20,6 +20,7 @@ from anvilate.mcp import (
     COMBINATION_OPERATIONS,
     CONTEXT_OPERATIONS,
     REQUIRED_OPERATIONS,
+    STUDY_OPERATIONS,
     handle_request,
     tool_catalog,
     wire_definitions,
@@ -33,7 +34,7 @@ _DESCRIPTION_LIMIT = 2048
 
 def test_every_description_fits_the_shortest_client_limit_and_says_enough():
     tools = tool_catalog()
-    assert len(tools) == 12
+    assert len(tools) == 13
     for tool in tools:
         assert 80 <= len(tool.description) <= _DESCRIPTION_LIMIT, (
             tool.name,
@@ -58,7 +59,8 @@ def test_every_argument_an_agent_fills_says_what_it_takes():
 
 
 def test_every_tool_belongs_to_one_group_and_the_groups_are_the_catalog():
-    groups = (REQUIRED_OPERATIONS, CATALOG_OPERATIONS, CONTEXT_OPERATIONS, COMBINATION_OPERATIONS)
+    groups = (REQUIRED_OPERATIONS, CATALOG_OPERATIONS, CONTEXT_OPERATIONS, COMBINATION_OPERATIONS,
+              STUDY_OPERATIONS)  # fmt: skip
     names = [tool.name for tool in tool_catalog()]
     for name in names:
         assert sum(name in group for group in groups) == 1, name
@@ -461,7 +463,7 @@ def test_the_catalog_says_each_thing_with_one_word():
         texts[tool.name] = own + [
             text for text in described(tool.output_schema) if "$ref" not in text
         ]
-    assert len(texts) == 13 and all(texts.values())
+    assert len(texts) == 14 and all(texts.values())
     retired = {"handle": "subject", "document": "spec", "verdict": "scorecard", "element": "part"}
     found = []
     for where, passages in texts.items():

@@ -344,3 +344,31 @@ def test_rows_must_name_one_row_per_choice():
     with pytest.raises(ValueError, match="one per choice"):
         SearchVariable(name="x", kind=VariableKind.CHOICE, choices=(1.0, 2.0), source="t",
                        rows=("a",))  # fmt: skip
+
+
+def test_run_study_searches_a_screened_spec_and_returns_a_bounded_summary(monkeypatch, tmp_path):
+    """Design optimization 2.3 over MCP: the subject's spec is searched by the checks
+    run_validation runs; the reply is a summary, and the record is a file."""
+    from pathlib import Path
+
+    from anvilate.mcp import _InvalidArguments, _run_study, _run_validation
+    from anvilate.search import StudySummary
+    from anvilate.spec import load_spec_yaml
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    spec = load_spec_yaml((Path(__file__).parents[1] / "examples" / "padeye.spec.yaml")
+                          .read_text())  # fmt: skip
+    handle = _run_validation({"spec": spec.model_dump(mode="json")})["subject"]
+    study = {"name": "lighter lug", "objective": "element_params.thickness", "seed": 7,
+             "evaluations": 40, "population": 8,
+             "variables": [{"name": "element_params.thickness", "low": 8, "high": 30}]}  # fmt: skip
+    result = _run_study({"subject": handle, "study": study})
+    summary = StudySummary.model_validate(result["study"])
+    assert summary.best is not None and summary.evaluations == 40
+    (change,) = summary.changes
+    assert change.path == "element_params.thickness" and change.found < change.base == 20.0
+    assert Path(result["file"]["path"]).name == "lighter-lug.study-record.json"
+    with pytest.raises(_InvalidArguments, match="over the 2000"):
+        _run_study({"subject": handle, "study": {**study, "evaluations": 5000}})
+    with pytest.raises(_InvalidArguments, match="leave `spec` out"):
+        _run_study({"subject": handle, "study": {**study, "spec": "x.yaml"}})

@@ -86,6 +86,8 @@ __all__ = [
     "Gate",
     "CATALOG_OPERATIONS",
     "COMBINATION_OPERATIONS",
+    "STUDY_OPERATIONS",
+    "STUDY_EVALUATION_LIMIT",
     "CONTEXT_OPERATIONS",
     "REQUIRED_OPERATIONS",
     "ToolDefinition",
@@ -165,7 +167,14 @@ CONTEXT_OPERATIONS = frozenset({"list_context", "read_cad_file"})
 # Several parts placed by the features they share. Its handle is rendered by
 # render_viewport and exported by export_artifact, the verbs a single part uses.
 COMBINATION_OPERATIONS = frozenset({"build_combination"})
-_LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
+# A design search over a screened spec. It proposes an edit and changes nothing, so it is
+# beside the pipeline rather than one of its required operations.
+STUDY_OPERATIONS = frozenset({"run_study"})
+_LOOKUPS = CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS | STUDY_OPERATIONS
+
+# The most evaluations a study may spend inside one synchronous call. Each screens a spec,
+# so a larger budget belongs at the shell, `anvilate study`, which has no reply to keep.
+STUDY_EVALUATION_LIMIT = 2000
 
 # Written out, not read from `contracts`. Deriving these would make the check below
 # vacuous: a reference computed from the same call it is compared against agrees with
@@ -242,6 +251,7 @@ _NODE_CARD_REF = "urn:anvilate:schema:node-card:1.4.0"
 _NEXT_STEPS_REF = "urn:anvilate:schema:next-steps:1.0.0"
 _JOURNEY_STATE_REF = "urn:anvilate:schema:journey-state:1.0.0"
 _PROFILE_LISTING_REF = "urn:anvilate:schema:profile-listing:1.0.0"
+_STUDY_SUMMARY_REF = "urn:anvilate:schema:study-summary:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -919,6 +929,40 @@ def _catalog() -> tuple[ToolDefinition, ...]:
             backing="anvilate.combination:build_combination",
         ),
         ToolDefinition(
+            name="run_study",
+            title="Search a screened spec",
+            description=(
+                "Search the spec a run_validation subject screened for the best design found "
+                "under a budget. study names the variables by their path in the spec "
+                "(element_params.thickness) with low and high, a choices list and its "
+                "source, or a bundled table and field; the objective, one of the variables; "
+                "seed; and evaluations, at most 2000 here. Every candidate is screened by "
+                "the same checks run_validation runs. Returns the best design found, never "
+                "called optimal, whether its neighbors confirmed it, and the edit it proposes "
+                "to the spec, which is not changed; the full record is written to the output "
+                "folder when the server has one."
+            ),
+            input_schema=_object_schema(
+                {
+                    "subject": _SUBJECT_SCHEMA,
+                    "study": {
+                        "type": "object",
+                        "description": "the study: name, objective, seed, evaluations, "
+                        "population, sense, strategy and variables",
+                    },
+                },
+                required=["subject", "study"],
+            ),
+            output_schema=_object_schema(
+                {"study": {"$ref": _STUDY_SUMMARY_REF}, "file": _FILE_SCHEMA},
+                required=["study"],
+            ),
+            cost=Cost.BOUNDED,
+            subject="subject",
+            backing="anvilate.search:run_search",
+            writes=True,
+        ),
+        ToolDefinition(
             name="list_context",
             title="List a context folder",
             description=(
@@ -1132,6 +1176,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _NEXT_STEPS_REF,
             _JOURNEY_STATE_REF,
             _PROFILE_LISTING_REF,
+            _STUDY_SUMMARY_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -3012,6 +3057,40 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return result if listing is None else {**result, "profile": listing}
 
 
+def _run_study(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """``run_study``: a declared search over the spec a screening handle names."""
+    from .refusal import RefusalError
+    from .search import run_search, search_diff, spec_evaluator, study_from_document, summarize
+
+    handle = arguments["subject"]
+    try:
+        spec_document = _screening(handle)["spec"]
+    except UnknownSubject as unknown:
+        raise _InvalidArguments([f"subject: {unknown.args[0]}"], operation="run_study") from unknown
+    declared = arguments["study"]
+    if isinstance(declared, Mapping) and "spec" in declared:
+        raise _InvalidArguments(
+            ["study: the spec is the subject's; leave `spec` out of the study"],
+            operation="run_study",
+        )
+    try:
+        study, base = study_from_document(declared, spec_document=spec_document)
+    except (RefusalError, ValueError, TypeError) as refused:
+        raise _InvalidArguments([f"study: {_reason(refused)}"], operation="run_study") from refused
+    if study.evaluations > STUDY_EVALUATION_LIMIT:
+        raise _InvalidArguments(
+            [f"study: evaluations {study.evaluations} is over the {STUDY_EVALUATION_LIMIT} "
+             "one call may spend; run it at the shell with `anvilate study`, or lower it"],
+            operation="run_study",
+        )  # fmt: skip
+    result = run_search(study, spec_evaluator(spec_document, objective=study.objective))
+    diff = search_diff(result, base) if result.best is not None else None
+    summary = summarize(result, diff).model_dump(mode="json")
+    record = json.dumps(result.model_dump(mode="json"), sort_keys=True).encode("utf-8")
+    file = _written(f"{safe_stem(study.name)}.study-record.json", record)
+    return {"study": summary, **({"file": file} if file is not None else {})}
+
+
 def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:
     """``read_scorecard``, resolved from the subject store.
 
@@ -3473,6 +3552,7 @@ _DISPATCH: dict[str, Any] = {
     "read_scorecard": _read_scorecard,
     "render_viewport": _render_viewport,
     "run_validation": _run_validation,
+    "run_study": _run_study,
 }
 
 

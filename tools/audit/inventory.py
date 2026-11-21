@@ -55,6 +55,7 @@ _GROUPS = (
     ("CATALOG_OPERATIONS", "catalog lookup"),
     ("CONTEXT_OPERATIONS", "reads the user's files"),
     ("COMBINATION_OPERATIONS", "combination"),
+    ("STUDY_OPERATIONS", "design search"),
 )
 
 _HEAD = """# Audit of the agent surface

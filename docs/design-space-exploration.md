@@ -150,7 +150,11 @@ anvilate study lighter-lug.study.yaml --output studies/
 ```
 
 It prints the result and the edit it proposes (`element_params.thickness: 20 -> 12.1`), and
-writes every point evaluated to `studies/` when asked. The spec is not changed. A candidate
+writes every point evaluated to `studies/` when asked. The spec is not changed. Over MCP,
+`run_study` takes a `run_validation` subject and the same study (without `spec`, which is
+the subject's), spends at most 2,000 evaluations per call, and returns a bounded summary
+([study-summary 1.0.0](api/schemas/study-summary.schema.json)) with the record written to
+the output folder. A candidate
 the spec's own validators refuse is infeasible, naming the refusal. Exit 0 when a feasible
 design was found, 1 when none was, 3 for a study or spec it cannot read.
 

@@ -29,6 +29,7 @@ from anvilate.mcp import (
     METHOD_NOT_FOUND,
     PROTOCOL_REVISION,
     REQUIRED_OPERATIONS,
+    STUDY_OPERATIONS,
     Cost,
     Dispatch,
     Gate,
@@ -54,14 +55,19 @@ def test_the_catalog_covers_exactly_the_specified_operations():
     # Named, and counted. A gate that iterates an accidentally-empty collection passes
     # while checking nothing; asserting the number means an emptied catalog fails here.
     names = [tool.name for tool in tool_catalog()]
-    assert len(names) == 12
+    assert len(names) == 13
     # Eight pipeline operations, the one lookup of what ships, the two that read the
-    # user's own files, and the one that places several parts together.
+    # user's own files, the one that places several parts together, and the one that
+    # searches a screened spec.
     assert len(REQUIRED_OPERATIONS) == 8 and set(CATALOG_OPERATIONS) == {"describe_part"}
     assert set(CONTEXT_OPERATIONS) == {"list_context", "read_cad_file"}
     assert set(COMBINATION_OPERATIONS) == {"build_combination"}
     assert set(names) == (
-        REQUIRED_OPERATIONS | CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
+        REQUIRED_OPERATIONS
+        | CATALOG_OPERATIONS
+        | CONTEXT_OPERATIONS
+        | COMBINATION_OPERATIONS
+        | STUDY_OPERATIONS
     )
     assert len(set(names)) == len(names)
 
@@ -249,6 +255,7 @@ def test_the_synchronous_tools_are_the_ones_that_finish():
         "list_context",
         "read_cad_file",
         "build_combination",
+        "run_study",
     }
 
 
@@ -272,11 +279,11 @@ def test_a_definition_cannot_be_edited_after_it_is_approved():
 def test_every_backing_symbol_resolves_on_the_live_surface():
     """The claim that an operation is built, held against the code.
 
-    A dotted path in a table is a comment until something imports it. All twelve operations
-    are backed today, and each claim names a symbol that exists.
+    A dotted path in a table is a comment until something imports it. All thirteen
+    operations are backed today, and each claim names a symbol that exists.
     """
     backed = {tool.name: tool.backing for tool in tool_catalog() if tool.backing}
-    assert len(backed) == 12, backed
+    assert len(backed) == 13, backed
     for name, path in backed.items():
         module_name, _, attribute = path.partition(":")
         module = importlib.import_module(module_name)
@@ -1722,6 +1729,7 @@ def _released_registry():
         PROFILE_LISTING_SCHEMA_VERSION,
         SCORECARD_SCHEMA_VERSION,
         SPEC_SCHEMA_VERSION,
+        STUDY_SUMMARY_SCHEMA_VERSION,
         VIEWPORT_SCHEMA_VERSION,
     )
 
@@ -1745,6 +1753,7 @@ def _released_registry():
                 _released(f"next-steps-{NEXT_STEPS_SCHEMA_VERSION}.json"),
                 _released(f"journey-state-{JOURNEY_STATE_SCHEMA_VERSION}.json"),
                 _released(f"profile-listing-{PROFILE_LISTING_SCHEMA_VERSION}.json"),
+                _released(f"study-summary-{STUDY_SUMMARY_SCHEMA_VERSION}.json"),
                 _released(f"viewport-image-{VIEWPORT_SCHEMA_VERSION}.json"),
                 _released(f"geometry-measurement-{MEASUREMENT_SCHEMA_VERSION}.json"),
             )
@@ -1808,6 +1817,22 @@ def _dispatched_arguments(tool_name: str) -> dict:
         return {"subject": handle}
     if tool_name == "export_artifact":
         return {"subject": handle, "format": "evidence_bundle"}
+    if tool_name == "run_study":
+        import yaml
+
+        root = pathlib.Path(__file__).resolve().parents[1]
+        lug = yaml.safe_load((root / "examples" / "padeye.spec.yaml").read_text())
+        screened = _call("run_validation", {"spec": lug})["result"]["structuredContent"]
+        return {
+            "subject": screened["subject"],
+            "study": {
+                "name": "thinner lug",
+                "objective": "element_params.thickness",
+                "evaluations": 8,
+                "population": 4,
+                "variables": [{"name": "element_params.thickness", "low": 10, "high": 25}],
+            },
+        }
     raise AssertionError(
         f"{tool_name} is dispatched and this helper does not know how to call it; the check "
         f"below is documented to cover every dispatched tool"

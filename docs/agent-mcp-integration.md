@@ -1,7 +1,7 @@
 # Driving Anvilate from a coding agent
 
 This is the operator's half of [the MCP tool surface](mcp-tool-contracts.md). That page
-says what the twelve tools *are*; this one is what an agent actually does with them, and
+says what the thirteen tools *are*; this one is what an agent actually does with them, and
 what it will hit when it tries the loop everybody writes first.
 
 The rules an agent must follow while doing any of this are the shipped
@@ -25,6 +25,7 @@ patterns are callable today:
 | Validate | `run_validation` | **Dispatched.** The card comes back in the reply. |
 | Run T3 | `run_fea_validation` | **Task-dispatched.** Returns a durable handle; poll with `tasks/get`. Until a solver lands, the typed result is `not_evaluated`. |
 | Read the scorecard | `read_scorecard` | **Dispatched.** Takes the subject returned by validation. |
+| Search for a better design | `run_study` | **Dispatched synchronously.** Takes the subject returned by validation and a study (variables by spec path, an objective, a seed, at most 2,000 evaluations); returns the best design found and the edit it proposes, never applied. |
 
 Compile, validate, and read are separate stateless calls because every later call names its
 subject. T3 adds a durable task: `tools/call` returns immediately,
@@ -189,7 +190,7 @@ print("compile_spec output $ref:", json.dumps(tools[0]["outputSchema"]["properti
 ```text
 protocol: 2026-07-28
 server: anvilate
-tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, build_combination, list_context, read_cad_file, describe_part
+tools: compile_spec, build_part, render_viewport, measure_geometry, run_validation, run_fea_validation, read_scorecard, export_artifact, build_combination, run_study, list_context, read_cad_file, describe_part
 compile_spec output $ref: {"$ref": "urn:anvilate:schema:design-spec:1.24.0"}
 ```
 

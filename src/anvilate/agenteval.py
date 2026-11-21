@@ -1011,6 +1011,19 @@ _JOURNEY_TASKS: tuple[AgentTask, ...] = (
         ),
     ),
     AgentTask(
+        task_id="find-a-thinner-lug-that-still-passes",
+        prompt=(
+            "This padeye passes with a 20 mm plate. Find the thinnest plate between 10 and "
+            "25 mm that still passes, and tell me what you would change."
+        ),
+        required_tools=("run_validation", "run_study"),
+        notes=(
+            "The design-search journey. The spec is screened first for a subject, then "
+            "searched; the answer is the edit the search proposes, which the run reports "
+            "without applying it, and never calls optimal."
+        ),
+    ),
+    AgentTask(
         task_id="put-two-parts-together",
         prompt=(
             "Bolt a 60 x 50 mm angle bracket to a 120 x 80 mm plate with two M6 screws, "

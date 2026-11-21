@@ -125,6 +125,21 @@ def _mcp_pass() -> dict[str, float]:
         written = Path(exported["structuredContent"]["file"]["path"]).name
         timings["mcp list_context"], _ = session.tool("list_context", {"folder": "."})
         timings["mcp read_cad_file"], _ = session.tool("read_cad_file", {"source": written})
+        lug = yaml.safe_load((_ROOT / "examples" / "padeye.spec.yaml").read_text("utf-8"))
+        _, screened = session.tool("run_validation", {"spec": lug})
+        timings["mcp run_study"], _ = session.tool(
+            "run_study",
+            {
+                "subject": screened["structuredContent"]["subject"],
+                "study": {
+                    "name": "thinner lug",
+                    "objective": "element_params.thickness",
+                    "evaluations": 8,
+                    "population": 4,
+                    "variables": [{"name": "element_params.thickness", "low": 10, "high": 25}],
+                },
+            },
+        )
         return timings
     finally:
         session.close()

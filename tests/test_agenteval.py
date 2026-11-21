@@ -341,11 +341,20 @@ def test_the_default_task_set_covers_the_surface_it_claims_to():
     assert task_set_issues(list(tasks)) == []
 
     exercised = {operation for task in tasks for operation in task.operations}
-    from anvilate.mcp import CATALOG_OPERATIONS, COMBINATION_OPERATIONS, CONTEXT_OPERATIONS
+    from anvilate.mcp import (
+        CATALOG_OPERATIONS,
+        COMBINATION_OPERATIONS,
+        CONTEXT_OPERATIONS,
+        STUDY_OPERATIONS,
+    )
 
     assert exercised == REQUIRED_OPERATIONS
     assert {tool.name for tool in tool_catalog()} == (
-        REQUIRED_OPERATIONS | CATALOG_OPERATIONS | CONTEXT_OPERATIONS | COMBINATION_OPERATIONS
+        REQUIRED_OPERATIONS
+        | CATALOG_OPERATIONS
+        | CONTEXT_OPERATIONS
+        | COMBINATION_OPERATIONS
+        | STUDY_OPERATIONS
     )
 
     # A required call is a claim that no correct run skips it. `run_validation` and
@@ -543,7 +552,12 @@ def test_the_corpus_reaches_every_backed_operation():
     reached = {operation for task in default_task_set() for operation in task.operations}
     # Every pipeline operation. The catalog lookup is a reference an agent may read, not
     # a step it must take, so the corpus is not required to reach it.
-    beside = mcp.CATALOG_OPERATIONS | mcp.CONTEXT_OPERATIONS | mcp.COMBINATION_OPERATIONS
+    beside = (
+        mcp.CATALOG_OPERATIONS
+        | mcp.CONTEXT_OPERATIONS
+        | mcp.COMBINATION_OPERATIONS
+        | mcp.STUDY_OPERATIONS
+    )
     assert set(mcp._DISPATCH) - beside <= reached
 
 
@@ -694,6 +708,16 @@ def test_every_journey_task_has_a_correct_run_that_completes_it(tmp_path):
             assert call(then, subject=subject, format="step")["validated"] is False
         return ["build_part"] + ([then] if then else [])
 
+    def searched() -> list[str]:
+        lug = yaml.safe_load((examples / "padeye.spec.yaml").read_text("utf-8"))
+        subject = call("run_validation", spec=lug)["subject"]
+        thickness = {"name": "element_params.thickness", "low": 10, "high": 25}
+        study = {"name": "thinner lug", "objective": "element_params.thickness",
+                 "evaluations": 24, "population": 6, "variables": [thickness]}  # fmt: skip
+        summary = call("run_study", subject=subject, study=study)["study"]
+        assert summary["changes"] and summary["changes"][0]["found"] < 20
+        return ["run_validation", "run_study"]
+
     def screened() -> list[str]:
         card = call("run_validation", spec=spec("clevis"))["scorecard"]
         assert card["status"] == "pass" and len(card["entries"]) >= 4
@@ -712,6 +736,7 @@ def test_every_journey_task_has_a_correct_run_that_completes_it(tmp_path):
         "draw-a-box-and-its-lid": lambda: drawn("enclosure") + drawn("enclosure_lid"),
         "screen-a-clevis-under-its-load": screened,
         "put-two-parts-together": assembled,
+        "find-a-thinner-lug-that-still-passes": searched,
         "start-from-a-drawing-in-my-folder": from_the_folder,
         "weigh-a-file-i-was-sent": weighed,
     }

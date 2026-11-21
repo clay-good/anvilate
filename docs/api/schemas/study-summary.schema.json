@@ -1,0 +1,140 @@
+{
+  "$defs": {
+    "StudyChangeRow": {
+      "additionalProperties": false,
+      "description": "One path a study proposes to change, from its base value to the value found.",
+      "properties": {
+        "base": {
+          "title": "Base",
+          "type": "number"
+        },
+        "found": {
+          "title": "Found",
+          "type": "number"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "base",
+        "found"
+      ],
+      "title": "StudyChangeRow",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:study-summary:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate study summary: a design search's best design found under its stated budget (never called optimal), its objective and governing check, whether its neighborhood confirmed it, the table rows it cites, and the edit it proposes to the spec, path by path, with the digest of the full record. Generated from anvilate.search.StudySummary.",
+  "properties": {
+    "best": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Best"
+    },
+    "better_neighbor": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Better Neighbor"
+    },
+    "changes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/StudyChangeRow"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "cited": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Cited",
+      "type": "array"
+    },
+    "confirmed": {
+      "title": "Confirmed",
+      "type": "boolean"
+    },
+    "evaluations": {
+      "minimum": 0,
+      "title": "Evaluations",
+      "type": "integer"
+    },
+    "governing_check": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Governing Check"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "objective": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Objective"
+    },
+    "record_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Sha256"
+    }
+  },
+  "required": [
+    "name",
+    "label",
+    "evaluations",
+    "confirmed"
+  ],
+  "title": "StudySummary",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

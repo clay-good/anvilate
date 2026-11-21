@@ -251,6 +251,7 @@ contracts.INDUSTRY_PROFILE_SCHEMA_VERSION
 contracts.NEXT_STEPS_SCHEMA_VERSION
 contracts.JOURNEY_STATE_SCHEMA_VERSION
 contracts.PROFILE_LISTING_SCHEMA_VERSION
+contracts.STUDY_SUMMARY_SCHEMA_VERSION
 contracts.CONTEXT_INVENTORY_SCHEMA_VERSION
 contracts.JSON_SCHEMA_DIALECT
 contracts.PART_CATALOG_SCHEMA_VERSION
@@ -264,6 +265,7 @@ contracts.industry_profile_json_schema
 contracts.next_steps_json_schema
 contracts.journey_state_json_schema
 contracts.profile_listing_json_schema
+contracts.study_summary_json_schema
 contracts.context_inventory_json_schema
 contracts.freeze_release
 contracts.part_catalog_json_schema
@@ -616,6 +618,8 @@ margin_of_safety.factor_set
 margin_of_safety.margin_table
 mcp.CATALOG_OPERATIONS
 mcp.COMBINATION_OPERATIONS
+mcp.STUDY_OPERATIONS
+mcp.STUDY_EVALUATION_LIMIT
 mcp.CONTEXT_OPERATIONS
 mcp.Cost
 mcp.Dispatch
@@ -920,6 +924,9 @@ search.TABLES
 search.table_choice
 search.study_from_document
 search.spec_evaluator
+search.StudyChangeRow
+search.StudySummary
+search.summarize
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep

@@ -33,8 +33,9 @@ independent and optional.
 - [ ] 2.1 Tiered evaluation, cheapest first; per-point record of tiers run
 - [ ] 2.2 Content-digest evaluation cache, shared with `add-local-fea`'s result store
 - [ ] 2.3 One MCP tool and one CLI command; task with progress and cancellation
-      (`anvilate study`, over the screens `check` runs; the MCP tool and the task are not
-      built yet)
+      (`anvilate study` and the `run_study` MCP tool over a screened subject, study-summary
+      1.0.0; synchronous with at most 2,000 evaluations per call, so the task with
+      progress and cancellation waits on FEA-length studies)
 - [ ] 2.4 Worked study: the gear reducer, mass under drive-train checks and housing FEA
 
 ## 3. Topology seeds (optional)
