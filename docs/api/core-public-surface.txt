@@ -248,6 +248,7 @@ contracts.PRODUCT_SUMMARY_SCHEMA_VERSION
 contracts.PRODUCT_DOCUMENT_SCHEMA_VERSION
 contracts.NODE_CARD_SCHEMA_VERSION
 contracts.INDUSTRY_PROFILE_SCHEMA_VERSION
+contracts.NEXT_STEPS_SCHEMA_VERSION
 contracts.CONTEXT_INVENTORY_SCHEMA_VERSION
 contracts.JSON_SCHEMA_DIALECT
 contracts.PART_CATALOG_SCHEMA_VERSION
@@ -258,6 +259,7 @@ contracts.product_summary_json_schema
 contracts.product_document_json_schema
 contracts.node_card_json_schema
 contracts.industry_profile_json_schema
+contracts.next_steps_json_schema
 contracts.context_inventory_json_schema
 contracts.freeze_release
 contracts.part_catalog_json_schema
@@ -897,6 +899,10 @@ industry.load_profile
 industry.AwaitedValue
 industry.bundled_profiles
 industry.industry_profile
+journey.NEXT_STEP_TOOLS
+journey.NextStep
+journey.NextSteps
+journey.next_steps
 verification.plan_verification
 verification.record_outcome
 verification.DVPR_COLUMNS

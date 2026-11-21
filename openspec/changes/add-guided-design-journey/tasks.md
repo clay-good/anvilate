@@ -8,6 +8,8 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
 
 - [ ] 1.1 `next` on every workflow result, derived from the card by the precedence rule;
       a test walks every rule against the live tool catalog
+      (`anvilate.journey`, next-steps 1.0.0, on `run_validation`; the other workflow
+      results, and the refusal-remedy rule over the wire, are not wired yet)
 - [ ] 1.2 Journey stage and per-stage gaps on part, combination and product results
 - [ ] 1.3 Stage invalidated by content digest; a changed design falls back and says why
 

@@ -1,0 +1,49 @@
+{
+  "$defs": {
+    "NextStep": {
+      "additionalProperties": false,
+      "description": "One step: the tool to call, what to pass it beyond the subject, and why.",
+      "properties": {
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "reason"
+      ],
+      "title": "NextStep",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:next-steps:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate next steps: the ordered steps a workflow result calls for, each naming the tool to call, what to pass it beside the subject, and why, derived from the result alone by a fixed precedence (a refusal's remedies, failed checks with a solved repair, other failures, tiers demanded and not run, missing declarations, then export). Generated from anvilate.journey.NextSteps.",
+  "properties": {
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/NextStep"
+      },
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    }
+  },
+  "required": [
+    "steps"
+  ],
+  "title": "NextSteps",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

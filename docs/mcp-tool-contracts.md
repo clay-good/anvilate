@@ -248,7 +248,14 @@ being non-empty, so a client reading only the protocol flag and one reading the 
 content reach the same verdict.
 
 `run_validation` answers with a scorecard — see [screening a spec](spec-screening.md) for
-what a Design Spec can and cannot be screened on. Two of its decisions differ from
+what a Design Spec can and cannot be screened on — and with `next`, the ordered steps the
+card calls for ([next-steps 1.0.0](api/schemas/next-steps.schema.json)). Each step names a
+tool, what to pass it beside the subject, and why, by one precedence: failed checks whose
+inverse solved a value (re-validate at it), other failures (move the named parameter), tiers
+the document demands that did not run (`build_part`, `run_fea_validation`), each
+declaration a check is waiting on, and, when nothing holds the card back,
+`export_artifact` with `evidence_bundle`. The same card gives the same steps, and the list
+is never empty. Two of its decisions differ from
 `compile_spec`'s and the difference is the point:
 
 - **A document that is not a Design Spec is a malformed request here.** Its input property

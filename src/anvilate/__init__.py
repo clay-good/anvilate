@@ -130,6 +130,8 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.industry` — industry profiles: cited screening rules declared once,
   required checks that always reach the card, layered company profiles and their
   relaxations, never a compliance claim.
+- :mod:`anvilate.journey` — the next step a workflow result calls for, derived from the
+  card alone by a fixed precedence, every tool it names held to the published catalog.
 - :mod:`anvilate.risk` — risk records in the hazard structure ISO 14971 and ISO 12100
   share, each control that is a check verified by that check's verdict.
 - :mod:`anvilate.trace` — each requirement traced to the checks, tests and evidence that

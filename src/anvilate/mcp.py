@@ -234,6 +234,7 @@ _CAD_FACTS_REF = "urn:anvilate:schema:cad-file-facts:1.2.0"
 _COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
 _PRODUCT_SUMMARY_REF = "urn:anvilate:schema:product-summary:1.2.0"
 _NODE_CARD_REF = "urn:anvilate:schema:node-card:1.4.0"
+_NEXT_STEPS_REF = "urn:anvilate:schema:next-steps:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -682,8 +683,12 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                 required=["spec"],
             ),
             output_schema=_object_schema(
-                {"scorecard": {"$ref": _SCORECARD_REF}, "subject": _SUBJECT_SCHEMA},
-                required=["scorecard", "subject"],
+                {
+                    "scorecard": {"$ref": _SCORECARD_REF},
+                    "subject": _SUBJECT_SCHEMA,
+                    "next": {"$ref": _NEXT_STEPS_REF},
+                },
+                required=["scorecard", "subject", "next"],
             ),
             writes=True,
             cost=Cost.BOUNDED,
@@ -1080,6 +1085,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _COMBINATION_REF,
             _PRODUCT_SUMMARY_REF,
             _NODE_CARD_REF,
+            _NEXT_STEPS_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -2916,7 +2922,11 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         ) from failure
     _refuse_unbacked(spec, "run_validation")
     spec = _confirm_drafts(spec)
-    card = screen_spec(spec, **_screening_options(spec)).model_dump(mode="json")
+    from .journey import NextSteps, next_steps
+
+    screened = screen_spec(spec, **_screening_options(spec))
+    card = screened.model_dump(mode="json")
+    steps = NextSteps(steps=next_steps(screened)).model_dump(mode="json")
     # The card is returned *and* published: returned because it is closed-form and the answer
     # fits in the reply, published because `read_scorecard` and `export_artifact` need a name
     # for it that is not "the last thing you asked me".
@@ -2932,7 +2942,7 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     handle = subject_store().publish(
         _SCREENING, {"spec": spec.model_dump(mode="json"), "scorecard": card}
     )
-    return {"scorecard": card, "subject": handle}
+    return {"scorecard": card, "subject": handle, "next": steps}
 
 
 def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:

@@ -78,6 +78,7 @@ __all__ = [
     "PRODUCT_DOCUMENT_SCHEMA_VERSION",
     "NODE_CARD_SCHEMA_VERSION",
     "INDUSTRY_PROFILE_SCHEMA_VERSION",
+    "NEXT_STEPS_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -99,6 +100,7 @@ __all__ = [
     "product_document_json_schema",
     "node_card_json_schema",
     "industry_profile_json_schema",
+    "next_steps_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -202,6 +204,7 @@ PRODUCT_SUMMARY_SCHEMA_VERSION = "1.2.0"
 PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.16.0"
 NODE_CARD_SCHEMA_VERSION = "1.4.0"
 INDUSTRY_PROFILE_SCHEMA_VERSION = "1.1.0"
+NEXT_STEPS_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -593,6 +596,24 @@ def industry_profile_json_schema() -> dict[str, Any]:
     )
 
 
+def next_steps_json_schema() -> dict[str, Any]:
+    """The ordered next steps a workflow result names."""
+    from .journey import NextSteps
+
+    return _artifact(
+        NextSteps,
+        name="next-steps",
+        version=NEXT_STEPS_SCHEMA_VERSION,
+        description=(
+            "Anvilate next steps: the ordered steps a workflow result calls for, each naming "
+            "the tool to call, what to pass it beside the subject, and why, derived from the "
+            "result alone by a fixed precedence (a refusal's remedies, failed checks with a "
+            "solved repair, other failures, tiers demanded and not run, missing "
+            "declarations, then export). Generated from anvilate.journey.NextSteps."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -814,6 +835,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "product-document.schema.json": product_document_json_schema(),
         "node-card.schema.json": node_card_json_schema(),
         "industry-profile.schema.json": industry_profile_json_schema(),
+        "next-steps.schema.json": next_steps_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

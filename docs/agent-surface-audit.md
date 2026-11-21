@@ -33,7 +33,7 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `build_part` | pipeline | `spec` | `geometry`, `warnings`, `subject` | yes | 287 characters | 10 s | draw, export, context |
 | `render_viewport` | pipeline | `subject`, `view`, `width_px` (optional), `dimensions` (optional), `format` (optional) | an image and one line of text | yes | 477 characters | 2 s | draw, export, context, combination |
 | `measure_geometry` | pipeline | `subject`, `query` | `measurement` | no | 164 characters | 2 s | none |
-| `run_validation` | pipeline | `spec`, `tiers` (optional) | `scorecard`, `subject` | yes | 218 characters | 2 s | check |
+| `run_validation` | pipeline | `spec`, `tiers` (optional) | `scorecard`, `subject`, `next` | yes | 218 characters | 2 s | check |
 | `run_fea_validation` | pipeline | `spec`, `convergence_tol` (optional) | `scorecard` | yes | 470 characters | a task | none |
 | `read_scorecard` | pipeline | `subject` | `scorecard` | no | 195 characters | 1 s | none |
 | `export_artifact` | pipeline | `subject`, `format`, `ifc_schema` (optional) | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 783 characters | 2 s | export, combination |

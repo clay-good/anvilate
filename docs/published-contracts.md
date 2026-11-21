@@ -33,6 +33,7 @@ that has never heard of anvilate.
 | [`docs/api/schemas/product-summary.schema.json`](api/schemas/product-summary.schema.json) | a placed product as a bounded summary tree: each node's path, part number, verdict and governing finding | `PRODUCT_SUMMARY_SCHEMA_VERSION` |
 | [`docs/api/schemas/node-card.schema.json`](api/schemas/node-card.schema.json) | one node of a placed product: the checks it owns and its children's cards | `NODE_CARD_SCHEMA_VERSION` |
 | [`docs/api/schemas/industry-profile.schema.json`](api/schemas/industry-profile.schema.json) | an industry profile as you write one: each rule cited or labeled a practice default (validation mode) | `INDUSTRY_PROFILE_SCHEMA_VERSION` |
+| [`docs/api/schemas/next-steps.schema.json`](api/schemas/next-steps.schema.json) | the ordered steps a workflow result calls for: the tool, what to pass it, and why | `NEXT_STEPS_SCHEMA_VERSION` |
 | [`docs/api/schemas/cli-output.schema.json`](api/schemas/cli-output.schema.json) | every completed `--format json` result from `build`, `check`, `export`, `verify`, `interfaces`, `diff`, and `doctor` | `CLI_OUTPUT_SCHEMA_VERSION` |
 
 The version cells name the constants rather than quoting numbers, and
