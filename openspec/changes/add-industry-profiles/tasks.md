@@ -2,12 +2,15 @@
 
 ## 1. Profile
 
-- [ ] 1.1 Profile schema (URN-identified): factor set, basis rules, required checks by
+- [x] 1.1 Profile schema (URN-identified): factor set, basis rules, required checks by
       item class, material needs, artifacts, drawing standard; source or practice label
-      per rule
+      per rule (`anvilate.industry`, published as industry-profile 1.0.0; basis rules and
+      material needs are not modelled yet)
 - [ ] 1.2 Item classes an item declares (flight box, primary structure, chassis part,
       patient-contacting, guard)
-- [ ] 1.3 Layering with override sources; relaxation reporting
+- [x] 1.3 Layering with override sources; relaxation reporting
+      (on the resolved profile; carrying it onto margin rows waits on binding a profile
+      to a margin report)
 
 ## 2. Shipped profiles
 
@@ -18,7 +21,7 @@
 
 ## 3. Card
 
-- [ ] 3.1 Required checks shown when untriggered; not evaluated or not available
+- [x] 3.1 Required checks shown when untriggered; not evaluated or not available
 - [ ] 3.2 Attribution of every profile-added rule; "what the profile changed" listing over
       the MCP tools and the CLI
 - [ ] 3.3 Report header naming profile and version, with the screening-not-certification

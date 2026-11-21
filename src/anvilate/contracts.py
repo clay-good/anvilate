@@ -77,6 +77,7 @@ __all__ = [
     "PRODUCT_SUMMARY_SCHEMA_VERSION",
     "PRODUCT_DOCUMENT_SCHEMA_VERSION",
     "NODE_CARD_SCHEMA_VERSION",
+    "INDUSTRY_PROFILE_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -97,6 +98,7 @@ __all__ = [
     "product_summary_json_schema",
     "product_document_json_schema",
     "node_card_json_schema",
+    "industry_profile_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -199,6 +201,7 @@ PRODUCT_SUMMARY_SCHEMA_VERSION = "1.2.0"
 # The product document itself: its version is the one ``anvilate_product`` states.
 PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.16.0"
 NODE_CARD_SCHEMA_VERSION = "1.4.0"
+INDUSTRY_PROFILE_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -570,6 +573,26 @@ def node_card_json_schema() -> dict[str, Any]:
     )
 
 
+def industry_profile_json_schema() -> dict[str, Any]:
+    """An industry profile, as the person writing one validates it."""
+    from .industry import IndustryProfile
+
+    return _artifact(
+        IndustryProfile,
+        name="industry-profile",
+        version=INDUSTRY_PROFILE_SCHEMA_VERSION,
+        mode="validation",
+        description=(
+            "Anvilate industry profile: a URN-identified, versioned bundle of screening "
+            "rules (a factor set, named factors, required checks by item class, required "
+            "artifacts, a drawing standard), each citing its source or labeled a "
+            "practice-based default, optionally extending another profile. A screening "
+            "configuration, never a compliance claim. Generated from "
+            "anvilate.industry.IndustryProfile."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -790,6 +813,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "product-summary.schema.json": product_summary_json_schema(),
         "product-document.schema.json": product_document_json_schema(),
         "node-card.schema.json": node_card_json_schema(),
+        "industry-profile.schema.json": industry_profile_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

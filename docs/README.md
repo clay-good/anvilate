@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Eighty-three pages, arranged by what you are trying to do. The [README](../README.md) is the
+Eighty-four pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -70,6 +70,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Load combinations](load-combinations.md) | The governing combination named, including the uplift case a gravity-only check misses. |
 | [Design-space exploration](design-space-exploration.md) | An exact Pareto front, because every check is closed-form. |
 | [Typed repair feedback](repair-feedback.md) | The parameter and the value that fixes a failing check. |
+| [Industry profiles](industry-profiles.md) | How your industry screens, declared once: cited factors, checks required for a class of item that reach the card even untriggered, a company layer whose relaxations are named, and never a compliance claim. |
 | [Quality artifacts](quality-artifacts.md) | The records a part is judged on, from its own evidence: the DVP&R, the design FMEA on published rating scales, characteristics numbered across revisions with their special marks and a control-plan seed, risk records whose controls take their checks' verdicts, and each requirement traced to its checks, tests and evidence, with the uncovered and the untraced named. |
 | [Verification planning](verification-planning.md) | The physical test each check implies — and why a plan is never evidence; exported as a DVP&R, CSV or XLSX. |
 | [Model credibility](model-credibility.md) | The recorded test read back against the prediction, the escaped-defect candidate an unconservative one files, and the eight NASA-STD-7009A factors scored only from evidence held. |

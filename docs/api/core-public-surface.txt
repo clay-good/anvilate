@@ -247,6 +247,7 @@ contracts.COMBINATION_SUMMARY_SCHEMA_VERSION
 contracts.PRODUCT_SUMMARY_SCHEMA_VERSION
 contracts.PRODUCT_DOCUMENT_SCHEMA_VERSION
 contracts.NODE_CARD_SCHEMA_VERSION
+contracts.INDUSTRY_PROFILE_SCHEMA_VERSION
 contracts.CONTEXT_INVENTORY_SCHEMA_VERSION
 contracts.JSON_SCHEMA_DIALECT
 contracts.PART_CATALOG_SCHEMA_VERSION
@@ -256,6 +257,7 @@ contracts.combination_summary_json_schema
 contracts.product_summary_json_schema
 contracts.product_document_json_schema
 contracts.node_card_json_schema
+contracts.industry_profile_json_schema
 contracts.context_inventory_json_schema
 contracts.freeze_release
 contracts.part_catalog_json_schema
@@ -878,6 +880,20 @@ characteristics.ControlPlanSeed
 characteristics.characteristics_of
 characteristics.number_characteristics
 characteristics.control_plan_seed
+industry.SCREENING_NOT_CERTIFICATION
+industry.ProfileRule
+industry.FactorRule
+industry.RequiredCheck
+industry.RequiredArtifact
+industry.IndustryProfile
+industry.Relaxation
+industry.ResolvedProfile
+industry.ProfiledCard
+industry.GENERAL
+industry.layer
+industry.resolve
+industry.apply_profile
+industry.load_profile
 verification.plan_verification
 verification.record_outcome
 verification.DVPR_COLUMNS

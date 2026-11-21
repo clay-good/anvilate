@@ -1,0 +1,317 @@
+{
+  "$defs": {
+    "FactorRule": {
+      "additionalProperties": false,
+      "description": "A named factor the profile sets, such as ``ultimate`` or ``fitting``.\n\nLarger is stricter: a factor multiplies the load or divides the allowable. A layered\noverride with a lower value is reported as a relaxation.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "practice_default": {
+          "default": false,
+          "title": "Practice Default",
+          "type": "boolean"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "value": {
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "value"
+      ],
+      "title": "FactorRule",
+      "type": "object"
+    },
+    "ProfileRule": {
+      "additionalProperties": false,
+      "description": "What every rule shares: an id, and either a source or a practice-default label.\n\n``source`` cites the document and clause the rule comes from. ``practice_default``\nsays the rule is a common practice with no single citable source; the card then says\nso rather than lending it a citation it does not have. A rule with neither is refused.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "practice_default": {
+          "default": false,
+          "title": "Practice Default",
+          "type": "boolean"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "ProfileRule",
+      "type": "object"
+    },
+    "RequiredArtifact": {
+      "additionalProperties": false,
+      "description": "A record the profile requires to come out, such as a margin table or a DFMEA.",
+      "properties": {
+        "artifact": {
+          "enum": [
+            "margin_table",
+            "dfmea",
+            "dvpr",
+            "risk_file",
+            "characteristic_accountability",
+            "control_plan_seed",
+            "requirement_trace"
+          ],
+          "title": "Artifact",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "practice_default": {
+          "default": false,
+          "title": "Practice Default",
+          "type": "boolean"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "id",
+        "artifact"
+      ],
+      "title": "RequiredArtifact",
+      "type": "object"
+    },
+    "RequiredCheck": {
+      "additionalProperties": false,
+      "description": "A check the profile requires for every item of a class.\n\n``satisfied_by`` names the card entries that are this check, by ``check_id`` or by\nname (an entry named ``\"bracket random vibration\"`` matches ``\"random vibration\"``:\nequal, or ending in a space then it). ``needs`` names the inputs the check reads,\nfor the not-evaluated entry when it did not run. ``pack`` names the module the check\nlives in and ``analysis`` the function that computes it; either missing from this\ninstallation makes the check not available, with ``install`` as the remedy.",
+      "properties": {
+        "analysis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis"
+        },
+        "check": {
+          "title": "Check",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "install": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Install"
+        },
+        "item_class": {
+          "title": "Item Class",
+          "type": "string"
+        },
+        "needs": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Needs",
+          "type": "array"
+        },
+        "pack": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pack"
+        },
+        "practice_default": {
+          "default": false,
+          "title": "Practice Default",
+          "type": "boolean"
+        },
+        "satisfied_by": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Satisfied By",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "id",
+        "item_class",
+        "check",
+        "satisfied_by"
+      ],
+      "title": "RequiredCheck",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:industry-profile:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate industry profile: a URN-identified, versioned bundle of screening rules (a factor set, named factors, required checks by item class, required artifacts, a drawing standard), each citing its source or labeled a practice-based default, optionally extending another profile. A screening configuration, never a compliance claim. Generated from anvilate.industry.IndustryProfile.",
+  "properties": {
+    "drawing_standard": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProfileRule"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "extends": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "pattern": "^urn:",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extends"
+    },
+    "factor_set": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProfileRule"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "factors": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FactorRule"
+      },
+      "title": "Factors",
+      "type": "array"
+    },
+    "item_classes": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Item Classes",
+      "type": "array"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "required_artifacts": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RequiredArtifact"
+      },
+      "title": "Required Artifacts",
+      "type": "array"
+    },
+    "required_checks": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/RequiredCheck"
+      },
+      "title": "Required Checks",
+      "type": "array"
+    },
+    "urn": {
+      "maxLength": 256,
+      "pattern": "^urn:[a-z0-9][a-z0-9-]{0,31}:\\S+$",
+      "title": "Urn",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "urn",
+    "name",
+    "version"
+  ],
+  "title": "IndustryProfile",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}

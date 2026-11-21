@@ -127,6 +127,9 @@ that already ran and does one more thing with them:
 - :mod:`anvilate.characteristics` — every characteristic of a part numbered, the numbers
   kept across revisions, special marks carried to the accountability table and the
   control-plan seed.
+- :mod:`anvilate.industry` — industry profiles: cited screening rules declared once,
+  required checks that always reach the card, layered company profiles and their
+  relaxations, never a compliance claim.
 - :mod:`anvilate.risk` — risk records in the hazard structure ISO 14971 and ISO 12100
   share, each control that is a check verified by that check's verdict.
 - :mod:`anvilate.trace` — each requirement traced to the checks, tests and evidence that
