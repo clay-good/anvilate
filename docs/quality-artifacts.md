@@ -10,6 +10,8 @@ with it.
 | --- | --- | --- | --- |
 | [DVP&R](verification-planning.md#the-plan-as-a-dvpr), CSV or XLSX | the design verification plan and report a validation engineer runs | the verification plan: each test item, its requirement, procedure and acceptance criterion | sample size, timing, owner, and running the test |
 | [Design FMEA](#design-fmea), CSV or XLSX | the DFMEA worksheet: one row per failure mode, its prevention and detection controls | the failure-mode catalogue, the scorecard and the verification plan | severity, effects, your action-priority matrix, and the actions |
+| [Characteristic accountability](#characteristic-accountability), CSV or XLSX | first-article inspection: every characteristic numbered, nominal, tolerance, special mark, and a measured column | the Design Spec's dimensions and frames, the callouts, and your marks | the measurements, and the register you keep between revisions |
+| [Control-plan seed](#control-plan-seed), CSV or XLSX | the control plan's design columns, for each special characteristic | your special marks and the scorecard | process step, machine, sample size, frequency, control method, reaction plan |
 | [Risk records](#risk-records), CSV | the risk-management file of ISO 14971 (medical) or the risk assessment of ISO 12100 (machinery) | your hazard records and the scorecard | the severity and probability categories, and whether the residual risk is acceptable |
 | Trace, CSV or ReqIF 1.2 | a requirements tool's link table, or the tool itself through ReqIF | your requirements, the scorecard and the verification plan | the requirements themselves, and whether a covered requirement is met |
 
@@ -134,6 +136,56 @@ refused with the first combinations it hits. A table with no source is refused, 
 export names it. No matrix ships with Anvilate: the handbook matrices most programs use are
 licensed, and a test sweeps every bundled file to keep one from arriving.
 
+## Characteristic accountability
+
+`characteristics_of` lists every characteristic of a part in drawing order: the toleranced
+dimensions, the geometric tolerances, the callouts' notes, and any material property you
+mark. `number_characteristics` numbers them against the last revision's register:
+
+```python
+from anvilate.characteristics import (CharacteristicRegister, characteristics_of,
+                                      number_characteristics)
+
+rev_a = number_characteristics(characteristics_of(spec_a), part="P-100", revision="A")
+saved = rev_a.numbering.model_dump_json()          # keep it with the release
+rev_b = number_characteristics(characteristics_of(spec_b, callouts=callouts, marks=marks),
+                               part="P-100", revision="B",
+                               previous=CharacteristicRegister.model_validate_json(saved))
+rev_b.added, rev_b.retired   # (4, 5), () when revision B adds a hole
+rev_b.to_csv()               # number, kind, characteristic, nominal, tolerance, special,
+                             # symbol, reason, and an empty measured-result column
+```
+
+| Rule | Why |
+| --- | --- |
+| A characteristic's identity is what it is (kind, tag, frame type), never its value | a revised tolerance is the same characteristic, so it keeps its number |
+| A new characteristic takes the next number never used | adding a hole never shifts a number an inspection record quotes |
+| A removed one's number is retired, kept in the register, and never reused | an old record's number never comes to mean something else |
+| The register is refused for another part, or for the revision it already is | a numbering carried to the wrong part is worse than none |
+
+Tolerances are written as limits of size in millimetres (`119.9 to 120.1 mm`), the form
+an inspector checks against.
+
+### Special characteristics
+
+A `SpecialMark` names one characteristic as `critical` or `significant`, with your
+customer's symbol and the reason, and optionally the check that makes it special. A mark
+that matches no characteristic, or more than one (two frames on one hole, with no `detail`
+to choose), is refused; an unmarked characteristic is never shown as special.
+
+Marks reach the accountability table and the control-plan seed today. Drawings and the QIF
+export do not carry them yet.
+
+## Control-plan seed
+
+`control_plan_seed(table, scorecard=card)` writes one row per special characteristic: its
+number, description, specification, tolerance, class and symbol, the governing check with
+its status, and a suggested measurement method (by kind: a variable gauge for a size, a
+CMM against the datums for a located frame, a certificate for a property). The process
+step, machine, sample size, frequency, control method and reaction plan columns are
+present and empty: they belong to the plant. A mark naming a check the card does not hold
+is refused.
+
 ## Risk records
 
 ISO 14971 and ISO 12100 share one chain: a hazard, the hazardous situation in which it
@@ -169,5 +221,4 @@ it is acceptable.
 
 ## Not yet
 
-Special-characteristic marks and the control-plan seed they feed, and stable
-characteristic numbering.
+Special marks on drawings and in the QIF export.

@@ -11,17 +11,19 @@
 
 ## 2. Characteristics
 
-- [ ] 2.1 Critical and significant marks with symbol and reason on dimensions,
+- [x] 2.1 Critical and significant marks with symbol and reason on dimensions,
       tolerances, properties
 - [ ] 2.2 Marks carried to drawings, QIF, inspection plan, control-plan seed
-- [ ] 2.3 Stable characteristic numbering across revisions; accountability table
+      (carried to the accountability table and the control-plan seed; drawings and QIF
+      not yet)
+- [x] 2.3 Stable characteristic numbering across revisions; accountability table
 
 ## 3. Plans and records
 
 - [x] 3.1 DVP&R export of the verification plan
       (CSV and XLSX, one row per item; no archetype routes a fatigue check yet, so the
       spec scenario's durability row waits on a durability archetype)
-- [ ] 3.2 Control-plan seed export
+- [x] 3.2 Control-plan seed export
 - [x] 3.3 Risk records (ISO 14971 / ISO 12100 structure) with linked controls
 
 ## 4. Traceability
