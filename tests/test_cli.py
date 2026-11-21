@@ -5827,3 +5827,17 @@ def test_doctor_reports_a_missing_optional_capability_and_still_passes(monkeypat
     assert by_name["IFC writer"]["status"] == "optional"
     assert "anvilate[ifc]" in by_name["IFC writer"]["remedy"]
     assert by_name["DXF writer"]["status"] == "pass"
+
+
+def test_check_reads_the_item_class_the_spec_declares(tmp_path):
+    """Industry profiles 1.2: a part declares the class it is screened as, so the profile
+    needs no flag; a class the profile does not declare is refused, naming the file."""
+    lug = tmp_path / "padeye.yaml"
+    lug.write_text(_LUG_SPEC + "\nitem_class: flight box\n")
+    code, text, _err = _run("check", str(lug), "--profile", "spaceflight")
+    assert code == 2 and "random vibration" in text.split("\n\n", 1)[1]
+    lug.write_text(_LUG_SPEC + "\nitem_class: chassis part\n")
+    code, _text, err = _run("check", str(lug), "--profile", "spaceflight")
+    assert code == 3 and "declares item_class 'chassis part'" in err
+    plain_code, _out, _ = _run("check", str(lug))  # without a profile the class is inert
+    assert plain_code == 0

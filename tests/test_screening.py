@@ -1722,6 +1722,7 @@ _NOT_A_CLAIM_ABOUT_THE_PART = {
     "description": "prose for a reader",
     "units": "the system the quantities are rendered in",
     "exports": "contracts this part publishes for others, not a property of this one",
+    "item_class": "which of a bound profile's rules apply; the profile puts them on the card",
 }
 
 
@@ -2352,6 +2353,10 @@ _NOTHING_TO_SCREEN = {
     "description": "prose for a human reader, with nothing to check it against",
     "units": "the system every rendered figure is stated in, applied rather than screened",
     "combination_basis": "resolved into a combination set, whose own entry reports the result",
+    "item_class": (
+        "the class an industry profile screens the part as; with a profile bound, its "
+        "required checks for that class reach the card, and without one it says nothing"
+    ),
 }
 
 

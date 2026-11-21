@@ -1270,7 +1270,7 @@
           "$ref": "#/$defs/AcceptanceCriteria"
         },
         "anvilate_spec": {
-          "default": "1.22.0",
+          "default": "1.23.0",
           "title": "Anvilate Spec",
           "type": "string"
         },
@@ -1427,6 +1427,18 @@
           },
           "title": "Interfaces",
           "type": "array"
+        },
+        "item_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item Class"
         },
         "keepouts": {
           "default": [],
@@ -4700,7 +4712,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:evidence-bundle:1.33.0",
+  "$id": "urn:anvilate:schema:evidence-bundle:1.34.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate evidence bundle: every screening layer's contribution for one part, with one rolled-up status, the scorecard, and the spec the verdicts were computed from. A layer that never ran is an absent key, not a null one — the two are different facts and the bundle refuses to collapse them. Carries the screening disclaimer unconditionally. Generated from anvilate.bundle.BundleDocument.",
   "properties": {
@@ -4926,5 +4938,5 @@
   ],
   "title": "BundleDocument",
   "type": "object",
-  "x-anvilate-version": "1.33.0"
+  "x-anvilate-version": "1.34.0"
 }

@@ -62,8 +62,10 @@ anvilate check bracket.yaml --profile spaceflight --item-class "flight box"
 anvilate check bracket.yaml --profile acme-aero.yaml
 ```
 
-A required check that has not run leaves the card not evaluated, so the exit code is 2
-until it does.
+A part can declare its class in its own Design Spec, `item_class: flight box`, and
+`--item-class` is then needed only to override it; a class the profile does not declare is
+refused, naming the file. Without a profile the field is inert. A required check that has
+not run leaves the card not evaluated, so the exit code is 2 until it does.
 
 | A required check | Shows as |
 | --- | --- |
@@ -111,7 +113,5 @@ of changes is empty.
 
 ## Not yet
 
-- Item classes declared on the Design Spec itself; today the class is passed to
-  `apply_profile`.
 - Relaxations carried onto the rows of a margin table, and the profile header in reports
   and over the MCP tools.

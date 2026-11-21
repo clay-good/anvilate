@@ -2215,7 +2215,7 @@
       "type": "string"
     }
   },
-  "$id": "urn:anvilate:schema:design-spec:1.22.0",
+  "$id": "urn:anvilate:schema:design-spec:1.23.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate Design Spec IR: the typed, versioned description of a part that the screening pipeline consumes. Generated from anvilate.spec.DesignSpec.",
@@ -2224,7 +2224,7 @@
       "$ref": "#/$defs/AcceptanceCriteria"
     },
     "anvilate_spec": {
-      "default": "1.22.0",
+      "default": "1.23.0",
       "title": "Anvilate Spec",
       "type": "string"
     },
@@ -2382,6 +2382,18 @@
       "title": "Interfaces",
       "type": "array"
     },
+    "item_class": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Item Class"
+    },
     "keepouts": {
       "default": [],
       "items": {
@@ -2448,5 +2460,5 @@
   ],
   "title": "DesignSpec",
   "type": "object",
-  "x-anvilate-version": "1.22.0"
+  "x-anvilate-version": "1.23.0"
 }

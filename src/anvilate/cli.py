@@ -4247,7 +4247,13 @@ def _check(args: argparse.Namespace, *, out, err) -> int:
             if profile is not None:
                 from .industry import apply_profile
 
-                card = apply_profile(card, profile, item_class=args.item_class).card
+                item_class = args.item_class or spec.item_class
+                if item_class is not None and item_class not in profile.profile.item_classes:
+                    print(f"anvilate check: {path} declares item_class {item_class!r}, which "
+                          f"{profile.profile.name} does not declare "
+                          f"({list(profile.profile.item_classes)})", file=err)  # fmt: skip
+                    return EXIT_BAD_REQUEST
+                card = apply_profile(card, profile, item_class=item_class).card
             results.append((path, spec, card))
             durations.append(time.monotonic() - started)
         except KeyboardInterrupt:

@@ -6,7 +6,7 @@
       item class, material needs, artifacts, drawing standard; source or practice label
       per rule (`anvilate.industry`, published as industry-profile 1.0.0; basis rules and
       material needs are not modelled yet)
-- [ ] 1.2 Item classes an item declares (flight box, primary structure, chassis part,
+- [x] 1.2 Item classes an item declares (flight box, primary structure, chassis part,
       patient-contacting, guard)
 - [x] 1.3 Layering with override sources; relaxation reporting
       (on the resolved profile; carrying it onto margin rows waits on binding a profile

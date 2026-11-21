@@ -1345,7 +1345,7 @@ class SourceReference(_Base):
 # older 1.x spec load unchanged — and it comes back saying
 # which version it is, not this one. The version a document carries is a record of what it
 # is, never an assertion that it is current; see `migrate_to_current`.
-SCHEMA_VERSION = "1.22.0"
+SCHEMA_VERSION = "1.23.0"
 
 
 class DesignSpec(_Base):
@@ -1392,6 +1392,10 @@ class DesignSpec(_Base):
     environment: Environment | None = None
     element_type: str | None = None
     element_params: FrozenMap[str, Any] = Field(default_factory=dict)
+    # The class an industry profile screens this part as ("flight box", "guard"), in the
+    # profile's own vocabulary. Read only when a profile is bound; `anvilate.industry`
+    # refuses a class the bound profile does not declare.
+    item_class: Named | None = None
     # Performance budgets: a requirement on a COMBINATION of checks, which no per-check
     # screen can see. Declared here rather than under `constraints`, because a budget is not
     # a bound on one number — it carries its own contributors, their sources and the rule
