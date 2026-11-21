@@ -40,6 +40,7 @@ from ..credibility import (
 from ..dependency import COMPUTED_FROM
 from ..derivation import Derivation, DerivationAbsence, SymbolValue
 from ..failure_modes import CoverageReport
+from ..industry import SCREENING_NOT_CERTIFICATION
 from ..margin import MarginEntry, MarginLedger
 from ..refusal import RefusalError, Remedy
 from ..scorecard import CheckStatus, Scorecard, ScorecardEntry
@@ -358,6 +359,10 @@ class CalculationReport(StatableModel):
     # page and a page with no revision on it cannot be put back in its set.
     revision: str | None = None
     unit_system: UnitSystem | None = None
+    # The industry profile the checks were screened under, as `ResolvedProfile.label`
+    # renders it. Printed in the header with the statement that a profile is a screening
+    # configuration and not a certification, so no reader takes the one for the other.
+    profile: str | None = None
     standards: tuple[str, ...] = ()
     assumptions: tuple[Provenanced[str], ...] = ()
     sections: tuple[ReportSection, ...] = ()
@@ -643,6 +648,8 @@ class CalculationReport(StatableModel):
             ("Date", self.date),
             ("Revision", self.revision),
             ("Units", self.unit_system.value if self.unit_system else None),
+            ("Screened under", self.profile),
+            ("Profile statement", SCREENING_NOT_CERTIFICATION if self.profile else None),
         )
         return tuple((label, value) for label, value in rows if value)
 

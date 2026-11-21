@@ -74,7 +74,9 @@ not run leaves the card not evaluated, so the exit code is 2 until it does.
 | its `pack` or `analysis` missing from this installation, or `implemented: false` | **not available**, naming what is missing and the `install` command |
 
 A required check is never dropped. Each entry a profile adds carries a reference naming
-the profile, its version, the rule's id and its source.
+the profile, its version, the rule's id and its source. A calculation report built with
+`CalculationReport(..., profile=resolved.profile.label)` names the profile in its header,
+in text, HTML and PDF, beside the statement that it is not a certification.
 
 ## Layering a company profile
 
@@ -113,5 +115,4 @@ of changes is empty.
 
 ## Not yet
 
-- Relaxations carried onto the rows of a margin table, and the profile header in reports
-  and over the MCP tools.
+- Relaxations carried onto the rows of a margin table, and the profile over the MCP tools.

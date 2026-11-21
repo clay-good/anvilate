@@ -282,3 +282,18 @@ def test_the_resolved_profile_renders_its_header_then_each_change():
     assert lines[0] == resolve(AIRCRAFT).header()
     assert lines[1:] == [f"  {line}" for line in resolve(AIRCRAFT).changes()]
     assert str(resolve(GENERAL)) == resolve(GENERAL).header()
+
+
+def test_a_report_under_a_profile_names_it_and_says_it_is_not_a_certification():
+    """Industry profiles 3.3: the medical-device report header names the profile and version
+    and says compliance is decided by the user's quality system and regulator."""
+    from anvilate.industry import industry_profile
+    from anvilate.report.document import CalculationReport
+
+    label = resolve(industry_profile("medical-device")).profile.label
+    report = CalculationReport(title="Infusion pump bracket", profile=label)
+    text = report.to_text()
+    assert f"Screened under: {label}" in text
+    assert f"Profile statement: {SCREENING_NOT_CERTIFICATION}" in text
+    assert label in report.to_html() and "regulator" in report.to_html()
+    assert "Screened under" not in CalculationReport(title="plain").to_text()
