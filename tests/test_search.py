@@ -9,7 +9,7 @@ x* = (3.5, 0.7, 17, 7.3, 7.8, 3.350214, 5.286683), weight 2,996.348165.
 
 from __future__ import annotations
 
-from math import sqrt
+from math import pi, sqrt
 
 import pytest
 
@@ -205,3 +205,49 @@ def test_the_seeded_stream_is_pinned_so_a_recorded_search_replays_on_any_interpr
     ]
     picks = _Stream(7).distinct(range(10), 3)
     assert len(set(picks)) == 3 and all(0 <= p < 10 for p in picks)
+
+
+# The pressure vessel, the same paper's problem E02 (after Sandgren): shell and head plate
+# thicknesses are integer multiples of 0.0625 in from 1x to 99x, a sourced choice, and
+# 10 <= x3, x4 <= 200. Best known x* = (0.8125, 0.4375, 42.098446, 176.636596), cost
+# 6,059.714335.
+_VESSEL_BEST = 6059.714335
+_PLATE = tuple(k * 0.0625 for k in range(1, 100))
+_PLATE_SOURCE = "Cagnina et al., Informatica 32 (2008), E02: integer multiples of 0.0625 in"
+
+
+def _vessel_cost(x1, x2, x3, x4):
+    return 0.6224 * x1 * x3 * x4 + 1.7781 * x2 * x3**2 + 3.1661 * x1**2 * x4 + 19.84 * x1**2 * x3
+
+
+def _vessel(design):
+    """g1..g4 of E02 as safety factors: each requirement over what it is held against."""
+    x1, x2, x3, x4 = (design[n] for n in ("x1", "x2", "x3", "x4"))
+    factors = {
+        "shell thickness": x1 / (0.0193 * x3),
+        "head thickness": x2 / (0.00954 * x3),
+        "volume": (pi * x3**2 * x4 + 4 / 3 * pi * x3**3) / 1_296_000,
+        "length": 240 / x4,
+    }
+    card = Scorecard(entries=tuple(ScorecardEntry.from_safety_factor(name, computed=f,
+                                                                     required=1.0)
+                                   for name, f in factors.items()))  # fmt: skip
+    return StudyEvaluation(objectives={"cost": _vessel_cost(x1, x2, x3, x4)}, scorecard=card)
+
+
+def test_the_pressure_vessel_takes_only_stocked_plate_and_lands_on_the_published_best():
+    """The second mixed-variable benchmark: two choices from a sourced list, two continuous."""
+    published = _vessel_cost(0.8125, 0.4375, 42.098446, 176.636596)
+    assert published == pytest.approx(_VESSEL_BEST, abs=1e-3)
+    plate = {"kind": VariableKind.CHOICE, "choices": _PLATE, "source": _PLATE_SOURCE}
+    study = SearchStudy(
+        name="pressure vessel", objective="cost", seed=7, evaluations=3000, population=30,
+        variables=(SearchVariable(name="x1", **plate), SearchVariable(name="x2", **plate),
+                   SearchVariable(name="x3", low=10, high=200),
+                   SearchVariable(name="x4", low=10, high=200)),
+    )  # fmt: skip
+    result = run_search(study, _vessel)
+    best = result.points[result.best]
+    assert best.objective == pytest.approx(_VESSEL_BEST, rel=1e-4)
+    assert (best.values["x1"], best.values["x2"]) == (0.8125, 0.4375)
+    assert all(p.values["x1"] in _PLATE and p.values["x2"] in _PLATE for p in result.points)

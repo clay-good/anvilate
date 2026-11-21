@@ -126,7 +126,10 @@ The search is held against a published benchmark: the Golinski speed reducer, as
 Esquivel and Coello Coello (Informatica 32, 2008) state it, with the pinion's teeth an
 integer. With seed 7 and 4,000 evaluations it lands within 0.05% of the published best
 weight, 2,996.348165, and every point it reports as feasible satisfies all eleven
-constraints.
+constraints. A second, from the same paper, holds the choice variables: the pressure vessel,
+whose shell and head thicknesses are stocked plate (multiples of 0.0625 in), lands on the
+published best cost, 6,059.714335, to within 0.01%, every candidate taking a stocked
+thickness.
 
 Out of scope: topology optimisation, FEA in the loop, surrogate models, and Bayesian
 optimisation. When an evaluation costs microseconds, an exhaustive seeded sweep with

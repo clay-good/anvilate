@@ -19,10 +19,11 @@ independent and optional.
       the base and the repaired design)
 - [x] 1.5 Neighborhood check and the "not locally confirmed" label
 - [ ] 1.6 Result as a spec diff; provenance on apply
-- [ ] 1.7 Golinski speed-reducer regression from the published definition; a second
+- [x] 1.7 Golinski speed-reducer regression from the published definition; a second
       mixed-variable benchmark
-      (the speed reducer, after Cagnina et al. 2008, is held within 0.05% of its published
-      best; the second benchmark is not yet)
+      (both from Cagnina et al., Informatica 32, 2008: the speed reducer within 0.05% of
+      its published best, and the pressure vessel with stocked plate thicknesses as a
+      sourced choice, within 0.01%)
 
 ## 2. Search with FEA in the loop
 
