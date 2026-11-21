@@ -139,6 +139,7 @@ compliance.screen_material_needs
 compliance.screen_substances
 cold_formed_steel.dsm_scorecard
 dfm.screen_dfm
+drivetrain.screen_output_speed
 frame.frame_over_combination_scorecard
 frame.screen_frame
 frame.screen_solution

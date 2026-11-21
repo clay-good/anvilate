@@ -120,3 +120,4 @@ walking_working.screen_fixed_ladder
 walking_working.screen_guardrail
 walking_working.screen_platform_edge
 walking_working.screen_stair
+drivetrain.screen_output_speed

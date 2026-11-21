@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Eighty-four pages, arranged by what you are trying to do. The [README](../README.md) is the
+Eighty-five pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -63,6 +63,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Margin ledger](margin-ledger.md) | Every applied conservatism attributed and multiplied out, and the double counts named. |
 | [Margins of safety](margin-of-safety.md) | The aerospace margin table: limit and ultimate kept apart, a cited factor set, the governing case of hundreds, as CSV, XLSX and a report section. |
 | [Structural hand methods](structural-hand-methods.md) | Laminates, random vibration, preloaded joints, fastener groups, sandwich panels, crippling, plasticity and thin-cylinder buckling, each read from a public-domain NASA document and pinned to it. |
+| [Drive trains](drive-trains.md) | One declared input, and every shaft's speed, torque and power derived through the meshes, with the graph held consistent and a typed torque that contradicts it refused. |
 | [Frame analysis](frame-analysis.md) | The member forces a frame carries, solved in the core: five closed forms and an independent solver that agrees, a mechanism named rather than solved around, and what the external doorway is still for. |
 | [CAE handoff](cae-handoff.md) | A frame written as an input deck for your own solver, keyword or bulk data, in stated units, one load case per step, marked unsolved input; and the solver's interface loads read back, hashed, with each case's free body held to balance. |
 | [Durability screening](durability-screening.md) | Rainflow cycles from a load history, modes held clear of excitation, and what a drop does to what is inside. |

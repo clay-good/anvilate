@@ -647,7 +647,10 @@ def test_every_screen_declares_its_modes_or_is_recorded_as_declaring_none() -> N
     # the law will not let onto a market, found by a declaration or a test lab, and not a
     # way the part fails in service; the catalogue carries nothing it reaches, and its
     # applicability keys cannot say "an article placed on a market that keeps a list".
-    assert len(none) <= 82, f"the declares-none list grew to {len(none)}"
+    # 83 with the drive train's output-speed screen. Turning inside a required band is a
+    # requirement the product states, met or not by the tooth counts; it is not a way the
+    # machine fails in service, and the catalogue carries nothing it reaches.
+    assert len(none) <= 83, f"the declares-none list grew to {len(none)}"
     # The page quotes both counts, and it said "five" while fourteen screens declared one.
     page = (Path(__file__).resolve().parents[1] / "docs" / "failure-mode-coverage.md").read_text()
     stated = f"{len(declares)} screens declare a mode today, and {len(none)} declare none"

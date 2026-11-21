@@ -7,10 +7,13 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
 
 - [ ] 1.1 Drive-train schema on product documents: shafts, carried items, meshes, input,
       required output and life
-- [ ] 1.2 Speed, torque and power flow with cited efficiencies; output band check
-- [ ] 1.3 Speed-graph consistency: single determination, center distance closure,
+      (`anvilate.drivetrain.DriveTrain`, standalone; not yet a product-document field)
+- [x] 1.2 Speed, torque and power flow with cited efficiencies; output band check
+- [x] 1.3 Speed-graph consistency: single determination, center distance closure,
       reverted layouts, one input, no undriven shaft
 - [ ] 1.4 Refusal of typed mesh torques inside a declared train
+      (`check_typed_torque`; the mesh screen does not call it until the train is a product
+      field)
 
 ## 2. Meshes
 
@@ -35,5 +38,7 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
 - [ ] 4.3 Gear data block on drawings and in the release package
 - [ ] 4.4 Shigley power transmission case study as a golden test, re-derived from the
       chapter's published values
+      (speeds, torques and tangential loads held, 10th ed. Ch. 18; shafts and bearings
+      follow with 3.x)
 - [ ] 4.5 The gear reducer worked product declares its drive train; docs page for drive
       trains
