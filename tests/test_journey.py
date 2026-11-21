@@ -164,3 +164,29 @@ def test_run_validation_states_the_journey():
         _run_validation({"spec": spec.model_dump(mode="json")})["journey"]
     )
     assert journey.stage == "screened"
+
+
+def test_a_combination_is_rechecked_by_building_it_and_exported_as_step():
+    card = Scorecard(entries=(_failing("bolt bearing", value=None),))
+    (step,) = next_steps(card, tool="build_combination", export_format="step")
+    assert step.tool == "build_combination"
+    (done,) = next_steps(Scorecard(entries=(_passing(),)), tool="build_combination",
+                         export_format="step")  # fmt: skip
+    assert (done.tool, dict(done.arguments)) == ("export_artifact", {"format": "step"})
+    with pytest.raises(RefusalError, match="export_format"):
+        next_steps(card, export_format="pdf")
+
+
+def test_build_combination_returns_next_and_journey():
+    import yaml
+
+    from anvilate.journey import JourneyState
+    from anvilate.mcp import _build_combination
+
+    document = yaml.safe_load(
+        (_EXAMPLES / "combinations" / "bracket_on_plate.combination.yaml").read_text()
+    )
+    result = _build_combination({"combination": document})
+    steps = NextSteps.model_validate(result["next"]).steps
+    assert steps and all(s.tool in NEXT_STEP_TOOLS for s in steps)
+    assert JourneyState.model_validate(result["journey"]).stage in ("described", "screened")

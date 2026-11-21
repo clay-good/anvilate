@@ -257,7 +257,9 @@ declaration a check is waiting on, and, when nothing holds the card back,
 `export_artifact` with `evidence_bundle`. The same card gives the same steps, and the list
 is never empty. Beside it, `journey` ([journey-state 1.0.0](api/schemas/journey-state.schema.json))
 states the furthest stage reached (`described`, `screened`, `simulated`, `optimized`,
-`review_ready`) and names what holds back each later one; a stage the document does not
+`review_ready`) and names what holds back each later one. `build_combination` returns the
+same pair for a combination, re-checking with `build_combination` itself and ending at
+`export_artifact` with `step`; a stage the document does not
 call for (no FEA demanded, no study declared) is *not applicable*, never reached. Two of
 its decisions differ from
 `compile_spec`'s and the difference is the point:

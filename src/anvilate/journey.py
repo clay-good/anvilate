@@ -41,7 +41,17 @@ __all__ = [
 ]
 
 #: Every tool a step may name. A test holds each against the server's published catalog.
-NEXT_STEP_TOOLS = ("run_validation", "build_part", "run_fea_validation", "export_artifact")
+NEXT_STEP_TOOLS = (
+    "run_validation",
+    "build_combination",
+    "build_part",
+    "run_fea_validation",
+    "export_artifact",
+)
+
+# The tools a result is re-checked with, and the export each result's subject supports.
+_RECHECK_TOOLS = ("run_validation", "build_combination")
+_EXPORTS = ("evidence_bundle", "step")
 
 # A tier the card reports as an entry of its own when the document demands it and it did
 # not run, and the tool that runs it.
@@ -79,22 +89,34 @@ def _value(value: float, unit: str | None) -> str:
 
 
 def next_steps(
-    card: Scorecard, *, remedies: Sequence[str] = (), tool: str = "run_validation"
+    card: Scorecard,
+    *,
+    remedies: Sequence[str] = (),
+    tool: str = "run_validation",
+    export_format: str = "evidence_bundle",
 ) -> tuple[NextStep, ...]:
     """The steps ``card`` calls for, by the precedence in this module's docstring.
 
-    ``remedies`` are a refusal's own remedies, when the call that produced the result was
-    refused; each becomes a step re-calling ``tool`` with that correction, ahead of
-    everything else.
+    ``tool`` is the call that produced the card and re-checks it once changed:
+    ``run_validation`` for a spec, ``build_combination`` for a combination. ``remedies`` are
+    a refusal's own remedies, when that call was refused; each becomes a step re-calling
+    ``tool`` with that correction, ahead of everything else. ``export_format`` is what the
+    result's subject exports as when nothing holds it back: ``evidence_bundle`` for a
+    screening, ``step`` for a combination.
     """
+    if export_format not in _EXPORTS:
+        raise _JourneyInputError(
+            f"export_format {export_format!r} is not one a step may name ({list(_EXPORTS)})",
+            remedies=(Remedy(action="replace", subject="export_format", source="the tool result"),),
+        )
     if not isinstance(card, Scorecard):
         raise _JourneyInputError(
             "card must be a Scorecard",
             remedies=(Remedy(action="replace", subject="card", source="the tool result"),),
         )
-    if tool not in NEXT_STEP_TOOLS:
+    if tool not in _RECHECK_TOOLS:
         raise _JourneyInputError(
-            f"tool {tool!r} is not one a step may name ({list(NEXT_STEP_TOOLS)})",
+            f"tool {tool!r} is not one a step may name to re-check ({list(_RECHECK_TOOLS)})",
             remedies=(Remedy(action="replace", subject="tool", source="the tool result"),),
         )
     remedies = each_one(remedies, str, named="remedies")
@@ -105,7 +127,7 @@ def next_steps(
         if hint is not None and hint.corrective_value is not None:
             value = _value(hint.corrective_value, hint.unit)
             steps.append(NextStep(
-                tool="run_validation", arguments={"set": hint.parameter, "to": value},
+                tool=tool, arguments={"set": hint.parameter, "to": value},
                 reason=f"{entry.name} fails; its inverse solves {hint.parameter} = {value}",
             ))  # fmt: skip
     for entry in failed:
@@ -114,8 +136,7 @@ def next_steps(
             move = (f"{hint.direction.value} {hint.parameter}" if hint is not None
                     else "revise the design")  # fmt: skip
             reason = f"{entry.name} fails; {move}, then re-validate"
-            steps.append(NextStep(tool="run_validation", arguments={"change": move},
-                                  reason=reason))  # fmt: skip
+            steps.append(NextStep(tool=tool, arguments={"change": move}, reason=reason))
     unrun = [e for e in card.entries if e.status is CheckStatus.NOT_EVALUATED]
     for entry in unrun:
         if entry.name in _TIER_TOOLS and not entry.needs:
@@ -132,7 +153,7 @@ def next_steps(
             first.setdefault(need.declaration, need.takes)
     for declaration, held in declared.items():
         steps.append(NextStep(
-            tool="run_validation", arguments={"declare": declaration},
+            tool=tool, arguments={"declare": declaration},
             reason=f"declare {declaration} ({first[declaration]}); it holds back "
                    f"{', '.join(dict.fromkeys(held))}",
         ))  # fmt: skip
@@ -141,7 +162,7 @@ def next_steps(
         reason = ("every check has a verdict; export the evidence for review" if not silent
                   else f"nothing here can supply what {', '.join(silent)} need; export the "
                        "evidence as a draft, with those checks marked not evaluated")  # fmt: skip
-        steps.append(NextStep(tool="export_artifact", arguments={"format": "evidence_bundle"},
+        steps.append(NextStep(tool="export_artifact", arguments={"format": export_format},
                               reason=reason))  # fmt: skip
     return tuple(steps)
 

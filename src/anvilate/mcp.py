@@ -870,6 +870,8 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "subject": _SUBJECT_SCHEMA,
                     "product": {"$ref": _PRODUCT_SUMMARY_REF},
                     "node": {"$ref": _NODE_CARD_REF},
+                    "next": {"$ref": _NEXT_STEPS_REF},
+                    "journey": {"$ref": _JOURNEY_STATE_REF},
                 },
                 required=[],
             ),
@@ -2654,10 +2656,15 @@ def _build_combination(arguments: Mapping[str, Any]) -> dict[str, Any]:
     handle = subject_store().publish(
         _BUILT_COMBINATION, {"combination": combination.model_dump(mode="json")}
     )
+    from .journey import NextSteps, journey_state, next_steps
+
+    steps = next_steps(built.card, tool="build_combination", export_format="step")
     return {
         "combination": built.summary().model_dump(mode="json"),
         "scorecard": built.card.model_dump(mode="json"),
         "subject": handle,
+        "next": NextSteps(steps=steps).model_dump(mode="json"),
+        "journey": journey_state(built.card).model_dump(mode="json"),
     }
 
 
