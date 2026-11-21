@@ -45,6 +45,8 @@ __all__ = [
     "run_search",
     "violation",
     "SearchDiff",
+    "TABLES",
+    "table_choice",
     "search_diff",
     "apply_search_diff",
 ]
@@ -142,6 +144,9 @@ class SearchVariable(StatableModel):
     choices: tuple[float, ...] = ()
     source: Provenance | None = None
     step: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    # For a choice read from a bundled table: the table rows each choice comes from, in
+    # the same order as ``choices``, so a result can cite the row it chose.
+    rows: tuple[Named, ...] = ()
 
     @model_validator(mode="after")
     def _well_formed(self) -> SearchVariable:
@@ -158,8 +163,11 @@ class SearchVariable(StatableModel):
                     "table or catalogue each value comes from, or a design can be built on a "
                     "size nobody stocks", subject="source",
                 )  # fmt: skip
+            if self.rows and len(self.rows) != len(self.choices):
+                raise _refuse(f"{self.name}: rows name the table row of each choice, one per "
+                              "choice", subject="rows")  # fmt: skip
             return self
-        if self.choices:
+        if self.choices or self.rows:
             raise _refuse(f"{self.name}: choices belong to a choice variable",
                           subject="choices")  # fmt: skip
         if (
@@ -300,6 +308,15 @@ class SearchResult(BaseModel):
         state = "locally confirmed" if self.confirmed else "not locally confirmed"
         return f"{BEST_FOUND} ({len(self.history)} evaluations), {state}"
 
+    def cited(self, index: int) -> tuple[str, ...]:
+        """For each table-bound choice in point ``index``, the value and the row it is."""
+        point = self.points[index]
+        return tuple(
+            f"{v.name} = {point.values[v.name]:g}: {v.rows[v.choices.index(point.values[v.name])]} "
+            f"[{v.source}]"
+            for v in self.study.variables if v.rows
+        )  # fmt: skip
+
     def __str__(self) -> str:
         lines = [f"{self.study.name}: {self.label}"]
         if self.best is not None:
@@ -307,6 +324,7 @@ class SearchResult(BaseModel):
             values = ", ".join(f"{k}={v:g}" for k, v in point.values.items())
             lines.append(f"  {self.study.objective} = {point.objective:g} at {values}; "
                          f"governing: {point.governing_check}")  # fmt: skip
+            lines.extend(f"  {line}" for line in self.cited(self.best))
         if self.better_neighbor is not None:
             better = self.points[self.better_neighbor]
             values = ", ".join(f"{k}={v:g}" for k, v in better.values.items())
@@ -578,3 +596,46 @@ def apply_search_diff(document: Mapping[str, object], diff: SearchDiff) -> dict[
                   "changed": [path for path, _old, _new in diff.changes]}  # fmt: skip
         edited["study_derived"] = [*list(edited.get("study_derived") or ()), record]
     return edited
+
+
+#: The bundled tables a choice variable can be bound to, and the numeric fields each has.
+TABLES: dict[str, tuple[str, ...]] = {
+    "bearings": ("bore", "outer_diameter", "width"),
+    "nema_frames": ("faceplate_width", "bolt_spacing", "pilot_diameter"),
+}
+
+
+def table_choice(name: str, *, table: str, field: str, step: float | None = None) -> SearchVariable:
+    """A choice variable over every value ``field`` takes in the bundled ``table``.
+
+    The source is the table's own dataset record (name, version and the standard it was
+    read from), and each value carries the rows that hold it (``6005, 6205`` for a 25 mm
+    bore), so a result cites the row it chose. Values are in the table's unit, millimetres
+    for both tables today. A table or field that does not exist is refused, naming the
+    ones that do.
+    """
+    from importlib.resources import files
+
+    from ._models import parse_yaml
+
+    if table not in TABLES:
+        raise _refuse(f"no bundled table is named {table!r}; the tables a choice can bind to "
+                      f"are {sorted(TABLES)}", subject="table")  # fmt: skip
+    if field not in TABLES[table]:
+        raise _refuse(f"table {table!r} has no numeric field {field!r}; it has "
+                      f"{list(TABLES[table])}", subject="field")  # fmt: skip
+    text = (files("anvilate.standards") / "data" / f"{table}.yaml").read_text("utf-8")
+    document = parse_yaml(text)
+    records = document["bearings"] if table == "bearings" else document["frames"]
+    found: dict[float, list[str]] = {}
+    for row, record in records.items():
+        cell = record[field]
+        value = float(cell["quantity"]["magnitude"] if isinstance(cell, dict) else cell)
+        found.setdefault(value, []).append(str(row))
+    dataset = document["dataset"]
+    source = (f"{table}.yaml ({dataset['name']} {dataset['version']}), "
+              f"{dataset['source']}: {field}")  # fmt: skip
+    values = sorted(found)
+    return SearchVariable(name=name, kind=VariableKind.CHOICE, choices=tuple(values),
+                          source=source, step=step,
+                          rows=tuple(", ".join(found[v]) for v in values))  # fmt: skip

@@ -116,6 +116,7 @@ print(result)   # the best design found under the stated budget (4000 evaluation
 | Rule | What it means |
 | --- | --- |
 | Variables | continuous between bounds, integer between whole-number bounds, or a choice from a list that names its source; an unsourced list ("7.3 mm") is refused |
+| Bundled tables | `table_choice("bore", table="bearings", field="bore")` binds a choice to a bundled table (`bearings`: ISO 15 bore, outer diameter, width; `nema_frames`: faceplate, bolt spacing, pilot), cited to the table's dataset record; the result names the rows that hold the chosen value (`bore = 25: 6805, 6005, 6205, 6305`) |
 | Strategy | `evolutionary` (seeded differential evolution over the whole box, feasibility first) or `local` (a compass refinement of continuous variables from a declared `start`) |
 | Determinism | every candidate of a generation is drawn before any is evaluated, and results are committed in draw order, so one worker and four record the same points; another seed records other ones |
 | Feasibility | the scorecard's: a check that failed or did not run makes a point infeasible, and infeasible points are ranked by how far their safety factors fall short |

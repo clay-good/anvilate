@@ -303,3 +303,44 @@ def test_a_search_with_no_feasible_design_proposes_no_edit():
 
     with pytest.raises(RefusalError, match="proposes no edit"):
         search_diff(run_search(_reducer(evaluations=20), never), {})
+
+
+def test_a_choice_bound_to_a_bundled_table_takes_only_its_values_and_cites_the_row():
+    """Design optimization 1.2: a shaft seat searched over the bundled ISO 15 bores; every
+    candidate is a tabulated bore, and the result names the bearings that have it."""
+    from anvilate.search import table_choice
+
+    bore = table_choice("bore", table="bearings", field="bore")
+    assert "ISO 15" in bore.source and "bearings.yaml" in bore.source
+    study = SearchStudy(name="shaft seat", variables=(bore,), objective="bore",
+                        evaluations=80, population=8)  # fmt: skip
+
+    def evaluate(design):
+        d = design["bore"]
+        card = Scorecard(entries=(ScorecardEntry.from_safety_factor(
+            "shaft torsion", computed=(d / 22.0) ** 3, required=1.0),))  # fmt: skip
+        return StudyEvaluation(objectives={"bore": d}, scorecard=card)
+
+    result = run_search(study, evaluate)
+    assert {p.values["bore"] for p in result.points} <= set(bore.choices)
+    assert result.confirmed  # 20 mm fails, so 25 mm has no better neighbor
+    (cited,) = result.cited(result.best)
+    assert cited.startswith("bore = 25: ") and "6205" in cited and "ISO 15" in cited
+    assert cited in str(result)
+
+
+@pytest.mark.parametrize(("table", "field", "said"), [
+    ("preferred_modules", "module", "no bundled table"),
+    ("bearings", "dynamic_load_rating", "no numeric field"),
+])  # fmt: skip
+def test_a_table_or_field_that_does_not_exist_is_refused(table, field, said):
+    from anvilate.search import table_choice
+
+    with pytest.raises(RefusalError, match=said):
+        table_choice("x", table=table, field=field)
+
+
+def test_rows_must_name_one_row_per_choice():
+    with pytest.raises(ValueError, match="one per choice"):
+        SearchVariable(name="x", kind=VariableKind.CHOICE, choices=(1.0, 2.0), source="t",
+                       rows=("a",))  # fmt: skip

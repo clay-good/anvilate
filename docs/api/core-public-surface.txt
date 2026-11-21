@@ -916,6 +916,8 @@ search.violation
 search.SearchDiff
 search.search_diff
 search.apply_search_diff
+search.TABLES
+search.table_choice
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep

@@ -11,6 +11,8 @@ independent and optional.
       wall-clock budgets wait on FEA in the loop)
 - [ ] 1.2 Choice variables bound to bundled tables (preferred modules, stock thickness,
       bearing series, motor frames); refusal of unsourced values
+      (`table_choice` over the bearing and NEMA frame tables, rows cited; unsourced
+      values refused. No preferred-module or stock-thickness table is bundled yet)
 - [x] 1.3 Seeded evolutionary search (pymoo, optional extra) and local refinement (SciPy
       COBYQA); deterministic commit order under parallel evaluation
       (`anvilate.search`: differential evolution and a compass refinement in pure Python,
