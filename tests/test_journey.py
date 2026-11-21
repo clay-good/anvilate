@@ -125,3 +125,42 @@ def test_a_tool_no_step_may_name_is_refused():
 def test_a_single_remedy_string_is_refused_not_read_letter_by_letter():
     with pytest.raises((RefusalError, TypeError, ValueError)):
         next_steps(Scorecard(), remedies="add manufacturing")  # type: ignore[arg-type]
+
+
+def test_stopping_early_is_visible_in_the_stage_and_its_gaps():
+    from anvilate.journey import JOURNEY_STAGES, journey_state
+
+    state = journey_state(Scorecard(entries=(_passing(), _unrun("T3 FEA"))))
+    assert state.stage == "screened"
+    by = {s.stage: s for s in state.stages}
+    assert [s.stage for s in state.stages] == list(JOURNEY_STAGES)
+    assert (by["simulated"].state, by["simulated"].gaps) == ("not_reached", ("T3 FEA has not run",))
+    assert by["optimized"].state == "not_applicable"
+    assert by["review_ready"].state == "not_reached"
+    assert "T3 FEA has no verdict" in by["review_ready"].gaps
+
+
+def test_a_stage_that_does_not_apply_is_passed_over_never_reached():
+    from anvilate.journey import journey_state
+
+    state = journey_state(Scorecard(entries=(_passing(),)))
+    by = {s.stage: s for s in state.stages}
+    assert state.stage == "screened" and by["simulated"].state == "not_applicable"
+    unscreened = journey_state(Scorecard(entries=(_unrun("bolt bearing", "element_params.load"),)))
+    assert unscreened.stage == "described"
+    assert unscreened.stages[1].gaps == ("bolt bearing has no verdict",)
+    assert str(unscreened).startswith("journey: described\n  described reached\n  screened not")
+    simulated = journey_state(Scorecard(entries=(_passing(), _passing("T3 FEA"))))
+    assert simulated.stage == "simulated"
+
+
+def test_run_validation_states_the_journey():
+    from anvilate.journey import JourneyState
+    from anvilate.mcp import _run_validation
+    from anvilate.spec import load_spec_yaml
+
+    spec = load_spec_yaml((_EXAMPLES / "padeye.spec.yaml").read_text())
+    journey = JourneyState.model_validate(
+        _run_validation({"spec": spec.model_dump(mode="json")})["journey"]
+    )
+    assert journey.stage == "screened"

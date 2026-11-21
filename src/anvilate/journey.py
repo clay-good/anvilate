@@ -30,6 +30,10 @@ from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Scorecard
 
 __all__ = [
+    "JOURNEY_STAGES",
+    "StageState",
+    "JourneyState",
+    "journey_state",
     "NEXT_STEP_TOOLS",
     "NextStep",
     "NextSteps",
@@ -140,3 +144,81 @@ def next_steps(
         steps.append(NextStep(tool="export_artifact", arguments={"format": "evidence_bundle"},
                               reason=reason))  # fmt: skip
     return tuple(steps)
+
+
+#: The stages a design passes through, in order.
+JOURNEY_STAGES = ("described", "screened", "simulated", "optimized", "review_ready")
+
+
+class StageState(StatableModel):
+    """One stage: reached, not reached (with the gaps that hold it back), or not applicable."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    stage: Named
+    state: str = Field(pattern=r"^(reached|not_reached|not_applicable)$")
+    gaps: tuple[Named, ...] = ()
+
+    def __str__(self) -> str:
+        held = f": {'; '.join(self.gaps)}" if self.gaps else ""
+        return f"{self.stage} {self.state.replace('_', ' ')}{held}"
+
+
+class JourneyState(StatableModel):
+    """The furthest stage a result has reached, and each stage's state.
+
+    ``stage`` is the last stage reached with every applicable stage before it reached too:
+    a stage that does not apply is passed over, never counted as reached.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    stage: Named
+    stages: tuple[StageState, ...] = Field(min_length=len(JOURNEY_STAGES))
+
+    def __str__(self) -> str:
+        return "\n".join([f"journey: {self.stage}", *(f"  {s}" for s in self.stages)])
+
+
+def journey_state(card: Scorecard) -> JourneyState:
+    """How far ``card``'s design has come, and what holds back each later stage.
+
+    ``described``: the document parsed into a card. ``screened``: every check but the FEA
+    tier has a verdict; the gaps name those that do not. ``simulated``: the FEA tier the
+    document demands has a verdict; not applicable when it demands none. ``optimized``: not
+    applicable until a study is declared, which this release cannot run. ``review_ready``:
+    every check has a verdict and the review package has been written for this content;
+    the package is not built in this release, so it is never reached, and says so.
+    """
+    if not isinstance(card, Scorecard):
+        raise _JourneyInputError(
+            "card must be a Scorecard",
+            remedies=(Remedy(action="replace", subject="card", source="the tool result"),),
+        )
+    open_ = [e.name for e in card.entries if e.status is CheckStatus.NOT_EVALUATED]
+    fea = [e for e in card.entries if e.name == "T3 FEA"]
+    unscreened = [n for n in open_ if n != "T3 FEA"]
+    stages = [StageState(stage="described", state="reached")]
+    stages.append(StageState(stage="screened", state="not_reached" if unscreened else "reached",
+                             gaps=tuple(f"{n} has no verdict" for n in unscreened)))  # fmt: skip
+    if not fea:
+        stages.append(StageState(stage="simulated", state="not_applicable",
+                                 gaps=("the document demands no FEA",)))  # fmt: skip
+    elif fea[0].status is CheckStatus.NOT_EVALUATED:
+        stages.append(StageState(stage="simulated", state="not_reached",
+                                 gaps=("T3 FEA has not run",)))  # fmt: skip
+    else:
+        stages.append(StageState(stage="simulated", state="reached"))
+    stages.append(StageState(stage="optimized", state="not_applicable",
+                             gaps=("no study is declared",)))  # fmt: skip
+    ready_gaps = tuple(f"{n} has no verdict" for n in open_) + (
+        "the review package is not written: this release has no review_package export",
+    )
+    stages.append(StageState(stage="review_ready", state="not_reached", gaps=ready_gaps))
+    furthest = "described"
+    for state in stages:
+        if state.state == "not_reached":
+            break
+        if state.state == "reached":
+            furthest = state.stage
+    return JourneyState(stage=furthest, stages=tuple(stages))

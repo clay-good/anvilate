@@ -235,6 +235,7 @@ _COMBINATION_REF = "urn:anvilate:schema:combination-summary:1.0.0"
 _PRODUCT_SUMMARY_REF = "urn:anvilate:schema:product-summary:1.2.0"
 _NODE_CARD_REF = "urn:anvilate:schema:node-card:1.4.0"
 _NEXT_STEPS_REF = "urn:anvilate:schema:next-steps:1.0.0"
+_JOURNEY_STATE_REF = "urn:anvilate:schema:journey-state:1.0.0"
 
 # The size a tool result may reach, in characters of its JSON. Claude Code warns at about
 # 10,000 tokens of tool output and caps at 25,000; Codex truncates to a token budget. A
@@ -687,8 +688,9 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "scorecard": {"$ref": _SCORECARD_REF},
                     "subject": _SUBJECT_SCHEMA,
                     "next": {"$ref": _NEXT_STEPS_REF},
+                    "journey": {"$ref": _JOURNEY_STATE_REF},
                 },
-                required=["scorecard", "subject", "next"],
+                required=["scorecard", "subject", "next", "journey"],
             ),
             writes=True,
             cost=Cost.BOUNDED,
@@ -1086,6 +1088,7 @@ def _schema_issues(tool: ToolDefinition, label: str, schema: dict[str, Any]) -> 
             _PRODUCT_SUMMARY_REF,
             _NODE_CARD_REF,
             _NEXT_STEPS_REF,
+            _JOURNEY_STATE_REF,
         }:
             issues.append(
                 f"{where} references {ref!r}, which is not a published anvilate contract "
@@ -2922,7 +2925,7 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
         ) from failure
     _refuse_unbacked(spec, "run_validation")
     spec = _confirm_drafts(spec)
-    from .journey import NextSteps, next_steps
+    from .journey import NextSteps, journey_state, next_steps
 
     screened = screen_spec(spec, **_screening_options(spec))
     card = screened.model_dump(mode="json")
@@ -2942,7 +2945,8 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     handle = subject_store().publish(
         _SCREENING, {"spec": spec.model_dump(mode="json"), "scorecard": card}
     )
-    return {"scorecard": card, "subject": handle, "next": steps}
+    journey = journey_state(screened).model_dump(mode="json")
+    return {"scorecard": card, "subject": handle, "next": steps, "journey": journey}
 
 
 def _read_scorecard(arguments: Mapping[str, Any]) -> dict[str, Any]:

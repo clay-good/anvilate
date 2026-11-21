@@ -249,6 +249,7 @@ contracts.PRODUCT_DOCUMENT_SCHEMA_VERSION
 contracts.NODE_CARD_SCHEMA_VERSION
 contracts.INDUSTRY_PROFILE_SCHEMA_VERSION
 contracts.NEXT_STEPS_SCHEMA_VERSION
+contracts.JOURNEY_STATE_SCHEMA_VERSION
 contracts.CONTEXT_INVENTORY_SCHEMA_VERSION
 contracts.JSON_SCHEMA_DIALECT
 contracts.PART_CATALOG_SCHEMA_VERSION
@@ -260,6 +261,7 @@ contracts.product_document_json_schema
 contracts.node_card_json_schema
 contracts.industry_profile_json_schema
 contracts.next_steps_json_schema
+contracts.journey_state_json_schema
 contracts.context_inventory_json_schema
 contracts.freeze_release
 contracts.part_catalog_json_schema
@@ -903,6 +905,10 @@ journey.NEXT_STEP_TOOLS
 journey.NextStep
 journey.NextSteps
 journey.next_steps
+journey.JOURNEY_STAGES
+journey.StageState
+journey.JourneyState
+journey.journey_state
 verification.plan_verification
 verification.record_outcome
 verification.DVPR_COLUMNS

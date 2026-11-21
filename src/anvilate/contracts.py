@@ -79,6 +79,7 @@ __all__ = [
     "NODE_CARD_SCHEMA_VERSION",
     "INDUSTRY_PROFILE_SCHEMA_VERSION",
     "NEXT_STEPS_SCHEMA_VERSION",
+    "JOURNEY_STATE_SCHEMA_VERSION",
     "VIEWPORT_SCHEMA_VERSION",
     "bundle_json_schema",
     "geometry_json_schema",
@@ -101,6 +102,7 @@ __all__ = [
     "node_card_json_schema",
     "industry_profile_json_schema",
     "next_steps_json_schema",
+    "journey_state_json_schema",
     "viewport_json_schema",
     "element_json_schemas",
     "SPEC_SCHEMA_VERSION",
@@ -205,6 +207,7 @@ PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.16.0"
 NODE_CARD_SCHEMA_VERSION = "1.4.0"
 INDUSTRY_PROFILE_SCHEMA_VERSION = "1.1.0"
 NEXT_STEPS_SCHEMA_VERSION = "1.0.0"
+JOURNEY_STATE_SCHEMA_VERSION = "1.0.0"
 
 
 def _artifact(
@@ -614,6 +617,23 @@ def next_steps_json_schema() -> dict[str, Any]:
     )
 
 
+def journey_state_json_schema() -> dict[str, Any]:
+    """How far a design has come, and what holds back each later stage."""
+    from .journey import JourneyState
+
+    return _artifact(
+        JourneyState,
+        name="journey-state",
+        version=JOURNEY_STATE_SCHEMA_VERSION,
+        description=(
+            "Anvilate journey state: the furthest stage a design has reached (described, "
+            "screened, simulated, optimized, review_ready) and, for each stage, whether it "
+            "is reached, not reached with the gaps that hold it back by name, or not "
+            "applicable to this document. Generated from anvilate.journey.JourneyState."
+        ),
+    )
+
+
 def scorecard_json_schema() -> dict[str, Any]:
     """The scorecard as a JSON Schema 2020-12 document.
 
@@ -836,6 +856,7 @@ def schema_artifacts() -> dict[str, dict[str, Any]]:
         "node-card.schema.json": node_card_json_schema(),
         "industry-profile.schema.json": industry_profile_json_schema(),
         "next-steps.schema.json": next_steps_json_schema(),
+        "journey-state.schema.json": journey_state_json_schema(),
         "cli-output.schema.json": cli_output_json_schema(),
         **{
             f"{ELEMENTS_DIRECTORY}/{tag}.schema.json": schema

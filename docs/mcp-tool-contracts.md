@@ -255,7 +255,11 @@ inverse solved a value (re-validate at it), other failures (move the named param
 the document demands that did not run (`build_part`, `run_fea_validation`), each
 declaration a check is waiting on, and, when nothing holds the card back,
 `export_artifact` with `evidence_bundle`. The same card gives the same steps, and the list
-is never empty. Two of its decisions differ from
+is never empty. Beside it, `journey` ([journey-state 1.0.0](api/schemas/journey-state.schema.json))
+states the furthest stage reached (`described`, `screened`, `simulated`, `optimized`,
+`review_ready`) and names what holds back each later one; a stage the document does not
+call for (no FEA demanded, no study declared) is *not applicable*, never reached. Two of
+its decisions differ from
 `compile_spec`'s and the difference is the point:
 
 - **A document that is not a Design Spec is a malformed request here.** Its input property

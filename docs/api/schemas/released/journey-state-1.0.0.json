@@ -1,0 +1,58 @@
+{
+  "$defs": {
+    "StageState": {
+      "additionalProperties": false,
+      "description": "One stage: reached, not reached (with the gaps that hold it back), or not applicable.",
+      "properties": {
+        "gaps": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Gaps",
+          "type": "array"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "state": {
+          "pattern": "^(reached|not_reached|not_applicable)$",
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage",
+        "state"
+      ],
+      "title": "StageState",
+      "type": "object"
+    }
+  },
+  "$id": "urn:anvilate:schema:journey-state:1.0.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Anvilate journey state: the furthest stage a design has reached (described, screened, simulated, optimized, review_ready) and, for each stage, whether it is reached, not reached with the gaps that hold it back by name, or not applicable to this document. Generated from anvilate.journey.JourneyState.",
+  "properties": {
+    "stage": {
+      "title": "Stage",
+      "type": "string"
+    },
+    "stages": {
+      "items": {
+        "$ref": "#/$defs/StageState"
+      },
+      "minItems": 5,
+      "title": "Stages",
+      "type": "array"
+    }
+  },
+  "required": [
+    "stage",
+    "stages"
+  ],
+  "title": "JourneyState",
+  "type": "object",
+  "x-anvilate-version": "1.0.0"
+}
