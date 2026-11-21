@@ -858,6 +858,13 @@ fmea.FmeaReport
 fmea.fmea
 fmea.load_rating_scale
 fmea.load_action_priority
+risk.RISK_COLUMNS
+risk.RiskControl
+risk.RiskRecord
+risk.ControlVerification
+risk.RiskRow
+risk.RiskReport
+risk.assess_risks
 verification.plan_verification
 verification.record_outcome
 verification.DVPR_COLUMNS

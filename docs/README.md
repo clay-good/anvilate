@@ -70,7 +70,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Load combinations](load-combinations.md) | The governing combination named, including the uplift case a gravity-only check misses. |
 | [Design-space exploration](design-space-exploration.md) | An exact Pareto front, because every check is closed-form. |
 | [Typed repair feedback](repair-feedback.md) | The parameter and the value that fixes a failing check. |
-| [Quality artifacts](quality-artifacts.md) | The records a part is judged on, from its own evidence: the DVP&R, the design FMEA on published rating scales, and each requirement traced to its checks, tests and evidence, with the uncovered and the untraced named. |
+| [Quality artifacts](quality-artifacts.md) | The records a part is judged on, from its own evidence: the DVP&R, the design FMEA on published rating scales, risk records whose controls take their checks' verdicts, and each requirement traced to its checks, tests and evidence, with the uncovered and the untraced named. |
 | [Verification planning](verification-planning.md) | The physical test each check implies — and why a plan is never evidence; exported as a DVP&R, CSV or XLSX. |
 | [Model credibility](model-credibility.md) | The recorded test read back against the prediction, the escaped-defect candidate an unconservative one files, and the eight NASA-STD-7009A factors scored only from evidence held. |
 | [Service-life planning](service-life-planning.md) | The inspection or replacement each life-limited check implies, from a declared rule and never a default; the spares it needs, and the items nothing gave a life. |

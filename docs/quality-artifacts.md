@@ -10,6 +10,7 @@ with it.
 | --- | --- | --- | --- |
 | [DVP&R](verification-planning.md#the-plan-as-a-dvpr), CSV or XLSX | the design verification plan and report a validation engineer runs | the verification plan: each test item, its requirement, procedure and acceptance criterion | sample size, timing, owner, and running the test |
 | [Design FMEA](#design-fmea), CSV or XLSX | the DFMEA worksheet: one row per failure mode, its prevention and detection controls | the failure-mode catalogue, the scorecard and the verification plan | severity, effects, your action-priority matrix, and the actions |
+| [Risk records](#risk-records), CSV | the risk-management file of ISO 14971 (medical) or the risk assessment of ISO 12100 (machinery) | your hazard records and the scorecard | the severity and probability categories, and whether the residual risk is acceptable |
 | Trace, CSV or ReqIF 1.2 | a requirements tool's link table, or the tool itself through ReqIF | your requirements, the scorecard and the verification plan | the requirements themselves, and whether a covered requirement is met |
 
 ## Requirement trace
@@ -133,7 +134,40 @@ refused with the first combinations it hits. A table with no source is refused, 
 export names it. No matrix ships with Anvilate: the handbook matrices most programs use are
 licensed, and a test sweeps every bundled file to keep one from arriving.
 
+## Risk records
+
+ISO 14971 and ISO 12100 share one chain: a hazard, the hazardous situation in which it
+meets a person, the harm, the risk estimated from the harm's severity and probability, the
+controls that reduce it, and the verification of each control. Declare the chain, and
+name the check a control rests on:
+
+```python
+from anvilate.risk import RiskControl, RiskRecord, assess_risks
+
+report = assess_risks([RiskRecord(
+    id="H-3", hazard="crushing between the platen and the frame",
+    hazardous_situation="an operator reaches past the guard while the press closes",
+    harm="crushed fingers", severity="serious", probability="occasional",
+    controls=(RiskControl(description="fixed guard", check="guard clearance"),
+              RiskControl(description="warning label", verification="label review LR-12")),
+)], scorecard=card)
+report.not_verified   # (('H-3', 'fixed guard'),) when the clearance check fails
+report.to_csv()       # one row per control
+```
+
+| A control | Is shown as |
+| --- | --- |
+| naming a check that passes (or passes with a warning or an over-margin flag) | verified, by that check |
+| naming a check that fails, did not run, or was deferred | **not verified**, naming the entry and why |
+| verified some other way, said in words | declared, not checked: the evidence is yours to show |
+| with no verification at all | no verification declared |
+
+A check name the card does not hold is refused: a control verified by a check that does
+not exist would read as verified. Severity and probability are your risk-management plan's
+own categories, carried as written; nothing here computes a risk level or judges whether
+it is acceptable.
+
 ## Not yet
 
-Special-characteristic marks and the control-plan seed they feed, stable characteristic
-numbering, and risk records.
+Special-characteristic marks and the control-plan seed they feed, and stable
+characteristic numbering.

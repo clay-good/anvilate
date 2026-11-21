@@ -124,6 +124,8 @@ that already ran and does one more thing with them:
   properties computed by some other tool.
 - :mod:`anvilate.fmea` — design FMEA rows from the failure-mode catalogue, the card and
   the verification plan, rated on Anvilate's published scales or the user's tables.
+- :mod:`anvilate.risk` — risk records in the hazard structure ISO 14971 and ISO 12100
+  share, each control that is a check verified by that check's verdict.
 - :mod:`anvilate.trace` — each requirement traced to the checks, tests and evidence that
   address it, the uncovered and the untraced named.
 - :mod:`anvilate.cae` — a declared frame written as an input deck for the analyst's own

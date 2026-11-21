@@ -22,7 +22,7 @@
       (CSV and XLSX, one row per item; no archetype routes a fatigue check yet, so the
       spec scenario's durability row waits on a durability archetype)
 - [ ] 3.2 Control-plan seed export
-- [ ] 3.3 Risk records (ISO 14971 / ISO 12100 structure) with linked controls
+- [x] 3.3 Risk records (ISO 14971 / ISO 12100 structure) with linked controls
 
 ## 4. Traceability
 
