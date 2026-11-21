@@ -166,3 +166,18 @@ def test_the_docs_page_quotes_the_flow_this_library_derives():
     assert f"torques of {torques[0]:.1f}, {torques[1]:.0f} and {torques[2]:,.0f} lbf·ft" in page
     loads = [m.tangential_load.to("lbf").magnitude for m in flow.meshes]
     assert f"loads of {loads[0]:.1f} and {loads[1]:,.0f} lbf" in page
+
+
+def test_a_declared_pressure_angle_splits_each_mesh_load_into_radial_and_total():
+    """Drive trains 3.1: the radial load that bends the shafts, from the tangential load and
+    the declared pressure angle. The case study's gears are 20-degree; 540.2 lbf tangential
+    gives 540.2 x tan 20 = 196.6 lbf radial and 540.2 / cos 20 = 574.9 lbf in all."""
+    meshes = tuple(m.model_copy(update={"pressure_angle": _q("20 degree")})
+                   for m in _reducer().meshes)  # fmt: skip
+    first = derive_flow(_reducer(meshes=meshes)).meshes[0]
+    assert first.radial_load.to("lbf").magnitude == pytest.approx(196.6, abs=0.1)
+    assert first.total_load.to("lbf").magnitude == pytest.approx(574.9, abs=0.1)
+    assert derive_flow(_reducer()).meshes[0].radial_load is None  # no angle, no split
+    with pytest.raises(ValueError, match="outside 0 to 45 degrees"):
+        Mesh(name="m", driver="a", driven="b", efficiency=1.0, source="x",
+             pressure_angle=_q("50 degree"))  # fmt: skip

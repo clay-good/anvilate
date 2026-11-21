@@ -23,7 +23,7 @@ contradicts the one the flow derives.
 
 from __future__ import annotations
 
-from math import isclose, pi
+from math import cos, isclose, pi, tan
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -110,6 +110,9 @@ class Mesh(StatableModel):
     efficiency: float = Field(gt=0, le=1, allow_inf_nan=False)
     source: Provenance
     center_distance: Quantity | None = None
+    # The transverse pressure angle, declared: it splits the tangential load into the
+    # radial load that bends the shafts. No default, because 14.5, 20 and 25 degrees all ship.
+    pressure_angle: Quantity | None = None
 
     @model_validator(mode="after")
     def _distinct(self) -> Mesh:
@@ -118,6 +121,11 @@ class Mesh(StatableModel):
                           subject="driver, driven")  # fmt: skip
         if self.center_distance is not None:
             _of(self.center_distance, "[length]", name=f"{self.name} center_distance")
+        if self.pressure_angle is not None:
+            degrees = _of(self.pressure_angle, "[]", name=f"{self.name} pressure_angle")
+            if not 0 < degrees.to("degree").magnitude < 45:
+                raise _refuse(f"{self.name} pressure_angle {self.pressure_angle} is outside "
+                              "0 to 45 degrees", subject="pressure_angle")  # fmt: skip
         return self
 
 
@@ -203,6 +211,8 @@ class MeshState(StatableModel):
     driver_torque: Quantity
     pitch_line_velocity: Quantity | None = None
     tangential_load: Quantity | None = None
+    radial_load: Quantity | None = None
+    total_load: Quantity | None = None
 
 
 class DriveFlow(StatableModel):
@@ -326,10 +336,16 @@ def _mesh_state(mesh: Mesh, gears: dict[str, Gear], torque: float, omega: float)
     if diameter is None:
         return MeshState(mesh=mesh.name, driver_torque=Quantity(magnitude=torque, unit="N*m"))
     radius = diameter.to("m").magnitude / 2
+    tangential = torque / radius
+    split: dict[str, Quantity] = {}
+    if mesh.pressure_angle is not None:
+        phi = mesh.pressure_angle.to("radian").magnitude
+        split = {"radial_load": Quantity(magnitude=tangential * tan(phi), unit="N"),
+                 "total_load": Quantity(magnitude=tangential / cos(phi), unit="N")}  # fmt: skip
     return MeshState(
         mesh=mesh.name, driver_torque=Quantity(magnitude=torque, unit="N*m"),
         pitch_line_velocity=Quantity(magnitude=omega * radius, unit="m/s"),
-        tangential_load=Quantity(magnitude=torque / radius, unit="N"),
+        tangential_load=Quantity(magnitude=tangential, unit="N"), **split,
     )  # fmt: skip
 
 

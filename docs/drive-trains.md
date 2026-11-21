@@ -31,6 +31,7 @@ screen_output_speed(train, flow)          # the output speed against its band, a
 | its power | the driver's power times the mesh's declared efficiency, which cites its source; a lossless analysis declares 1.0 and says so |
 | its torque | power over speed |
 | a mesh's pitch-line velocity and tangential load | from the driver's speed and torque and its declared pitch diameter |
+| its radial and total load | the tangential load times the tangent, and over the cosine, of the mesh's declared pressure angle; with no angle declared there is no split, since 14.5, 20 and 25 degrees all ship |
 
 | Refused, naming what to correct | Why |
 | --- | --- |
@@ -49,6 +50,8 @@ the pitch diameter rounded to 2.67 in; the library takes the exact 16/6 in.
 
 ## Not yet
 
-Declaring the train inside a product document, mesh forces on the shafts and bearings,
+Declaring the train inside a product document, the mesh loads applied to the shafts and
+their bearings (the case study's bearing reactions rest on positions in its Example 7-2,
+which the free chapter does not carry),
 mesh geometry and rating against the gear standards, heat, and swept clearance: each
 waits on a standard read rather than remembered.
