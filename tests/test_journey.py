@@ -264,3 +264,38 @@ def test_a_review_package_bundle_carries_the_screening_disclaimer(monkeypatch, t
                                "format": "review_package"})  # fmt: skip
     bundle = json.loads(Path(result["files"][0]["path"]).read_text())
     assert bundle["disclaimer"] == SCREENING_DISCLAIMER
+
+
+def test_a_changed_design_loses_its_stage_and_names_the_change(monkeypatch, tmp_path):
+    """Guided design journey 1.3: a package covers one content digest; change a dimension
+    and the next validation falls back from review_ready, naming what moved."""
+    from anvilate.mcp import _export_artifact, _run_validation
+    from anvilate.spec import load_spec_yaml
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    spec = load_spec_yaml((_EXAMPLES / "padeye.spec.yaml").read_text()).model_dump(mode="json")
+    first = _run_validation({"spec": spec})
+    assert first["journey"]["stage"] == "screened"  # nothing written yet
+    _export_artifact({"subject": first["subject"], "format": "review_package"})
+    again = _run_validation({"spec": spec})
+    assert again["journey"]["stage"] == "review_ready"
+    thicker = {**spec["element_params"], "thickness": {"magnitude": 22.0, "unit": "mm"}}
+    moved = {**spec, "element_params": thicker}
+    after = _run_validation({"spec": moved})
+    ready = {s["stage"]: s for s in after["journey"]["stages"]}["review_ready"]
+    assert after["journey"]["stage"] == "screened" and ready["state"] == "not_reached"
+    assert ready["gaps"] == ["the review package was written for earlier content; changed "
+                             "since: element_params"]  # fmt: skip
+
+
+def test_a_draft_package_never_counts_as_written():
+    from anvilate.journey import package_standing
+    from anvilate.spec import load_spec_yaml
+
+    card = Scorecard(entries=(_passing(),))
+    spec = load_spec_yaml((_EXAMPLES / "padeye.spec.yaml").read_text())
+    assert package_standing({"draft": True, "content_sha256": "x"}, spec, card) == (False, ())
+    assert package_standing("not a manifest", spec, card) == (False, ())
+    written, changed = package_standing({"draft": False, "content_sha256": "x",
+                                         "spec_fields": {}}, spec, card)  # fmt: skip
+    assert not written and "name" in changed

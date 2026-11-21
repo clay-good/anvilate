@@ -913,6 +913,7 @@ journey.StageState
 journey.JourneyState
 journey.journey_state
 journey.write_review_package
+journey.package_standing
 capabilities.Capability
 capabilities.CAPABILITIES
 capabilities.capability

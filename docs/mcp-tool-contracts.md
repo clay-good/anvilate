@@ -262,7 +262,10 @@ listing both with their digests, into the output folder. It is refused while a c
 verdict unless `draft: true` is passed; a draft is marked draft in every file (the names,
 the bundle's `draft` key, the dossier's first line, the manifest). Writing it records no
 review: the dossier still reads "not yet reviewed" and the manifest says `records_review:
-false`. Its result's `journey` reads `review_ready` once a non-draft package is written.
+false`. Its result's `journey` reads `review_ready` once a non-draft package is written, and
+`run_validation` reads the package's manifest from the output folder afterwards: the same
+content stays `review_ready`, and a changed design falls back, naming the spec fields that
+moved since the package was written.
 `anvilate export SPEC --artifact review-package --output DIR [--draft]` writes the same
 files at the shell. The same card gives the same steps, and the list
 is never empty. Beside it, `journey` ([journey-state 1.0.0](api/schemas/journey-state.schema.json))

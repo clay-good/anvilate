@@ -3004,7 +3004,8 @@ def _run_validation(arguments: Mapping[str, Any]) -> dict[str, Any]:
     handle = subject_store().publish(
         _SCREENING, {"spec": spec.model_dump(mode="json"), "scorecard": card}
     )
-    journey = journey_state(screened).model_dump(mode="json")
+    on_record = _package_on_record(spec, screened)
+    journey = journey_state(screened, **on_record).model_dump(mode="json")
     result = {"scorecard": card, "subject": handle, "next": steps, "journey": journey}
     return result if listing is None else {**result, "profile": listing}
 
@@ -3321,6 +3322,26 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
             f"unvalidated, {confirmation}. Say so when you hand it over"
         )
     return result
+
+
+def _package_on_record(spec: Any, card: Any) -> dict[str, Any]:
+    """Whether the output folder holds a review package for this content, and what changed.
+
+    The server keeps nothing between calls, so the package's own manifest is the record: a
+    non-draft one for this spec's name, compared by content digest.
+    """
+    from .journey import package_standing
+
+    folder = output_folder()
+    if folder is None:
+        return {}
+    manifest = folder / f"{safe_stem(str(spec.name))}.review.manifest.json"
+    try:
+        recorded = parse_json(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return {}
+    written, changed = package_standing(recorded, spec, card)
+    return {"package_written": written, "changed_since": changed}
 
 
 def _review_package(

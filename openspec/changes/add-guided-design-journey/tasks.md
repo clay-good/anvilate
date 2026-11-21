@@ -13,7 +13,7 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
 - [ ] 1.2 Journey stage and per-stage gaps on part, combination and product results
       (`journey_state`, journey-state 1.0.0, on `run_validation` and `build_combination`;
       product results not yet)
-- [ ] 1.3 Stage invalidated by content digest; a changed design falls back and says why
+- [x] 1.3 Stage invalidated by content digest; a changed design falls back and says why
 
 ## 2. Finish line
 

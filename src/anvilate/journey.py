@@ -36,6 +36,7 @@ __all__ = [
     "JourneyState",
     "journey_state",
     "write_review_package",
+    "package_standing",
     "NEXT_STEP_TOOLS",
     "NextStep",
     "NextSteps",
@@ -206,7 +207,9 @@ class JourneyState(StatableModel):
         return "\n".join([f"journey: {self.stage}", *(f"  {s}" for s in self.stages)])
 
 
-def journey_state(card: Scorecard, *, package_written: bool = False) -> JourneyState:
+def journey_state(
+    card: Scorecard, *, package_written: bool = False, changed_since: Sequence[str] = ()
+) -> JourneyState:
     """How far ``card``'s design has come, and what holds back each later stage.
 
     ``described``: the document parsed into a card. ``screened``: every check but the FEA
@@ -214,13 +217,16 @@ def journey_state(card: Scorecard, *, package_written: bool = False) -> JourneyS
     document demands has a verdict; not applicable when it demands none. ``optimized``: not
     applicable until a study is declared, which this release cannot run. ``review_ready``:
     every check has a verdict and the review package has been written for this content
-    (``package_written``, which only the export that wrote it can say).
+    (``package_written``, which only the export that wrote it can say). A package written
+    for earlier content no longer counts: ``changed_since`` names the spec fields that
+    moved since, and the stage falls back, saying so.
     """
     if not isinstance(card, Scorecard):
         raise _JourneyInputError(
             "card must be a Scorecard",
             remedies=(Remedy(action="replace", subject="card", source="the tool result"),),
         )
+    changed_since = each_one(changed_since, str, named="changed_since")
     open_ = [e.name for e in card.entries if e.status is CheckStatus.NOT_EVALUATED]
     fea = [e for e in card.entries if e.name == "T3 FEA"]
     unscreened = [n for n in open_ if n != "T3 FEA"]
@@ -237,9 +243,16 @@ def journey_state(card: Scorecard, *, package_written: bool = False) -> JourneyS
         stages.append(StageState(stage="simulated", state="reached"))
     stages.append(StageState(stage="optimized", state="not_applicable",
                              gaps=("no study is declared",)))  # fmt: skip
-    ready_gaps = tuple(f"{n} has no verdict" for n in open_) + (
-        () if package_written else ("the review package is not written for this content",)
-    )
+    if changed_since:
+        package_gap: tuple[str, ...] = (
+            "the review package was written for earlier content; changed since: "
+            + ", ".join(changed_since),
+        )
+    elif package_written:
+        package_gap = ()
+    else:
+        package_gap = ("the review package is not written for this content",)
+    ready_gaps = tuple(f"{n} has no verdict" for n in open_) + package_gap
     stages.append(StageState(stage="review_ready",
                              state="not_reached" if ready_gaps else "reached",
                              gaps=ready_gaps))  # fmt: skip
@@ -302,6 +315,7 @@ def write_review_package(
     manifest = {
         "package": "anvilate review package",
         "content_sha256": digest,
+        "spec_fields": _field_digests(spec),
         "draft": draft,
         "records_review": False,
         "statement": _RECORDS_NO_REVIEW,
@@ -321,3 +335,33 @@ def _name(path: str) -> str:
     from pathlib import PurePath
 
     return PurePath(path).name
+
+
+def _field_digests(spec: Any) -> dict[str, str]:
+    from .attestation import canonical_json, sha256_hex
+
+    return {key: sha256_hex(canonical_json(value).encode("utf-8"))
+            for key, value in spec.model_dump(mode="json").items()}  # fmt: skip
+
+
+def package_standing(manifest: Any, spec: Any, card: Scorecard) -> tuple[bool, tuple[str, ...]]:
+    """Whether a written review package still covers this content, and what changed if not.
+
+    Returns ``(written, changed)``: ``written`` is true only for a non-draft package whose
+    content digest is this spec and card's; otherwise ``changed`` names the spec fields that
+    differ from the ones the package was written for, or the card itself when the spec is
+    unchanged and the verdicts moved (a new release screening differently).
+    """
+    from .attestation import canonical_json, sha256_hex
+
+    if not isinstance(manifest, dict) or manifest.get("draft") is not False:
+        return False, ()
+    digest = sha256_hex(canonical_json(
+        {"spec": spec.model_dump(mode="json"), "scorecard": card.model_dump(mode="json")}
+    ).encode("utf-8"))  # fmt: skip
+    if manifest.get("content_sha256") == digest:
+        return True, ()
+    then = manifest.get("spec_fields") or {}
+    now = _field_digests(spec)
+    changed = tuple(sorted(k for k in {*then, *now} if then.get(k) != now.get(k)))
+    return False, changed or ("the scorecard",)
