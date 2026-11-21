@@ -97,6 +97,11 @@ both sources, and listed among the profile's changes:
 RELAXED ultimate: 1.4 (ACME ES-12 §4, test-verified) below 1.5 (14 CFR 25.303 factor of safety)
 ```
 
+`profiled_factor_set(factor_set("14-cfr-25"), resolved)` puts the profile's `ultimate` and
+`yield` factors into a bundled factor set, each changed row's clause naming the profile and
+the rule. A relaxed factor is named on every row it reaches, so every margin row computed
+under the set (`margin_table`) reports the relaxation, both values and both sources.
+
 ## Shipped profiles
 
 `bundled_profiles()` returns them; `industry_profile("spaceflight")` picks one by name.
@@ -117,7 +122,3 @@ under `awaiting`, naming where your licensed copy gives the value.
 `general` adds nothing: no factors, no required checks, no artifacts. Applying it leaves
 every shipped example's card unchanged, which a test holds over all of them, and its list
 of changes is empty.
-
-## Not yet
-
-- Relaxations carried onto the rows of a margin table.

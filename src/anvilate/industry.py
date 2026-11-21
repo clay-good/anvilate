@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import importlib.util
 from collections.abc import Sequence
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, ValidationError, model_validator
 
@@ -55,6 +55,7 @@ __all__ = [
     "apply_profile",
     "load_profile",
     "bundled_profiles",
+    "profiled_factor_set",
     "industry_profile",
 ]
 
@@ -505,3 +506,55 @@ def industry_profile(name: str) -> IndustryProfile:
     known = [p.urn.rpartition(":")[2] for p in profiles]
     raise _refuse(f"no shipped profile is named {name!r}; the shipped ones are {known}",
                   subject="name")  # fmt: skip
+
+
+def profiled_factor_set(base: Any, profile: ResolvedProfile) -> Any:
+    """``base`` with the profile's ``ultimate`` and ``yield`` factors in force, attributed.
+
+    Every row the profile sets a factor for takes it, and its clause names the profile and
+    the rule. A factor the profile **relaxed** below the profile it extends is named as a
+    relaxation on every row it reaches, with both values and both sources, so each margin
+    row computed under the set says so. A profile that sets neither factor returns ``base``.
+    """
+    from .margin_of_safety import FactorSet
+
+    if not isinstance(base, FactorSet):
+        raise _refuse("base must be a FactorSet, such as factor_set(name)", subject="base")
+    if not isinstance(profile, ResolvedProfile):
+        raise _refuse("profile must be a ResolvedProfile from resolve or layer",
+                      subject="profile")  # fmt: skip
+    set_by = {f.name: f for f in profile.profile.factors if f.name in ("ultimate", "yield")}
+    if not set_by:
+        return base
+    relaxed = {r.factor: r for r in profile.relaxations}
+
+    def clause(name: str, original: str) -> str:
+        rule = set_by[name]
+        said = f"{profile.profile.label}, rule {rule.id} [{rule.basis}]"
+        if name in relaxed:
+            r = relaxed[name]
+            said = (f"RELAXED {name} {r.value:g} by {said}, below {r.parent_value:g} "
+                    f"[{r.parent_basis}]")  # fmt: skip
+        return f"{said}; the set's own clause: {original}"
+
+    rows = []
+    for row in base.rows:
+        update: dict[str, object] = {}
+        if "ultimate" in set_by:
+            update["ultimate_factor"] = set_by["ultimate"].value
+        if "yield" in set_by and row.yield_factor is not None:
+            update["yield_factor"] = set_by["yield"].value
+        names = [n for n in ("ultimate", "yield") if n in set_by
+                 and (n == "ultimate" or row.yield_factor is not None)]  # fmt: skip
+        text = row.clause
+        for name in names:
+            text = clause(name, text)
+        rows.append(row.model_copy(update={**update, "clause": text}))
+    # Rebuilt rather than copied, so the set's own validators judge the new factors.
+    return FactorSet(
+        **{
+            **base.model_dump(),
+            "rows": tuple(rows),
+            "name": f"{base.name} under {profile.profile.name}",
+        }
+    )

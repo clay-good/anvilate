@@ -327,3 +327,31 @@ def test_the_tools_profile_choices_are_the_shipped_profiles():
 
     shipped = {p.urn.rpartition(":")[2] for p in bundled_profiles()}
     assert set(_SHIPPED_PROFILES) == shipped
+
+
+def test_a_company_relaxing_a_factor_names_it_on_every_affected_margin_row():
+    """Industry profiles 1.3, the spec's scenario: a company profile lowers the ultimate
+    factor below its parent's, and every margin row computed under it reports the
+    relaxation, both values and the override's source."""
+    from anvilate.industry import industry_profile, profiled_factor_set
+    from anvilate.margin_of_safety import MarginLimit, factor_set, margin_table
+    from test_margin_of_safety import _check
+
+    aircraft = industry_profile("transport-aircraft")
+    company = IndustryProfile(
+        urn="urn:acme:profile:acme-aero", name="ACME aero", version="2", extends=aircraft.urn,
+        factors=(FactorRule(id="ACME-F-1", name="ultimate", value=1.4,
+                            source="ACME ES-12 §4, test-verified"),),
+    )  # fmt: skip
+    base = factor_set("14-cfr-25")
+    relaxed = profiled_factor_set(base, layer(aircraft, company))
+    report = margin_table([_check()], relaxed)
+    ultimate = [row for row in report.rows if row.limit is MarginLimit.ULTIMATE]
+    assert ultimate and all(row.factor_of_safety == 1.4 for row in ultimate)
+    for row in ultimate:
+        assert "RELAXED ultimate 1.4" in row.factor_clause
+        assert "ACME ES-12 §4" in row.factor_clause and "below 1.5" in row.factor_clause
+    unrelaxed = profiled_factor_set(base, resolve(aircraft))
+    clause = margin_table([_check()], unrelaxed).rows[-1].factor_clause
+    assert "RELAXED" not in clause and "TA-F-1" in clause
+    assert profiled_factor_set(base, resolve(GENERAL)) is base

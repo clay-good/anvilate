@@ -903,6 +903,7 @@ industry.apply_profile
 industry.load_profile
 industry.AwaitedValue
 industry.bundled_profiles
+industry.profiled_factor_set
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep

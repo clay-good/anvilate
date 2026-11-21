@@ -9,8 +9,7 @@
 - [x] 1.2 Item classes an item declares (flight box, primary structure, chassis part,
       patient-contacting, guard)
 - [x] 1.3 Layering with override sources; relaxation reporting
-      (on the resolved profile; carrying it onto margin rows waits on binding a profile
-      to a margin report)
+      (on the resolved profile and, through `profiled_factor_set`, on every margin row)
 
 ## 2. Shipped profiles
 
