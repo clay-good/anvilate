@@ -275,3 +275,10 @@ def test_a_check_no_screen_implements_is_shown_not_available():
     edge, point = profiled.card.entries
     assert edge.detail.startswith("not available") and "16 CFR 1500.49" in edge.reference
     assert profiled.not_available == ("sharp edge", "sharp point")
+
+
+def test_the_resolved_profile_renders_its_header_then_each_change():
+    lines = str(resolve(AIRCRAFT)).splitlines()
+    assert lines[0] == resolve(AIRCRAFT).header()
+    assert lines[1:] == [f"  {line}" for line in resolve(AIRCRAFT).changes()]
+    assert str(resolve(GENERAL)) == resolve(GENERAL).header()

@@ -217,3 +217,17 @@ def test_a_mark_naming_a_check_the_card_lacks_is_refused():
         control_plan_seed(table, scorecard=Scorecard(entries=()))
     (row,) = control_plan_seed(table).rows  # without a card the name is carried as written
     assert row[6] == "ghost" and row[7].startswith("variable gauge")
+
+
+def test_each_rendering_names_what_tells_its_objects_apart():
+    mark = SpecialMark(kind=CharacteristicKind.GEOMETRIC_TOLERANCE, where="hole_1",
+                       detail="position", special=SpecialClass.CRITICAL, symbol="◆",
+                       reason="caliper")  # fmt: skip
+    a = number_characteristics(characteristics_of(REV_A), part="P-100", revision="A")
+    b = number_characteristics(characteristics_of(REV_B, marks=[mark]), part="P-100",
+                               revision="B", previous=a.numbering)  # fmt: skip
+    text = str(b)
+    assert text.startswith("P-100 rev B: 5 characteristic(s); new [4, 5]; retired []")
+    assert "  3. position of hole_1 [critical ◆]" in text and "  4. size of hole_2" in text
+    assert str(b.rows[0].characteristic) == "size of width"
+    assert str(control_plan_seed(b)) == "control-plan seed: 1 special characteristic(s)"
