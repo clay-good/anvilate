@@ -7,15 +7,22 @@ independent and optional.
 
 - [ ] 1.1 Study schema: `search` strategy beside `sweep`; continuous, integer and choice
       variables; budgets in evaluations, solver runs and wall-clock
+      (`SearchStudy`: the three variable kinds and an evaluation budget; solver-run and
+      wall-clock budgets wait on FEA in the loop)
 - [ ] 1.2 Choice variables bound to bundled tables (preferred modules, stock thickness,
       bearing series, motor frames); refusal of unsourced values
-- [ ] 1.3 Seeded evolutionary search (pymoo, optional extra) and local refinement (SciPy
+- [x] 1.3 Seeded evolutionary search (pymoo, optional extra) and local refinement (SciPy
       COBYQA); deterministic commit order under parallel evaluation
-- [ ] 1.4 Inverse-seeded starting points
-- [ ] 1.5 Neighborhood check and the "not locally confirmed" label
+      (`anvilate.search`: differential evolution and a compass refinement in pure Python,
+      so no new dependency; one worker and four record the same points)
+- [x] 1.4 Inverse-seeded starting points (`starts`, evaluated first; the caller passes
+      the base and the repaired design)
+- [x] 1.5 Neighborhood check and the "not locally confirmed" label
 - [ ] 1.6 Result as a spec diff; provenance on apply
 - [ ] 1.7 Golinski speed-reducer regression from the published definition; a second
       mixed-variable benchmark
+      (the speed reducer, after Cagnina et al. 2008, is held within 0.05% of its published
+      best; the second benchmark is not yet)
 
 ## 2. Search with FEA in the loop
 

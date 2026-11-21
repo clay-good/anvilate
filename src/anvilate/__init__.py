@@ -134,6 +134,8 @@ that already ran and does one more thing with them:
   each on this platform, shared by `doctor` and every tool that needs one.
 - :mod:`anvilate.journey` — the next step a workflow result calls for, derived from the
   card alone by a fixed precedence, every tool it names held to the published catalog.
+- :mod:`anvilate.search` — a seeded search for the best design found under a budget,
+  feasibility the scorecard's, its neighborhood checked, never called optimal.
 - :mod:`anvilate.risk` — risk records in the hazard structure ISO 14971 and ISO 12100
   share, each control that is a check verified by that check's verdict.
 - :mod:`anvilate.trace` — each requirement traced to the checks, tests and evidence that

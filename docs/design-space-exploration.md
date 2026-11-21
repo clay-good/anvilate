@@ -97,6 +97,38 @@ evaluator. A non-finite one is refused rather than sorted, because NaN compares 
 against everything: it would neither dominate nor be dominated, and would sit on the
 front for a reason that is not a reason.
 
+## Search: the best design found under a budget
+
+When the box is too big to sweep, `anvilate.search.run_search` spends the budget where it
+matters, on the same evaluator a sweep uses (the objective, and a scorecard that decides
+feasibility):
+
+```python
+from anvilate.search import SearchStudy, SearchVariable, VariableKind, run_search
+
+study = SearchStudy(name="speed reducer", objective="weight", seed=7, evaluations=4000,
+                    variables=(SearchVariable(name="x3", kind=VariableKind.INTEGER,
+                                              low=17, high=28), ...))
+result = run_search(study, evaluate, starts=[base_design, repaired_design])
+print(result)   # the best design found under the stated budget (4000 evaluations), ...
+```
+
+| Rule | What it means |
+| --- | --- |
+| Variables | continuous between bounds, integer between whole-number bounds, or a choice from a list that names its source; an unsourced list ("7.3 mm") is refused |
+| Strategy | `evolutionary` (seeded differential evolution over the whole box, feasibility first) or `local` (a compass refinement of continuous variables from a declared `start`) |
+| Determinism | every candidate of a generation is drawn before any is evaluated, and results are committed in draw order, so one worker and four record the same points; another seed records other ones |
+| Feasibility | the scorecard's: a check that failed or did not run makes a point infeasible, and infeasible points are ranked by how far their safety factors fall short |
+| Starts | `starts` are evaluated first: the base design, and the design its inverse repairs propose |
+| Result | `BEST_FOUND`, never "optimal": every neighbor (a declared step either way, an integer by one, a choice to its adjacent entries) is evaluated for real, and a feasible better one is named and the result labeled *not locally confirmed* |
+
+The search is held against a published benchmark: the Golinski speed reducer, as Cagnina,
+Esquivel and Coello Coello (Informatica 32, 2008) state it, with the pinion's teeth an
+integer. With seed 7 and 4,000 evaluations it lands within 0.05% of the published best
+weight, 2,996.348165, and every point it reports as feasible satisfies all eleven
+constraints.
+
 Out of scope: topology optimisation, FEA in the loop, surrogate models, and Bayesian
 optimisation. When an evaluation costs microseconds, an exhaustive seeded sweep with
-exact sorting is faster than the machinery for avoiding one.
+exact sorting is faster than the machinery for avoiding one, and a seeded search is the
+step beyond it.

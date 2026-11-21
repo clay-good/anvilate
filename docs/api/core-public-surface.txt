@@ -904,6 +904,15 @@ industry.load_profile
 industry.AwaitedValue
 industry.bundled_profiles
 industry.profiled_factor_set
+search.VariableKind
+search.SearchStrategy
+search.SearchVariable
+search.SearchStudy
+search.SearchPoint
+search.SearchResult
+search.BEST_FOUND
+search.run_search
+search.violation
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep

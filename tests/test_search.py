@@ -1,0 +1,207 @@
+"""Search: the best design found under a stated budget, checked against a published benchmark.
+
+The speed reducer is re-implemented from its published definition: Cagnina, Esquivel and
+Coello Coello, "Solving Engineering Optimization Problems with the Simple Constrained
+Particle Swarm Optimizer", Informatica 32 (2008) 319-326, problem E03 (after Golinski),
+with x3 (pinion teeth) an integer and 7.8 <= x5 <= 8.3. Its best known design is
+x* = (3.5, 0.7, 17, 7.3, 7.8, 3.350214, 5.286683), weight 2,996.348165.
+"""
+
+from __future__ import annotations
+
+from math import sqrt
+
+import pytest
+
+from anvilate.explore import StudyEvaluation
+from anvilate.refusal import RefusalError
+from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
+from anvilate.search import (
+    BEST_FOUND,
+    SearchStrategy,
+    SearchStudy,
+    SearchVariable,
+    VariableKind,
+    run_search,
+    violation,
+)
+
+_PUBLISHED_BEST = 2996.348165
+_NAMES = ("x1", "x2", "x3", "x4", "x5", "x6", "x7")
+_BOUNDS = ((2.6, 3.6), (0.7, 0.8), (17, 28), (7.3, 8.3), (7.8, 8.3), (2.9, 3.9), (5.0, 5.5))
+
+
+def _weight(x1, x2, x3, x4, x5, x6, x7):
+    return (0.7854 * x1 * x2**2 * (3.3333 * x3**2 + 14.9334 * x3 - 43.0934)
+            - 1.508 * x1 * (x6**2 + x7**2) + 7.4777 * (x6**3 + x7**3)
+            + 0.7854 * (x4 * x6**2 + x5 * x7**2))  # fmt: skip
+
+
+def _constraints(x1, x2, x3, x4, x5, x6, x7):
+    """The eleven constraints, each as g <= 0, in the source's normalized form."""
+    return (
+        27 / (x1 * x2**2 * x3) - 1,
+        397.5 / (x1 * x2**2 * x3**2) - 1,
+        1.93 * x4**3 / (x2 * x3 * x6**4) - 1,
+        1.93 * x5**3 / (x2 * x3 * x7**4) - 1,
+        sqrt((745 * x4 / (x2 * x3)) ** 2 + 16.9e6) / (110 * x6**3) - 1,
+        sqrt((745 * x5 / (x2 * x3)) ** 2 + 157.5e6) / (85 * x7**3) - 1,
+        x2 * x3 / 40 - 1,
+        5 * x2 / x1 - 1,
+        x1 / (12 * x2) - 1,
+        (1.5 * x6 + 1.9) / x4 - 1,
+        (1.1 * x7 + 1.9) / x5 - 1,
+    )
+
+
+def _evaluate(design):
+    """Each constraint g <= 0 is a check whose safety factor is 1 / (1 + g)."""
+    x = [design[n] for n in _NAMES]
+    entries = tuple(ScorecardEntry.from_safety_factor(f"g{i}", computed=1 / (1 + g), required=1.0)
+                    for i, g in enumerate(_constraints(*x), start=1))  # fmt: skip
+    return StudyEvaluation(objectives={"weight": _weight(*x)}, scorecard=Scorecard(entries=entries))
+
+
+def _reducer(**overrides) -> SearchStudy:
+    variables = tuple(
+        SearchVariable(name=n, low=a, high=b,
+                       kind=VariableKind.INTEGER if n == "x3" else VariableKind.CONTINUOUS)
+        for n, (a, b) in zip(_NAMES, _BOUNDS, strict=True)
+    )  # fmt: skip
+    return SearchStudy(**{"name": "speed reducer", "variables": variables,
+                          "objective": "weight", "seed": 7, "evaluations": 4000,
+                          "population": 30, **overrides})  # fmt: skip
+
+
+def test_the_benchmark_as_written_reproduces_its_published_best():
+    x_star = (3.5, 0.7, 17, 7.3, 7.8, 3.350214, 5.286683)
+    assert _weight(*x_star) == pytest.approx(_PUBLISHED_BEST, abs=1e-3)
+    assert max(_constraints(*x_star)) < 1e-5  # active to the source's printed precision
+
+
+def test_the_speed_reducer_search_lands_on_the_published_best_and_every_feasible_point_is():
+    result = run_search(_reducer(), _evaluate)
+    best = result.points[result.best]
+    assert best.objective == pytest.approx(_PUBLISHED_BEST, rel=5e-4)
+    assert best.objective >= _PUBLISHED_BEST - 0.01  # never better than the published best
+    assert best.values["x3"] == 17.0 and float(best.values["x3"]).is_integer()
+    feasible = [p for p in result.points if p.feasible]
+    assert len(feasible) > 100
+    for point in feasible:
+        x = [point.values[n] for n in _NAMES]
+        assert max(_constraints(*x)) <= 1e-12, point.index
+        assert all(low <= v <= high for v, (low, high) in zip(x, _BOUNDS, strict=True))
+    assert len(result.history) == 4000 and result.exhausted
+
+
+def test_a_search_reruns_identically_on_one_worker_or_four():
+    one = run_search(_reducer(evaluations=400), _evaluate)
+    four = run_search(_reducer(evaluations=400), _evaluate, workers=4)
+    assert one.points == four.points and one.best == four.best
+    other_seed = run_search(_reducer(evaluations=400, seed=8), _evaluate)
+    assert other_seed.points != one.points
+
+
+def test_the_result_is_never_called_optimal_and_a_better_neighbor_is_named():
+    result = run_search(_reducer(evaluations=800), _evaluate)
+    assert result.best is not None
+    text = str(result) + result.label
+    assert "optimal" not in text.lower() and BEST_FOUND in result.label
+    if result.better_neighbor is not None:
+        assert not result.confirmed and "not locally confirmed" in result.label
+        assert "a feasible neighbor is better" in str(result)
+    assert all(result.points[i].origin == "neighbor" for i in result.neighbors)
+
+
+def test_a_start_is_evaluated_first_and_a_local_refinement_improves_on_it():
+    start = {"x1": 3.6, "x2": 0.8, "x3": 20.0, "x4": 8.3, "x5": 8.3, "x6": 3.9, "x7": 5.5}
+    continuous = tuple(v for v in _reducer().variables if v.name != "x3")
+    fixed = {"x3": 17.0}
+
+    def evaluate(design):
+        return _evaluate({**design, **fixed})
+
+    study = SearchStudy(name="refine", variables=continuous, objective="weight",
+                        strategy=SearchStrategy.LOCAL, evaluations=600,
+                        start={k: v for k, v in start.items() if k != "x3"})  # fmt: skip
+    result = run_search(study, evaluate)
+    assert result.points[0].origin == "start"
+    assert result.points[result.best].objective < result.points[0].objective
+
+
+def test_a_choice_needs_its_source_and_takes_only_its_values():
+    with pytest.raises(ValueError, match="name no source"):
+        SearchVariable(name="thickness", kind=VariableKind.CHOICE, choices=(6.0, 7.3, 8.0))
+    plate = SearchVariable(name="thickness", kind=VariableKind.CHOICE, choices=(6.0, 8.0, 10.0),
+                           source="mill stock list MS-2, rev 4")  # fmt: skip
+    study = SearchStudy(name="plate", variables=(plate,), objective="mass", evaluations=20,
+                        population=4)  # fmt: skip
+
+    def evaluate(design):
+        t = design["thickness"]
+        card = Scorecard(entries=(ScorecardEntry.from_safety_factor(
+            "bending", computed=t / 7.0, required=1.0),))  # fmt: skip
+        return StudyEvaluation(objectives={"mass": t}, scorecard=card)
+
+    result = run_search(study, evaluate)
+    assert {p.values["thickness"] for p in result.points} <= {6.0, 8.0, 10.0}
+    assert result.points[result.best].values["thickness"] == 8.0 and result.confirmed
+
+
+@pytest.mark.parametrize(("kwargs", "said"), [
+    ({"strategy": SearchStrategy.LOCAL}, "give start"),
+    ({"start": {"x1": 3.0}}, "every variable"),
+])  # fmt: skip
+def test_an_incoherent_study_is_refused(kwargs, said):
+    with pytest.raises(ValueError, match=said):
+        _reducer(**kwargs)
+
+
+def test_no_feasible_design_is_said_plainly():
+    def never(design):
+        card = Scorecard(entries=(ScorecardEntry.from_safety_factor("g", computed=0.5,
+                                                                    required=1.0),))  # fmt: skip
+        return StudyEvaluation(objectives={"weight": 1.0}, scorecard=card)
+
+    result = run_search(_reducer(evaluations=40), never)
+    assert result.best is None and result.label == "no feasible design found in 40 evaluations"
+    assert result.neighbors == ()
+
+
+def test_an_evaluator_that_omits_the_objective_or_returns_nan_is_refused():
+    def nan(design):
+        return StudyEvaluation(objectives={"weight": float("nan")},
+                               scorecard=Scorecard(entries=()))  # fmt: skip
+
+    with pytest.raises(RefusalError, match="finite number"):
+        run_search(_reducer(evaluations=10), nan)
+
+    def silent(design):
+        return StudyEvaluation(objectives={}, scorecard=Scorecard(entries=()))
+
+    with pytest.raises(RefusalError, match="no value for the objective"):
+        run_search(_reducer(evaluations=10), silent)
+
+
+def test_violation_measures_how_far_a_card_is_from_passing():
+    passing = Scorecard(entries=(ScorecardEntry.from_safety_factor("a", computed=2, required=1),))
+    short = Scorecard(entries=(ScorecardEntry.from_safety_factor("a", computed=0.5, required=1),
+                               ScorecardEntry(name="b", status=CheckStatus.NOT_EVALUATED,
+                                              detail="did not run")))  # fmt: skip
+    assert violation(passing) == 0 and violation(short) == pytest.approx(1.5)
+
+
+def test_the_seeded_stream_is_pinned_so_a_recorded_search_replays_on_any_interpreter():
+    """The search draws from its own SplitMix64 stream rather than `random`, whose sampling
+    algorithms change between Python releases. Pinned here: a change to the stream moves
+    every recorded search, and must be a deliberate one."""
+    from anvilate.search import _Stream
+
+    stream = _Stream(7)
+    assert [stream._next() for _ in range(3)] == [
+        7191089600892374487,
+        309689372594955804,
+        16616101746815609346,
+    ]
+    picks = _Stream(7).distinct(range(10), 3)
+    assert len(set(picks)) == 3 and all(0 <= p < 10 for p in picks)

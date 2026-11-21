@@ -25,7 +25,7 @@ contributing-analysis.md | Contributing | README, discipline-modules | -
 datasets.md | Start here | nothing | -
 declaration-needs.md | Deciding what the answer is worth | example-highlights, headless-cli, published-contracts, spec-screening | -
 design-decisions.md | Start here | README | -
-design-space-exploration.md | Deciding what the answer is worth | example-highlights | -
+design-space-exploration.md | Deciding what the answer is worth | README, example-highlights | -
 dfm-rules.md | Deciding what the answer is worth | README | -
 discipline-modules.md | Deciding what the answer is worth | README, contributing-analysis, published-contracts | -
 durability-screening.md | Deciding what the answer is worth | nothing | -
