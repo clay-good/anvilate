@@ -80,10 +80,11 @@ def test_the_precedence_is_fixed_and_identical_cards_give_identical_steps():
 
 def test_nothing_holding_it_back_exports_and_the_list_is_never_empty():
     (step,) = next_steps(Scorecard(entries=(_passing(),)))
-    assert (step.tool, dict(step.arguments)) == ("export_artifact", {"format": "evidence_bundle"})
+    assert (step.tool, dict(step.arguments)) == ("export_artifact", {"format": "review_package"})
     assert step.reason.startswith("every check has a verdict")
     (draft,) = next_steps(Scorecard(entries=(_passing(), _unrun("constraint max_mass"))))
     assert draft.tool == "export_artifact" and "as a draft" in draft.reason
+    assert dict(draft.arguments) == {"format": "review_package", "draft": "true"}
     assert next_steps(Scorecard())  # an empty card still has a step
 
 
@@ -190,3 +191,76 @@ def test_build_combination_returns_next_and_journey():
     steps = NextSteps.model_validate(result["next"]).steps
     assert steps and all(s.tool in NEXT_STEP_TOOLS for s in steps)
     assert JourneyState.model_validate(result["journey"]).stage in ("described", "screened")
+
+
+def _screened(name: str) -> str:
+    from anvilate.mcp import _run_validation
+    from anvilate.spec import load_spec_yaml
+
+    spec = load_spec_yaml((_EXAMPLES / name).read_text())
+    return _run_validation({"spec": spec.model_dump(mode="json")})["subject"]
+
+
+def test_a_review_package_is_refused_short_of_every_verdict_unless_a_draft(monkeypatch, tmp_path):
+    """Guided design journey 2.1/2.2: the finish line, and a draft that says so everywhere."""
+    import json
+
+    from anvilate.mcp import _export_artifact, _InvalidArguments
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    handle = _screened("nema23_bracket.spec.yaml")  # T0 and T1 have no verdict
+    with pytest.raises(_InvalidArguments, match="ask for a draft"):
+        _export_artifact({"subject": handle, "format": "review_package"})
+    result = _export_artifact({"subject": handle, "format": "review_package", "draft": True})
+    assert result["draft"] is True and len(result["files"]) == 3
+    names = [Path(f["path"]).name for f in result["files"]]
+    assert all(".draft." in n for n in names)
+    bundle = json.loads((tmp_path / names[0]).read_text())
+    assert bundle["draft"] is True
+    dossier = (tmp_path / names[1]).read_text()
+    assert dossier.startswith("DRAFT: not review-ready; no verdict for T0 geometry")
+    manifest = json.loads((tmp_path / names[2]).read_text())
+    assert manifest["draft"] is True and manifest["journey"]["stage"] == "described"
+
+
+def test_a_review_ready_package_reaches_the_stage_and_records_no_review(monkeypatch, tmp_path):
+    """Guided design journey 2.3: the package is not an approval; the dossier still reads
+    "not yet reviewed" and the manifest says it records no review."""
+    import json
+
+    from anvilate.mcp import _export_artifact
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    result = _export_artifact({"subject": _screened("padeye.spec.yaml"),
+                               "format": "review_package"})  # fmt: skip
+    assert result["draft"] is False and result["journey"]["stage"] == "review_ready"
+    names = [Path(f["path"]).name for f in result["files"]]
+    assert "draft" not in json.loads((tmp_path / names[0]).read_text())
+    dossier = (tmp_path / names[1]).read_text()
+    assert dossier.startswith("Review-ready for content sha256:")
+    assert "not yet reviewed" in dossier and "records no review" in dossier
+    manifest = json.loads((tmp_path / names[2]).read_text())
+    assert manifest["records_review"] is False
+    assert [f["sha256"] for f in manifest["files"]] == [f["sha256"] for f in result["files"][:2]]
+
+
+def test_draft_marks_only_a_review_package(monkeypatch, tmp_path):
+    from anvilate.mcp import _export_artifact, _InvalidArguments
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    with pytest.raises(_InvalidArguments, match="draft: marks a review_package"):
+        _export_artifact({"subject": _screened("padeye.spec.yaml"), "format": "evidence_bundle",
+                          "draft": True})  # fmt: skip
+
+
+def test_a_review_package_bundle_carries_the_screening_disclaimer(monkeypatch, tmp_path):
+    import json
+
+    from anvilate.bundle import SCREENING_DISCLAIMER
+    from anvilate.mcp import _export_artifact
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    result = _export_artifact({"subject": _screened("padeye.spec.yaml"),
+                               "format": "review_package"})  # fmt: skip
+    bundle = json.loads(Path(result["files"][0]["path"]).read_text())
+    assert bundle["disclaimer"] == SCREENING_DISCLAIMER

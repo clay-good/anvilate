@@ -11,7 +11,7 @@ one fixed precedence:
 3. failed checks with no solved value (re-validate after moving the named parameter);
 4. tiers the document demands that did not run (build the solid; run the FEA);
 5. checks held back by a value nobody declared, one step per missing declaration;
-6. when nothing holds the result back, the export of the evidence for review.
+6. when nothing holds the result back, the export of the review package.
 
 The list is a function of the result: the same card gives the same steps, and it is never
 empty, because a result short of review always has something left to do, even if that is
@@ -21,7 +21,8 @@ against the live catalog.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from pydantic import ConfigDict, Field
 
@@ -34,6 +35,7 @@ __all__ = [
     "StageState",
     "JourneyState",
     "journey_state",
+    "write_review_package",
     "NEXT_STEP_TOOLS",
     "NextStep",
     "NextSteps",
@@ -51,7 +53,7 @@ NEXT_STEP_TOOLS = (
 
 # The tools a result is re-checked with, and the export each result's subject supports.
 _RECHECK_TOOLS = ("run_validation", "build_combination")
-_EXPORTS = ("evidence_bundle", "step")
+_EXPORTS = ("review_package", "step")
 
 # A tier the card reports as an entry of its own when the document demands it and it did
 # not run, and the tool that runs it.
@@ -93,7 +95,7 @@ def next_steps(
     *,
     remedies: Sequence[str] = (),
     tool: str = "run_validation",
-    export_format: str = "evidence_bundle",
+    export_format: str = "review_package",
 ) -> tuple[NextStep, ...]:
     """The steps ``card`` calls for, by the precedence in this module's docstring.
 
@@ -101,8 +103,9 @@ def next_steps(
     ``run_validation`` for a spec, ``build_combination`` for a combination. ``remedies`` are
     a refusal's own remedies, when that call was refused; each becomes a step re-calling
     ``tool`` with that correction, ahead of everything else. ``export_format`` is what the
-    result's subject exports as when nothing holds it back: ``evidence_bundle`` for a
-    screening, ``step`` for a combination.
+    result's subject exports as when nothing holds it back: ``review_package`` for a
+    screening (``draft`` when a check has no verdict nothing here can supply), ``step`` for
+    a combination.
     """
     if export_format not in _EXPORTS:
         raise _JourneyInputError(
@@ -159,11 +162,13 @@ def next_steps(
         ))  # fmt: skip
     if not steps:
         silent = [e.name for e in unrun]
-        reason = ("every check has a verdict; export the evidence for review" if not silent
-                  else f"nothing here can supply what {', '.join(silent)} need; export the "
-                       "evidence as a draft, with those checks marked not evaluated")  # fmt: skip
-        steps.append(NextStep(tool="export_artifact", arguments={"format": export_format},
-                              reason=reason))  # fmt: skip
+        reason = ("every check has a verdict; write the review package" if not silent
+                  else f"nothing here can supply what {', '.join(silent)} need; write the "
+                       "review package as a draft, those checks marked not evaluated")  # fmt: skip
+        arguments = {"format": export_format}
+        if silent and export_format == "review_package":
+            arguments["draft"] = "true"
+        steps.append(NextStep(tool="export_artifact", arguments=arguments, reason=reason))
     return tuple(steps)
 
 
@@ -201,15 +206,15 @@ class JourneyState(StatableModel):
         return "\n".join([f"journey: {self.stage}", *(f"  {s}" for s in self.stages)])
 
 
-def journey_state(card: Scorecard) -> JourneyState:
+def journey_state(card: Scorecard, *, package_written: bool = False) -> JourneyState:
     """How far ``card``'s design has come, and what holds back each later stage.
 
     ``described``: the document parsed into a card. ``screened``: every check but the FEA
     tier has a verdict; the gaps name those that do not. ``simulated``: the FEA tier the
     document demands has a verdict; not applicable when it demands none. ``optimized``: not
     applicable until a study is declared, which this release cannot run. ``review_ready``:
-    every check has a verdict and the review package has been written for this content;
-    the package is not built in this release, so it is never reached, and says so.
+    every check has a verdict and the review package has been written for this content
+    (``package_written``, which only the export that wrote it can say).
     """
     if not isinstance(card, Scorecard):
         raise _JourneyInputError(
@@ -233,9 +238,11 @@ def journey_state(card: Scorecard) -> JourneyState:
     stages.append(StageState(stage="optimized", state="not_applicable",
                              gaps=("no study is declared",)))  # fmt: skip
     ready_gaps = tuple(f"{n} has no verdict" for n in open_) + (
-        "the review package is not written: this release has no review_package export",
+        () if package_written else ("the review package is not written for this content",)
     )
-    stages.append(StageState(stage="review_ready", state="not_reached", gaps=ready_gaps))
+    stages.append(StageState(stage="review_ready",
+                             state="not_reached" if ready_gaps else "reached",
+                             gaps=ready_gaps))  # fmt: skip
     furthest = "described"
     for state in stages:
         if state.state == "not_reached":
@@ -243,3 +250,74 @@ def journey_state(card: Scorecard) -> JourneyState:
         if state.state == "reached":
             furthest = state.stage
     return JourneyState(stage=furthest, stages=tuple(stages))
+
+
+def write_review_package(
+    spec: Any,
+    card: Scorecard,
+    sections: Any,
+    *,
+    stem: str,
+    draft: bool,
+    toolchain: str,
+    write: Callable[[str, bytes], dict[str, Any]],
+) -> dict[str, Any]:
+    """The review package for one content digest: the bundle, the dossier and a manifest.
+
+    Refused while a check has no verdict, unless ``draft``; a draft is marked draft in every
+    file it writes (its file names, the bundle's ``draft`` key, the dossier's first line and
+    the manifest). Writing it records no review: the dossier still reads "not yet reviewed"
+    until a named reviewer records one, and the manifest says so. ``write(name, data)``
+    writes one file and returns where it went (``path``, ``bytes``, ``sha256``).
+    """
+    import json
+
+    from .attestation import canonical_json, sha256_hex
+    from .review import build_dossier
+
+    unrun = [e.name for e in card.entries if e.status is CheckStatus.NOT_EVALUATED]
+    if unrun and not draft:
+        raise _JourneyInputError(
+            f"a review package is written once every check has a verdict, and "
+            f"{', '.join(unrun)} have none. Supply what they need, or ask for a draft, "
+            "written marked as one in every file",
+            remedies=(Remedy(action="add", subject="draft", source="the export request"),),
+        )  # fmt: skip
+    digest = sha256_hex(canonical_json(
+        {"spec": spec.model_dump(mode="json"), "scorecard": card.model_dump(mode="json")}
+    ).encode("utf-8"))  # fmt: skip
+    mark = "draft." if draft else ""
+    bundle = sections.model_copy(update={"draft": True}) if draft else sections
+    dossier = build_dossier(card, toolchain=toolchain)
+    head = (f"DRAFT: not review-ready; no verdict for {', '.join(unrun)}" if draft
+            else f"Review-ready for content sha256:{digest}")  # fmt: skip
+    lines = [head, _RECORDS_NO_REVIEW, "", dossier.summary(), "",
+             *(item.headline for item in dossier.items)]  # fmt: skip
+    files = [
+        write(f"{stem}.review.{mark}bundle.json",
+              canonical_json(bundle.to_document_dict()).encode("utf-8")),
+        write(f"{stem}.review.{mark}dossier.txt", ("\n".join(lines) + "\n").encode("utf-8")),
+    ]  # fmt: skip
+    state = journey_state(card, package_written=not draft)
+    manifest = {
+        "package": "anvilate review package",
+        "content_sha256": digest,
+        "draft": draft,
+        "records_review": False,
+        "statement": _RECORDS_NO_REVIEW,
+        "journey": state.model_dump(mode="json"),
+        "files": [{"name": _name(f["path"]), "sha256": f["sha256"]} for f in files],
+    }
+    listed = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    files.append(write(f"{stem}.review.{mark}manifest.json", listed.encode("utf-8")))
+    return {"files": tuple(files), "draft": draft, "journey": state.model_dump(mode="json"),
+            "content_sha256": digest}  # fmt: skip
+
+
+_RECORDS_NO_REVIEW = "Writing this package records no review, approval or sign-off."
+
+
+def _name(path: str) -> str:
+    from pathlib import PurePath
+
+    return PurePath(path).name

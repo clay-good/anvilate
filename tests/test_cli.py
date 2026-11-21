@@ -5841,3 +5841,37 @@ def test_check_reads_the_item_class_the_spec_declares(tmp_path):
     assert code == 3 and "declares item_class 'chassis part'" in err
     plain_code, _out, _ = _run("check", str(lug))  # without a profile the class is inert
     assert plain_code == 0
+
+
+def test_export_writes_a_review_package_and_a_draft_short_of_every_verdict(tmp_path):
+    """Guided design journey 2.1/2.2 at the shell: the same package the MCP export writes."""
+    from anvilate._cli_output import ReviewPackageOutput
+
+    lug = tmp_path / "padeye.yaml"
+    lug.write_text(_LUG_SPEC)
+    folder = tmp_path / "review"
+    code, raw, _err = _run("export", str(lug), "--artifact", "review-package", "--output",
+                           str(folder), "--format", "json")  # fmt: skip
+    assert code == 0
+    payload = ReviewPackageOutput.model_validate(json.loads(raw))
+    (package,) = payload.packages
+    assert not package.draft and package.journey.stage == "review_ready"
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "padeye.review.bundle.json",
+        "padeye.review.dossier.txt",
+        "padeye.review.manifest.json",
+    ]
+    code, _out, err = _run("export", str(lug), "--artifact", "review-package", "--output",
+                           str(folder))  # fmt: skip
+    assert code == 3 and "--force" in err  # a written package is not overwritten silently
+    bare = tmp_path / "bare.yaml"
+    bare.write_text(_BARE_SPEC)
+    code, _out, err = _run("export", str(bare), "--artifact", "review-package", "--output",
+                           str(folder))  # fmt: skip
+    assert code == 3 and "ask for a draft" in err
+    code, text, _err = _run("export", str(bare), "--artifact", "review-package", "--output",
+                            str(folder), "--draft")  # fmt: skip
+    assert code == 0 and text.startswith("wrote a draft review package")
+    assert any(".draft." in p.name for p in folder.iterdir())
+    code, _out, err = _run("export", str(lug), "--draft")
+    assert code == 3 and "--draft marks a review package" in err

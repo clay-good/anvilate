@@ -36,7 +36,7 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `run_validation` | pipeline | `spec`, `tiers` (optional), `profile` (optional) | `scorecard`, `subject`, `next`, `journey`, `profile` | yes | 218 characters | 2 s | check |
 | `run_fea_validation` | pipeline | `spec`, `convergence_tol` (optional) | `scorecard` | yes | 470 characters | a task | none |
 | `read_scorecard` | pipeline | `subject` | `scorecard` | no | 195 characters | 1 s | none |
-| `export_artifact` | pipeline | `subject`, `format`, `ifc_schema` (optional) | `format`, `bundle`, `sha256`, `file`, `validated`, `note` | yes | 783 characters | 2 s | export, combination |
+| `export_artifact` | pipeline | `subject`, `format`, `ifc_schema` (optional), `draft` (optional) | `format`, `bundle`, `sha256`, `file`, `validated`, `note`, `files`, `draft`, `journey` | yes | 783 characters | 2 s | export, combination |
 | `build_combination` | combination | `combination`, `library` (optional), `node` (optional) | `combination`, `scorecard`, `subject`, `product`, `node`, `next`, `journey` | yes | 939 characters | 15 s | combination |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
 | `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 854 characters | 10 s | context |
@@ -66,7 +66,7 @@ The shell is the engineer's own door; an agent uses the tools above. Every comma
 | `confirm` | confirm, at this terminal, values your agent read off a picture or a PDF | none |
 | `diff` | compare two spec documents and the verdicts they screen to | `--format`, `--module` |
 | `doctor` | check which Anvilate runtime capabilities are ready | `--format` |
-| `export` | write a downstream artifact from a screened spec | `--ap214`, `--artifact`, `--force`, `--format`, `--ifc-schema`, `--module`, `--output`, `--unvalidated` |
+| `export` | write a downstream artifact from a screened spec | `--ap214`, `--artifact`, `--draft`, `--force`, `--format`, `--ifc-schema`, `--module`, `--output`, `--unvalidated` |
 | `fetch` | download a dataset Anvilate may read but not ship, once, with your consent | `--consent`, `--format` |
 | `interfaces` | detect planar faces and through-hole patterns in a mating STEP | `--accept`, `--accept-contact`, `--accept-gap`, `--accept-mate`, `--basic-size`, `--confirmed-by`, `--fit`, `--format`, `--limit`, `--locator`, `--mating-plane`, `--max-gap`, `--min-contact-area`, `--min-engagement`, `--min-gap`, `--name`, `--requirement`, `--solid` |
 | `parts` | list the parts a spec can declare, or describe one | none |

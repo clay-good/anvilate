@@ -1185,6 +1185,7 @@ def _every_section() -> BundleSections:
         carbon=_carbon_estimate(),
         datasets=__import__("anvilate.standards.datasets").standards.datasets.bundled_datasets(),
         decks=(_deck_record(),),
+        draft=True,
         citations=(
             SourceRecord(
                 ref="AA-6061-T6",

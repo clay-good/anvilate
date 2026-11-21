@@ -29,6 +29,7 @@ from .geometry import (
     PlanarGapClearanceCheck,
     StepInterfaceCandidates,
 )
+from .journey import JourneyState
 from .margin import MarginEntry, MarginKind
 from .needs import LEVERAGE_IS_NOT_IMPORTANCE
 from .product import NodeCard, ProductSummary
@@ -36,10 +37,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.74.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.76.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.74.0"]
-SchemaVersion = Literal["1.74.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.76.0"]
+SchemaVersion = Literal["1.76.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -200,6 +201,29 @@ class EvidenceBundleOutput(_WireModel):
     artifact: Literal["evidence-bundle"]
     status: CheckStatus
     bundles: tuple[EvidenceBundleOutputEntry, ...]
+
+
+class ReviewPackageFile(_WireModel):
+    path: str
+    bytes: Annotated[int, Field(ge=0)]
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class ReviewPackageEntry(_WireModel):
+    """One spec's review package: the files written, whether a draft, and the stage."""
+
+    files: tuple[ReviewPackageFile, ...]
+    draft: bool
+    journey: JourneyState
+    content_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class ReviewPackageOutput(_WireModel):
+    schema_: SchemaId = Field(alias="schema")
+    schema_version: SchemaVersion
+    command: Literal["export"]
+    artifact: Literal["review-package"]
+    packages: tuple[ReviewPackageEntry, ...]
 
 
 class QifOutputEntry(_WireModel):
@@ -454,6 +478,7 @@ CliOutput = (
     | CheckOutput
     | ProductCheckOutput
     | EvidenceBundleOutput
+    | ReviewPackageOutput
     | DxfOutput
     | QifOutput
     | GeometryExportOutput

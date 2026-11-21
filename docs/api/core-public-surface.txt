@@ -912,6 +912,7 @@ journey.JOURNEY_STAGES
 journey.StageState
 journey.JourneyState
 journey.journey_state
+journey.write_review_package
 capabilities.Capability
 capabilities.CAPABILITIES
 capabilities.capability

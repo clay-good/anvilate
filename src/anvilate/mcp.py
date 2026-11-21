@@ -226,7 +226,8 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.16.0"
 # 1.33.0 adds `decks`, absent when none: input decks written for the user's own solver,
 # listed as unsolved input and outside the roll-up.
 # 1.34.0 follows Design Spec 1.23.0.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.34.0"
+# 1.35.0 adds `draft`, absent unless a draft review package wrote the bundle.
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.35.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"
@@ -260,7 +261,7 @@ _SHIPPED_PROFILES = (
 
 # What `export_artifact` produces, and which handle each is made from: a screening result
 # (the card and its spec) or a built part.
-_FROM_SCREENING = ("evidence_bundle", "qif", "part_sheet")
+_FROM_SCREENING = ("evidence_bundle", "qif", "part_sheet", "review_package")
 _FROM_BUILT_PART = ("step", "3mf", "dxf", "ifc")
 _EXPORT_FORMATS = (*_FROM_SCREENING, *_FROM_BUILT_PART)
 
@@ -806,6 +807,13 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "subject": _SUBJECT_SCHEMA,
                     "format": {"type": "string", "enum": list(_EXPORT_FORMATS)},
                     "ifc_schema": {"type": "string", "enum": ["IFC4", "IFC4X3_ADD2"]},
+                    "draft": {
+                        "type": "boolean",
+                        "description": (
+                            "for review_package: write it although a check did not run, "
+                            "with every file marked draft"
+                        ),
+                    },
                 },
                 required=["subject", "format"],
             ),
@@ -824,6 +832,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     # file is written and carries the unvalidated mark. Absent otherwise.
                     "validated": {"type": "boolean"},
                     "note": {"type": "string"},
+                    # For review_package: every file the package wrote, whether it is a
+                    # draft, and how far the design has come with it written.
+                    "files": {"type": "array", "items": _FILE_SCHEMA},
+                    "draft": {"type": "boolean"},
+                    "journey": {"$ref": _JOURNEY_STATE_REF},
                 },
                 required=["format", "sha256"],
             ),
@@ -3258,6 +3271,13 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
             operation="export_artifact",
         ) from unreadable
     stem = safe_stem(str(spec.name))
+    if artifact == "review_package":
+        return _review_package(spec, card, sections, stem, draft=bool(arguments.get("draft")))
+    if arguments.get("draft") is not None:
+        raise _InvalidArguments(
+            [f"draft: marks a review_package, and the format is {artifact}"],
+            operation="export_artifact",
+        )
     if artifact == "evidence_bundle":
         # The digest of the bundle's own canonical JSON, the same content addressing the
         # store and the attestation layer use, so the sha256 names the document returned.
@@ -3301,6 +3321,26 @@ def _export_artifact(arguments: Mapping[str, Any]) -> dict[str, Any]:
             f"unvalidated, {confirmation}. Say so when you hand it over"
         )
     return result
+
+
+def _review_package(
+    spec: Any, card: Any, sections: Any, stem: str, *, draft: bool
+) -> dict[str, Any]:
+    """``export_artifact`` with ``review_package``, written into the output folder."""
+    from .journey import write_review_package
+    from .refusal import RefusalError
+
+    try:
+        written = write_review_package(
+            spec, card, sections, stem=stem, draft=draft, toolchain=f"anvilate {_version()}",
+            write=lambda name, data: (_needs_output_folder("review_package"),
+                                      write_output(name, data))[1],
+        )  # fmt: skip
+    except RefusalError as refused:
+        raise _InvalidArguments([f"format: {refused}"], operation="export_artifact") from refused
+    files = list(written["files"])
+    return {"format": "review_package", "sha256": files[-1]["sha256"], "file": files[-1],
+            "files": files, "draft": draft, "journey": written["journey"]}  # fmt: skip
 
 
 def _cancelled_fea_result() -> dict[str, Any]:

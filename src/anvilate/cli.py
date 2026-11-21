@@ -231,6 +231,7 @@ _NEEDS_GEOMETRY: dict[str, str] = {}
 _UNBUILT_ARTIFACTS = _NEEDS_GEOMETRY
 _MCP_FORMAT_COMMAND = {
     "evidence_bundle": "export --artifact evidence-bundle",
+    "review_package": "export --artifact review-package --output review/",
     "qif": "export --artifact qif",
     "dxf": "export --artifact dxf",
     "step": "export --artifact step --output part.step",
@@ -238,7 +239,7 @@ _MCP_FORMAT_COMMAND = {
     "ifc": "export --artifact ifc --output part.ifc",
     "part_sheet": "view",
 }
-_ARTIFACTS = ("evidence-bundle", "dxf", "qif", "step", "3mf", "ifc")
+_ARTIFACTS = ("evidence-bundle", "dxf", "qif", "step", "3mf", "ifc", "review-package")
 # The three that are the part itself, written to a file `--output` names.
 _GEOMETRY_ARTIFACTS = {"step": (".step", ".stp"), "3mf": (".3mf",), "ifc": (".ifc",)}
 
@@ -636,7 +637,14 @@ def _build_parser() -> argparse.ArgumentParser:
     export.add_argument(
         "--output",
         type=Path,
-        help="for --artifact step, 3mf or ifc: the file to write (.step, .stp, .3mf or .ifc)",
+        help="for --artifact step, 3mf or ifc: the file to write (.step, .stp, .3mf or .ifc); "
+        "for review-package: the folder to write the package into",
+    )
+    export.add_argument(
+        "--draft",
+        action="store_true",
+        help="for review-package: write it although a check has no verdict, every file "
+        "marked draft",
     )
     export.add_argument(
         "--unvalidated",
@@ -3273,10 +3281,14 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
         return _export_geometry(args, out=out, err=err)
     # A flag that is read for two artifacts and ignored for the rest would be a request
     # dropped without a word: `--unvalidated` on a DXF would look like it had been honoured.
+    if args.artifact != "review-package" and args.draft:
+        print(f"anvilate export: --draft marks a review package, and this is --artifact "
+              f"{args.artifact}", file=err)  # fmt: skip
+        return EXIT_BAD_REQUEST
     given = [
         flag
         for flag, value in (
-            ("--output", args.output is not None),
+            ("--output", args.output is not None and args.artifact != "review-package"),
             ("--unvalidated", args.unvalidated),
             ("--ap214", args.ap214),
             ("--ifc-schema", args.ifc_schema is not None),
@@ -3339,6 +3351,8 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
     # code carried it, and a verdict only an exit code carries is one nobody reads in a log.
     worst = _worst_status(sections for _p, _s, sections in results)
 
+    if args.artifact == "review-package":
+        return _review_packages(results, args, out=out, err=err)
     if args.artifact == "qif":
         return _qif(results, worst=worst, fmt=args.format, out=out, err=err)
     if args.artifact == "dxf":
@@ -3368,6 +3382,54 @@ def _export(args: argparse.Namespace, *, out, err) -> int:
             statuses = [sections.status for _p, _s, sections in results]
             print("\n" + _run_summary("bundles", statuses, worst), file=out)
     return EXIT_CODES[worst]
+
+
+def _review_packages(results: list, args: argparse.Namespace, *, out, err) -> int:
+    """``export --artifact review-package``: one package per spec, into ``--output``."""
+    import hashlib
+
+    from ._outputs import safe_stem
+    from .journey import write_review_package
+    from .refusal import RefusalError
+
+    if args.output is None:
+        print("anvilate export --artifact review-package: --output names the folder to write "
+              "the package into", file=err)  # fmt: skip
+        return EXIT_BAD_REQUEST
+    folder = args.output
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def write(name: str, data: bytes) -> dict[str, Any]:
+        target = folder / name
+        if target.exists() and not args.force:
+            raise FileExistsError(f"{target} exists; pass --force to replace it")
+        target.write_bytes(data)
+        return {"path": str(target), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+    packages = []
+    for path, spec, sections in results:
+        try:
+            packages.append(write_review_package(
+                spec, sections.scorecard, sections, stem=safe_stem(str(spec.name)),
+                draft=args.draft, toolchain=f"anvilate {_installed_version()}", write=write,
+            ))  # fmt: skip
+        except (RefusalError, FileExistsError) as refused:
+            print(f"anvilate export --artifact review-package: {path}: {refused}", file=err)
+            return EXIT_BAD_REQUEST
+    if args.format == "json":
+        payload = machine_document(
+            "export",
+            {"packages": [{**p, "files": list(p["files"])} for p in packages]},
+            artifact="review-package",
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True), file=out)
+    else:
+        for package in packages:
+            kind = "draft review package" if package["draft"] else "review package"
+            print(f"wrote a {kind} for content sha256:{package['content_sha256']}", file=out)
+            for file in package["files"]:
+                print(f"  {file['path']}", file=out)
+    return EXIT_OK
 
 
 # The byte-order marks a text editor writes ahead of a non-UTF-8 save. Named because the

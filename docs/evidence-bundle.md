@@ -64,6 +64,10 @@ cases, rendered under "unsolved input decks" as UNSOLVED INPUT. It stays out of 
 and out of the attestation predicate: nothing on the card rests on a deck until its results
 are read back.
 
+**A draft says so in its own bytes.** A bundle written into a draft review package carries
+`draft: true` (absent otherwise, and out of the roll-up and the predicate), so a reviewer
+holding only the file cannot take it for a review-ready one.
+
 ### The work, not just the verdict
 
 A check that carries a derivation renders it under its line — the formula, the values put

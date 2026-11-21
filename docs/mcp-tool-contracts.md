@@ -254,7 +254,17 @@ tool, what to pass it beside the subject, and why, by one precedence: failed che
 inverse solved a value (re-validate at it), other failures (move the named parameter), tiers
 the document demands that did not run (`build_part`, `run_fea_validation`), each
 declaration a check is waiting on, and, when nothing holds the card back,
-`export_artifact` with `evidence_bundle`. The same card gives the same steps, and the list
+`export_artifact` with `review_package`.
+
+**The review package is the finish line.** `export_artifact` with `review_package` writes,
+for one content digest, the evidence bundle, the reviewer dossier as text and a manifest
+listing both with their digests, into the output folder. It is refused while a check has no
+verdict unless `draft: true` is passed; a draft is marked draft in every file (the names,
+the bundle's `draft` key, the dossier's first line, the manifest). Writing it records no
+review: the dossier still reads "not yet reviewed" and the manifest says `records_review:
+false`. Its result's `journey` reads `review_ready` once a non-draft package is written.
+`anvilate export SPEC --artifact review-package --output DIR [--draft]` writes the same
+files at the shell. The same card gives the same steps, and the list
 is never empty. Beside it, `journey` ([journey-state 1.0.0](api/schemas/journey-state.schema.json))
 states the furthest stage reached (`described`, `screened`, `simulated`, `optimized`,
 `review_ready`) and names what holds back each later one. `build_combination` returns the

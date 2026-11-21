@@ -531,6 +531,8 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
       and it is not a field a caller can omit — there is no argument to ``to_json_dict``
       that leaves it out — and the bundle the server really returns is checked for it here
       rather than the model being taken at its word.
+    * ``review_package`` is that same evidence, written with the dossier for one content
+      digest; it carries the same bundle, so the same disclaimer, and it records no review.
     """
     from anvilate.bundle import SCREENING_DISCLAIMER
     from anvilate.mcp import Gate, handle_request, tool_catalog
@@ -549,7 +551,7 @@ def test_the_mcp_tool_that_emits_artifacts_discharges_its_gates_format_by_format
 
     gated_cad = (published & set(_FROM_BUILT_PART)) | (published & {"qif"})
     assert gated_cad == {"step", "3mf", "dxf", "ifc", "qif"}, published
-    assert published - gated_cad == {"evidence_bundle", "part_sheet"}
+    assert published - gated_cad == {"evidence_bundle", "part_sheet", "review_package"}
 
     # The CAD half over *this* surface: refused here, and each exporter takes the
     # authorization as a required keyword, so neither can be wired here without one. QIF is

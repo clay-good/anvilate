@@ -261,6 +261,9 @@ class BundleDocument(BaseModel):
     # solver, marked unsolved: listed so a reviewer sees a deck exists and that nothing on
     # this card rests on it until its results are read back.
     decks: tuple[DeckRecord, ...] | None = None
+    # Absent unless true. A draft review package's bundle says so in its own bytes: a
+    # reviewer holding only this file must not mistake it for a review-ready one.
+    draft: bool | None = None
 
 
 def _check_block(entry: ScorecardEntry, *, system: UnitSystem | None) -> tuple[str, ...]:
@@ -385,6 +388,9 @@ class BundleSections(RevalidatedModel):
     # the same terms as `spec`: a deck is unsolved input, and a signed digest must not move
     # because a bundle says one was written.
     decks: tuple[DeckRecord, ...] = ()
+    # A bundle written into a draft review package, short of review-ready. Out of the
+    # roll-up, like `spec`: marking a document a draft must not move a signed digest.
+    draft: bool = False
 
     @model_validator(mode="after")
     def _an_order_of_checks_the_card_carries(self) -> BundleSections:
@@ -928,6 +934,8 @@ class BundleSections(RevalidatedModel):
             document["datasets"] = [pin.model_dump(mode="json") for pin in self.datasets]
         if self.decks:
             document["decks"] = [deck.model_dump(mode="json") for deck in self.decks]
+        if self.draft:
+            document["draft"] = True
         return document
 
     def to_json_dict(self) -> dict[str, object]:
