@@ -43,6 +43,7 @@ __all__ = [
     "FactorRule",
     "RequiredCheck",
     "RequiredArtifact",
+    "AwaitedValue",
     "IndustryProfile",
     "Relaxation",
     "ResolvedProfile",
@@ -52,6 +53,8 @@ __all__ = [
     "resolve",
     "apply_profile",
     "load_profile",
+    "bundled_profiles",
+    "industry_profile",
 ]
 
 _SOURCE = "the industry profile: each rule with its source or a practice-default label"
@@ -123,6 +126,9 @@ class RequiredCheck(ProfileRule):
     for the not-evaluated entry when it did not run. ``pack`` names the module the check
     lives in and ``analysis`` the function that computes it; either missing from this
     installation makes the check not available, with ``install`` as the remedy.
+    ``implemented: false`` says no screen in this library computes the check yet, which
+    is shown as not available too: a requirement the library cannot meet is stated, never
+    dropped.
     """
 
     item_class: Named
@@ -132,6 +138,7 @@ class RequiredCheck(ProfileRule):
     pack: Named | None = None
     analysis: Named | None = None
     install: Named | None = None
+    implemented: bool = True
 
 
 class RequiredArtifact(ProfileRule):
@@ -141,6 +148,20 @@ class RequiredArtifact(ProfileRule):
         "margin_table", "dfmea", "dvpr", "risk_file", "characteristic_accountability",
         "control_plan_seed", "requirement_trace",
     ]  # fmt: skip
+
+
+class AwaitedValue(StatableModel):
+    """A rule the profile cannot fill because its value lives in a paid standard.
+
+    Named rather than invented: ``standard`` says where your organization's licensed copy
+    gives the value, and the profile ships without it.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: Named
+    what: Named
+    standard: Named
 
 
 class IndustryProfile(StatableModel):
@@ -163,10 +184,11 @@ class IndustryProfile(StatableModel):
     required_checks: tuple[RequiredCheck, ...] = ()
     required_artifacts: tuple[RequiredArtifact, ...] = ()
     drawing_standard: ProfileRule | None = None
+    awaiting: tuple[AwaitedValue, ...] = ()
 
     @model_validator(mode="after")
     def _coherent(self) -> IndustryProfile:
-        ids = [r.id for r in self._rules()]
+        ids = [r.id for r in self._rules()] + [a.id for a in self.awaiting]
         twice = sorted({i for i in ids if ids.count(i) > 1})
         if twice:
             raise _refuse(f"profile {self.urn} declares rules {twice} twice",
@@ -231,6 +253,7 @@ class ResolvedProfile(StatableModel):
         if p.drawing_standard is not None:
             lines.append(f"drawing standard: {p.drawing_standard.id} "
                          f"[{p.drawing_standard.basis}]")  # fmt: skip
+        lines += [f"awaiting your value: {a.what} ({a.standard}): {a.id}" for a in p.awaiting]
         lines += [str(r) for r in self.relaxations]
         return tuple(lines)
 
@@ -286,6 +309,7 @@ def layer(parent: IndustryProfile, child: IndustryProfile) -> ResolvedProfile:
         required_checks=merged(parent.required_checks, child.required_checks),
         required_artifacts=merged(parent.required_artifacts, child.required_artifacts),
         drawing_standard=child.drawing_standard or parent.drawing_standard,
+        awaiting=tuple({a.id: a for a in (*parent.awaiting, *child.awaiting)}.values()),
     )  # fmt: skip
     return ResolvedProfile(profile=profile, chain=(parent.urn, child.urn),
                            relaxations=relaxations)  # fmt: skip
@@ -329,6 +353,8 @@ def _matches(entry: ScorecardEntry, names: Sequence[str]) -> bool:
 
 def _missing(rule: RequiredCheck) -> str | None:
     """What this installation lacks to run the check, or ``None`` when nothing."""
+    if not rule.implemented:
+        return "screen"
     for kind, dotted in (("pack", rule.pack), ("analysis", rule.analysis)):
         if dotted is None:
             continue
@@ -409,6 +435,11 @@ def load_profile(text: str) -> IndustryProfile:
         raise _refuse(f"the profile text is not YAML or JSON: {error}", subject="text") from None
     if not isinstance(data, dict):
         raise _refuse("the profile text must hold one mapping, the profile", subject="text")
+    return _validated(data)
+
+
+def _validated(data: dict) -> IndustryProfile:
+    """``data`` as a profile, raising a refusal its validators raised as itself."""
     try:
         return IndustryProfile.model_validate(data)
     except ValidationError as error:
@@ -417,3 +448,39 @@ def load_profile(text: str) -> IndustryProfile:
             if isinstance(cause, RefusalError):
                 raise cause from None
         raise
+
+
+def bundled_profiles() -> tuple[IndustryProfile, ...]:
+    """The profiles shipped with the library, general first, each read from public documents.
+
+    Each is a starting point to layer your company's profile on, never a program's
+    requirements: the rules it could not fill from a public document are listed in its
+    ``awaiting``.
+    """
+    from importlib.resources import files
+
+    from ._models import parse_yaml
+
+    folder = files("anvilate.standards") / "data" / "profiles"
+    shipped = sorted(p.name for p in folder.iterdir() if p.name.endswith(".yaml"))
+    profiles = []
+    for name in shipped:
+        text = (files("anvilate.standards") / "data" / "profiles" / name).read_text("utf-8")
+        data = parse_yaml(text)
+        # The dataset block is the bundled file's provenance and licence, which every YAML
+        # file in the package carries; it is not part of the profile a user writes.
+        data.pop("dataset")
+        profiles.append(_validated(data))
+    return (GENERAL, *profiles)
+
+
+def industry_profile(name: str) -> IndustryProfile:
+    """One shipped profile by its short name (the last part of its URN, such as
+    ``spaceflight``) or by its full URN."""
+    profiles = bundled_profiles()
+    for profile in profiles:
+        if name in (profile.urn, profile.urn.rpartition(":")[2]):
+            return profile
+    known = [p.urn.rpartition(":")[2] for p in profiles]
+    raise _refuse(f"no shipped profile is named {name!r}; the shipped ones are {known}",
+                  subject="name")  # fmt: skip

@@ -1,0 +1,37 @@
+# Medical devices (US): a starting point read from 21 CFR Part 820, the Quality Management
+# System Regulation, as in force from 2026-02-02 (eCFR, read 2026-11-21). The regulation
+# incorporates ISO 13485:2016 by reference; that standard and ISO 14971 are paid, so their
+# values are listed as awaiting yours.
+dataset:
+  name: anvilate-profile-medical-device
+  version: "1.0.0"
+  source: "21 CFR Part 820 (Quality Management System Regulation, effective 2026-02-02), https://www.ecfr.gov/current/title-21/chapter-I/subchapter-H/part-820"
+  license: "CC0-1.0 (rules paraphrased with their clause numbers; no standard is redistributed)"
+  retrieved: "2026-11-21"
+urn: urn:anvilate:profile:medical-device
+name: Medical device
+version: 1.0.0
+item_classes: [device part, patient-contacting]
+required_artifacts:
+  - id: MD-A-1
+    artifact: risk_file
+    source: "21 CFR 820.10(a) (QMSR, effective 2026-02-02): a quality management system complying with the applicable requirements of ISO 13485, which carries risk management"
+  - id: MD-A-2
+    artifact: dvpr
+    source: "21 CFR 820.10(c): design and development to ISO 13485 clause 7.3 and its subclauses, which include design verification"
+  - id: MD-A-3
+    artifact: requirement_trace
+    source: "21 CFR 820.10(c): design and development to ISO 13485 clause 7.3 and its subclauses, inputs to outputs"
+  - id: MD-A-4
+    artifact: characteristic_accountability
+    practice_default: true
+drawing_standard:
+  id: asme-y14.5
+  practice_default: true
+awaiting:
+  - id: MD-W-1
+    what: "the severity and probability categories, and the risk acceptability criteria, of your risk-management plan"
+    standard: "ISO 14971, through your risk-management procedure"
+  - id: MD-W-2
+    what: "the biological evaluation endpoints for each patient-contacting material"
+    standard: "ISO 10993-1, through your biological evaluation plan"

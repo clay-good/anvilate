@@ -57,7 +57,7 @@ print(profile)           # the header, then everything the profile changed, rule
 | --- | --- |
 | already on the card (its `check_id` or name matches `satisfied_by`) | itself, unchanged |
 | not on the card | **not evaluated**, naming the inputs in `needs` |
-| its `pack` or `analysis` missing from this installation | **not available**, naming what is missing and the `install` command |
+| its `pack` or `analysis` missing from this installation, or `implemented: false` | **not available**, naming what is missing and the `install` command |
 
 A required check is never dropped. Each entry a profile adds carries a reference naming
 the profile, its version, the rule's id and its source.
@@ -76,16 +76,30 @@ both sources, and listed among the profile's changes:
 RELAXED ultimate: 1.4 (ACME ES-12 §4, test-verified) below 1.5 (14 CFR 25.303 factor of safety)
 ```
 
-## The general profile
+## Shipped profiles
 
-`GENERAL` adds nothing: no factors, no required checks, no artifacts. Applying it leaves
-every card unchanged, and its list of changes is empty.
+`bundled_profiles()` returns them; `industry_profile("spaceflight")` picks one by name.
+Each is a starting point read from public documents, edition by edition, to layer your
+program's or company's profile on. What it could not fill from a public document is listed
+under `awaiting`, naming where your licensed copy gives the value.
+
+| Profile | Factors | Required for | Awaiting your value |
+| --- | --- | --- | --- |
+| `general` | none | nothing | nothing |
+| `spaceflight` | ultimate 1.4, yield 1.25 (GSFC-STD-7000B Table 2.2-3, static and sine) | flight box: random vibration (GEVS §2.4.2.5, at least the Table 2.4-4 workmanship levels) and outgassing (NASA-STD-6016C §4.2.3.6, ASTM E595: CVCM ≤0.1%, TML ≤1.0%); primary structure: outgassing | nothing |
+| `medical-device` | none | records: risk file, DVP&R and trace (21 CFR 820.10(a) and (c), QMSR in force from 2026-02-02, through ISO 13485) | your risk-management plan's categories (ISO 14971); biological evaluation endpoints (ISO 10993-1) |
+| `industrial-machinery` | none | machine part: strength in use (Regulation (EU) 2023/1230 Annex III 1.3.2); guard: strength (1.4.1, 1.4.2); records: risk file (Annex III Part B point 1), design calculations (Annex IV Part A (g)) | safety distances and guard load cases from the harmonised standards |
+| `automotive` | none | chassis part: fatigue; records: DFMEA, DVP&R, control-plan seed, characteristic table, all practice defaults: no public document governs them | your customer's FMEA tables and matrix; their special-characteristic symbols |
+| `consumer-product` | none | children's article: sharp edge and sharp point (16 CFR 1500.49, 1500.48), shown **not available**: no screen here computes them yet | nothing |
+| `transport-aircraft` | ultimate 1.5 (14 CFR 25.303), fitting 1.15 (25.625) | primary structure and fittings: fatigue and damage tolerance (25.571) | material design values at the 25.613 probabilities; a bearing factor, for which 25.623 sets no number |
+
+`general` adds nothing: no factors, no required checks, no artifacts. Applying it leaves
+every shipped example's card unchanged, which a test holds over all of them, and its list
+of changes is empty.
 
 ## Not yet
 
 - Item classes declared on the Design Spec itself; today the class is passed to
   `apply_profile`.
-- Shipped profiles for spaceflight, transport aircraft, automotive, medical devices,
-  industrial machinery and consumer products, read from public documents.
 - Relaxations carried onto the rows of a margin table, and the profile header in reports
   and over the MCP tools and the CLI.

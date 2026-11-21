@@ -1,0 +1,36 @@
+# Automotive: no public document governs a supplier's design records. The quality-system
+# standard and the industry's FMEA handbook and control-plan manual are paid, and the
+# customer names which edition applies; every rule here is labeled a practice default and
+# every value they would supply is listed as awaiting yours.
+dataset:
+  name: anvilate-profile-automotive
+  version: "1.0.0"
+  source: "practice-based defaults; no public document governs these records"
+  license: "CC0-1.0 (rules paraphrased with their clause numbers; no standard is redistributed)"
+  retrieved: "2026-11-21"
+urn: urn:anvilate:profile:automotive
+name: Automotive
+version: 1.0.0
+item_classes: [chassis part, interior part]
+required_checks:
+  - id: AU-FAT-1
+    practice_default: true
+    item_class: chassis part
+    check: fatigue
+    satisfied_by: [fatigue, duty cycle fatigue]
+    needs: ["the duty cycle or the customer's durability load spectrum"]
+required_artifacts:
+  - {id: AU-A-1, artifact: dfmea, practice_default: true}
+  - {id: AU-A-2, artifact: dvpr, practice_default: true}
+  - {id: AU-A-3, artifact: control_plan_seed, practice_default: true}
+  - {id: AU-A-4, artifact: characteristic_accountability, practice_default: true}
+drawing_standard:
+  id: asme-y14.5
+  practice_default: true
+awaiting:
+  - id: AU-W-1
+    what: "the severity, occurrence and detection tables and the action-priority matrix your customer requires"
+    standard: "the FMEA handbook edition your customer names (IATF 16949:2016 customer-specific requirements)"
+  - id: AU-W-2
+    what: "the special-characteristic symbols your customer uses"
+    standard: "your customer's specific requirements"

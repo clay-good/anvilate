@@ -1,0 +1,54 @@
+# Transport-category aircraft structure: a starting point read from 14 CFR Part 25 on eCFR
+# (current text, read 2026-11-21). Layer your company's or program's profile on it.
+dataset:
+  name: anvilate-profile-transport-aircraft
+  version: "1.0.0"
+  source: "14 CFR Part 25, eCFR current text, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-C/part-25"
+  license: "CC0-1.0 (rules paraphrased with their clause numbers; no standard is redistributed)"
+  retrieved: "2026-11-21"
+urn: urn:anvilate:profile:transport-aircraft
+name: Transport aircraft
+version: 1.0.0
+item_classes: [primary structure, fitting]
+factor_set:
+  id: 14-cfr-25
+  source: "14 CFR Part 25 (eCFR, current 2026-10-15) §25.303 factor of safety; §25.305(a) limit load"
+factors:
+  - id: TA-F-1
+    name: ultimate
+    value: 1.5
+    source: "14 CFR 25.303: a factor of safety of 1.5 on limit loads"
+  - id: TA-F-2
+    name: fitting
+    value: 1.15
+    source: "14 CFR 25.625(a): a fitting factor of at least 1.15 for each fitting whose strength is not proven by limit and ultimate load tests; multiplied per 25.619"
+required_checks:
+  - id: TA-FAT-1
+    source: "14 CFR 25.571(a): catastrophic failure due to fatigue, corrosion, manufacturing defects, or accidental damage avoided throughout the operational life"
+    item_class: primary structure
+    check: fatigue
+    satisfied_by: [fatigue, damage tolerance]
+    needs: ["the load spectrum over the operational life", "the material's fatigue properties, with their source"]
+  - id: TA-FAT-2
+    source: "14 CFR 25.571(a): catastrophic failure due to fatigue, corrosion, manufacturing defects, or accidental damage avoided throughout the operational life"
+    item_class: fitting
+    check: fatigue
+    satisfied_by: [fatigue, damage tolerance]
+    needs: ["the load spectrum over the operational life", "the material's fatigue properties, with their source"]
+required_artifacts:
+  - id: TA-A-1
+    artifact: margin_table
+    practice_default: true
+  - id: TA-A-2
+    artifact: requirement_trace
+    practice_default: true
+drawing_standard:
+  id: asme-y14.5
+  practice_default: true
+awaiting:
+  - id: TA-W-1
+    what: "material design values at the probabilities 14 CFR 25.613(b) requires (99% / 90% with 95% confidence)"
+    standard: "MMPDS or your approved material specification"
+  - id: TA-W-2
+    what: "the bearing factor for parts with clearance subject to pounding or vibration; 14 CFR 25.623 sets no number"
+    standard: "your company's approved structural design manual"

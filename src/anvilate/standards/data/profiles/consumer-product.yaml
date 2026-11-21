@@ -1,0 +1,33 @@
+# Consumer products (US): a starting point read from 16 CFR Part 1500 on eCFR (read
+# 2026-11-21). The sharp-point and sharp-edge tests apply to articles intended for children
+# under 8; no screen in this library computes them yet, so they show as not available.
+dataset:
+  name: anvilate-profile-consumer-product
+  version: "1.0.0"
+  source: "16 CFR Part 1500, eCFR current text, https://www.ecfr.gov/current/title-16/chapter-II/subchapter-C/part-1500"
+  license: "CC0-1.0 (rules paraphrased with their clause numbers; no standard is redistributed)"
+  retrieved: "2026-11-21"
+urn: urn:anvilate:profile:consumer-product
+name: Consumer product
+version: 1.0.0
+item_classes: [enclosure, children's article]
+required_checks:
+  - id: CP-EDGE-1
+    source: "16 CFR 1500.49 Technical requirements for determining a sharp metal or glass edge in toys and other articles intended for use by children under 8 years of age"
+    item_class: children's article
+    check: sharp edge
+    satisfied_by: [sharp edge]
+    needs: ["each accessible metal or glass edge, tested as 1500.49 describes"]
+    implemented: false
+  - id: CP-POINT-1
+    source: "16 CFR 1500.48 Technical requirements for determining a sharp point in toys and other articles intended for use by children under 8 years of age"
+    item_class: children's article
+    check: sharp point
+    satisfied_by: [sharp point]
+    needs: ["each accessible point, tested as 1500.48 describes"]
+    implemented: false
+required_artifacts:
+  - {id: CP-A-1, artifact: risk_file, practice_default: true}
+drawing_standard:
+  id: asme-y14.5
+  practice_default: true

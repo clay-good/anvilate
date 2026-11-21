@@ -201,7 +201,7 @@ PRODUCT_SUMMARY_SCHEMA_VERSION = "1.2.0"
 # The product document itself: its version is the one ``anvilate_product`` states.
 PRODUCT_DOCUMENT_SCHEMA_VERSION = "1.16.0"
 NODE_CARD_SCHEMA_VERSION = "1.4.0"
-INDUSTRY_PROFILE_SCHEMA_VERSION = "1.0.0"
+INDUSTRY_PROFILE_SCHEMA_VERSION = "1.1.0"
 
 
 def _artifact(

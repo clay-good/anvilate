@@ -1983,13 +1983,16 @@ def test_every_bundled_dataset_records_a_redistributable_license():
         "nineteen": 19,
         "twenty": 20,
         "twenty-one": 21,
+        "twenty-six": 26,
+        "twenty-seven": 27,
     }
     assert counted[claim.group(1)] == len(datasets)
     # One sentence per licence, "<Count> is/are <SPDX>", each stating how many carry it.
     licences = Counter(str(d["dataset"]["license"]).split()[0] for _n, d in datasets)
+    sentence = r"\b([A-Z][a-z]+(?:-[a-z]+)?) (?:is|are) ([A-Z][\w.-]+-[\w.]+)\b"
     stated = {
         spdx: counted[word.lower()]
-        for word, spdx in re.findall(r"\b([A-Z][a-z]+) (?:is|are) ([A-Z][\w.-]+-[\w.]+)\b", page)
+        for word, spdx in re.findall(sentence, page)
         if word.lower() in counted
     }
     assert stated == dict(licences), (stated, dict(licences))

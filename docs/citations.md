@@ -236,11 +236,11 @@ is `not_evaluated` with the reason, never an extrapolation.
 ## Every bundled table says what it may be redistributed under
 
 A table bundled in the package travels with it, so whatever the data is licensed under, a
-redistributor inherits. Each of the twenty-one bundled datasets — the dimension tables, the
+redistributor inherits. Each of the twenty-seven bundled datasets — the dimension tables, the six industry profiles, the
 materials seed, the MIL-HDBK-5J allowables pack, the welded-joint fatigue pack, the ISO 286
 and ISO 2768 tolerance tables, the process-capability estimates — declares a name, a
 version, the source it was read from, an SPDX licence identifier, and the date it was
-retrieved. Twenty are CC0-1.0: the *values* are facts, and no source standard is
+retrieved. Twenty-six are CC0-1.0: the *values* are facts, and no source standard is
 redistributed. MIL-HDBK-5J is itself a US Government work approved for public release.
 One is CC-BY-4.0: the welded-joint fatigue pack, whose test points come from a CC BY
 compilation. Its one condition is credit, and every record it yields carries the dataset's
@@ -291,6 +291,12 @@ build rather than going stale in a document.
 | `tolerance/data/iso286_deviations.yaml` | ISO 286-1 fundamental deviations (shaft letters d/e/f/g, k, m/n/p, r/s <= 50 mm, u <= 18 mm) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `tolerance/data/iso286_grades.yaml` | ISO 286-1 standard tolerance grades (IT grades) | 0.1.0 | CC0-1.0 | 2026-07-08 |
 | `tolerance/data/process_capability.yaml` | DFM screening estimates (typical finest achievable tolerances) | 0.1.0 | CC0-1.0 | 2026-07-08 |
+| `standards/data/profiles/spaceflight.yaml` | GSFC-STD-7000B (2021-04-28, administratively extended 2026-04-24) and NASA-STD-6016C w/Change 1 (2023-11-15), https://standards.nasa.gov | 1.0.0 | CC0-1.0 | 2026-11-21 |
+| `standards/data/profiles/transport-aircraft.yaml` | 14 CFR Part 25, eCFR current text, https://www.ecfr.gov/current/title-14/chapter-I/subchapter-C/part-25 | 1.0.0 | CC0-1.0 | 2026-11-21 |
+| `standards/data/profiles/medical-device.yaml` | 21 CFR Part 820 (Quality Management System Regulation, effective 2026-02-02), https://www.ecfr.gov/current/title-21/chapter-I/subchapter-H/part-820 | 1.0.0 | CC0-1.0 | 2026-11-21 |
+| `standards/data/profiles/industrial-machinery.yaml` | Regulation (EU) 2023/1230 on machinery, https://eur-lex.europa.eu/eli/reg/2023/1230/oj | 1.0.0 | CC0-1.0 | 2026-11-21 |
+| `standards/data/profiles/automotive.yaml` | practice-based defaults; no public document governs these records | 1.0.0 | CC0-1.0 | 2026-11-21 |
+| `standards/data/profiles/consumer-product.yaml` | 16 CFR Part 1500, eCFR current text, https://www.ecfr.gov/current/title-16/chapter-II/subchapter-C/part-1500 | 1.0.0 | CC0-1.0 | 2026-11-21 |
 
 Fetched data is not in that table, because none of it is in the package. Two recipes ship:
 the MUSE benchmark's case index (CC BY 4.0, pinned to a commit rather than a branch, since a

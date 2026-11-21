@@ -1,0 +1,56 @@
+# Spaceflight hardware: a starting point read from public NASA documents.
+# Every value is cited to the edition it was read from; layer your program's profile on it.
+dataset:
+  name: anvilate-profile-spaceflight
+  version: "1.0.0"
+  source: "GSFC-STD-7000B (2021-04-28, administratively extended 2026-04-24) and NASA-STD-6016C w/Change 1 (2023-11-15), https://standards.nasa.gov"
+  license: "CC0-1.0 (rules paraphrased with their clause numbers; no standard is redistributed)"
+  retrieved: "2026-11-21"
+urn: urn:anvilate:profile:spaceflight
+name: Spaceflight hardware
+version: 1.0.0
+item_classes: [flight box, primary structure]
+factor_set:
+  id: gsfc-std-7000b-static
+  source: "GSFC-STD-7000B (2021-04-28, administratively extended 2026-04-24) Table 2.2-3, static and sine loads"
+factors:
+  - id: SF-F-1
+    name: ultimate
+    value: 1.4
+    source: "GSFC-STD-7000B (2021-04-28, administratively extended 2026-04-24) Table 2.2-3, metallic, static and sine loads"
+  - id: SF-F-2
+    name: yield
+    value: 1.25
+    source: "GSFC-STD-7000B (2021-04-28, administratively extended 2026-04-24) Table 2.2-3, metallic, static and sine loads"
+required_checks:
+  - id: SF-VIB-1
+    source: "GSFC-STD-7000B (2021-04-28) §2.4.2.5 Component/Unit Vibroacoustic Tests: random vibration in each of three axes, at least the Table 2.4-4 workmanship levels (6.8 grms)"
+    item_class: flight box
+    check: random vibration
+    satisfied_by: [random vibration, random vibration load]
+    needs: ["the input acceleration spectral density (g²/Hz against Hz), at least the Table 2.4-4 workmanship levels", "the box's fundamental frequency and amplification Q"]
+    analysis: anvilate.analysis.random_vibration.random_vibration_load
+  - id: SF-OUT-1
+    source: "NASA-STD-6016C w/Change 1 (2023-11-15) §4.2.3.6 [MPR 95]: exposed nonmetallics tested to ASTM E595-15, CVCM ≤0.1%, TML less water vapor recovery ≤1.0%"
+    item_class: flight box
+    check: outgassing
+    satisfied_by: [outgassing, outgassing census]
+    needs: ["each exposed nonmetallic's ASTM E595 TML and CVCM, with their source"]
+    analysis: anvilate.analysis.optomechanics.outgassing_census_scorecard
+  - id: SF-OUT-2
+    source: "NASA-STD-6016C w/Change 1 (2023-11-15) §4.2.3.6 [MPR 95]: exposed nonmetallics tested to ASTM E595-15, CVCM ≤0.1%, TML less water vapor recovery ≤1.0%"
+    item_class: primary structure
+    check: outgassing
+    satisfied_by: [outgassing, outgassing census]
+    needs: ["each exposed nonmetallic's ASTM E595 TML and CVCM, with their source"]
+    analysis: anvilate.analysis.optomechanics.outgassing_census_scorecard
+required_artifacts:
+  - id: SF-A-1
+    artifact: margin_table
+    source: "GSFC-STD-7000B (2021-04-28) §2.4.1.3 Design Strength Qualification: loads equal to 1.25 times limit loads, against which margins are reported"
+  - id: SF-A-2
+    artifact: requirement_trace
+    practice_default: true
+drawing_standard:
+  id: asme-y14.5
+  practice_default: true

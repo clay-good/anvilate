@@ -1,0 +1,46 @@
+# Industrial machinery (EU): a starting point read from Regulation (EU) 2023/1230 on
+# machinery (EUR-Lex, read 2026-11-21), which applies from 14 January 2027 (Article 54).
+# The harmonised standards that give guard distances and the like are paid; they are
+# listed as awaiting your values.
+dataset:
+  name: anvilate-profile-industrial-machinery
+  version: "1.0.0"
+  source: "Regulation (EU) 2023/1230 on machinery, https://eur-lex.europa.eu/eli/reg/2023/1230/oj"
+  license: "CC0-1.0 (rules paraphrased with their clause numbers; no standard is redistributed)"
+  retrieved: "2026-11-21"
+urn: urn:anvilate:profile:industrial-machinery
+name: Industrial machinery
+version: 1.0.0
+item_classes: [machine part, guard]
+required_checks:
+  - id: IM-STR-1
+    source: "Regulation (EU) 2023/1230 Annex III 1.3.2 Risk of break-up during operation: parts and their linkages able to withstand the stresses to which they are subject when used"
+    item_class: machine part
+    check: strength in use
+    satisfied_by: [bending, shear, yield, bolt bearing, bearing, buckling]
+    needs: ["the loads the part carries in use, including the foreseeable misuse the risk assessment names"]
+    pack: anvilate.packs.machinery
+  - id: IM-GRD-1
+    source: "Regulation (EU) 2023/1230 Annex III 1.4.1 General requirements and 1.4.2 Special requirements for guards"
+    item_class: guard
+    check: guard strength
+    satisfied_by: [bending, deflection, shear]
+    needs: ["the load a person or an ejected part puts on the guard, as the risk assessment states it"]
+    pack: anvilate.packs.machinery
+required_artifacts:
+  - id: IM-A-1
+    artifact: risk_file
+    source: "Regulation (EU) 2023/1230 Annex III Part B, General principles, point 1: a risk assessment determines the essential health and safety requirements"
+  - id: IM-A-2
+    artifact: margin_table
+    source: "Regulation (EU) 2023/1230 Annex IV Part A point (g): reports or results of the design calculations and tests, in the technical documentation"
+drawing_standard:
+  id: iso-gps
+  practice_default: true
+awaiting:
+  - id: IM-W-1
+    what: "safety distances from a guard opening to the hazard it covers"
+    standard: "the harmonised safety-distance standard your conformity assessment uses"
+  - id: IM-W-2
+    what: "the load cases a guard must withstand"
+    standard: "the harmonised guard standard your conformity assessment uses"

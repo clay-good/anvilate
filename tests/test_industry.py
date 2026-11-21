@@ -204,3 +204,74 @@ def test_the_docs_pages_profile_and_relaxation_are_what_the_library_computes():
                               extends=profile.urn, factors=(lower,))  # fmt: skip
     (relaxed,) = layer(profile, company).relaxations
     assert str(relaxed) in page
+
+
+def test_the_general_profile_leaves_every_examples_card_as_it_was():
+    """Industry profiles 2.1: binding the general profile changes no shipped example's card."""
+    from pathlib import Path
+
+    from anvilate.screening import screen_spec
+    from anvilate.spec import load_spec_yaml
+
+    examples = sorted((Path(__file__).parents[1] / "examples").rglob("*.spec.yaml"))
+    assert len(examples) >= 30
+    general = resolve(GENERAL)
+    for path in examples:
+        card = screen_spec(load_spec_yaml(path.read_text(encoding="utf-8")))
+        profiled = apply_profile(card, general)
+        assert profiled.card == card and profiled.added == (), path.name
+
+
+def test_binding_the_spaceflight_profile_requires_vibration_and_outgassing_for_a_flight_box():
+    from anvilate.industry import industry_profile
+
+    profiled = apply_profile(_card("box wall bending"), resolve(industry_profile("spaceflight")),
+                             item_class="flight box")  # fmt: skip
+    assert profiled.added == ("random vibration", "outgassing")
+    assert profiled.not_available == ()  # both analyses exist in this installation
+    vibration, outgassing = profiled.card.entries[-2:]
+    assert "Table 2.4-4" in vibration.detail and "§2.4.2.5" in vibration.reference
+    assert "ASTM E595" in outgassing.detail and "NASA-STD-6016C" in outgassing.reference
+
+
+def test_every_shipped_profile_agrees_with_the_bundled_factor_set_it_names():
+    """A shipped profile restates factors the bundled factor set already reads from the same
+    document; the two may not drift apart, and every analysis a profile names must exist."""
+    from anvilate.industry import bundled_profiles, industry_profile
+    from anvilate.margin_of_safety import factor_set
+
+    shipped = bundled_profiles()
+    assert [p.urn.rpartition(":")[2] for p in shipped][:1] == ["general"] and len(shipped) >= 3
+    assert len(shipped) == 7
+    for profile in shipped[1:]:
+        if profile.factor_set is not None:
+            rows = factor_set(profile.factor_set.id).rows
+            ultimate = next(f.value for f in profile.factors if f.name == "ultimate")
+            assert ultimate in {row.ultimate_factor for row in rows}, profile.urn
+        for item_class in profile.item_classes:
+            unbuilt = tuple(r.check for r in profile.required_checks
+                            if r.item_class == item_class and not r.implemented)  # fmt: skip
+            got = apply_profile(Scorecard(), resolve(profile), item_class=item_class)
+            assert got.not_available == unbuilt, (profile.urn, item_class)
+        assert all(r.source or r.practice_default for r in profile._rules())
+        assert industry_profile(profile.urn) is not None
+    with pytest.raises(RefusalError, match="no shipped profile"):
+        industry_profile("submarine")
+
+
+def test_a_shipped_profile_names_what_awaits_a_paid_standard():
+    from anvilate.industry import industry_profile
+
+    changes = resolve(industry_profile("transport-aircraft")).changes()
+    assert any(line.startswith("awaiting your value: material design values") for line in changes)
+    assert "factor fitting = 1.15" in " ".join(changes)
+
+
+def test_a_check_no_screen_implements_is_shown_not_available():
+    from anvilate.industry import industry_profile
+
+    profiled = apply_profile(Scorecard(), resolve(industry_profile("consumer-product")),
+                             item_class="children's article")  # fmt: skip
+    edge, point = profiled.card.entries
+    assert edge.detail.startswith("not available") and "16 CFR 1500.49" in edge.reference
+    assert profiled.not_available == ("sharp edge", "sharp point")

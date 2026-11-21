@@ -14,8 +14,8 @@
 
 ## 2. Shipped profiles
 
-- [ ] 2.1 General, held identical to today's cards by a regression over every example
-- [ ] 2.2 Spaceflight hardware, transport aircraft, automotive, medical device,
+- [x] 2.1 General, held identical to today's cards by a regression over every example
+- [x] 2.2 Spaceflight hardware, transport aircraft, automotive, medical device,
       industrial machinery, consumer product, each with values read from primary public
       documents and a list of rules awaiting user values
 

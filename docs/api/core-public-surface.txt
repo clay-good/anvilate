@@ -894,6 +894,9 @@ industry.layer
 industry.resolve
 industry.apply_profile
 industry.load_profile
+industry.AwaitedValue
+industry.bundled_profiles
+industry.industry_profile
 verification.plan_verification
 verification.record_outcome
 verification.DVPR_COLUMNS
