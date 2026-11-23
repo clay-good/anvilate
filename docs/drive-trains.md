@@ -185,9 +185,36 @@ shaft is the overhanging-beam case and this is not it. A stepped shaft bends on 
 that changes along it, and averaging the steps would report a deflection nothing has, so
 `ShaftStiffness` takes one diameter and a stepped shaft waits.
 
+## What the machine sweeps while it runs
+
+A clearance that holds with the machine stopped can close the moment it runs. A shaft that
+declares the `axis` it turns about — `x`, `y` or `z`, in the product's own coordinates —
+makes everything it carries sweep its **envelope of revolution**, and
+`product_screening` gauges each envelope against the `min_clearance` the product declares:
+
+| Gauged | Not gauged |
+| --- | --- |
+| a turning item against every item nothing turns | two items on one shaft, which turn together |
+| a turning item against the envelopes on the *other* shafts | two gears **in mesh**, because touching is what a mesh does |
+| | a pair a mate or a rigid connection already holds, which touches by design |
+
+The envelope is the cylinder the item's **bounding box** sweeps about the axis. That is
+conservative on purpose — a gap it reports is a gap the real body has at least — and it
+means a round gear standing in as a box sweeps wider than the gear does. The detail line
+says so, so a reader never reads a box's envelope as a gear's. An item whose footprint
+overhangs its shaft sweeps a ring reaching well past its own body, which is the case the
+check exists to catch: a 120 mm disc flush with one side of a 40 mm post reaches 102 mm from
+the axis, not 60.
+
+Nothing is inferred. A box's longest side is not an axis of rotation, so a shaft that
+declares no axis sweeps nothing and the entry says which declaration is missing.
+
 ## Not yet
 
-Declaring the train inside a product document, axial loads from helical gears, a stepped
-shaft's curve, a bundled table of bearing and gear bending limits, mesh geometry and rating
-against the gear standards, heat, and swept clearance: each of the last three waits on a
-standard read rather than remembered.
+Axial loads from helical gears, a stepped shaft's curve, a bundled table of bearing and gear
+bending limits, the gear data block on the drawing, mesh geometry and rating against the gear
+standards, and the heat balance: the last two wait on a standard read rather than remembered.
+
+The worked reducer declares no shaft axis: its gear placeholders are boxes placed beside
+their shafts rather than turned about them, and sweeping a box that is not on the axis would
+report a ring nothing has. It gets the axis when its gears are placed on their shafts.

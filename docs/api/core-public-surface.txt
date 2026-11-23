@@ -734,6 +734,7 @@ product_screening.MaturityLine
 product_screening.MassRollup
 product_screening.Mobility
 product_screening.ClosestApproach
+product_screening.SweptApproach
 product_screening.Economy
 product_screening.CostLine
 product_screening.NodeCost

@@ -1057,7 +1057,9 @@ class Product(StatableModel):
     # vertical acceleration its load path is carried at, and 1.15.0 a chain band's source,
     # and 1.16.0 the lateral acceleration that moves the point each body's load acts at, and
     # 1.17.0 the drive train over its items — which shafts carry which gears, which gears
-    # mesh, the one input and the output it must deliver; an older document reads unchanged.
+    # mesh, the one input and the output it must deliver — and 1.18.0 the axis each shaft
+    # turns about, which is what lets a turning item sweep an envelope and have its clearance
+    # checked while the machine runs; an older document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -1077,6 +1079,7 @@ class Product(StatableModel):
         "1.15.0",
         "1.16.0",
         "1.17.0",
+        "1.18.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

@@ -1058,3 +1058,157 @@ def test_a_part_the_train_does_not_name_may_type_whatever_it_likes():
     document["mates"] += _seat("stirrer", "base")
     report = product_screening(parse_product(document))
     assert _named(report, "output speed").status is CheckStatus.PASS
+
+
+# --- Envelopes of revolution and swept clearance (drive trains 4.2) ---------------------
+
+_HOUSING = {"value": _q(3, "mm"), "source": "the housing's internal clearance rule"}
+
+
+def _on_top(part: str, on: str) -> list[dict]:
+    """Seat ``part`` on ``on``'s top, flush left and front: same footprint, so concentric."""
+    return [
+        {"id": f"{part}-sit", "kind": "face_to_face",
+         "place": {"part": part, "face": "bottom"}, "on": {"part": on, "face": "top"}},
+        {"id": f"{part}-left", "kind": "edge_flush",
+         "place": {"part": part, "face": "left"}, "on": {"part": on, "face": "left"}},
+        {"id": f"{part}-front", "kind": "edge_flush",
+         "place": {"part": part, "face": "front"}, "on": {"part": on, "face": "front"}},
+    ]  # fmt: skip
+
+
+def _turning_document(
+    *,
+    axis: str | None = "z",
+    gap: float = 200.0,
+    gear: tuple[float, float, float] = (40, 40, 20),
+    clearance: dict | None = _HOUSING,
+) -> dict:
+    """Two 40 x 40 posts standing on a base, their axes ``gap`` apart, each carrying a gear.
+
+    Each gear has the post's footprint and is seated on its top flush left and front, so it
+    is concentric with the post and its envelope of revolution is the post's: a cylinder of
+    radius hypot(20, 20) = 28.284 mm. Pass a wider ``gear`` to move its envelope off the
+    axis, which is the case the check exists to catch.
+    """
+    definitions = [_definition("base", placeholder=_box(600, 200, 12, 8.0)),
+                   _definition("post", placeholder=_box(40, 40, 100, 1.0)),
+                   _definition("disc", placeholder=_box(*gear, 0.6))]  # fmt: skip
+    instances = [{"name": "base", "item": "base"}, {"name": "one", "item": "post"},
+                 {"name": "rotor", "item": "disc"}, {"name": "two", "item": "post"},
+                 {"name": "idler", "item": "disc"}]  # fmt: skip
+    mates = [
+        *_seat("one", "base"),
+        *_on_top("rotor", "one"),
+        {"id": "two-sit", "kind": "face_to_face",
+         "place": {"part": "two", "face": "bottom"}, "on": {"part": "base", "face": "top"}},
+        {"id": "two-beside", "kind": "face_to_face",
+         "place": {"part": "two", "face": "left"}, "on": {"part": "one", "face": "right"},
+         "offset": {"magnitude": gap - 40, "unit": "mm"}},
+        {"id": "two-front", "kind": "edge_flush",
+         "place": {"part": "two", "face": "front"}, "on": {"part": "base", "face": "front"}},
+        *_on_top("idler", "two"),
+    ]  # fmt: skip
+    turning = {"axis": axis} if axis is not None else {}
+    document = {
+        "anvilate_product": "1.18.0", "name": "spinner", "definitions": definitions,
+        "instances": instances, "ground": "base", "mates": mates,
+        "drive_train": {
+            "shafts": [{"name": "one", "carries": ["rotor"], **turning},
+                       {"name": "two", "carries": ["idler"], **turning}],
+            "gears": [{"item": "rotor", "teeth": 20, "pitch_diameter": _q(40, "mm")},
+                      {"item": "idler", "teeth": 20, "pitch_diameter": _q(40, "mm")}],
+            "meshes": [{"name": "pair", "driver": "rotor", "driven": "idler",
+                        "efficiency": 1.0, "source": "taken as lossless for this screening"}],
+            "input": {"shaft": "one", "speed": _q(600, "rpm"), "torque": _q(5, "N*m")},
+        },
+    }  # fmt: skip
+    if clearance is not None:
+        document["screening"] = {"min_clearance": clearance}
+    return document
+
+
+def _swept_between(report, turning: str, against: str):
+    found = [a for a in report.swept
+             if {a.turning, a.against} == {turning, against}]  # fmt: skip
+    return found[0] if found else None
+
+
+def test_a_turning_item_sweeps_a_cylinder_about_its_shafts_declared_axis():
+    """Two 40 x 40 posts 200 mm apart each sweep a cylinder of radius hypot(20, 20), so the
+    gap between their envelopes is 200 - 2 x 28.2843 = 143.431 mm, where the still gap
+    between the two boxes is 160 mm."""
+    report = product_screening(parse_product(_turning_document()))
+    between = _swept_between(report, "rotor", "two")
+    assert between is not None and between.both_turn
+    assert between.gap_mm == pytest.approx(200 - 2 * math.hypot(20, 20), abs=1e-3)
+    # The two posts themselves are not gauged: a mate places one off the other, and a pair a
+    # mate holds is not a clearance.
+    assert _swept_between(report, "one", "two") is None
+    assert _named(report, "swept clearance").status is CheckStatus.PASS
+
+
+def test_two_gears_in_mesh_are_not_gauged_because_touching_is_what_a_mesh_does():
+    report = product_screening(parse_product(_turning_document()))
+    assert _swept_between(report, "rotor", "idler") is None
+    # And items on ONE shaft turn together, so they are not gauged against each other.
+    assert _swept_between(report, "one", "rotor") is None
+    assert _swept_between(report, "two", "idler") is None
+
+
+def test_an_item_off_its_shafts_axis_sweeps_wider_and_the_check_says_so():
+    """A gear whose footprint overhangs its shaft sweeps a ring reaching past its own body.
+    A 120 x 40 disc seated flush left on a 40 x 40 post has its centre 40 mm off the post's
+    axis, so its furthest corner is hypot(100, 20) = 101.98 mm out and its envelope is that
+    cylinder — far past its own 120 mm width. Against the post 200 mm away, whose envelope
+    reaches 28.284 mm, that leaves 200 - 101.98 - 28.284 = 69.7 mm.
+    """
+    report = product_screening(parse_product(_turning_document(gear=(120, 40, 20))))
+    reach = _swept_between(report, "rotor", "two")
+    assert reach is not None
+    assert reach.gap_mm == pytest.approx(200 - math.hypot(100, 20) - math.hypot(20, 20), abs=1e-3)
+    # Closed right up it fails, and the detail says the envelope came from a bounding box, so
+    # a reader knows a round gear modelled as a box sweeps wider than the gear does.
+    close = product_screening(parse_product(_turning_document(gear=(120, 40, 20), gap=100)))
+    entry = _named(close, "swept clearance")
+    assert entry.status is CheckStatus.FAIL
+    assert "sweeps within" in entry.detail and "bounding box sweeps" in entry.detail
+
+
+def test_a_clearance_that_holds_stopped_can_close_when_the_machine_runs():
+    """The whole reason for the check. With the axes 50 mm apart the parts clear each other
+    standing still — every still gap is past the 3 mm the housing asks for — and two
+    envelopes of radius 28.284 mm overlap the moment the machine runs."""
+    report = product_screening(parse_product(_turning_document(gap=50)))
+    assert _named(report, "clearance").status is CheckStatus.PASS
+    assert _named(report, "swept clearance").status is CheckStatus.FAIL
+    # Two solids that overlap are zero apart, not a negative distance: the gauge measures a
+    # gap and there is none. Zero is below every positive limit, so the verdict is the same.
+    assert _swept_between(report, "rotor", "two").gap_mm == 0.0
+    # And it really is an overlap, not a touch: pull them apart and the gap appears.
+    apart = product_screening(parse_product(_turning_document(gap=70)))
+    assert _swept_between(apart, "rotor", "two").gap_mm == pytest.approx(
+        70 - 2 * math.hypot(20, 20), abs=1e-3
+    )
+
+
+def test_a_shaft_that_declares_no_axis_sweeps_nothing_and_the_entry_names_what_to_declare():
+    report = product_screening(parse_product(_turning_document(axis=None)))
+    assert report.swept == ()
+    entry = _named(report, "swept clearance")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert [need.declaration for need in entry.needs] == ["drive_train.shafts[].axis"]
+
+
+def test_an_item_a_mate_holds_is_not_gauged_against_what_holds_it():
+    """A post standing on its base touches the base, and that is the mate working."""
+    report = product_screening(parse_product(_turning_document()))
+    assert _swept_between(report, "one", "base") is None
+    # The gear is mated to its post, not to the base, so the base IS gauged against it.
+    assert _swept_between(report, "rotor", "base") is not None
+
+
+def test_a_product_with_no_declared_clearance_gets_no_swept_entry():
+    report = product_screening(parse_product(_turning_document(clearance=None)))
+    assert report.swept  # the envelopes are still reported
+    assert [e for e in report.entries if e.name == "swept clearance"] == []

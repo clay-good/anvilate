@@ -525,6 +525,23 @@
       "additionalProperties": false,
       "description": "One shaft, the items it carries by item path, and where its bearings and items sit.\n\n``supports`` and ``stations`` are what :func:`solve_shaft_statics` reads; a shaft that\ndeclares neither still carries its speed, torque and power through the flow.",
       "properties": {
+        "axis": {
+          "anyOf": [
+            {
+              "enum": [
+                "x",
+                "y",
+                "z"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Axis"
+        },
         "carries": {
           "items": {
             "type": "string"
@@ -2443,7 +2460,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.17.0",
+  "$id": "urn:anvilate:schema:product-document:1.18.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
@@ -2468,7 +2485,8 @@
         "1.14.0",
         "1.15.0",
         "1.16.0",
-        "1.17.0"
+        "1.17.0",
+        "1.18.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -2600,5 +2618,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.17.0"
+  "x-anvilate-version": "1.18.0"
 }

@@ -61,6 +61,7 @@ __all__ = [
     "MassRollup",
     "Mobility",
     "ClosestApproach",
+    "SweptApproach",
     "Economy",
     "CostLine",
     "NodeCost",
@@ -154,6 +155,20 @@ class ClosestApproach(StatableModel):
     at_mm: tuple[float, float, float]
 
 
+class SweptApproach(StatableModel):
+    """How close a turning item's swept envelope comes to something it must not touch."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    turning: Named
+    about: Named
+    against: Named
+    gap_mm: float
+    at_mm: tuple[float, float, float]
+    #: Whether what it approaches is itself turning, on another shaft.
+    both_turn: bool = False
+
+
 class ProductScreening(StatableModel):
     """What the product as a whole weighs, where, how close its items come, how it moves."""
 
@@ -165,6 +180,7 @@ class ProductScreening(StatableModel):
     rollup: MassRollup | None = None
     mass_budget: BudgetResult | None = None
     approaches: tuple[ClosestApproach, ...] = Field(default=(), max_length=4096)
+    swept: tuple[SweptApproach, ...] = Field(default=(), max_length=4096)
     mobility: Mobility
     load_path: tuple[LoadStep, ...] = ()
     economy: Economy | None = None
@@ -283,11 +299,14 @@ def product_screening(
     entries += screen_material_needs(product)
     cost_lines, costs = _costs(product, shelf)
     approaches = _approaches(product, bodies)
+    swept = _swept(product, bodies)
     if declared is not None and declared.min_clearance is not None:
         entries.append(_clearance_entry(approaches, declared.min_clearance))
+        if product.drive_train is not None:
+            entries.append(_swept_entry(swept, declared.min_clearance))
     return ProductScreening(
         name=product.name, contributions=tuple(contributions), nodes=tuple(nodes),
-        rollup=rollup, mass_budget=budget, approaches=approaches,
+        rollup=rollup, mass_budget=budget, approaches=approaches, swept=swept,
         mobility=_mobility(product, placed),
         load_path=tuple(steps),
         economy=_economy(product, shelf, bodies),
@@ -441,15 +460,25 @@ def _tip_entry(top: NodeMass, placed: Any, limit: Any) -> ScorecardEntry:
     )  # fmt: skip
 
 
+def _joined(product: Product) -> set[frozenset[str]]:
+    """The item pairs a mate or a rigid connection already holds together.
+
+    Gauging the gap between two items that touch BY DESIGN reports zero and calls it a
+    finding, so neither the still clearance nor the swept one gauges such a pair: a shaft
+    standing on its base touches the base, and that is the mate working.
+    """
+    joined = {frozenset((m.place.part, m.on.part)) for m in product.mates}
+    for connection in product.connections:
+        joined.add(frozenset((connection.on.rpartition(".")[0],
+                              connection.place.rpartition(".")[0])))  # fmt: skip
+    return joined
+
+
 def _approaches(product: Product, bodies: list[Any]) -> tuple[ClosestApproach, ...]:
     """The least gap between every two top-level items that share no mate or connection."""
     from OCP.BRepExtrema import BRepExtrema_DistShapeShape  # type: ignore[import-untyped]
 
-    joined = {frozenset((m.place.part, m.on.part)) for m in product.mates}
-    for connection in product.connections:
-        a = connection.on.rpartition(".")[0]
-        b = connection.place.rpartition(".")[0]
-        joined.add(frozenset((a, b)))
+    joined = _joined(product)
 
     def item(path: str) -> str:
         return path.split("/")[1].split("[")[0]
@@ -470,6 +499,164 @@ def _approaches(product: Product, bodies: list[Any]) -> tuple[ClosestApproach, .
             found.append(ClosestApproach(first=first.path, second=second.path,
                                          gap_mm=round(gauge.Value(), 6), at_mm=mid))  # fmt: skip
     return tuple(sorted(found, key=lambda a: a.gap_mm))
+
+
+#: What a swept envelope is, in one phrase the card can cite.
+_SWEPT_BASIS = (
+    "each turning item's envelope of revolution about its shaft's declared axis, taken as "
+    "the cylinder its bounding box sweeps — conservative, so a gap it reports is a gap the "
+    "real body has at least"
+)
+
+
+def _axis_line(shape: Any, axis: str) -> tuple[str, tuple[float, float], tuple[float, float]]:
+    """The shaft's turning line: its direction, where it sits, and how far the body reaches."""
+    box = shape.bounding_box()
+    low = (box.min.X, box.min.Y, box.min.Z)
+    high = (box.max.X, box.max.Y, box.max.Z)
+    along = "xyz".index(axis)
+    across = [i for i in range(3) if i != along]
+    at = tuple((low[i] + high[i]) / 2.0 for i in across)
+    return axis, at, (low[along], high[along])
+
+
+def _swept_cylinder(shape: Any, axis: str, at: tuple[float, float]) -> Any:
+    """The cylinder ``shape`` sweeps turning about the line ``at`` in direction ``axis``.
+
+    The radius is the furthest the body's bounding box reaches from the line, so the
+    envelope contains the body whatever shape it is, and the axial extent is the box's. A
+    gap this reports is therefore never larger than the real one.
+    """
+    from build123d import Cylinder, Location, Rotation
+
+    box = shape.bounding_box()
+    low = (box.min.X, box.min.Y, box.min.Z)
+    high = (box.max.X, box.max.Y, box.max.Z)
+    along = "xyz".index(axis)
+    across = [i for i in range(3) if i != along]
+    radius = max(
+        math.hypot(x - at[0], y - at[1])
+        for x in (low[across[0]], high[across[0]])
+        for y in (low[across[1]], high[across[1]])
+    )
+    height = high[along] - low[along]
+    if radius <= 0.0 or height <= 0.0:
+        return None
+    centre = [0.0, 0.0, 0.0]
+    centre[across[0]], centre[across[1]] = at[0], at[1]
+    centre[along] = (low[along] + high[along]) / 2.0
+    turned = {"x": Rotation(0, 90, 0), "y": Rotation(90, 0, 0), "z": Rotation(0, 0, 0)}[axis]
+    solid = Cylinder(radius=radius, height=height)
+    return Location(tuple(centre)) * turned * solid
+
+
+def _swept(product: Product, bodies: list[Any]) -> tuple[SweptApproach, ...]:
+    """Every gap between a turning item's envelope and what it must not touch.
+
+    A clearance that holds with the machine stopped can close the moment it runs, so each
+    item a shaft carries is swept about that shaft's declared axis and gauged against two
+    things: the items nothing turns, and the envelopes on the *other* shafts. Items on one
+    shaft turn together and are not gauged against each other, and two gears **in mesh** are
+    not gauged either — touching is what a mesh does.
+
+    A shaft that declares no axis sweeps nothing, which is the document's statement that it
+    has not said which way the machine turns.
+
+    Two envelopes that overlap are reported zero apart rather than at a negative distance:
+    the gauge measures a gap and an overlap has none. Zero is below every positive limit, so
+    the verdict is the same either way, and the still clearance beside it reports the same
+    way for the same reason.
+    """
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape  # type: ignore[import-untyped]
+
+    train = product.drive_train
+    if train is None:
+        return ()
+    turning = {s.name: s for s in train.shafts if s.axis is not None}
+    if not turning:
+        return ()
+    by_item = {path.split("/")[1].split("[")[0]: leaf for leaf, path in
+               ((leaf, leaf.path) for leaf in bodies)}  # fmt: skip
+    meshing = {frozenset((m.driver, m.driven)) for m in train.meshes}
+    joined = _joined(product)
+    envelopes: dict[str, tuple[str, Any, str]] = {}
+    for shaft in turning.values():
+        if shaft.name not in by_item:
+            continue
+        axis, at, _reach = _axis_line(by_item[shaft.name].shape, shaft.axis or "z")
+        for item in (shaft.name, *shaft.carries):
+            leaf = by_item.get(item)
+            if leaf is None:
+                continue
+            solid = _swept_cylinder(leaf.shape, axis, at)
+            if solid is not None:
+                envelopes[item] = (shaft.name, solid, item)
+    if not envelopes:
+        return ()
+    spinning = set(envelopes)
+    found: list[SweptApproach] = []
+
+    def gauge(first: Any, second: Any) -> tuple[float, tuple[float, float, float]] | None:
+        measure = BRepExtrema_DistShapeShape(first.wrapped, second.wrapped)
+        measure.Perform()
+        if not measure.IsDone():
+            return None
+        p, q = measure.PointOnShape1(1), measure.PointOnShape2(1)
+        mid = tuple(round((u + v) / 2, 3) + 0.0 for u, v in
+                    ((p.X(), q.X()), (p.Y(), q.Y()), (p.Z(), q.Z())))  # fmt: skip
+        return round(measure.Value(), 6), mid
+
+    for item, (shaft, solid, _) in sorted(envelopes.items()):
+        for other, leaf in sorted(by_item.items()):
+            if other in spinning or frozenset((item, other)) in joined:
+                continue
+            read = gauge(solid, leaf.shape)
+            if read is not None:
+                found.append(SweptApproach(turning=item, about=shaft, against=other,
+                                           gap_mm=read[0], at_mm=read[1]))  # fmt: skip
+    pairs = sorted(envelopes)
+    for i, item in enumerate(pairs):
+        for other in pairs[i + 1 :]:
+            if envelopes[item][0] == envelopes[other][0]:
+                continue  # one shaft: they turn together
+            if frozenset((item, other)) in meshing:
+                continue  # a mesh touches, and is checked as a mesh
+            if frozenset((item, other)) in joined:
+                continue  # held together by design
+            read = gauge(envelopes[item][1], envelopes[other][1])
+            if read is not None:
+                found.append(SweptApproach(
+                    turning=item, about=envelopes[item][0], against=other,
+                    gap_mm=read[0], at_mm=read[1], both_turn=True,
+                ))  # fmt: skip
+    return tuple(sorted(found, key=lambda a: a.gap_mm))
+
+
+def _swept_entry(swept: tuple[SweptApproach, ...], limit: Any) -> ScorecardEntry:
+    """The worst swept gap against the clearance the product declares."""
+    least = limit.value.to("mm").magnitude
+    if not swept:
+        return ScorecardEntry(
+            name="swept clearance", status=CheckStatus.NOT_EVALUATED, underived=_SUMMED,
+            detail=("not evaluated: no shaft in the drive train declares the axis it turns "
+                    "about, so nothing sweeps an envelope"),
+            needs=(_need("drive_train.shafts[].axis",
+                         "which way each shaft turns, in the product's coordinates",
+                         "[]", ("x", "y", "z")),),
+            reference=limit.source,
+        )  # fmt: skip
+    worst = swept[0]
+    short = [a for a in swept if a.gap_mm < least]
+    where = ", ".join(f"{v:g}" for v in worst.at_mm)
+    other = f"{worst.against} turning about its own shaft" if worst.both_turn else worst.against
+    detail = (f"{worst.turning} turning about {worst.about} sweeps within "
+              f"{worst.gap_mm:.4g} mm of {other} at ({where}) mm, against {least:g} mm "
+              f"({limit.source}); {_SWEPT_BASIS}")  # fmt: skip
+    if len(short) > 1:
+        detail += f"; {len(short)} swept pairs are closer than that"
+    return ScorecardEntry(name="swept clearance",
+                          status=CheckStatus.FAIL if short else CheckStatus.PASS,
+                          detail=detail, underived=_SUMMED, reference=limit.source)  # fmt: skip
 
 
 def _clearance_entry(approaches: tuple[ClosestApproach, ...], limit: Any) -> ScorecardEntry:

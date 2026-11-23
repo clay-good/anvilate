@@ -46,7 +46,11 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
 
 - [ ] 4.1 Read ISO/TR 14179-1 (or AGMA 947-A23) and anchor the heat balance; until then
       the entry is not evaluated naming it
-- [ ] 4.2 Envelopes of revolution; swept clearance to stationary items and across shafts
+- [x] 4.2 Envelopes of revolution; swept clearance to stationary items and across shafts
+      (`DriveShaft.axis` at document schema 1.18.0; `product_screening` sweeps each carried
+      item's bounding box about it and gauges every envelope against the declared
+      `min_clearance`, skipping one shaft's own items, gears in mesh, and pairs a mate
+      holds. The worked reducer declares no axis until its gears sit on their shafts)
 - [ ] 4.3 Gear data block on drawings and in the release package
 - [ ] 4.4 Shigley power transmission case study as a golden test, re-derived from the
       chapter's published values

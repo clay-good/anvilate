@@ -24,7 +24,7 @@ contradicts the one the flow derives.
 from __future__ import annotations
 
 from math import cos, hypot, isclose, pi, sin, tan
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -248,6 +248,11 @@ class DriveShaft(StatableModel):
     supports: tuple[ShaftSupport, ...] = Field(default=(), max_length=16)
     stations: tuple[ShaftStation, ...] = Field(default=(), max_length=64)
     stiffness: ShaftStiffness | None = None
+    # Which way the shaft turns, in the product's own coordinates. What it buys is the swept
+    # envelope: everything the shaft carries sweeps a cylinder about this line as it turns,
+    # and a clearance that holds with the machine stopped can close the moment it runs. No
+    # default and nothing inferred — a box's longest side is not an axis of rotation.
+    axis: Literal["x", "y", "z"] | None = None
 
     @model_validator(mode="after")
     def _laid_out(self) -> DriveShaft:
