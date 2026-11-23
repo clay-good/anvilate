@@ -5,9 +5,11 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
 
 ## 1. Declaration and flow
 
-- [ ] 1.1 Drive-train schema on product documents: shafts, carried items, meshes, input,
+- [x] 1.1 Drive-train schema on product documents: shafts, carried items, meshes, input,
       required output and life
-      (`anvilate.drivetrain.DriveTrain`, standalone; not yet a product-document field)
+      (`Product.drive_train` at document schema 1.17.0; every shaft and gear names one of the
+      product's own instances, the flow is derived at parse, and `product_screening` puts the
+      output-speed and shaft-bending entries on the product's card)
 - [x] 1.2 Speed, torque and power flow with cited efficiencies; output band check
 - [x] 1.3 Speed-graph consistency: single determination, center distance closure,
       reverted layouts, one input, no undriven shaft

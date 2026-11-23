@@ -277,6 +277,7 @@ def product_screening(
     entries += _rated_from_path(product, shelf, steps)
     entries += _thermal(product, placed)
     entries += _chains(product)
+    entries += _drive_train(product)
     from .compliance import screen_material_needs
 
     entries += screen_material_needs(product)
@@ -1080,6 +1081,29 @@ def _economy(product: Product, shelf: Mapping[str, Product], bodies: list[Any]) 
         note="fasteners and the tools they need are not counted: a product declares no "
         "fastener hardware yet",
     )  # fmt: skip
+
+
+def _drive_train(product: Product) -> list[ScorecardEntry]:
+    """The declared drive train's own checks, on the product's card.
+
+    The flow is already derived — the document would not have parsed otherwise — so what is
+    left is the comparisons: the output speed against its band, and each shaft's bending
+    against the limits declared on it. A shaft is only read for bending where it declares
+    the two bearings and the stiffness that make a curve; the others are the document's
+    statement that its shafts are not screened for it yet, and the drive-trains page says so
+    rather than this card inventing a not-evaluated entry per shaft.
+    """
+    from .drivetrain import derive_flow, screen_output_speed, screen_shaft_curve
+
+    train = product.drive_train
+    if train is None:
+        return []
+    flow = derive_flow(train)
+    entries = [screen_output_speed(train, flow)]
+    for shaft in train.shafts:
+        if len(shaft.supports) == 2 and shaft.stiffness is not None:
+            entries += screen_shaft_curve(train, flow, shaft.name)
+    return entries
 
 
 def _chains(product: Product) -> list[ScorecardEntry]:

@@ -48,6 +48,38 @@ and 16/72 at 6 teeth/in gives 388.9 and 86.42 rpm, torques of 60.0, 270 and 1,21
 and tangential loads of 540.2 and 2,431 lbf. The chapter prints 540.0 for the first, from
 the pitch diameter rounded to 2.67 in; the library takes the exact 16/6 in.
 
+## A product declares its drive train
+
+A product document carries the machine it is, over the items it already has, at schema
+1.17.0:
+
+```yaml
+anvilate_product: 1.17.0
+drive_train:
+  shafts:
+  - name: fast                 # an instance of this product
+    carries: [pinion]          # so is every item a shaft carries
+    supports: [{name: A, at: {magnitude: 0, unit: mm}}, ...]
+    stations: [{item: pinion, at: {magnitude: 100, unit: mm}}]
+    stiffness: {diameter: ..., elastic_modulus: ..., source: AISI 1045, Shigley Table A-5}
+  gears: [{item: pinion, teeth: 18, pitch_diameter: ...}, ...]
+  meshes: [{name: pinion-wheel, driver: pinion, driven: wheel, efficiency: 1.0, source: ...}]
+  input: {shaft: fast, speed: {magnitude: 1500, unit: rpm}, power: ...}
+  output: {shaft: slow, speed_low: ..., speed_high: ..., source: ...}
+```
+
+Every shaft and gear the train names is an instance of the product, by the same names its
+stack-up chains and its material needs use. **The flow is derived at parse**, so a train no
+input drives, whose shaft speeds two paths disagree on, or whose centre distances do not
+close is refused before anything is built — the point of declaring the machine is that it
+cannot be built wrong, and a refusal that waited for the first screen to read it would
+arrive after the geometry.
+
+`product_screening` then puts the train's own checks on the product's card: the output speed
+against its band, and the bending at each point of every shaft that declares two bearings
+and a stiffness. A shaft that declares neither is not read for bending and nothing is
+reported for it — that is the document's statement, not a gap the card fills in.
+
 ## The mesh loads reach the bearings
 
 A shaft that declares where its bearings and its gears sit is solved by statics:

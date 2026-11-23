@@ -398,7 +398,9 @@ def test_a_support_or_station_declared_twice_is_refused():
 def test_an_unplaceable_position_or_angle_is_refused():
     with pytest.raises(ValueError, match=r"support A at is a \[length\] quantity"):
         ShaftSupport(name="A", at=_q("5 kg"))
-    with pytest.raises(ValueError, match="must be a finite position"):
+    # A non-finite position is refused by the document's finite rule, on the field, which
+    # every model a product document declares opts into.
+    with pytest.raises(ValueError, match="at is nan, which is not a number a document can state"):
         ShaftSupport(name="A", at=Quantity(magnitude=float("nan"), unit="mm"))
     with pytest.raises(ValueError, match="line_of_centers .* outside -360 to 360 degrees"):
         Mesh(name="m", driver="a", driven="b", efficiency=1.0, source="x",

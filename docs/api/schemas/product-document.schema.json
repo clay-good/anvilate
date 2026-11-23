@@ -480,6 +480,161 @@
       "title": "Demand",
       "type": "object"
     },
+    "DriveInput": {
+      "additionalProperties": false,
+      "description": "The one input: the shaft driven, its speed, and its power or its torque.",
+      "properties": {
+        "power": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shaft": {
+          "title": "Shaft",
+          "type": "string"
+        },
+        "speed": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "torque": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "shaft",
+        "speed"
+      ],
+      "title": "DriveInput",
+      "type": "object"
+    },
+    "DriveShaft": {
+      "additionalProperties": false,
+      "description": "One shaft, the items it carries by item path, and where its bearings and items sit.\n\n``supports`` and ``stations`` are what :func:`solve_shaft_statics` reads; a shaft that\ndeclares neither still carries its speed, torque and power through the flow.",
+      "properties": {
+        "carries": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Carries",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "stations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ShaftStation"
+          },
+          "maxItems": 64,
+          "title": "Stations",
+          "type": "array"
+        },
+        "stiffness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ShaftStiffness"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "supports": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ShaftSupport"
+          },
+          "maxItems": 16,
+          "title": "Supports",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "carries"
+      ],
+      "title": "DriveShaft",
+      "type": "object"
+    },
+    "DriveTrain": {
+      "additionalProperties": false,
+      "description": "A declared drive train over a product's items.",
+      "properties": {
+        "gears": {
+          "items": {
+            "$ref": "#/$defs/Gear"
+          },
+          "maxItems": 128,
+          "minItems": 2,
+          "title": "Gears",
+          "type": "array"
+        },
+        "input": {
+          "$ref": "#/$defs/DriveInput"
+        },
+        "meshes": {
+          "items": {
+            "$ref": "#/$defs/Mesh"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Meshes",
+          "type": "array"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequiredOutput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reverted": {
+          "default": false,
+          "title": "Reverted",
+          "type": "boolean"
+        },
+        "shafts": {
+          "items": {
+            "$ref": "#/$defs/DriveShaft"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Shafts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "shafts",
+        "gears",
+        "meshes",
+        "input"
+      ],
+      "title": "DriveTrain",
+      "type": "object"
+    },
     "Expansion": {
       "additionalProperties": false,
       "description": "A material's coefficient of thermal expansion, as the declaration read it, cited.",
@@ -502,6 +657,39 @@
         "source"
       ],
       "title": "Expansion",
+      "type": "object"
+    },
+    "Gear": {
+      "additionalProperties": false,
+      "description": "One gear: the item it is, its teeth, and its pitch diameter when declared.",
+      "properties": {
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "pitch_diameter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "teeth": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Teeth",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item",
+        "teeth"
+      ],
+      "title": "Gear",
       "type": "object"
     },
     "Instance": {
@@ -1249,6 +1437,76 @@
       "title": "MaterialNeeds",
       "type": "object"
     },
+    "Mesh": {
+      "additionalProperties": false,
+      "description": "Two gears in mesh: which drives, the efficiency and its source, the center distance.\n\n``efficiency`` is the fraction of power the mesh passes on, declared with ``source``;\na lossless analysis declares 1.0 and says so. ``stage`` groups the meshes a reverted\nlayout requires to share one center distance.",
+      "properties": {
+        "center_distance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "driven": {
+          "title": "Driven",
+          "type": "string"
+        },
+        "driver": {
+          "title": "Driver",
+          "type": "string"
+        },
+        "efficiency": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Efficiency",
+          "type": "number"
+        },
+        "line_of_centers": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "pressure_angle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "driver",
+        "driven",
+        "efficiency",
+        "source"
+      ],
+      "title": "Mesh",
+      "type": "object"
+    },
     "OpenInterface": {
       "additionalProperties": false,
       "description": "An interface left unconnected on purpose, as ``item.interface``, and why.",
@@ -1657,6 +1915,45 @@
       "title": "Reference",
       "type": "object"
     },
+    "RequiredOutput": {
+      "additionalProperties": false,
+      "description": "The output the train must deliver: the shaft, its speed band, and the life it runs.\n\n``life`` is the running time the train must reach, and it is what every bearing's ISO 281\nrating life is held against. It is optional because a train may be screened on its\nkinematics alone; without it the bearing demands say so rather than assuming one.",
+      "properties": {
+        "life": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shaft": {
+          "title": "Shaft",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "speed_high": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "speed_low": {
+          "$ref": "#/$defs/Quantity"
+        }
+      },
+      "required": [
+        "shaft",
+        "speed_low",
+        "speed_high",
+        "source"
+      ],
+      "title": "RequiredOutput",
+      "type": "object"
+    },
     "Screening": {
       "additionalProperties": false,
       "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth, as a budget whose terms are the bodies;\n``max_cg_height`` is the highest the centre of mass may sit above the product's lowest\npoint; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection. ``loads`` are what the product carries, which travel down\nthrough the bodies they rest on to the floor; ``splits`` divide a body's load among\nmore supports than determine it, each with its basis. ``vertical_acceleration`` is the\nacceleration the load path is carried at, gravity included and acting down: each body's\nweight and each load given as a mass are carried at m·a rather than m·g.\n``lateral_acceleration`` is the sideways part, with the direction it points: it makes a\nhorizontal force at each body's centre of mass, and the moment of that force moves the\npoint each body's load acts at — which is how a product that stands up under gravity\ntips over on a truck.",
@@ -1807,6 +2104,161 @@
         }
       },
       "title": "Screening",
+      "type": "object"
+    },
+    "ShaftStation": {
+      "additionalProperties": false,
+      "description": "A carried item's axial position on its shaft; a gear's station is where its mesh pulls.",
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "deflection_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "limit_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit Source"
+        },
+        "slope_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "item",
+        "at"
+      ],
+      "title": "ShaftStation",
+      "type": "object"
+    },
+    "ShaftStiffness": {
+      "additionalProperties": false,
+      "description": "What a shaft's bending resists with: a prismatic shaft's diameter and its modulus.\n\nOne diameter, because the elastic curve this feeds is the prismatic case. A stepped\nshaft bends on a diameter that changes along it, and averaging the steps would report a\ndeflection nothing has; such a shaft is refused rather than approximated.",
+      "properties": {
+        "diameter": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "elastic_modulus": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "diameter",
+        "elastic_modulus",
+        "source"
+      ],
+      "title": "ShaftStiffness",
+      "type": "object"
+    },
+    "ShaftSupport": {
+      "additionalProperties": false,
+      "description": "One bearing on a shaft, at an axial position.\n\nA shaft with more than two supports is statically indeterminate: its reactions do not\nfollow from equilibrium alone. Such a shaft is named as indeterminate and refused, unless\nevery support declares the ``share`` of the load it takes and the ``source`` that share\nrests on. Two supports need neither.",
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Quantity"
+        },
+        "deflection_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit Source"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "share": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 1,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Share"
+        },
+        "slope_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "name",
+        "at"
+      ],
+      "title": "ShaftSupport",
       "type": "object"
     },
     "Split": {
@@ -1991,7 +2443,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.16.0",
+  "$id": "urn:anvilate:schema:product-document:1.17.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
@@ -2015,7 +2467,8 @@
         "1.13.0",
         "1.14.0",
         "1.15.0",
-        "1.16.0"
+        "1.16.0",
+        "1.17.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -2049,6 +2502,17 @@
       ],
       "default": null,
       "title": "Description"
+    },
+    "drive_train": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DriveTrain"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "ground": {
       "title": "Ground",
@@ -2136,5 +2600,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.16.0"
+  "x-anvilate-version": "1.17.0"
 }

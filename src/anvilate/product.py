@@ -54,6 +54,7 @@ from ._models import (
 )
 from .combination import Mate
 from .derivation import DerivationAbsence, Underived
+from .drivetrain import DriveTrain, derive_flow
 from .interfaces import (
     COMPATIBLE,
     KINDS,
@@ -1054,8 +1055,9 @@ class Product(StatableModel):
     # materials and what they must withstand, and 1.12.0 a unit price on a part or a
     # component record, and 1.13.0 a limit on the centre of mass's height, and 1.14.0 the
     # vertical acceleration its load path is carried at, and 1.15.0 a chain band's source,
-    # and 1.16.0 the lateral acceleration that moves the point each body's load acts at; an
-    # older document reads unchanged.
+    # and 1.16.0 the lateral acceleration that moves the point each body's load acts at, and
+    # 1.17.0 the drive train over its items — which shafts carry which gears, which gears
+    # mesh, the one input and the output it must deliver; an older document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -1074,6 +1076,7 @@ class Product(StatableModel):
         "1.14.0",
         "1.15.0",
         "1.16.0",
+        "1.17.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
@@ -1087,6 +1090,11 @@ class Product(StatableModel):
     connections: tuple[Connection, ...] = Field(default=(), max_length=512)
     screening: Screening | None = None
     open_interfaces: tuple[OpenInterface, ...] = Field(default=(), max_length=512)
+    # The machine the product is, where it is one: which of its instances are shafts, which
+    # gears they carry, which gears mesh, the one input and the output it must deliver. Its
+    # flow is derived here, at parse, so a train that cannot be a machine is refused before
+    # anything is built rather than when something first reads it.
+    drive_train: DriveTrain | None = None
 
     def offers(self) -> dict[str, dict[str, Interface | PartInterface]]:
         """Each instance's interfaces by name: its placeholder's or component's, or a
@@ -1113,6 +1121,37 @@ class Product(StatableModel):
                           subject=subject)  # fmt: skip
         return item, offered[item][name]
 
+    def _train_names_its_own(self, names: set[str]) -> None:
+        """A declared drive train addresses the product's own instances, and is a machine.
+
+        Every shaft and every gear the train names is an instance of this product, by the
+        same names its chains and its material needs use. The flow is derived here so that a
+        train no input drives, whose speeds two paths disagree on, or whose centre distances
+        do not close is refused at parse — the point of declaring the machine is that it
+        cannot be built wrong, and a refusal that waited for the first screen to read it
+        would arrive after the geometry.
+        """
+        train = self.drive_train
+        if train is None:
+            return
+        for shaft in train.shafts:
+            if shaft.name not in names:
+                raise _refuse(f"the drive train declares a shaft '{shaft.name}', which is not "
+                              f"an instance ({', '.join(sorted(names))})",
+                              subject="drive_train.shafts[].name")  # fmt: skip
+            stray = sorted(set(shaft.carries) - names)
+            if stray:
+                raise _refuse(f"shaft '{shaft.name}' carries {stray}, which are not instances "
+                              "of this product; a drive train is declared over the items the "
+                              "product already has",
+                              subject="drive_train.shafts[].carries")  # fmt: skip
+        for gear in train.gears:
+            if gear.item not in names:
+                raise _refuse(f"the drive train declares a gear '{gear.item}', which is not an "
+                              f"instance ({', '.join(sorted(names))})",
+                              subject="drive_train.gears[].item")  # fmt: skip
+        derive_flow(train)
+
     @model_validator(mode="after")
     def _refers_to_its_own(self) -> Product:
         ids = [d.id for d in self.definitions]
@@ -1137,6 +1176,7 @@ class Product(StatableModel):
             if item not in names:
                 raise _refuse(f"material needs name '{item}', which is not an instance "
                               f"({', '.join(names)})", subject="screening.needs")  # fmt: skip
+        self._train_names_its_own(set(names))
         if self.layout is not None:
             declared = [p.name for p in self.layout.parameters]
             repeated = sorted({n for n in declared if declared.count(n) > 1})

@@ -856,3 +856,107 @@ def test_a_lateral_acceleration_points_somewhere_and_is_finite():
         }
         with pytest.raises(ValueError, match=says):
             parse_product(document)
+
+
+# --- A declared drive train over the product's items (drive trains 1.1) ------------------
+
+_LOSSLESS = "the reducer's efficiency, taken as 1.0 for this screening"
+
+
+def _reducer_document(**train_overrides) -> dict:
+    """Four instances — a base, two shafts and a gear on each — and a train over them."""
+    definitions = [_definition("base", placeholder=_box(300, 120, 12, 5.4)),
+                   _definition("shaft", placeholder=_box(200, 30, 30, 1.1)),
+                   _definition("gear", placeholder=_box(60, 60, 20, 0.8))]  # fmt: skip
+    instances = [{"name": "base", "item": "base"},
+                 {"name": "fast", "item": "shaft"}, {"name": "slow", "item": "shaft"},
+                 {"name": "pinion", "item": "gear"}, {"name": "wheel", "item": "gear"}]  # fmt: skip
+    mates = [m for name in ("fast", "slow", "pinion", "wheel") for m in _seat(name, "base")]
+    train = {
+        "shafts": [
+            {"name": "fast", "carries": ["pinion"],
+             "supports": [{"name": "A", "at": _q(0, "mm")}, {"name": "B", "at": _q(200, "mm")}],
+             "stations": [{"item": "pinion", "at": _q(100, "mm")}],
+             "stiffness": {"diameter": _q(30, "mm"), "elastic_modulus": _q(207, "GPa"),
+                           "source": "AISI 1045, Shigley Table A-5"}},
+            {"name": "slow", "carries": ["wheel"]},
+        ],
+        "gears": [{"item": "pinion", "teeth": 18, "pitch_diameter": _q(54, "mm")},
+                  {"item": "wheel", "teeth": 72, "pitch_diameter": _q(216, "mm")}],
+        "meshes": [{"name": "pinion-wheel", "driver": "pinion", "driven": "wheel",
+                    "efficiency": 1.0, "source": _LOSSLESS,
+                    "pressure_angle": _q(20, "degree")}],
+        "input": {"shaft": "fast", "speed": _q(1500, "rpm"), "power": _q(2.2, "kW")},
+        "output": {"shaft": "slow", "speed_low": _q(370, "rpm"), "speed_high": _q(380, "rpm"),
+                   "source": "the driven machine's rated speed"},
+    }  # fmt: skip
+    train.update(train_overrides)
+    return {"anvilate_product": "1.17.0", "name": "reducer", "definitions": definitions,
+            "instances": instances, "ground": "base", "mates": mates,
+            "drive_train": train}  # fmt: skip
+
+
+def test_a_product_carries_its_drive_train_and_screens_its_output_speed():
+    """18/72 from 1,500 rpm is 375 rpm, inside the 370 to 380 band the machine asks for."""
+    product = parse_product(_reducer_document())
+    assert product.drive_train is not None
+    report = product_screening(product)
+    entry = _named(report, "output speed")
+    assert entry.status is CheckStatus.PASS and "375 rpm, inside" in entry.detail
+
+
+def test_a_product_whose_train_misses_its_band_fails_on_the_products_own_card():
+    document = _reducer_document()
+    document["drive_train"]["output"]["speed_low"] = _q(400, "rpm")
+    document["drive_train"]["output"]["speed_high"] = _q(410, "rpm")
+    entry = _named(product_screening(parse_product(document)), "output speed")
+    assert (
+        entry.status is CheckStatus.FAIL and "outside the required 400 to 410 rpm" in entry.detail
+    )
+
+
+def test_a_shaft_that_declares_its_bearings_and_stiffness_is_read_for_bending():
+    """The fast shaft declares two bearings and a stiffness, so it gets a curve; the slow
+    one declares neither, so the card says nothing about it rather than inventing a verdict.
+    """
+    document = _reducer_document()
+    document["drive_train"]["shafts"][0]["stations"][0]["deflection_limit"] = _q(0.05, "mm")
+    document["drive_train"]["shafts"][0]["stations"][0]["limit_source"] = "the gear maker's note"
+    report = product_screening(parse_product(document))
+    entry = _named(report, "fast pinion deflection")
+    assert entry.status in (CheckStatus.PASS, CheckStatus.FAIL)
+    assert "against a declared limit of 0.05 mm" in entry.detail
+    assert not [e for e in report.entries if e.name.startswith("slow ")]
+
+
+def test_a_train_naming_something_the_product_does_not_have_is_refused_at_parse():
+    document = _reducer_document()
+    document["drive_train"]["shafts"][1]["carries"] = ["flywheel"]
+    with pytest.raises(ValueError, match=r"carries \['flywheel'\], which are not instances"):
+        parse_product(document)
+    document = _reducer_document()
+    document["drive_train"]["gears"][0]["item"] = "sprocket"
+    with pytest.raises(ValueError, match="declares a gear 'sprocket', which is not an instance"):
+        parse_product(document)
+    document = _reducer_document()
+    document["drive_train"]["shafts"][0]["name"] = "layshaft"
+    with pytest.raises(ValueError, match="declares a shaft 'layshaft', which is not an instance"):
+        parse_product(document)
+
+
+def test_a_train_that_cannot_be_a_machine_is_refused_before_anything_is_built():
+    """The point of declaring the machine: the document does not parse if it is not one."""
+    document = _reducer_document()
+    document["drive_train"]["shafts"].append({"name": "base", "carries": ["base"]})
+    with pytest.raises(ValueError, match="driven by nothing from the input"):
+        parse_product(document)
+    document = _reducer_document()
+    document["drive_train"]["gears"][1]["pitch_diameter"] = _q(100, "mm")
+    document["drive_train"]["meshes"][0]["center_distance"] = _q(135, "mm")
+    with pytest.raises(ValueError, match="declares a center distance of 135 mm"):
+        parse_product(document)
+
+
+def test_a_product_with_no_drive_train_adds_no_drive_train_entries():
+    report = product_screening(parse_product(_cart()))
+    assert [e for e in report.entries if e.name == "output speed"] == []

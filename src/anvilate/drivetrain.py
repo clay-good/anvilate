@@ -23,7 +23,7 @@ contradicts the one the flow derives.
 
 from __future__ import annotations
 
-from math import cos, hypot, isclose, isfinite, pi, sin, tan
+from math import cos, hypot, isclose, pi, sin, tan
 from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, Field, model_validator
@@ -93,19 +93,21 @@ def _of(value: Quantity, dimension: str, *, name: str) -> Quantity:
 
 
 def _of_angle(value: Quantity, *, name: str) -> float:
-    """An angle in degrees: dimensionless, finite, and not a length someone meant as one."""
+    """An angle in degrees, and not a length someone meant as one.
+
+    Finiteness is the document's rule, applied on the field; see :func:`_at`.
+    """
     if not isinstance(value, Quantity) or not value.has_dimension("[]"):
         raise _refuse(f"{name} is an angle; got {value!r}", subject=name)
-    degrees = value.to("degree").magnitude
-    if not isfinite(degrees):
-        raise _refuse(f"{name} must be a finite angle; got {value}", subject=name)
-    return degrees
+    return value.to("degree").magnitude
 
 
 class Gear(StatableModel):
     """One gear: the item it is, its teeth, and its pitch diameter when declared."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     item: Named
     teeth: int = Field(ge=1, le=10_000, strict=True)
@@ -119,13 +121,15 @@ class Gear(StatableModel):
 
 
 def _at(value: Quantity, *, name: str) -> float:
-    """An axial position along a shaft, in metres: any finite length from the declarer's datum."""
+    """An axial position along a shaft, in metres: any length from the declarer's datum.
+
+    Zero and negative are both positions, so the only thing to check is the dimension. A
+    non-finite one never reaches here: every model that declares a position opts into the
+    document's finite rule, which refuses it by name on the field.
+    """
     if not isinstance(value, Quantity) or not value.has_dimension("[length]"):
         raise _refuse(f"{name} is a [length] quantity; got {value!r}", subject=name)
-    metres = value.to("m").magnitude
-    if not isfinite(metres):
-        raise _refuse(f"{name} must be a finite position; got {value}", subject=name)
-    return metres
+    return value.to("m").magnitude
 
 
 def _limits(
@@ -156,6 +160,8 @@ class ShaftStiffness(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     diameter: Quantity
     elastic_modulus: Quantity
@@ -178,6 +184,8 @@ class ShaftSupport(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     name: Named
     at: Quantity
@@ -208,6 +216,8 @@ class ShaftStation(StatableModel):
     """A carried item's axial position on its shaft; a gear's station is where its mesh pulls."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     item: Named
     at: Quantity
@@ -230,6 +240,8 @@ class DriveShaft(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     name: Named
     carries: tuple[Named, ...] = Field(min_length=1, max_length=64)
@@ -273,6 +285,8 @@ class Mesh(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     name: Named
     driver: Named
@@ -312,6 +326,8 @@ class DriveInput(StatableModel):
     """The one input: the shaft driven, its speed, and its power or its torque."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     shaft: Named
     speed: Quantity
@@ -340,6 +356,8 @@ class RequiredOutput(StatableModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     shaft: Named
     speed_low: Quantity
@@ -363,6 +381,8 @@ class DriveTrain(StatableModel):
     """A declared drive train over a product's items."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+    # A product document declares this, so every number in it is finite.
+    states_requirements = True
 
     shafts: tuple[DriveShaft, ...] = Field(min_length=1, max_length=64)
     gears: tuple[Gear, ...] = Field(min_length=2, max_length=128)
