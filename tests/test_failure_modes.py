@@ -506,19 +506,27 @@ def test_every_shipped_element_reaches_a_mode_or_is_recorded_as_debt() -> None:
 
 
 def test_each_machinery_check_declares_the_mode_it_addresses() -> None:
-    """The four modes the machinery pack answers are bound by the checks, not by names."""
+    """The four modes the machinery pack answers are bound by the checks, not by names.
+
+    A transmission shaft now carries two catalogued modes, not one: it can crack at a
+    stress raiser, and it can stay whole and still bend past what its gears and bearings
+    take (`drivetrain.screen_shaft_curve`). So the assertion is that the pack's mode is
+    among the element's, and that the element's set is exactly what the catalogue holds —
+    a mode appearing on an element nothing screens for it would otherwise pass here.
+    """
     from anvilate.screening import element_registry
 
     registry = element_registry()
-    for element, mode in (
-        ("transmission_shaft", "shaft fatigue at a stress raiser"),
-        ("spur_gear_mesh", "gear tooth surface pitting"),
-        ("rolling_bearing", "rolling-contact fatigue of a bearing"),
-        ("helical_compression_spring", "coil spring buckling"),
-    ):
+    for element, modes in (
+        ("transmission_shaft", {"shaft fatigue at a stress raiser",
+                                "a shaft bending enough to misalign its gears and bearings"}),
+        ("spur_gear_mesh", {"gear tooth surface pitting"}),
+        ("rolling_bearing", {"rolling-contact fatigue of a bearing"}),
+        ("helical_compression_spring", {"coil spring buckling"}),
+    ):  # fmt: skip
         assert element in registry
-        (applicable,) = DEFAULT_CATALOG.applicable({"element": element})
-        assert applicable.id == mode
+        applicable = {mode.id for mode in DEFAULT_CATALOG.applicable({"element": element})}
+        assert applicable == modes
     declared_in_machinery = {
         mode for where, mode in _declared_modes() if where.startswith("packs/machinery.py")
     }

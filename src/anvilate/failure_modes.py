@@ -473,6 +473,21 @@ DEFAULT_CATALOG = ModeCatalog(
             ),
         ),
         FailureMode(
+            id="a shaft bending enough to misalign its gears and bearings",
+            description=(
+                "a shaft strong enough to carry its loads that bends and tilts under them "
+                "beyond what the gears it carries and the bearings it runs in will take: the "
+                "mesh loads move across the tooth face and the bearing races cock, and both "
+                "wear out long before anything is overstressed"
+            ),
+            applicability=Applicability(elements=("transmission_shaft",)),
+            stage=DiscoveryStage.FIELD,
+            citation=(
+                "Shigley, Mechanical Engineering Design, 10th ed. (2015), shaft deflection and "
+                "slope at gears and bearings"
+            ),
+        ),
+        FailureMode(
             id="gear tooth surface pitting",
             description=(
                 "contact fatigue pitting the flanks of meshing gear teeth, the surface giving "

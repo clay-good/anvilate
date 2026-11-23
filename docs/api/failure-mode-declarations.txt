@@ -13,6 +13,7 @@ assembly.screen_inspectability -> a tolerance nobody can measure on the built ar
 assembly.screen_swing_arc -> a fastener no tool reaches in the state it is driven
 assembly.screen_tool_access -> a fastener no tool reaches in the state it is driven
 dfm.screen_dfm -> a feature the shop cannot make as drawn
+drivetrain.screen_shaft_curve -> a shaft bending enough to misalign its gears and bearings
 fatigue.weld_fatigue_scorecard -> weld toe fatigue
 machinery.screen_shaft -> shaft fatigue at a stress raiser
 machinery.screen_gear_mesh -> gear tooth surface pitting

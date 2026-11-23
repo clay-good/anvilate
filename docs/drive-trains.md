@@ -115,9 +115,39 @@ The shaft and key screens need no wrapper. The torque is `flow.shaft(name).torqu
 bending moment is `statics.peak.magnitude`, and both are quantities the existing analysis
 functions already take.
 
+## How far each shaft bends, where it matters
+
+A shaft that declares its `stiffness` — one diameter and a modulus, with their source — gets
+its elastic curve read **where each bearing and each gear sits**, not at whichever point of
+the shaft happens to sag most. Each mesh load goes onto the simply-supported prismatic beam
+between the two bearings in each of the two planes, and the two are combined at every point.
+
+```python
+from anvilate.drivetrain import ShaftStiffness, screen_shaft_curve, solve_shaft_curve
+
+curve = solve_shaft_curve(train, flow, "output")
+curve.point("gear 5")      # gear 5 at 150 mm: 0.1019 mm, 0°
+curve.point("E").slope     # what the bearing is asked to take
+screen_shaft_curve(train, flow, "output")   # each point against the limit declared on it
+```
+
+No limit is supplied from this library. A tapered roller bearing and a self-aligning one
+differ by two orders of magnitude in the slope they take, so a `slope_limit` or a
+`deflection_limit` is declared on the support or station it applies to, with the
+`limit_source` it rests on. A point that declares none is not screened and not reported; a
+shaft where *no* point declares one gets a single not-evaluated entry naming the
+declaration, because a shaft screened on nothing looks exactly like a shaft that passed.
+
+Refused, naming what to correct: a shaft with no declared stiffness; a shaft whose reactions
+came from a declared split rather than from equilibrium, since a split equilibrium did not
+give does not carry a shape either; and a load outside the bearing span, because an overhung
+shaft is the overhanging-beam case and this is not it. A stepped shaft bends on a diameter
+that changes along it, and averaging the steps would report a deflection nothing has, so
+`ShaftStiffness` takes one diameter and a stepped shaft waits.
+
 ## Not yet
 
-Declaring the train inside a product document, axial loads from helical gears, deflection and
-slope at the gears and bearings, feeding the derived loads into the existing shaft, key and
-bearing screens, mesh geometry and rating against the gear standards, heat, and swept
-clearance: each waits on a standard read rather than remembered.
+Declaring the train inside a product document, axial loads from helical gears, a stepped
+shaft's curve, a bundled table of bearing and gear bending limits, mesh geometry and rating
+against the gear standards, heat, and swept clearance: each of the last three waits on a
+standard read rather than remembered.

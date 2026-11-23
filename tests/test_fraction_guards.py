@@ -1269,6 +1269,25 @@ _AT_MOST_WITH_UNIT = re.compile(
     r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,30}?must be at most ([\d.]+) ([a-zA-Z_]+)\b"
 )
 
+# An interval whose ENDS CARRY A UNIT: "load_position must lie strictly inside the span
+# (0, 1 m)". `_ASKS` reads a bare interval and cannot read this one, because the unit sits
+# between the upper bound and the closing bracket — so the three simply-supported offset-load
+# functions sat outside the probe population on a guard that was telling the binder exactly
+# what to pass. The only way past it is a SMALLER value, and no other reader goes down.
+_WITHIN_WITH_UNIT = re.compile(
+    r"\b([a-z_][a-z_0-9]{2,})\b[^.;]{0,40}?must (?:lie|be)[^.;\[(]{0,40}?"
+    r"[\[(]\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*([a-zA-Z_]+)\s*[\])]"
+)
+
+
+def _where_in_the_interval_it_wants(message: str) -> tuple[str, float, str] | None:
+    """The parameter, a value inside the interval a refusal names, and its unit."""
+    found = _WITHIN_WITH_UNIT.search(message)
+    if found is None:
+        return None
+    middle = (float(found.group(2)) + float(found.group(3))) / 2.0
+    return found.group(1), middle, found.group(4)
+
 
 def _what_it_asked_for_with_a_unit(message: str) -> tuple[str, float, str] | None:
     """The parameter, value and unit a refusal naming a unit-bearing upper bound states."""
@@ -1375,6 +1394,11 @@ def _uniformly_callable() -> list[tuple[str, object, dict]]:
                         bounded = _what_it_asked_for_with_a_unit(message)
                         if bounded is not None and bounded[0] in arguments:
                             target, number, unit = bounded
+                            arguments[target] = Quantity(magnitude=number, unit=unit)
+                            continue
+                        inside = _where_in_the_interval_it_wants(message)
+                        if inside is not None and inside[0] in arguments:
+                            target, number, unit = inside
                             arguments[target] = Quantity(magnitude=number, unit=unit)
                             continue
                         spinning = _which_speed_needs_an_angle(message)
@@ -2101,3 +2125,34 @@ def test_the_unit_bearing_bound_reader_actually_reads_one():
     assert _what_it_asked_for_with_a_unit("") is None
     # And the function it was added for is in the population because of it.
     assert "nds_timber.nds_group_action_factor" in {label for label, _, _ in _uniformly_callable()}
+
+
+def test_the_unit_bearing_interval_reader_actually_reads_one():
+    """Attack on `_where_in_the_interval_it_wants`, which a passing count cannot make.
+
+    The interval reader beside it in `_ASKS` takes a BARE interval — "must lie in (0, 1)" —
+    and cannot read one whose ends carry a unit, because the unit sits between the upper
+    bound and the closing bracket. Every other reader goes UP; this guard needs a smaller
+    value, so without this one the three simply-supported offset-load functions stood
+    outside every probe on a guard that was naming exactly what to pass.
+    """
+    read = _where_in_the_interval_it_wants(
+        "load_position must lie strictly inside the span (0, 1 m); got 1 m"
+    )
+    assert read == ("load_position", 0.5, "m")
+    # A closed interval and a different phrasing read too; the midpoint is what it returns.
+    assert _where_in_the_interval_it_wants(
+        "position must lie within [100, 300 mm]; got 500 mm"
+    ) == ("position", 200.0, "mm")
+    # It does not fire on a bare interval, which the reader beside it already takes, nor on
+    # prose with no interval in it at all.
+    assert _where_in_the_interval_it_wants("alpha must lie in (0, 1)") is None
+    assert _where_in_the_interval_it_wants("force must be positive; got 0 N") is None
+    assert _where_in_the_interval_it_wants("") is None
+    # And the three functions it was added for are in the population because of it.
+    reached = {label for label, _, _ in _uniformly_callable()}
+    assert {
+        "beam.simply_supported_offset_load",
+        "beam.simply_supported_offset_load_deflection_at",
+        "beam.simply_supported_offset_load_slope_at",
+    } <= reached

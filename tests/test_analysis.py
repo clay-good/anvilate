@@ -48774,3 +48774,95 @@ def test_the_two_minimums_read_the_wrong_way_round_are_refused():
             minimum_permitted=_q("7 inch"),
             diameter=_q("1 inch"),
         )
+
+
+def test_the_elastic_curve_at_a_point_agrees_with_every_case_the_library_already_cites():
+    """`simply_supported_offset_load_deflection_at` and `..._slope_at` are the only two
+    places this library can be asked for a beam's shape *where you ask*, so they are held
+    to the three cases whose answers it already publishes.
+    """
+    from anvilate.analysis.beam import (
+        simply_supported_offset_load_deflection_at,
+        simply_supported_offset_load_slope_at,
+    )
+
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {"length": _q("500 mm"), "second_moment": inertia, "elastic_modulus": _q("200 GPa")}
+    mid = {"force": _q("100 N"), "load_position": _q("250 mm"), **kw}
+
+    # 1. At mid-span under a central load it is the classical F·L³/(48·E·I).
+    central = simply_supported_center_load(force=_q("100 N"), extreme_fibre=_q("5 mm"), **kw)
+    assert simply_supported_offset_load_deflection_at(position=_q("250 mm"), **mid).to(
+        "mm"
+    ).magnitude == pytest.approx(central.max_deflection.to("mm").magnitude, rel=1e-9)
+
+    # 2. At a support under a central load it is the F·L²/(16·E·I) the slope family gives.
+    support = simply_supported_center_load_support_slope(force=_q("100 N"), **kw)
+    assert simply_supported_offset_load_slope_at(position=_q("0 mm"), **mid).to(
+        "degree"
+    ).magnitude == pytest.approx(support.to("degree").magnitude, rel=1e-9)
+
+    # 3. A beam does not move at a simple support, and does not tilt under a central load.
+    for end in ("0 mm", "500 mm"):
+        assert simply_supported_offset_load_deflection_at(
+            position=_q(end), **mid
+        ).magnitude == pytest.approx(0.0, abs=1e-12)
+    assert simply_supported_offset_load_slope_at(
+        position=_q("250 mm"), **mid
+    ).magnitude == pytest.approx(0.0, abs=1e-12)
+
+
+def test_the_elastic_curves_two_branches_meet_under_the_load():
+    """The formulas differ either side of the load, and a shaft is routinely read right
+    there. Both branches give 2·F·a²·b²/(6·L·E·I) at x = a, and the slope agrees too."""
+    from anvilate.analysis.beam import (
+        simply_supported_offset_load_deflection_at,
+        simply_supported_offset_load_slope_at,
+    )
+
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {"force": _q("100 N"), "load_position": _q("125 mm"), "length": _q("500 mm"),
+          "second_moment": inertia, "elastic_modulus": _q("200 GPa")}  # fmt: skip
+    a, b, ell = 125.0, 375.0, 500.0
+    ei = 200_000 * inertia.to("mm**4").magnitude
+    assert simply_supported_offset_load_deflection_at(position=_q("125 mm"), **kw).to(
+        "mm"
+    ).magnitude == pytest.approx(2 * 100 * a**2 * b**2 / (6 * ell * ei), rel=1e-9)
+    below = simply_supported_offset_load_slope_at(position=_q("124.999 mm"), **kw)
+    above = simply_supported_offset_load_slope_at(position=_q("125.001 mm"), **kw)
+    assert below.to("degree").magnitude == pytest.approx(above.to("degree").magnitude, rel=1e-4)
+
+    # The maximum of the curve is the one `simply_supported_offset_load` publishes, and it
+    # does NOT sit under the load: sampling the span finds it between the load and mid-span.
+    sampled = max(
+        simply_supported_offset_load_deflection_at(position=_q(f"{x / 10} mm"), **kw)
+        .to("mm")
+        .magnitude
+        for x in range(0, 5001)
+    )
+    published = (
+        simply_supported_offset_load(extreme_fibre=_q("5 mm"), **kw)
+        .max_deflection.to("mm")
+        .magnitude
+    )
+    assert sampled == pytest.approx(published, rel=1e-5)
+
+
+def test_the_elastic_curve_refuses_a_point_off_the_beam_and_a_beam_with_no_stiffness():
+    from anvilate.analysis.beam import simply_supported_offset_load_deflection_at
+
+    inertia = rectangular_second_moment(_q("20 mm"), _q("10 mm"))
+    kw = {"force": _q("100 N"), "load_position": _q("125 mm"), "length": _q("500 mm"),
+          "second_moment": inertia, "elastic_modulus": _q("200 GPa")}  # fmt: skip
+    with pytest.raises(ValueError, match="position must lie on the span"):
+        simply_supported_offset_load_deflection_at(position=_q("600 mm"), **{**kw})
+    with pytest.raises(ValueError, match="load_position must lie strictly inside the span"):
+        simply_supported_offset_load_deflection_at(
+            position=_q("250 mm"), **{**kw, "load_position": _q("500 mm")}
+        )
+    # `length`, `second_moment` and `elastic_modulus` are already positive-definite in this
+    # module, so the curve adds no guard of its own for them and inherits theirs.
+    with pytest.raises(ValueError, match="elastic_modulus must be positive"):
+        simply_supported_offset_load_deflection_at(
+            position=_q("250 mm"), **{**kw, "elastic_modulus": _q("0 GPa")}
+        )

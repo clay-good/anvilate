@@ -136,6 +136,8 @@ __all__ = [
     "simply_supported_plastic_collapse_load",
     "fixed_fixed_plastic_collapse_load",
     "propped_cantilever_plastic_collapse_load",
+    "simply_supported_offset_load_deflection_at",
+    "simply_supported_offset_load_slope_at",
     "simply_supported_center_load_support_slope",
     "simply_supported_uniform_load_support_slope",
     "cantilever_end_load_tip_slope",
@@ -2740,6 +2742,117 @@ def simply_supported_offset_load(
             second_moment=second_moment,
         ),
     )
+
+
+def _offset_load_curve(
+    force: Quantity,
+    load_position: Quantity,
+    position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+    name: str,
+) -> tuple[float, float, float, float, float]:
+    """(F, a, x, L, E·I) in N, mm and N·mm² for the two elastic-curve formulas below."""
+    _require(force, "[force]", "force")
+    _require(load_position, "[length]", "load_position")
+    _require(position, "[length]", "position")
+    _require(length, "[length]", "length")
+    _require(second_moment, "[length]**4", "second_moment")
+    _require(elastic_modulus, "[pressure]", "elastic_modulus")
+    ell = length.to("mm").magnitude
+    if ell <= 0:
+        raise _beam_refusal(
+            f"length must be positive; got {length}", subject="length", source=_LAYOUT_SOURCE
+        )
+    a = load_position.to("mm").magnitude
+    if not 0 < a < ell:
+        raise _beam_refusal(
+            f"load_position must lie strictly inside the span (0, {length}); got {load_position}",
+            subject="load_position and length",
+            source=_LOAD_SOURCE,
+        )
+    x = position.to("mm").magnitude
+    if not 0 <= x <= ell:
+        raise _beam_refusal(
+            f"position must lie on the span [0, {length}]; got {position}. A {name} off the "
+            "beam is not a point on its elastic curve",
+            subject="position and length",
+            source=_LAYOUT_SOURCE,
+        )
+    stiffness = elastic_modulus.to("N/mm**2").magnitude * second_moment.to("mm**4").magnitude
+    return force.to("N").magnitude, a, x, ell, stiffness
+
+
+def simply_supported_offset_load_deflection_at(
+    *,
+    force: Quantity,
+    load_position: Quantity,
+    position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The deflection at any point of a simply-supported beam under one offset load.
+
+    The Roark/Shigley elastic curve for a prismatic beam simply supported over ``length`` L
+    with a transverse ``force`` F at ``load_position`` a (b = L − a), read at ``position`` x:
+
+        x ≤ a:  y = F·b·x·(L² − b² − x²)/(6·L·E·I)
+        x ≥ a:  y = F·a·(L − x)·(2·L·x − a² − x²)/(6·L·E·I)
+
+    :func:`simply_supported_offset_load` returns the beam's single largest deflection; this
+    returns the deflection *where you ask*, which is what a shaft is held to — a gear's
+    misalignment and a bearing's are read at the gear and at the bearing, not at whichever
+    point of the shaft happens to sag most. It is **signed in the direction of the force**,
+    so loads in two planes and several loads along one beam superpose by adding.
+
+    The two branches agree at x = a (both give 2·F·a²·b²/(6·L·E·I)), and at mid-span under a
+    central load the result is the classical F·L³/(48·E·I) that
+    :func:`simply_supported_center_load` returns.
+    """
+    f, a, x, ell, ei = _offset_load_curve(force, load_position, position, length,
+                                          second_moment, elastic_modulus, "deflection")  # fmt: skip
+    b = ell - a
+    if x <= a:
+        y = f * b * x * (ell**2 - b**2 - x**2) / (6.0 * ell * ei)
+    else:
+        y = f * a * (ell - x) * (2.0 * ell * x - a**2 - x**2) / (6.0 * ell * ei)
+    return Quantity(magnitude=y, unit="mm")
+
+
+def simply_supported_offset_load_slope_at(
+    *,
+    force: Quantity,
+    load_position: Quantity,
+    position: Quantity,
+    length: Quantity,
+    second_moment: Quantity,
+    elastic_modulus: Quantity,
+) -> Quantity:
+    """The slope at any point of a simply-supported beam under one offset load.
+
+    The derivative of the Roark/Shigley elastic curve
+    :func:`simply_supported_offset_load_deflection_at` integrates:
+
+        x ≤ a:  θ = F·b·(L² − b² − 3·x²)/(6·L·E·I)
+        x ≥ a:  θ = F·a·(3·x² − 6·L·x + a² + 2·L²)/(6·L·E·I)
+
+    A rolling bearing and a gear mesh are both rated against the **slope** they are asked to
+    take, so this is the companion of the deflection and not an afterthought. Signed in the
+    same sense as the deflection, so several loads superpose by adding; at a support under a
+    central load it is the F·L²/(16·E·I) that
+    :func:`simply_supported_center_load_support_slope` returns. Returned in **degrees**, as
+    every other slope in this module is.
+    """
+    f, a, x, ell, ei = _offset_load_curve(force, load_position, position, length,
+                                          second_moment, elastic_modulus, "slope")  # fmt: skip
+    b = ell - a
+    if x <= a:
+        radians = f * b * (ell**2 - b**2 - 3.0 * x**2) / (6.0 * ell * ei)
+    else:
+        radians = f * a * (3.0 * x**2 - 6.0 * ell * x + a**2 + 2.0 * ell**2) / (6.0 * ell * ei)
+    return Quantity(magnitude=degrees(radians), unit="degree")
 
 
 def simply_supported_symmetric_point_loads(

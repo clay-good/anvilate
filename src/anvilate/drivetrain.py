@@ -34,7 +34,14 @@ if TYPE_CHECKING:  # the bearing demand type lives with the component record tha
     from .components import Demand
 from .derivation import DerivationAbsence, Underived
 from .refusal import RefusalError, Remedy
-from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
+from .scorecard import (
+    CheckStatus,
+    Comparison,
+    LimitSense,
+    Need,
+    ScorecardEntry,
+    ValueSource,
+)
 from .units import Quantity
 
 __all__ = [
@@ -47,6 +54,7 @@ __all__ = [
     "ShaftState",
     "MeshState",
     "DriveFlow",
+    "ShaftStiffness",
     "ShaftSupport",
     "ShaftStation",
     "SupportReaction",
@@ -57,6 +65,10 @@ __all__ = [
     "check_typed_torque",
     "solve_shaft_statics",
     "bearing_demands",
+    "CurvePoint",
+    "ShaftCurve",
+    "solve_shaft_curve",
+    "screen_shaft_curve",
 ]
 
 _SOURCE = "the drive train declaration: shafts, gears, meshes, the input and the output"
@@ -116,6 +128,46 @@ def _at(value: Quantity, *, name: str) -> float:
     return metres
 
 
+def _limits(
+    slope: Quantity | None, deflection: Quantity | None, source: Provenance | None, what: str
+) -> None:
+    """A declared bending limit says what it is and where it came from, or says nothing."""
+    if slope is not None:
+        _of_angle(slope, name=f"{what} slope_limit")
+    if deflection is not None:
+        _of(deflection, "[length]", name=f"{what} deflection_limit")
+    given = slope is not None or deflection is not None
+    if given and source is None:
+        raise _refuse(f"{what} declares a bending limit and no limit_source; a limit nothing "
+                      "is held to is a number somebody remembered",
+                      subject="limit_source")  # fmt: skip
+    if source is not None and not given:
+        raise _refuse(f"{what} gives a limit_source and no slope_limit or deflection_limit; "
+                      "the source is the basis of a limit", subject="slope_limit, "
+                      "deflection_limit")  # fmt: skip
+
+
+class ShaftStiffness(StatableModel):
+    """What a shaft's bending resists with: a prismatic shaft's diameter and its modulus.
+
+    One diameter, because the elastic curve this feeds is the prismatic case. A stepped
+    shaft bends on a diameter that changes along it, and averaging the steps would report a
+    deflection nothing has; such a shaft is refused rather than approximated.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    diameter: Quantity
+    elastic_modulus: Quantity
+    source: Provenance
+
+    @model_validator(mode="after")
+    def _real(self) -> ShaftStiffness:
+        _of(self.diameter, "[length]", name="shaft diameter")
+        _of(self.elastic_modulus, "[pressure]", name="shaft elastic_modulus")
+        return self
+
+
 class ShaftSupport(StatableModel):
     """One bearing on a shaft, at an axial position.
 
@@ -131,10 +183,17 @@ class ShaftSupport(StatableModel):
     at: Quantity
     share: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
     source: Provenance | None = None
+    # What this bearing will take of the shaft's bending, where the document says so. Both
+    # are what the point is held to, never a default: a tapered roller bearing and a
+    # self-aligning one differ by two orders of magnitude in the slope they accept.
+    slope_limit: Quantity | None = None
+    deflection_limit: Quantity | None = None
+    limit_source: Provenance | None = None
 
     @model_validator(mode="after")
     def _placed(self) -> ShaftSupport:
         _at(self.at, name=f"support {self.name} at")
+        _limits(self.slope_limit, self.deflection_limit, self.limit_source, f"support {self.name}")
         if self.share is not None and self.source is None:
             raise _refuse(f"support {self.name} declares a share of {self.share:g} and no "
                           "source; a split a shaft's statics cannot give is only as good as "
@@ -152,10 +211,14 @@ class ShaftStation(StatableModel):
 
     item: Named
     at: Quantity
+    slope_limit: Quantity | None = None
+    deflection_limit: Quantity | None = None
+    limit_source: Provenance | None = None
 
     @model_validator(mode="after")
     def _placed(self) -> ShaftStation:
         _at(self.at, name=f"station {self.item} at")
+        _limits(self.slope_limit, self.deflection_limit, self.limit_source, f"station {self.item}")
         return self
 
 
@@ -172,6 +235,7 @@ class DriveShaft(StatableModel):
     carries: tuple[Named, ...] = Field(min_length=1, max_length=64)
     supports: tuple[ShaftSupport, ...] = Field(default=(), max_length=16)
     stations: tuple[ShaftStation, ...] = Field(default=(), max_length=64)
+    stiffness: ShaftStiffness | None = None
 
     @model_validator(mode="after")
     def _laid_out(self) -> DriveShaft:
@@ -655,45 +719,16 @@ def _senses(train: DriveTrain, on: dict[str, str]) -> dict[str, float]:
     return sense
 
 
-def solve_shaft_statics(train: DriveTrain, flow: DriveFlow, shaft: str) -> ShaftStatics:
-    """One shaft's bearing reactions and bending moments from the mesh loads it carries.
+def _mesh_loads(train: DriveTrain, flow: DriveFlow, shaft: str) -> list[tuple[float, float, float]]:
+    """Each mesh load the shaft carries, as (position, F_y, F_z) in metres and newtons.
 
-    Each gear on the shaft is pulled by its mesh: the tangential load perpendicular to the
-    line joining the gear centres, and the radial load along it, pushing the two gears apart.
-    Both are resolved into the shaft's cross-section with the mesh's declared
-    ``line_of_centers``; a shaft carrying one loaded gear needs no angle, since the reference
-    plane may be taken as its line of centres. The input shaft is taken to turn
-    counter-clockwise seen along +x.
-
-    Two supports are solved by equilibrium. More than two are statically indeterminate: the
-    shaft is named as such and refused, unless every support declares the share it takes and
-    the source that share rests on, and then the reactions are those shares and no bending
-    moment is derived from them.
+    Shared by the statics and the elastic curve, so the two can never disagree about
+    what is pulling on the shaft.
     """
-    if not isinstance(flow, DriveFlow):
-        raise _refuse("flow must be the DriveFlow derive_flow returned", subject="flow")
-    declared = {s.name: s for s in train.shafts}
-    if shaft not in declared:
-        raise _refuse(f"no shaft is named {shaft!r}; the train has {sorted(declared)}",
-                      subject="shaft")  # fmt: skip
-    here = declared[shaft]
-    if len(here.supports) < 2:
-        raise _refuse(f"shaft {shaft} declares {len(here.supports)} support(s); a shaft is "
-                      "carried by at least two bearings, each at its axial position",
-                      subject="supports")  # fmt: skip
-    split = here.supports[0].share is not None  # the shaft validator holds all or none
-    if split and len(here.supports) == 2:
-        raise _refuse(f"shaft {shaft} declares load shares on its two supports, whose "
-                      "reactions equilibrium already gives; drop the shares and let the "
-                      "statics answer", subject="share")  # fmt: skip
-    if not split and len(here.supports) > 2:
-        raise _refuse(
-            f"shaft {shaft} is statically indeterminate: {len(here.supports)} supports carry "
-            "it and equilibrium gives two reactions; declare each support's share of the "
-            "load with the source it rests on, or carry the shaft on two bearings",
-            subject="supports",
-        )  # fmt: skip
-
+    here = next((s for s in train.shafts if s.name == shaft), None)
+    if here is None:
+        raise _refuse(f"no shaft is named {shaft!r}; the train has "
+                      f"{sorted(s.name for s in train.shafts)}", subject="shaft")  # fmt: skip
     on = _carriers(train)
     states = {m.mesh: m for m in flow.meshes}
     foreign = sorted({m.name for m in train.meshes} - set(states))
@@ -744,6 +779,49 @@ def solve_shaft_statics(train: DriveTrain, flow: DriveFlow, shaft: str) -> Shaft
                       drag * tangential * across[0] + away * radial * toward[0],
                       drag * tangential * across[1] + away * radial * toward[1]))  # fmt: skip
 
+    return loads
+
+
+def solve_shaft_statics(train: DriveTrain, flow: DriveFlow, shaft: str) -> ShaftStatics:
+    """One shaft's bearing reactions and bending moments from the mesh loads it carries.
+
+    Each gear on the shaft is pulled by its mesh: the tangential load perpendicular to the
+    line joining the gear centres, and the radial load along it, pushing the two gears apart.
+    Both are resolved into the shaft's cross-section with the mesh's declared
+    ``line_of_centers``; a shaft carrying one loaded gear needs no angle, since the reference
+    plane may be taken as its line of centres. The input shaft is taken to turn
+    counter-clockwise seen along +x.
+
+    Two supports are solved by equilibrium. More than two are statically indeterminate: the
+    shaft is named as such and refused, unless every support declares the share it takes and
+    the source that share rests on, and then the reactions are those shares and no bending
+    moment is derived from them.
+    """
+    if not isinstance(flow, DriveFlow):
+        raise _refuse("flow must be the DriveFlow derive_flow returned", subject="flow")
+    declared = {s.name: s for s in train.shafts}
+    if shaft not in declared:
+        raise _refuse(f"no shaft is named {shaft!r}; the train has {sorted(declared)}",
+                      subject="shaft")  # fmt: skip
+    here = declared[shaft]
+    if len(here.supports) < 2:
+        raise _refuse(f"shaft {shaft} declares {len(here.supports)} support(s); a shaft is "
+                      "carried by at least two bearings, each at its axial position",
+                      subject="supports")  # fmt: skip
+    split = here.supports[0].share is not None  # the shaft validator holds all or none
+    if split and len(here.supports) == 2:
+        raise _refuse(f"shaft {shaft} declares load shares on its two supports, whose "
+                      "reactions equilibrium already gives; drop the shares and let the "
+                      "statics answer", subject="share")  # fmt: skip
+    if not split and len(here.supports) > 2:
+        raise _refuse(
+            f"shaft {shaft} is statically indeterminate: {len(here.supports)} supports carry "
+            "it and equilibrium gives two reactions; declare each support's share of the "
+            "load with the source it rests on, or carry the shaft on two bearings",
+            subject="supports",
+        )  # fmt: skip
+
+    loads = _mesh_loads(train, flow, shaft)
     total = (sum(f[1] for f in loads), sum(f[2] for f in loads))
     if split:
         reactions = tuple(
@@ -767,7 +845,7 @@ def solve_shaft_statics(train: DriveTrain, flow: DriveFlow, shaft: str) -> Shaft
     r_a = (-total[0] - r_b[0], -total[1] - r_b[1])
     reactions = (_reaction(first, *r_a), _reaction(second, *r_b))
     points = [*loads, (x_a, *r_a), (x_b, *r_b)]
-    named = [*((s.item, station[s.item]) for s in here.stations),
+    named = [*((s.item, _at(s.at, name=f"station {s.item} at")) for s in here.stations),
              (first.name, x_a), (second.name, x_b)]  # fmt: skip
     moments = tuple(_moment(name, x, points) for name, x in sorted(named, key=lambda pair: pair[1]))
     return ShaftStatics(shaft=shaft, determinate=True, reactions=reactions, moments=moments)
@@ -832,3 +910,208 @@ def bearing_demands(
                                       f"({train.output.source})"))  # fmt: skip
         demands[reaction.support] = tuple(each)
     return demands
+
+
+class CurvePoint(StatableModel):
+    """How far the shaft has moved, and how far it has tilted, at one point along it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    at_item: Named
+    at: Quantity
+    deflection: Quantity
+    slope: Quantity
+
+    def __str__(self) -> str:
+        return (f"{self.at_item} at {self.at.to('mm').magnitude:.4g} mm: "
+                f"{self.deflection.to('mm').magnitude:.4g} mm, "
+                f"{self.slope.to('degree').magnitude:.4g}°")  # fmt: skip
+
+
+class ShaftCurve(StatableModel):
+    """One prismatic shaft's deflection and slope at every bearing and station on it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    shaft: Named
+    span: Quantity
+    second_moment: Quantity
+    points: tuple[CurvePoint, ...] = Field(min_length=2, max_length=80)
+
+    @property
+    def worst(self) -> CurvePoint:
+        """The point that has moved furthest — the shape's headline, and never a support."""
+        return max(self.points, key=lambda p: p.deflection.to("mm").magnitude)
+
+    def point(self, name: str) -> CurvePoint:
+        """One bearing's or station's point on the curve, by name."""
+        for found in self.points:
+            if found.at_item == name:
+                return found
+        raise _refuse(f"shaft {self.shaft} has no point named {name!r}; it has "
+                      f"{[p.at_item for p in self.points]}", subject="at_item")  # fmt: skip
+
+    def __str__(self) -> str:
+        return "\n".join([f"{self.shaft} over {self.span.to('mm').magnitude:.4g} mm",
+                          *(f"  {p}" for p in self.points)])  # fmt: skip
+
+
+_CURVE_CITATION = (
+    "Roark/Shigley, the elastic curve of a simply-supported prismatic beam under a point "
+    "load, superposed over the shaft's mesh loads in two planes"
+)
+
+
+def solve_shaft_curve(train: DriveTrain, flow: DriveFlow, shaft: str) -> ShaftCurve:
+    """The shaft's deflection and slope where each bearing and each carried item sits.
+
+    Every mesh load the shaft carries is put on the elastic curve of a simply-supported
+    prismatic beam between its two bearings, in each of the two cross-section planes, and
+    the two planes are combined at each point: the deflection is the resultant of the two
+    deflections and the slope the resultant of the two slopes. A gear's misalignment and a
+    bearing's are read *where they sit*, which is why this is not the beam's single largest
+    deflection.
+
+    Refused, naming what to correct: a shaft with no declared ``stiffness``; a shaft whose
+    reactions came from a declared split rather than from equilibrium, since a split
+    equilibrium did not give does not carry a shape either; and a load outside the bearing
+    span, because an overhung shaft is the overhanging-beam case and this is not it.
+    """
+    from .analysis.beam import (
+        circular_second_moment,
+        simply_supported_offset_load_deflection_at,
+        simply_supported_offset_load_slope_at,
+    )
+
+    statics = solve_shaft_statics(train, flow, shaft)
+    if not statics.determinate:
+        raise _refuse(
+            f"shaft {shaft} carries its load on a declared split over {len(statics.reactions)} "
+            "supports, so its reactions do not come from equilibrium and neither does its "
+            "shape; carry it on two bearings to read a deflection",
+            subject="supports",
+        )  # fmt: skip
+    here = next(s for s in train.shafts if s.name == shaft)
+    if here.stiffness is None:
+        raise _refuse(f"shaft {shaft} declares no stiffness, so nothing here knows how far it "
+                      "bends; give its diameter and elastic modulus with their source",
+                      subject="stiffness")  # fmt: skip
+    first, second = here.supports
+    x_a = _at(first.at, name=f"support {first.name} at")
+    x_b = _at(second.at, name=f"support {second.name} at")
+    low, high = min(x_a, x_b), max(x_a, x_b)
+    span = high - low
+    second_moment = circular_second_moment(here.stiffness.diameter)
+    common = {"length": Quantity(magnitude=span * 1000, unit="mm"),
+              "second_moment": second_moment,
+              "elastic_modulus": here.stiffness.elastic_modulus}  # fmt: skip
+
+    loads = _mesh_loads(train, flow, shaft)
+    for at, _, _ in loads:
+        if not low < at < high:
+            raise _refuse(
+                f"shaft {shaft} carries a mesh load at {at * 1000:.4g} mm, outside the "
+                f"{low * 1000:.4g} to {high * 1000:.4g} mm its bearings span; an overhung "
+                "shaft bends as an overhanging beam, which this is not",
+                subject="stations",
+            )  # fmt: skip
+
+    named = [*((s.item, _at(s.at, name=f"station {s.item} at")) for s in here.stations),
+             (first.name, x_a), (second.name, x_b)]  # fmt: skip
+    points = []
+    for name, at in sorted(named, key=lambda pair: pair[1]):
+        if not low <= at <= high:
+            raise _refuse(f"shaft {shaft} stations {name} at {at * 1000:.4g} mm, outside the "
+                          f"{low * 1000:.4g} to {high * 1000:.4g} mm its bearings span",
+                          subject="stations")  # fmt: skip
+        where = Quantity(magnitude=(at - low) * 1000, unit="mm")
+        planes = []
+        for component in (1, 2):
+            deflection = slope = 0.0
+            for load_at, *force in loads:
+                each = {"force": Quantity(magnitude=force[component - 1], unit="N"),
+                        "load_position": Quantity(magnitude=(load_at - low) * 1000, unit="mm"),
+                        "position": where, **common}  # fmt: skip
+                deflection += simply_supported_offset_load_deflection_at(**each).to("mm").magnitude
+                slope += simply_supported_offset_load_slope_at(**each).to("degree").magnitude
+            planes.append((deflection, slope))
+        points.append(CurvePoint(
+            at_item=name, at=Quantity(magnitude=at * 1000, unit="mm"),
+            deflection=Quantity(magnitude=hypot(planes[0][0], planes[1][0]), unit="mm"),
+            slope=Quantity(magnitude=hypot(planes[0][1], planes[1][1]), unit="degree"),
+        ))  # fmt: skip
+    return ShaftCurve(shaft=shaft, span=Quantity(magnitude=span * 1000, unit="mm"),
+                      second_moment=second_moment, points=tuple(points))  # fmt: skip
+
+
+_CURVE_UNDERIVED = Underived(
+    kind=DerivationAbsence.LOOKUP,
+    reason=(
+        "a comparison of a deflection and a slope against the limits the document declares "
+        "for the point; the two values are derived by the elastic curve, load by load and "
+        "plane by plane, and the comparison has no arithmetic of its own to substitute"
+    ),
+)
+
+
+def _limit_need(what: str, kind: str) -> Need:
+    return Need(
+        declaration=f"drive_train.shafts[].{what}.{kind}_limit",
+        takes=f"the {kind} this point will take, and the bearing or gear data it comes from",
+        dimension="[]" if kind == "slope" else "[length]",
+        units=("degree",) if kind == "slope" else ("mm", "in"),
+        sources=(ValueSource.USER,),
+    )
+
+
+def screen_shaft_curve(
+    train: DriveTrain, flow: DriveFlow, shaft: str
+) -> tuple[ScorecardEntry, ...]:
+    """Each bearing's and gear's deflection and slope against the limit declared for it.
+
+    One entry per declared limit. A point that declares none is not screened and not
+    reported — it is the document's statement that nothing there is held — but a shaft where
+    *no* point declares one gets a single not-evaluated entry naming the declaration, because
+    a shaft screened on nothing looks exactly like a shaft that passed.
+
+    No limit is supplied from this library. A tapered roller bearing and a self-aligning one
+    differ by two orders of magnitude in the slope they take, and a limit is only worth what
+    its source is worth, so each one is declared with the bearing or gear data it comes from.
+    """
+    curve = solve_shaft_curve(train, flow, shaft)
+    here = next(s for s in train.shafts if s.name == shaft)
+    declared = {**{s.name: s for s in here.supports}, **{s.item: s for s in here.stations}}
+    entries: list[ScorecardEntry] = []
+    for point in curve.points:
+        limits = declared[point.at_item]
+        for kind, value, limit in (
+            ("slope", point.slope, limits.slope_limit),
+            ("deflection", point.deflection, limits.deflection_limit),
+        ):
+            if limit is None:
+                continue
+            entries.append(ScorecardEntry(
+                name=f"{shaft} {point.at_item} {kind}",
+                status=(CheckStatus.PASS if _within(value, limit, kind) else CheckStatus.FAIL),
+                detail=f"{point}, against a declared limit of {limit}",
+                reference=limits.limit_source, underived=_CURVE_UNDERIVED,
+                addresses=("a shaft bending enough to misalign its gears and bearings",),
+                comparison=Comparison(measured=value, limit=limit, sense=LimitSense.AT_MOST,
+                                      measured_label=f"{point.at_item} {kind}",
+                                      limit_label="declared limit"),
+            ))  # fmt: skip
+    if entries:
+        return tuple(entries)
+    return (ScorecardEntry(
+        name=f"{shaft} bending", status=CheckStatus.NOT_EVALUATED,
+        detail=(f"not evaluated: shaft {shaft} bends {curve.worst}, and no point on it "
+                "declares a limit"),
+        underived=_CURVE_UNDERIVED,
+        addresses=("a shaft bending enough to misalign its gears and bearings",),
+        needs=(_limit_need("supports[]", "slope"), _limit_need("stations[]", "deflection")),
+    ),)  # fmt: skip
+
+
+def _within(value: Quantity, limit: Quantity, kind: str) -> bool:
+    unit = "degree" if kind == "slope" else "mm"
+    return value.to(unit).magnitude <= limit.to(unit).magnitude

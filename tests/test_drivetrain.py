@@ -21,15 +21,18 @@ from anvilate.drivetrain import (
     Mesh,
     RequiredOutput,
     ShaftStation,
+    ShaftStiffness,
     ShaftSupport,
     bearing_demands,
     check_typed_torque,
     derive_flow,
     screen_output_speed,
+    screen_shaft_curve,
+    solve_shaft_curve,
     solve_shaft_statics,
 )
 from anvilate.refusal import RefusalError
-from anvilate.scorecard import CheckStatus
+from anvilate.scorecard import CheckStatus, LimitSense
 from anvilate.units import Quantity
 
 _SHIGLEY = "Shigley's Mechanical Engineering Design, 10th ed., Ch. 18: lossless, as the case study"
@@ -431,6 +434,10 @@ def test_the_docs_page_quotes_the_statics_this_library_solves():
     assert f"{statics.reaction('E').magnitude.to('N').magnitude:,.0f} N" in page
     assert f"# {statics.peak}" in page
 
+    # And the curve's own line, which the page prints beside the call that returns it.
+    stiff = _stiff()
+    assert f"# {solve_shaft_curve(stiff, derive_flow(stiff), 'output').point('gear 5')}" in page
+
 
 def test_a_flow_derived_from_another_train_is_refused_rather_than_read():
     """An ordinary mistake: the right shaft name, the wrong flow. The mesh loads it carries
@@ -559,3 +566,145 @@ def test_the_shaft_and_key_screens_run_on_the_derived_torque_and_bending_moment(
     assert shear.to("MPa").magnitude == pytest.approx(
         2 * torque.to("N*m").magnitude / 0.05 / 9.8e-4 / 1e6, rel=1e-3
     )
+
+
+# --- Deflection and slope at the gears and the bearings (drive trains 3.4) ---------------
+
+
+_STEEL = ShaftStiffness(diameter=Quantity.parse("50 mm"),
+                        elastic_modulus=Quantity.parse("207 GPa"),
+                        source="AISI 1045 steel, Shigley Table A-5: E = 30 Mpsi")  # fmt: skip
+
+
+def _stiff(**overrides) -> DriveTrain:
+    """The laid-out reducer with one prismatic 50 mm steel shaft diameter throughout."""
+    shafts = tuple(s.model_copy(update={"stiffness": _STEEL}) for s in _laid_out().shafts)
+    return _laid_out(**{"shafts": shafts, **overrides})
+
+
+def test_a_central_gear_bends_its_shaft_by_the_closed_form_the_library_already_has():
+    """The output shaft is the textbook case, so the curve must land on the textbook answer.
+
+    One load at midspan of a 300 mm span: the total mesh load on gear 5 is 11,508 N, the
+    second moment of a 50 mm shaft is pi x 50^4 / 64 = 306,796 mm^4, and E = 207 GPa, so
+    the deflection is F·L^3/(48·E·I) and the support slope is F·L^2/(16·E·I).
+    """
+    train = _stiff()
+    curve = solve_shaft_curve(train, derive_flow(train), "output")
+    load, span, ei = 11508.0, 300.0, 207_000 * pi * 50**4 / 64
+    assert curve.point("gear 5").deflection.to("mm").magnitude == pytest.approx(
+        load * span**3 / (48 * ei), rel=1e-3
+    )
+    assert curve.point("E").slope.to("radian").magnitude == pytest.approx(
+        load * span**2 / (16 * ei), rel=1e-3
+    )
+    # A simply-supported beam does not move at its supports, and does not tilt under a
+    # central load: the two conditions that say the curve was evaluated and not guessed.
+    assert curve.point("E").deflection.to("mm").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert curve.point("F").deflection.to("mm").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert curve.point("gear 5").slope.to("degree").magnitude == pytest.approx(0.0, abs=1e-12)
+    assert curve.worst.at_item == "gear 5"
+    assert curve.second_moment.to("mm**4").magnitude == pytest.approx(306_796, rel=1e-4)
+
+
+def test_two_gears_bend_a_countershaft_at_both_of_them():
+    """Superposition, in two planes. Neither support moves, both tilt, and the heavier
+    second-stage gear is the point that has moved furthest."""
+    train = _stiff()
+    curve = solve_shaft_curve(train, derive_flow(train), "countershaft")
+    assert [p.at_item for p in curve.points] == ["C", "gear 3", "gear 4", "D"]
+    for support in ("C", "D"):
+        assert curve.point(support).deflection.to("mm").magnitude == pytest.approx(0.0, abs=1e-12)
+        assert curve.point(support).slope.to("degree").magnitude > 0.0
+    assert curve.worst.at_item == "gear 4"
+    assert (
+        curve.point("gear 4").deflection.to("mm").magnitude
+        > curve.point("gear 3").deflection.to("mm").magnitude
+    )
+
+
+def test_a_declared_limit_passes_or_fails_the_point_it_is_declared_on():
+    source = "the bearing maker's permissible-misalignment table, page 84"
+    shafts = tuple(
+        s.model_copy(update={
+            "supports": (_support("E", 0, slope_limit=_q("0.0573 degree"), limit_source=source),
+                         _support("F", 300)),
+            "stations": (ShaftStation(item="gear 5", at=_q("150 mm"),
+                                      deflection_limit=_q("0.13 mm"), limit_source=source),),
+        }) if s.name == "output" else s for s in _stiff().shafts
+    )  # fmt: skip
+    train = _stiff(shafts=shafts)
+    entries = screen_shaft_curve(train, derive_flow(train), "output")
+    verdicts = {e.name: e.status for e in entries}
+    # 0.0584 degrees of slope against a 0.0573 limit, and 0.1019 mm against a 0.13 mm one.
+    assert verdicts == {"output E slope": CheckStatus.FAIL,
+                        "output gear 5 deflection": CheckStatus.PASS}  # fmt: skip
+    slope = next(e for e in entries if e.name == "output E slope")
+    assert slope.reference == source
+    assert slope.comparison.sense is LimitSense.AT_MOST
+    assert (
+        slope.comparison.measured
+        == solve_shaft_curve(train, derive_flow(train), "output").point("E").slope
+    )
+
+
+def test_a_shaft_where_nothing_declares_a_limit_is_not_evaluated_naming_the_declaration():
+    """A shaft screened on nothing looks exactly like a shaft that passed."""
+    train = _stiff()
+    (entry,) = screen_shaft_curve(train, derive_flow(train), "output")
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "gear 5 at 150 mm" in entry.detail and "no point on it declares a limit" in entry.detail
+    assert [need.declaration for need in entry.needs] == [
+        "drive_train.shafts[].supports[].slope_limit",
+        "drive_train.shafts[].stations[].deflection_limit",
+    ]
+
+
+def test_a_shaft_with_no_declared_stiffness_is_refused_rather_than_given_one():
+    train = _laid_out()  # no stiffness on any shaft
+    with pytest.raises(RefusalError, match="shaft output declares no stiffness"):
+        solve_shaft_curve(train, derive_flow(train), "output")
+
+
+def test_a_declared_split_has_no_shape_either():
+    basis = "the bearing maker's three-point mounting note, table 4"
+    shafts = tuple(
+        s.model_copy(update={"supports": (_support("E", 0, share=0.25, source=basis),
+                                          _support("G", 150, share=0.5, source=basis),
+                                          _support("F", 300, share=0.25, source=basis))})
+        if s.name == "output" else s for s in _stiff().shafts
+    )  # fmt: skip
+    train = _stiff(shafts=shafts)
+    with pytest.raises(RefusalError, match="neither does its shape"):
+        solve_shaft_curve(train, derive_flow(train), "output")
+
+
+def test_an_overhung_gear_is_refused_rather_than_solved_as_a_simple_beam():
+    shafts = tuple(
+        s.model_copy(update={
+            "supports": (_support("E", 0), _support("F", 100)),
+            "stations": (_station("gear 5", 150),),
+        }) if s.name == "output" else s for s in _stiff().shafts
+    )  # fmt: skip
+    train = _stiff(shafts=shafts)
+    with pytest.raises(RefusalError, match="an overhung shaft bends as an overhanging beam"):
+        solve_shaft_curve(train, derive_flow(train), "output")
+
+
+def test_a_limit_without_its_source_is_refused_and_so_is_a_source_without_a_limit():
+    with pytest.raises(ValueError, match="declares a bending limit and no limit_source"):
+        ShaftSupport(name="E", at=_q("0 mm"), slope_limit=_q("0.05 degree"))
+    with pytest.raises(ValueError, match="gives a limit_source and no slope_limit"):
+        ShaftStation(item="gear 5", at=_q("150 mm"), limit_source="a note")
+    with pytest.raises(ValueError, match="shaft diameter must be positive"):
+        ShaftStiffness(diameter=_q("0 mm"), elastic_modulus=_q("207 GPa"), source="a note")
+
+
+def test_the_curve_renders_its_span_and_every_point_and_names_an_unknown_one():
+    train = _stiff()
+    curve = solve_shaft_curve(train, derive_flow(train), "output")
+    lines = str(curve).splitlines()
+    assert lines[0] == "output over 300 mm"
+    assert lines[2] == "  gear 5 at 150 mm: 0.1019 mm, 0°"
+    with pytest.raises(RefusalError, match="no point named 'Z'"):
+        curve.point("Z")

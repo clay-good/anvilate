@@ -33,7 +33,10 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
       (`bearing_demands` sources each bearing's equivalent load, speed and required life to
       the derivation it came from; the shaft and key screens take the flow's torque and the
       statics' peak moment directly)
-- [ ] 3.4 Deflection and slope at gears and bearings; limits declared or from a cited table
+- [x] 3.4 Deflection and slope at gears and bearings; limits declared or from a cited table
+      (`solve_shaft_curve` reads the elastic curve at every bearing and station;
+      `screen_shaft_curve` holds each against the limit declared on it with its source. No
+      table is bundled: a cited one waits on reading it, and a declared limit is enough)
 
 ## 4. Heat, motion, data
 
