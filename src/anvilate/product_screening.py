@@ -1099,11 +1099,81 @@ def _drive_train(product: Product) -> list[ScorecardEntry]:
     if train is None:
         return []
     flow = derive_flow(train)
+    _nothing_typed_twice(product, train, flow)
     entries = [screen_output_speed(train, flow)]
     for shaft in train.shafts:
         if len(shaft.supports) == 2 and shaft.stiffness is not None:
             entries += screen_shaft_curve(train, flow, shaft.name)
     return entries
+
+
+#: What a part inside a declared train would be typing a second time, and where the train
+#: derives it instead. A mesh's driver torque is the flow's; a shaft's torque is the flow's;
+#: a shaft's bending moment is the peak of its own two-bearing statics.
+_TYPED_TWICE = {"pinion_torque", "torque", "bending_moment"}
+
+
+def _nothing_typed_twice(product: Product, train: Any, flow: Any) -> None:
+    """Refuse a part inside the train that types a load the train already derives.
+
+    This is the whole reason for declaring the machine. A mesh screened on a torque somebody
+    typed still passes on the number it was given, and a typo there is invisible; so inside a
+    declared train the load is the flow's, and a part that states a different one is a second
+    source of truth rather than a cross-check.
+
+    The remedy is not "leave it out": a ``TransmissionShaft`` *requires* its torque and its
+    bending moment, and a ``SpurGearMesh`` its pinion torque, so an element cannot omit
+    them. The refusal names the derived value to write instead, and the other way out — take
+    the item out of the train. :func:`anvilate.drivetrain.check_typed_torque` is the
+    standalone form, for a caller screening a mesh directly rather than through a document,
+    where the torque is an argument and leaving it out *is* the remedy.
+    """
+    from .spec import parse_spec
+
+    definitions = {d.id: d for d in product.definitions}
+    of = {i.name: definitions[i.item] for i in product.instances}
+    derived = {state.mesh: state for state in flow.meshes}
+    for mesh in train.meshes:
+        params = _element_params(of.get(mesh.name), parse_spec)
+        if "pinion_torque" in params:
+            _disagrees(mesh.name, "pinion_torque", params["pinion_torque"],
+                       derived[mesh.name].driver_torque, "N*m",
+                       "the flow derives the mesh's driver torque from the input")  # fmt: skip
+    for shaft in train.shafts:
+        params = _element_params(of.get(shaft.name), parse_spec)
+        if not _TYPED_TWICE & set(params):
+            continue
+        state = flow.shaft(shaft.name)
+        if "torque" in params:
+            _disagrees(shaft.name, "torque", params["torque"], state.torque, "N*m",
+                       "the flow derives it from the input through each mesh's ratio")  # fmt: skip
+        if "bending_moment" in params and len(shaft.supports) == 2:
+            from .drivetrain import solve_shaft_statics
+
+            peak = solve_shaft_statics(train, flow, shaft.name).peak
+            if peak is not None:
+                _disagrees(shaft.name, "bending_moment", params["bending_moment"],
+                           peak.magnitude, "N*m",
+                           "its own two-bearing statics derive it from the mesh loads")  # fmt: skip
+
+
+def _element_params(definition: Any, parse: Any) -> Mapping[str, Any]:
+    if definition is None or definition.spec is None:
+        return {}
+    return parse(dict(definition.spec)).element_params
+
+
+def _disagrees(item: str, parameter: str, typed: Any, derived: Any, unit: str, how: str) -> None:
+    was = typed.to(unit).magnitude
+    now = derived.to(unit).magnitude
+    if math.isclose(was, now, rel_tol=1e-3):
+        return
+    raise _refuse(
+        f"'{item}' is typed with a {parameter} of {was:.4g} {unit} and the drive train "
+        f"derives {now:.4g} {unit}; {how}. Write {now:.6g} {unit}, or take '{item}' out of "
+        "the drive train",
+        subject=f"definitions[].spec.element_params.{parameter}",
+    )
 
 
 def _chains(product: Product) -> list[ScorecardEntry]:

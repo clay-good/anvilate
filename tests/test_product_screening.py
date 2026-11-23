@@ -960,3 +960,101 @@ def test_a_train_that_cannot_be_a_machine_is_refused_before_anything_is_built():
 def test_a_product_with_no_drive_train_adds_no_drive_train_entries():
     report = product_screening(parse_product(_cart()))
     assert [e for e in report.entries if e.name == "output speed"] == []
+
+
+# --- Nothing typed twice inside a declared train (drive trains 1.4) ---------------------
+
+
+def _shaft_spec(**params) -> dict:
+    """A transmission shaft whose screen inputs the drive train derives.
+
+    It REQUIRES its torque and its bending moment, which is why the refusal below cannot say
+    "leave it out": the element has no state without them. It names the derived value to
+    write instead.
+    """
+    return {
+        "anvilate_spec": "1.3.0", "name": "shaft", "description": "a shaft inside the train",
+        "units": {"value": "SI", "origin": "user_stated"},
+        "material": {"ref": "ASTM-A36"}, "manufacturing": {"process": "cnc_turning"},
+        "element_type": "transmission_shaft",
+        "element_params": {"diameter": _q(30, "mm"), "length": _q(200, "mm"),
+                           "yield_strength": _q(250, "MPa"),
+                           "bending_moment": _q(27.6009, "N*m"), "torque": _q(14.0056, "N*m"),
+                           **params},
+        "acceptance": {"tiers": ["T1_analytical"]},
+    }  # fmt: skip
+
+
+def _reducer_with_shaft_spec(**params) -> dict:
+    """The reducer, with its FAST shaft a real part instead of a placeholder.
+
+    Only the fast one: the slow shaft keeps the placeholder, so the refusals below are read
+    against one shaft's derived torque rather than whichever instance shared a definition.
+    """
+    document = _reducer_document()
+    document["definitions"].append(_definition("fastpart", spec=_shaft_spec(**params)))
+    for instance in document["instances"]:
+        if instance["name"] == "fast":
+            instance["item"] = "fastpart"
+    return document
+
+
+def test_a_shaft_inside_the_train_that_types_a_torque_the_flow_contradicts_is_refused():
+    """2.2 kW at 1,500 rpm is 14.006 N·m on the fast shaft. A part that types 20 is a
+    second source of truth, and a screen reading it would pass on the number it was given.
+    """
+    product = parse_product(_reducer_with_shaft_spec(torque=_q(20, "N*m")))
+    with pytest.raises(ValueError, match="typed with a torque of 20 N.m and the drive train"):
+        product_screening(product)
+    # The remedy is actionable, because the element cannot omit the field: the refusal names
+    # the value to write and the other way out.
+    try:
+        product_screening(product)
+    except ValueError as refused:
+        assert "Write 14.0056 N*m, or take 'fast' out of the drive train" in str(refused)
+    # And the derived value is accepted: the refusal is for a contradiction, not for stating
+    # a number the train agrees with.
+    report = product_screening(parse_product(_reducer_with_shaft_spec()))
+    assert _named(report, "output speed").status is CheckStatus.PASS
+
+
+def test_a_shaft_that_types_a_bending_moment_its_own_statics_contradicts_is_refused():
+    """The fast shaft declares two bearings, so its bending moment is derived too."""
+    document = _reducer_with_shaft_spec(bending_moment=_q(500, "N*m"))
+    with pytest.raises(ValueError, match="typed with a bending_moment of 500 N.m"):
+        product_screening(parse_product(document))
+
+
+def test_a_mesh_inside_the_train_that_types_its_pinion_torque_is_refused():
+    mesh_spec = {
+        "anvilate_spec": "1.3.0", "name": "mesh", "description": "a mesh inside the train",
+        "units": {"value": "SI", "origin": "user_stated"},
+        "material": {"ref": "ASTM-A36"}, "manufacturing": {"process": "cnc_turning"},
+        "element_type": "spur_gear_mesh",
+        "element_params": {"pinion_teeth": 18, "gear_teeth": 72,
+                           "module": _q(3, "mm"), "face_width": _q(20, "mm"),
+                           "pressure_angle": 20.0, "pinion_torque": _q(99, "N*m"),
+                           "bending_geometry_factor": 0.31,
+                           "contact_geometry_factor": 0.107,
+                           "pinion_modulus": _q(207, "GPa"), "gear_modulus": _q(207, "GPa"),
+                           "allowable_bending_stress": _q(200, "MPa"),
+                           "allowable_contact_stress": _q(700, "MPa")},
+        "acceptance": {"tiers": ["T1_analytical"]},
+    }  # fmt: skip
+    document = _reducer_document()
+    document["definitions"].append(_definition("meshpart", spec=mesh_spec))
+    document["instances"].append({"name": "pinion-wheel", "item": "meshpart"})
+    document["mates"] += _seat("pinion-wheel", "base")
+    with pytest.raises(ValueError, match="'pinion-wheel' is typed with a pinion_torque of 99"):
+        product_screening(parse_product(document))
+
+
+def test_a_part_the_train_does_not_name_may_type_whatever_it_likes():
+    """The refusal covers the items the train names. A part beside the train is screened on
+    what its own document states, as it always was — including a torque of its own."""
+    document = _reducer_document()
+    document["definitions"].append(_definition("stirrer", spec=_shaft_spec(torque=_q(20, "N*m"))))
+    document["instances"].append({"name": "stirrer", "item": "stirrer"})
+    document["mates"] += _seat("stirrer", "base")
+    report = product_screening(parse_product(document))
+    assert _named(report, "output speed").status is CheckStatus.PASS

@@ -13,9 +13,11 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
 - [x] 1.2 Speed, torque and power flow with cited efficiencies; output band check
 - [x] 1.3 Speed-graph consistency: single determination, center distance closure,
       reverted layouts, one input, no undriven shaft
-- [ ] 1.4 Refusal of typed mesh torques inside a declared train
-      (`check_typed_torque`; the mesh screen does not call it until the train is a product
-      field)
+- [x] 1.4 Refusal of typed mesh torques inside a declared train
+      (`product_screening` refuses a part the train names whose typed torque, bending moment
+      or pinion torque the flow or the statics contradicts, naming the derived value to
+      write; `check_typed_torque` stays the standalone form for a caller screening a mesh
+      directly, where leaving the torque out *is* the remedy)
 
 ## 2. Meshes
 

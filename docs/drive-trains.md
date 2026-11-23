@@ -80,6 +80,14 @@ against its band, and the bending at each point of every shaft that declares two
 and a stiffness. A shaft that declares neither is not read for bending and nothing is
 reported for it — that is the document's statement, not a gap the card fills in.
 
+**Nothing is typed twice.** A part the train names is refused if it states a load the train
+derives and the two disagree: a shaft's `torque` against the flow's, its `bending_moment`
+against its own two-bearing statics, a mesh's `pinion_torque` against the flow's driver
+torque. The remedy is not "leave it out" — a `transmission_shaft` requires its torque and
+its bending moment, so the element has no state without them — so the refusal names the
+derived value to write and the other way out, which is to take the item out of the train. A
+part the train does not name is screened on what its own document states, as it always was.
+
 ## The mesh loads reach the bearings
 
 A shaft that declares where its bearings and its gears sit is solved by statics:
