@@ -26,9 +26,9 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
 ## 3. Shafts and bearings
 
 - [ ] 3.1 Mesh forces (tangential, radial, axial) applied at gear stations
-      (tangential, radial and total per mesh from a declared pressure angle; axial needs
-      helical gears, and applying them at stations waits on 3.2)
-- [ ] 3.2 Two-bearing statics; indeterminate shafts named; declared splits with basis
+      (tangential and radial applied at declared stations by `solve_shaft_statics`, resolved
+      with each mesh's declared `line_of_centers`; axial waits on helical gears)
+- [x] 3.2 Two-bearing statics; indeterminate shafts named; declared splits with basis
 - [ ] 3.3 Existing shaft, key and bearing screens fed derived loads as dependent entries
 - [ ] 3.4 Deflection and slope at gears and bearings; limits declared or from a cited table
 

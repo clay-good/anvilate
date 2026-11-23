@@ -18,9 +18,12 @@ from anvilate.drivetrain import (
     Gear,
     Mesh,
     RequiredOutput,
+    ShaftStation,
+    ShaftSupport,
     check_typed_torque,
     derive_flow,
     screen_output_speed,
+    solve_shaft_statics,
 )
 from anvilate.refusal import RefusalError
 from anvilate.scorecard import CheckStatus
@@ -181,3 +184,256 @@ def test_a_declared_pressure_angle_splits_each_mesh_load_into_radial_and_total()
     with pytest.raises(ValueError, match="outside 0 to 45 degrees"):
         Mesh(name="m", driver="a", driven="b", efficiency=1.0, source="x",
              pressure_angle=_q("50 degree"))  # fmt: skip
+
+
+# --- Two-bearing statics (drive trains 3.2) ---------------------------------------------
+
+
+def _support(name: str, mm: float, **extra) -> ShaftSupport:
+    return ShaftSupport(name=name, at=_q(f"{mm} mm"), **extra)
+
+
+def _station(item: str, mm: float) -> ShaftStation:
+    return ShaftStation(item=item, at=_q(f"{mm} mm"))
+
+
+def _laid_out(**overrides) -> DriveTrain:
+    """The case study's reducer with its gears and bearings placed along each shaft.
+
+    Shigley's Chapter 18 gives no shaft layout — the bearing positions belong to its Example
+    7-2, outside the free chapter — so these spans are this test's own, and the expected
+    reactions below are hand-derived from them, not quoted.
+    """
+    shafts = (
+        DriveShaft(name="input", carries=("gear 2",),
+                   supports=(_support("A", 0), _support("B", 200)),
+                   stations=(_station("gear 2", 100),)),
+        DriveShaft(name="countershaft", carries=("gear 3", "gear 4"),
+                   supports=(_support("C", 0), _support("D", 300)),
+                   stations=(_station("gear 3", 75), _station("gear 4", 225))),
+        DriveShaft(name="output", carries=("gear 5",),
+                   supports=(_support("E", 0), _support("F", 300)),
+                   stations=(_station("gear 5", 150),)),
+    )  # fmt: skip
+    angles = ("0 degree", "180 degree")  # reverted: the second stage pulls the other way
+    meshes = tuple(m.model_copy(update={"pressure_angle": _q("20 degree"),
+                                        "line_of_centers": _q(a)})
+                   for m, a in zip(_reducer().meshes, angles, strict=True))  # fmt: skip
+    return _reducer(**{"shafts": shafts, "meshes": meshes, **overrides})
+
+
+def test_one_gear_centred_between_two_bearings_splits_its_mesh_load_in_half():
+    """The output shaft: gear 5 at midspan, so each bearing takes half the total mesh load
+    and the bending moment at the gear is that half times the half span.
+
+    The total load is the tangential 2,431 lbf and the radial 884.8 lbf in quadrature,
+    2,587 lbf = 11,508 N; each bearing takes 5,754 N, and 5,754 N x 0.15 m = 863 N·m.
+    """
+    train = _laid_out()
+    statics = solve_shaft_statics(train, derive_flow(train), "output")
+    assert statics.determinate is True
+    assert [r.support for r in statics.reactions] == ["E", "F"]
+    for reaction in statics.reactions:
+        assert reaction.magnitude.to("N").magnitude == pytest.approx(5754, rel=1e-3)
+        assert reaction.share is None
+    assert statics.peak.at_item == "gear 5"
+    assert statics.peak.magnitude.to("N*m").magnitude == pytest.approx(863.1, rel=1e-3)
+    ends = [m for m in statics.moments if m.at_item in ("E", "F")]
+    assert [m.magnitude.to("N*m").magnitude for m in ends] == pytest.approx([0.0, 0.0], abs=1e-9)
+
+
+def test_two_meshes_on_a_countershaft_are_resolved_by_their_lines_of_centers():
+    """Hand-derived. Gear 3 is driven at 75 mm with its line of centres at 0 degrees: the
+    tangential 540.2 lbf (2,403 N) drags it along +z and the radial 196.6 lbf (874.6 N)
+    pushes it along +y. Gear 4 drives at 225 mm with the line at 180 degrees, so its
+    tangential 2,431 lbf (10,813 N) pulls along -z and its radial 884.8 lbf (3,936 N)
+    along +y. Taking moments about C over the 300 mm span gives D, and D and the loads give C.
+    """
+    train = _laid_out()
+    statics = solve_shaft_statics(train, derive_flow(train), "countershaft")
+    far = statics.reaction("D")
+    assert far.y.to("N").magnitude == pytest.approx(-(874.6 * 0.075 + 3936 * 0.225) / 0.3, rel=2e-3)
+    assert far.z.to("N").magnitude == pytest.approx(-(2403 * 0.075 - 10813 * 0.225) / 0.3, rel=2e-3)
+    near = statics.reaction("C")
+    assert near.y.to("N").magnitude == pytest.approx(-(874.6 + 3936) - far.y.to("N").magnitude,
+                                                     rel=2e-3)  # fmt: skip
+    assert near.z.to("N").magnitude == pytest.approx(-(2403 - 10813) - far.z.to("N").magnitude,
+                                                     rel=2e-3)  # fmt: skip
+    assert statics.peak.at_item == "gear 4"  # the heavier mesh, and the longer lever from C
+    assert [m.at_item for m in statics.moments] == ["C", "gear 3", "gear 4", "D"]
+
+
+def test_the_reactions_and_the_loads_close_on_every_shaft():
+    """A gate on the solve itself: each shaft's two reactions and its mesh loads sum to zero,
+    and so do their moments about the first bearing."""
+    train = _laid_out()
+    flow = derive_flow(train)
+    for shaft in train.shafts:
+        statics = solve_shaft_statics(train, flow, shaft.name)
+        last = statics.moments[-1]
+        assert last.magnitude.to("N*m").magnitude == pytest.approx(0.0, abs=1e-6), shaft.name
+        # Past the last bearing nothing is left to bend the shaft, in either plane.
+        assert last.in_xy.to("N*m").magnitude == pytest.approx(0.0, abs=1e-6)
+        assert last.in_xz.to("N*m").magnitude == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_shaft_on_more_than_two_bearings_is_named_indeterminate_not_guessed():
+    shafts = tuple(
+        s.model_copy(update={"supports": (*s.supports, _support("G", 150))})
+        if s.name == "output" else s for s in _laid_out().shafts
+    )  # fmt: skip
+    train = _laid_out(shafts=shafts)
+    with pytest.raises(RefusalError, match="shaft output is statically indeterminate: 3 supports"):
+        solve_shaft_statics(train, derive_flow(train), "output")
+
+
+def test_a_declared_split_carries_its_basis_and_derives_no_bending():
+    """The remedy the refusal names: each support's share, with the source it rests on."""
+    basis = "the bearing maker's three-point mounting note, table 4"
+    shafts = tuple(
+        s.model_copy(update={"supports": (_support("E", 0, share=0.25, source=basis),
+                                          _support("G", 150, share=0.5, source=basis),
+                                          _support("F", 300, share=0.25, source=basis))})
+        if s.name == "output" else s for s in _laid_out().shafts
+    )  # fmt: skip
+    train = _laid_out(shafts=shafts)
+    statics = solve_shaft_statics(train, derive_flow(train), "output")
+    assert statics.determinate is False and statics.moments == ()
+    assert statics.basis == (basis, basis, basis)
+    middle = statics.reaction("G")
+    assert middle.share == 0.5
+    assert middle.magnitude.to("N").magnitude == pytest.approx(11508 * 0.5, rel=1e-3)
+    assert "a declared split over 3 supports" in str(statics)
+
+
+def test_a_share_without_its_source_is_refused_and_so_is_a_source_without_a_share():
+    with pytest.raises(ValueError, match="declares a share of 0.5 and no source"):
+        ShaftSupport(name="A", at=_q("0 mm"), share=0.5)
+    with pytest.raises(ValueError, match="gives a source and no share"):
+        ShaftSupport(name="A", at=_q("0 mm"), source="a note")
+
+
+def test_shares_that_do_not_cover_the_load_or_cover_only_some_supports_are_refused():
+    source = "a note"
+    with pytest.raises(ValueError, match="support shares summing to 0.75, not 1"):
+        DriveShaft(name="s", carries=("g",),
+                   supports=(_support("A", 0, share=0.25, source=source),
+                             _support("B", 100, share=0.25, source=source),
+                             _support("C", 200, share=0.25, source=source)))  # fmt: skip
+    with pytest.raises(ValueError, match="share on some of its supports and not others"):
+        DriveShaft(name="s", carries=("g",),
+                   supports=(_support("A", 0, share=0.5, source=source),
+                             _support("B", 100)))  # fmt: skip
+
+
+def test_a_split_declared_on_a_shaft_equilibrium_already_answers_is_refused():
+    source = "a note"
+    shafts = tuple(
+        s.model_copy(update={"supports": (_support("E", 0, share=0.5, source=source),
+                                          _support("F", 300, share=0.5, source=source))})
+        if s.name == "output" else s for s in _laid_out().shafts
+    )  # fmt: skip
+    train = _laid_out(shafts=shafts)
+    with pytest.raises(RefusalError, match="drop the shares and let the statics answer"):
+        solve_shaft_statics(train, derive_flow(train), "output")
+
+
+def test_a_shaft_on_fewer_than_two_bearings_is_refused():
+    shafts = tuple(s.model_copy(update={"supports": s.supports[:1]})
+                   if s.name == "output" else s for s in _laid_out().shafts)  # fmt: skip
+    train = _laid_out(shafts=shafts)
+    with pytest.raises(RefusalError, match="shaft output declares 1 support"):
+        solve_shaft_statics(train, derive_flow(train), "output")
+
+
+def test_two_bearings_at_one_position_are_refused():
+    shafts = tuple(s.model_copy(update={"supports": (_support("E", 40), _support("F", 40))})
+                   if s.name == "output" else s for s in _laid_out().shafts)  # fmt: skip
+    train = _laid_out(shafts=shafts)
+    with pytest.raises(RefusalError, match="puts both its supports at 40 mm"):
+        solve_shaft_statics(train, derive_flow(train), "output")
+
+
+def test_a_second_mesh_on_a_shaft_without_a_line_of_centers_is_refused():
+    meshes = tuple(m.model_copy(update={"line_of_centers": None}) for m in _laid_out().meshes)
+    train = _laid_out(meshes=meshes)
+    solve_shaft_statics(train, derive_flow(train), "output")  # one loaded gear needs no angle
+    with pytest.raises(RefusalError, match="carries 2 meshing gears, whose loads do not act"):
+        solve_shaft_statics(train, derive_flow(train), "countershaft")
+
+
+def test_a_gear_the_shaft_does_not_station_is_refused_naming_it():
+    shafts = tuple(s.model_copy(update={"stations": ()}) if s.name == "output" else s
+                   for s in _laid_out().shafts)  # fmt: skip
+    train = _laid_out(shafts=shafts)
+    with pytest.raises(RefusalError, match="carries gear 5 and does not station it"):
+        solve_shaft_statics(train, derive_flow(train), "output")
+
+
+def test_a_mesh_without_a_pressure_angle_has_no_load_to_apply():
+    meshes = tuple(m.model_copy(update={"pressure_angle": None}) for m in _laid_out().meshes)
+    train = _laid_out(meshes=meshes)
+    with pytest.raises(RefusalError, match="mesh 4-5 has no tangential and radial load"):
+        solve_shaft_statics(train, derive_flow(train), "output")
+
+
+def test_a_station_the_shaft_does_not_carry_is_refused():
+    with pytest.raises(ValueError, match=r"stations \['gear 9'\], which it does not carry"):
+        DriveShaft(name="s", carries=("gear 5",), stations=(_station("gear 9", 10),))
+
+
+def test_a_support_or_station_declared_twice_is_refused():
+    with pytest.raises(ValueError, match=r"declares supports \['A'\] twice"):
+        DriveShaft(name="s", carries=("g",), supports=(_support("A", 0), _support("A", 100)))
+    with pytest.raises(ValueError, match=r"declares stations \['g'\] twice"):
+        DriveShaft(name="s", carries=("g",), stations=(_station("g", 0), _station("g", 100)))
+
+
+def test_an_unplaceable_position_or_angle_is_refused():
+    with pytest.raises(ValueError, match=r"support A at is a \[length\] quantity"):
+        ShaftSupport(name="A", at=_q("5 kg"))
+    with pytest.raises(ValueError, match="must be a finite position"):
+        ShaftSupport(name="A", at=Quantity(magnitude=float("nan"), unit="mm"))
+    with pytest.raises(ValueError, match="line_of_centers .* outside -360 to 360 degrees"):
+        Mesh(name="m", driver="a", driven="b", efficiency=1.0, source="x",
+             line_of_centers=_q("400 degree"))  # fmt: skip
+
+
+def test_an_unknown_shaft_or_support_names_what_the_train_has():
+    train = _laid_out()
+    flow = derive_flow(train)
+    with pytest.raises(RefusalError, match="no shaft is named 'layshaft'"):
+        solve_shaft_statics(train, flow, "layshaft")
+    with pytest.raises(RefusalError, match="no support named 'Z'"):
+        solve_shaft_statics(train, flow, "output").reaction("Z")
+    with pytest.raises(RefusalError, match="flow must be the DriveFlow"):
+        solve_shaft_statics(train, "not a flow", "output")
+
+
+def test_the_statics_renders_its_reactions_and_its_peak_moment():
+    train = _laid_out()
+    lines = str(solve_shaft_statics(train, derive_flow(train), "output")).splitlines()
+    assert lines[0] == "output: two-bearing statics"
+    assert lines[1] == "  E at 0 mm: 5754 N (+1968, -5407)"
+    assert lines[-1].startswith("  peak gear 5 at 150 mm: 863.1 N·m bending")
+
+
+def test_the_docs_page_quotes_the_statics_this_library_solves():
+    """docs/drive-trains.md prints a reaction and a peak moment; both are the solve's."""
+    from pathlib import Path
+
+    page = (Path(__file__).parents[1] / "docs" / "drive-trains.md").read_text(encoding="utf-8")
+    train = _laid_out()
+    statics = solve_shaft_statics(train, derive_flow(train), "output")
+    assert f"{statics.reaction('E').magnitude.to('N').magnitude:,.0f} N" in page
+    assert f"# {statics.peak}" in page
+
+
+def test_a_flow_derived_from_another_train_is_refused_rather_than_read():
+    """An ordinary mistake: the right shaft name, the wrong flow. The mesh loads it carries
+    are another machine's, so the reactions would be another machine's too."""
+    train = _laid_out()
+    other = _laid_out(meshes=tuple(m.model_copy(update={"name": f"{m.name} b"})
+                                   for m in _laid_out().meshes))  # fmt: skip
+    with pytest.raises(RefusalError, match=r"does not carry meshes \['2-3', '4-5'\]"):
+        solve_shaft_statics(train, derive_flow(other), "output")

@@ -48,10 +48,48 @@ and 16/72 at 6 teeth/in gives 388.9 and 86.42 rpm, torques of 60.0, 270 and 1,21
 and tangential loads of 540.2 and 2,431 lbf. The chapter prints 540.0 for the first, from
 the pitch diameter rounded to 2.67 in; the library takes the exact 16/6 in.
 
+## The mesh loads reach the bearings
+
+A shaft that declares where its bearings and its gears sit is solved by statics:
+`solve_shaft_statics` applies each mesh load where its gear sits, and returns the two bearing
+reactions and the bending moment along the shaft.
+
+```python
+from anvilate.drivetrain import DriveShaft, ShaftStation, ShaftSupport, solve_shaft_statics
+
+DriveShaft(name="output", carries=("gear 5",),
+           supports=(ShaftSupport(name="E", at=q("0 mm")),
+                     ShaftSupport(name="F", at=q("300 mm"))),
+           stations=(ShaftStation(item="gear 5", at=q("150 mm"))))
+
+statics = solve_shaft_statics(train, flow, "output")
+statics.reaction("E").magnitude          # 5,754 N
+statics.peak                             # gear 5 at 150 mm: 863.1 N·m bending
+```
+
+Each mesh pulls its gear two ways: the tangential load across the line joining the gear
+centres, and the radial load along it, pushing the two gears apart. Where a shaft carries two
+meshing gears those two loads do not act in one plane, so each mesh declares its
+`line_of_centers` — the angle, about the shaft axis, of that line. A shaft carrying one
+meshing gear needs no angle, because its line of centres may be taken as the reference plane.
+The input shaft is taken to turn counter-clockwise seen along +x; the other sense flips every
+tangential load together, which leaves every reaction and bending magnitude where it was.
+
+| | |
+| --- | --- |
+| two supports | solved by equilibrium: `determinate` is true, and the bending moment is given at every bearing and station |
+| three or more | refused, named as statically indeterminate, unless every support declares the `share` it takes and the `source` that share rests on |
+| a declared split | the reactions are those shares; `basis` carries their sources, and `moments` is empty, because a split equilibrium did not give cannot be integrated into a bending moment diagram without the shaft's stiffness |
+| two supports with shares declared | refused: equilibrium already answers, so a declared split would be a second source of truth |
+| fewer than two supports, both at one position, a gear with no station, a mesh with no pressure angle | refused, each naming what to declare |
+
+The case study's own bearing reactions are not reproduced here: its shaft layout belongs to
+Example 7-2, outside the free chapter. The spans above are the library's test's own, and the
+reactions are hand-derived from them.
+
 ## Not yet
 
-Declaring the train inside a product document, the mesh loads applied to the shafts and
-their bearings (the case study's bearing reactions rest on positions in its Example 7-2,
-which the free chapter does not carry),
-mesh geometry and rating against the gear standards, heat, and swept clearance: each
-waits on a standard read rather than remembered.
+Declaring the train inside a product document, axial loads from helical gears, deflection and
+slope at the gears and bearings, feeding the derived loads into the existing shaft, key and
+bearing screens, mesh geometry and rating against the gear standards, heat, and swept
+clearance: each waits on a standard read rather than remembered.

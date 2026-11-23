@@ -23,7 +23,7 @@ contradicts the one the flow derives.
 
 from __future__ import annotations
 
-from math import cos, isclose, pi, tan
+from math import cos, hypot, isclose, isfinite, pi, sin, tan
 
 from pydantic import ConfigDict, Field, model_validator
 
@@ -43,9 +43,15 @@ __all__ = [
     "ShaftState",
     "MeshState",
     "DriveFlow",
+    "ShaftSupport",
+    "ShaftStation",
+    "SupportReaction",
+    "StationMoment",
+    "ShaftStatics",
     "derive_flow",
     "screen_output_speed",
     "check_typed_torque",
+    "solve_shaft_statics",
 ]
 
 _SOURCE = "the drive train declaration: shafts, gears, meshes, the input and the output"
@@ -69,6 +75,16 @@ def _of(value: Quantity, dimension: str, *, name: str) -> Quantity:
     return value
 
 
+def _of_angle(value: Quantity, *, name: str) -> float:
+    """An angle in degrees: dimensionless, finite, and not a length someone meant as one."""
+    if not isinstance(value, Quantity) or not value.has_dimension("[]"):
+        raise _refuse(f"{name} is an angle; got {value!r}", subject=name)
+    degrees = value.to("degree").magnitude
+    if not isfinite(degrees):
+        raise _refuse(f"{name} must be a finite angle; got {value}", subject=name)
+    return degrees
+
+
 class Gear(StatableModel):
     """One gear: the item it is, its teeth, and its pitch diameter when declared."""
 
@@ -85,13 +101,98 @@ class Gear(StatableModel):
         return self
 
 
+def _at(value: Quantity, *, name: str) -> float:
+    """An axial position along a shaft, in metres: any finite length from the declarer's datum."""
+    if not isinstance(value, Quantity) or not value.has_dimension("[length]"):
+        raise _refuse(f"{name} is a [length] quantity; got {value!r}", subject=name)
+    metres = value.to("m").magnitude
+    if not isfinite(metres):
+        raise _refuse(f"{name} must be a finite position; got {value}", subject=name)
+    return metres
+
+
+class ShaftSupport(StatableModel):
+    """One bearing on a shaft, at an axial position.
+
+    A shaft with more than two supports is statically indeterminate: its reactions do not
+    follow from equilibrium alone. Such a shaft is named as indeterminate and refused, unless
+    every support declares the ``share`` of the load it takes and the ``source`` that share
+    rests on. Two supports need neither.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: Named
+    at: Quantity
+    share: float | None = Field(default=None, gt=0, le=1, allow_inf_nan=False)
+    source: Provenance | None = None
+
+    @model_validator(mode="after")
+    def _placed(self) -> ShaftSupport:
+        _at(self.at, name=f"support {self.name} at")
+        if self.share is not None and self.source is None:
+            raise _refuse(f"support {self.name} declares a share of {self.share:g} and no "
+                          "source; a split a shaft's statics cannot give is only as good as "
+                          "what it rests on", subject="source")  # fmt: skip
+        if self.share is None and self.source is not None:
+            raise _refuse(f"support {self.name} gives a source and no share; the source is "
+                          "the basis of a declared share", subject="share")  # fmt: skip
+        return self
+
+
+class ShaftStation(StatableModel):
+    """A carried item's axial position on its shaft; a gear's station is where its mesh pulls."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    item: Named
+    at: Quantity
+
+    @model_validator(mode="after")
+    def _placed(self) -> ShaftStation:
+        _at(self.at, name=f"station {self.item} at")
+        return self
+
+
 class DriveShaft(StatableModel):
-    """One shaft and the items it carries, gears among them, by item path."""
+    """One shaft, the items it carries by item path, and where its bearings and items sit.
+
+    ``supports`` and ``stations`` are what :func:`solve_shaft_statics` reads; a shaft that
+    declares neither still carries its speed, torque and power through the flow.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: Named
     carries: tuple[Named, ...] = Field(min_length=1, max_length=64)
+    supports: tuple[ShaftSupport, ...] = Field(default=(), max_length=16)
+    stations: tuple[ShaftStation, ...] = Field(default=(), max_length=64)
+
+    @model_validator(mode="after")
+    def _laid_out(self) -> DriveShaft:
+        for named, label in ((tuple(s.name for s in self.supports), "supports"),
+                             (tuple(s.item for s in self.stations), "stations")):  # fmt: skip
+            twice = sorted({n for n in named if named.count(n) > 1})
+            if twice:
+                raise _refuse(f"shaft {self.name} declares {label} {twice} twice",
+                              subject=label)  # fmt: skip
+        placed = {s.item for s in self.stations}
+        stray = sorted(placed - set(self.carries))
+        if stray:
+            raise _refuse(f"shaft {self.name} stations {stray}, which it does not carry; a "
+                          "station places an item the shaft carries",
+                          subject="stations")  # fmt: skip
+        declared = [s for s in self.supports if s.share is not None]
+        if declared and len(declared) != len(self.supports):
+            raise _refuse(f"shaft {self.name} declares a load share on some of its supports "
+                          "and not others; a declared split gives every support its share",
+                          subject="supports")  # fmt: skip
+        if declared and not isclose(sum(s.share or 0.0 for s in self.supports), 1.0,
+                                    rel_tol=1e-6):  # fmt: skip
+            raise _refuse(f"shaft {self.name} declares support shares summing to "
+                          f"{sum(s.share or 0.0 for s in self.supports):.4g}, not 1",
+                          subject="share")  # fmt: skip
+        return self
 
 
 class Mesh(StatableModel):
@@ -113,6 +214,10 @@ class Mesh(StatableModel):
     # The transverse pressure angle, declared: it splits the tangential load into the
     # radial load that bends the shafts. No default, because 14.5, 20 and 25 degrees all ship.
     pressure_angle: Quantity | None = None
+    # Where this mesh pulls, about the shaft axis: the angle from +y to the line joining the
+    # two gear centres, driver towards driven, seen looking along +x. A shaft carrying two
+    # loaded gears needs it, because the two mesh loads do not act in one plane.
+    line_of_centers: Quantity | None = None
 
     @model_validator(mode="after")
     def _distinct(self) -> Mesh:
@@ -126,6 +231,11 @@ class Mesh(StatableModel):
             if not 0 < degrees.to("degree").magnitude < 45:
                 raise _refuse(f"{self.name} pressure_angle {self.pressure_angle} is outside "
                               "0 to 45 degrees", subject="pressure_angle")  # fmt: skip
+        if self.line_of_centers is not None:
+            angle = _of_angle(self.line_of_centers, name=f"{self.name} line_of_centers")
+            if not -360 <= angle <= 360:
+                raise _refuse(f"{self.name} line_of_centers {self.line_of_centers} is outside "
+                              "-360 to 360 degrees", subject="line_of_centers")  # fmt: skip
         return self
 
 
@@ -429,3 +539,240 @@ def check_typed_torque(flow: DriveFlow, mesh: str, torque: Quantity) -> None:
             f"train derives {derived:.4g} N·m; inside a declared train the torque is the "
             "flow's, so leave it out", subject="torque",
         )  # fmt: skip
+
+
+class SupportReaction(StatableModel):
+    """What one bearing carries: the two cross-section components and their resultant."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    support: Named
+    at: Quantity
+    y: Quantity
+    z: Quantity
+    magnitude: Quantity
+    share: float | None = None
+
+    def __str__(self) -> str:
+        return (f"{self.support} at {self.at.to('mm').magnitude:.4g} mm: "
+                f"{self.magnitude.to('N').magnitude:.4g} N "
+                f"({self.y.to('N').magnitude:+.4g}, {self.z.to('N').magnitude:+.4g})")  # fmt: skip
+
+
+class StationMoment(StatableModel):
+    """The bending moment at one point on the shaft, in each plane and in all."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    at_item: Named
+    at: Quantity
+    in_xy: Quantity
+    in_xz: Quantity
+    magnitude: Quantity
+
+    def __str__(self) -> str:
+        return (f"{self.at_item} at {self.at.to('mm').magnitude:.4g} mm: "
+                f"{self.magnitude.to('N*m').magnitude:.4g} N·m bending")  # fmt: skip
+
+
+class ShaftStatics(StatableModel):
+    """One shaft's bearing reactions and bending moments, or the reason it has none.
+
+    ``determinate`` is true when two supports carry the shaft and equilibrium alone gives the
+    reactions. It is false when more supports do, and the reactions come from the shares the
+    document declares: then ``basis`` carries what those shares rest on, and ``moments`` is
+    empty, because a split that equilibrium did not give cannot be integrated into a bending
+    moment diagram without the shaft's stiffness.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    shaft: Named
+    determinate: bool
+    reactions: tuple[SupportReaction, ...] = Field(min_length=2, max_length=16)
+    moments: tuple[StationMoment, ...] = Field(default=(), max_length=80)
+    basis: tuple[Provenance, ...] = ()
+
+    @property
+    def peak(self) -> StationMoment | None:
+        """The largest bending moment on the shaft, or None when none was derived."""
+        return max(self.moments, key=lambda m: m.magnitude.to("N*m").magnitude, default=None)
+
+    def reaction(self, name: str) -> SupportReaction:
+        """One support's reaction, by name."""
+        for found in self.reactions:
+            if found.support == name:
+                return found
+        raise _refuse(f"shaft {self.shaft} has no support named {name!r}; it has "
+                      f"{[r.support for r in self.reactions]}", subject="support")  # fmt: skip
+
+    def __str__(self) -> str:
+        how = ("two-bearing statics" if self.determinate
+               else f"a declared split over {len(self.reactions)} supports")  # fmt: skip
+        lines = [f"{self.shaft}: {how}", *(f"  {r}" for r in self.reactions)]
+        if self.peak is not None:
+            lines.append(f"  peak {self.peak}")
+        return "\n".join(lines)
+
+
+_LOADS_NEEDED = (
+    "every mesh on the shaft declares both gears' pitch_diameter and its "
+    "pressure_angle, so the tangential and radial loads are derived"
+)
+
+
+def _senses(train: DriveTrain, on: dict[str, str]) -> dict[str, float]:
+    """Each shaft's rotation sense about +x, with the input shaft taken as +1.
+
+    External gears reverse, so a driven shaft turns against its driver. Only the relative
+    senses matter: flipping them all flips every tangential load together, which leaves every
+    reaction and bending magnitude where it was.
+    """
+    sense = {train.input.shaft: 1.0}
+    pending = list(train.meshes)
+    while pending:
+        for mesh in list(pending):
+            driver, driven = on[mesh.driver], on[mesh.driven]
+            if driver in sense:
+                sense[driven] = -sense[driver]
+                pending.remove(mesh)
+                break
+        else:  # pragma: no cover - derive_flow refuses a train whose graph does not close
+            break
+    return sense
+
+
+def solve_shaft_statics(train: DriveTrain, flow: DriveFlow, shaft: str) -> ShaftStatics:
+    """One shaft's bearing reactions and bending moments from the mesh loads it carries.
+
+    Each gear on the shaft is pulled by its mesh: the tangential load perpendicular to the
+    line joining the gear centres, and the radial load along it, pushing the two gears apart.
+    Both are resolved into the shaft's cross-section with the mesh's declared
+    ``line_of_centers``; a shaft carrying one loaded gear needs no angle, since the reference
+    plane may be taken as its line of centres. The input shaft is taken to turn
+    counter-clockwise seen along +x.
+
+    Two supports are solved by equilibrium. More than two are statically indeterminate: the
+    shaft is named as such and refused, unless every support declares the share it takes and
+    the source that share rests on, and then the reactions are those shares and no bending
+    moment is derived from them.
+    """
+    if not isinstance(flow, DriveFlow):
+        raise _refuse("flow must be the DriveFlow derive_flow returned", subject="flow")
+    declared = {s.name: s for s in train.shafts}
+    if shaft not in declared:
+        raise _refuse(f"no shaft is named {shaft!r}; the train has {sorted(declared)}",
+                      subject="shaft")  # fmt: skip
+    here = declared[shaft]
+    if len(here.supports) < 2:
+        raise _refuse(f"shaft {shaft} declares {len(here.supports)} support(s); a shaft is "
+                      "carried by at least two bearings, each at its axial position",
+                      subject="supports")  # fmt: skip
+    split = here.supports[0].share is not None  # the shaft validator holds all or none
+    if split and len(here.supports) == 2:
+        raise _refuse(f"shaft {shaft} declares load shares on its two supports, whose "
+                      "reactions equilibrium already gives; drop the shares and let the "
+                      "statics answer", subject="share")  # fmt: skip
+    if not split and len(here.supports) > 2:
+        raise _refuse(
+            f"shaft {shaft} is statically indeterminate: {len(here.supports)} supports carry "
+            "it and equilibrium gives two reactions; declare each support's share of the "
+            "load with the source it rests on, or carry the shaft on two bearings",
+            subject="supports",
+        )  # fmt: skip
+
+    on = _carriers(train)
+    states = {m.mesh: m for m in flow.meshes}
+    foreign = sorted({m.name for m in train.meshes} - set(states))
+    if foreign:
+        raise _refuse(f"the flow does not carry meshes {foreign}, so it was not derived from "
+                      "this train; pass the flow derive_flow returned for it",
+                      subject="flow")  # fmt: skip
+    station = {s.item: _at(s.at, name=f"station {s.item} at") for s in here.stations}
+    mine = [m for m in train.meshes if shaft in (on[m.driver], on[m.driven])]
+    if not mine:
+        raise _refuse(f"shaft {shaft} carries no gear in any mesh, so no mesh load reaches "
+                      "its bearings", subject="shafts")  # fmt: skip
+    sense = _senses(train, on)
+    loads: list[tuple[float, float, float]] = []  # (x, Fy, Fz)
+    for mesh in mine:
+        gear = mesh.driver if on[mesh.driver] == shaft else mesh.driven
+        state = states[mesh.name]
+        if state.tangential_load is None or state.radial_load is None:
+            raise _refuse(
+                f"mesh {mesh.name} has no tangential and radial load to apply at {gear}; "
+                f"{_LOADS_NEEDED}", subject="pitch_diameter, pressure_angle",
+            )  # fmt: skip
+        if gear not in station:
+            raise _refuse(f"shaft {shaft} carries {gear} and does not station it; a mesh load "
+                          "is applied where its gear sits along the shaft",
+                          subject="stations")  # fmt: skip
+        if mesh.line_of_centers is None:
+            if len(mine) > 1:
+                raise _refuse(
+                    f"shaft {shaft} carries {len(mine)} meshing gears, whose loads do not act "
+                    f"in one plane, and mesh {mesh.name} declares no line_of_centers; give "
+                    "each mesh the angle, about the shaft axis, of the line joining its gear "
+                    "centres", subject="line_of_centers",
+                )  # fmt: skip
+            theta = 0.0
+        else:
+            theta = mesh.line_of_centers.to("radian").magnitude
+        toward = (cos(theta), sin(theta))  # driver towards driven, in the cross-section
+        across = (-sin(theta), cos(theta))  # x times toward: where the mesh drags the driven
+        tangential = state.tangential_load.to("N").magnitude
+        radial = state.radial_load.to("N").magnitude
+        driving = on[mesh.driver] == shaft
+        # The driven gear is dragged along +across and pushed away from the driver, along
+        # +toward; the driver takes both back. The driver shaft's sense flips the drag.
+        away = -1.0 if driving else 1.0
+        drag = (-1.0 if driving else 1.0) * sense[on[mesh.driver]]
+        loads.append((station[gear],
+                      drag * tangential * across[0] + away * radial * toward[0],
+                      drag * tangential * across[1] + away * radial * toward[1]))  # fmt: skip
+
+    total = (sum(f[1] for f in loads), sum(f[2] for f in loads))
+    if split:
+        reactions = tuple(
+            _reaction(support, -(support.share or 0.0) * total[0],
+                      -(support.share or 0.0) * total[1])
+            for support in here.supports
+        )  # fmt: skip
+        basis = tuple(s.source for s in here.supports if s.source is not None)
+        return ShaftStatics(shaft=shaft, determinate=False, reactions=reactions, basis=basis)
+
+    first, second = here.supports
+    x_a = _at(first.at, name=f"support {first.name} at")
+    x_b = _at(second.at, name=f"support {second.name} at")
+    if isclose(x_a, x_b, abs_tol=1e-9):
+        raise _refuse(f"shaft {shaft} puts both its supports at "
+                      f"{x_a * 1000:.4g} mm; two bearings carry a shaft over a span",
+                      subject="supports")  # fmt: skip
+    span = x_b - x_a
+    r_b = (-sum(f[1] * (f[0] - x_a) for f in loads) / span,
+           -sum(f[2] * (f[0] - x_a) for f in loads) / span)  # fmt: skip
+    r_a = (-total[0] - r_b[0], -total[1] - r_b[1])
+    reactions = (_reaction(first, *r_a), _reaction(second, *r_b))
+    points = [*loads, (x_a, *r_a), (x_b, *r_b)]
+    named = [*((s.item, station[s.item]) for s in here.stations),
+             (first.name, x_a), (second.name, x_b)]  # fmt: skip
+    moments = tuple(_moment(name, x, points) for name, x in sorted(named, key=lambda pair: pair[1]))
+    return ShaftStatics(shaft=shaft, determinate=True, reactions=reactions, moments=moments)
+
+
+def _reaction(support: ShaftSupport, y: float, z: float) -> SupportReaction:
+    return SupportReaction(
+        support=support.name, at=support.at, y=Quantity(magnitude=y, unit="N"),
+        z=Quantity(magnitude=z, unit="N"),
+        magnitude=Quantity(magnitude=hypot(y, z), unit="N"), share=support.share,
+    )  # fmt: skip
+
+
+def _moment(name: str, x: float, points: list[tuple[float, float, float]]) -> StationMoment:
+    in_xy = sum(f[1] * (x - f[0]) for f in points if f[0] < x)
+    in_xz = sum(f[2] * (x - f[0]) for f in points if f[0] < x)
+    return StationMoment(
+        at_item=name, at=Quantity(magnitude=x * 1000, unit="mm"),
+        in_xy=Quantity(magnitude=in_xy, unit="N*m"), in_xz=Quantity(magnitude=in_xz, unit="N*m"),
+        magnitude=Quantity(magnitude=hypot(in_xy, in_xz), unit="N*m"),
+    )  # fmt: skip

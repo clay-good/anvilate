@@ -936,9 +936,15 @@ drivetrain.DriveTrain
 drivetrain.ShaftState
 drivetrain.MeshState
 drivetrain.DriveFlow
+drivetrain.ShaftSupport
+drivetrain.ShaftStation
+drivetrain.SupportReaction
+drivetrain.StationMoment
+drivetrain.ShaftStatics
 drivetrain.derive_flow
 drivetrain.screen_output_speed
 drivetrain.check_typed_torque
+drivetrain.solve_shaft_statics
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep
