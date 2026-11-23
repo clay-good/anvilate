@@ -1025,6 +1025,17 @@ def test_the_render_truth_tolerance_reads_the_exponents_in_its_own_line():
     assert _rounding_slack("k_a = min(1, 4.51\u00b7655^-0.265)") == 0.0
     assert _rounding_slack("\u03c3 = 3\u00b7(3 + 0.3)\u00b70.0500 MPa") > 0.0
 
+    # An exponent on a parenthesised GROUP stands on everything inside it, not on the first
+    # number in it. A bearing life cubes a ratio of two printed loads, and reading only the
+    # numerator's rounding under-counted the doubt by the denominator's share: the line below
+    # evaluates to 2,808 h under a printed 2,778 h, 1.1% apart, and the old model gave it the
+    # 1% floor and called a rounding artifact a defect.
+    ratio = "L10h = 10^6 / (60 \u00b7 86.4198) \u00b7 (3.15 kip / 1.29 kip)^3"
+    assert _rounding_slack(ratio) == pytest.approx(3 * (0.005 / 3.15 + 0.005 / 1.29), rel=1e-9)
+    assert not disagrees(Reading(ratio, value=2808.01, expected=2778.21))
+    # Still a finding when the line is further out than its own figures can explain.
+    assert disagrees(Reading(ratio, value=2900.0, expected=2778.21))
+
 
 def test_spoken_leaves_the_choice_of_separator_to_the_caller():
     """`fixed_pinned` is a compound adjective; `yield_strength` is a noun phrase.

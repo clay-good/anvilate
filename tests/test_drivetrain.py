@@ -9,6 +9,8 @@ T2 = 60.0, T3 = 270 and T5 = 1,215 lbf-ft; Wt23 = 540.0 lbf and Wt45 = 2,431 lbf
 
 from __future__ import annotations
 
+from math import pi
+
 import pytest
 
 from anvilate.drivetrain import (
@@ -20,6 +22,7 @@ from anvilate.drivetrain import (
     RequiredOutput,
     ShaftStation,
     ShaftSupport,
+    bearing_demands,
     check_typed_torque,
     derive_flow,
     screen_output_speed,
@@ -437,3 +440,122 @@ def test_a_flow_derived_from_another_train_is_refused_rather_than_read():
                                    for m in _laid_out().meshes))  # fmt: skip
     with pytest.raises(RefusalError, match=r"does not carry meshes \['2-3', '4-5'\]"):
         solve_shaft_statics(train, derive_flow(other), "output")
+
+
+# --- The derived loads reach the existing screens (drive trains 3.3) ---------------------
+
+
+def _bearing_record(rating_kn: float):
+    from anvilate.components import ComponentRecord
+
+    def q(v: float, unit: str) -> dict:
+        return {"magnitude": v, "unit": unit}
+
+    return ComponentRecord.model_validate({
+        "manufacturer": "Acme", "part_number": "6210", "description": "deep groove ball bearing",
+        "family": "ball_bearing",
+        "suppliers": [{"supplier": "Distributor", "number": "D-1"}],
+        "envelope": [q(90, "mm"), q(90, "mm"), q(20, "mm")], "envelope_source": "datasheet p.1",
+        "mass": q(0.46, "kg"), "mass_source": "datasheet p.1",
+        "ratings": [{"name": "dynamic_load_rating", "value": q(rating_kn, "kN"),
+                     "source": "datasheet p.2"}],
+    })  # fmt: skip
+
+
+def test_the_derived_reaction_and_speed_are_what_the_bearing_screen_reads():
+    """Drive trains 3.3. The bearing screen already reads an equivalent load, a speed and a
+    required life. Two of the three are not free, and this is where they come from.
+    """
+    from anvilate.components import _rating_entries
+
+    train = _laid_out(output=RequiredOutput(
+        shaft="output", speed_low=_q("82 rpm"), speed_high=_q("88 rpm"),
+        source="Shigley Ch. 18 specification: 82 to 88 rev/min", life=_q("12000 hour"),
+    ))  # fmt: skip
+    flow = derive_flow(train)
+    demands = bearing_demands(train, flow, "output")
+    assert sorted(demands) == ["E", "F"]
+    asked = {d.name: d for d in demands["E"]}
+    statics = solve_shaft_statics(train, flow, "output")
+    assert asked["equivalent_load"].value == statics.reaction("E").magnitude
+    assert asked["speed"].value == flow.shaft("output").speed
+    assert asked["required_life"].value.to("hour").magnitude == 12000
+    assert "the radial reaction at E" in asked["equivalent_load"].source
+    assert "turns at 86.42 rpm" in asked["speed"].source
+
+    # 5,754 N at 86.42 rpm against a 50 kN rating: (50/5.754)^3 = 656.2 Mrev, and
+    # 656.2e6 / (60 x 86.42) = 126,540 h, past the 12,000 h the train requires.
+    (entry,) = _rating_entries(_bearing_record(50.0), demands["E"])
+    assert entry.name == "bearing rating life" and entry.status is CheckStatus.PASS
+    assert entry.derivation.result.value == pytest.approx(126_540, rel=1e-3)
+    assert entry.life.value.to("hour").magnitude == pytest.approx(126_540, rel=1e-3)
+    # The detail line names the rating and the required life; the load's own source rides on
+    # the derivation, where the reader finds what P was and where it came from.
+    load_symbol = next(s for s in entry.derivation.inputs if s.symbol == "P")
+    assert "the radial reaction at E" in load_symbol.description
+
+
+def test_a_bearing_too_small_for_the_derived_load_fails_against_the_required_life():
+    from anvilate.components import _rating_entries
+
+    train = _laid_out(output=RequiredOutput(
+        shaft="output", speed_low=_q("82 rpm"), speed_high=_q("88 rpm"),
+        source="Shigley Ch. 18 specification", life=_q("12000 hour"),
+    ))  # fmt: skip
+    demands = bearing_demands(train, derive_flow(train), "output")
+    (entry,) = _rating_entries(_bearing_record(14.0), demands["E"])
+    assert entry.status is CheckStatus.FAIL
+    assert entry.derivation.result.value < 12000
+
+
+def test_a_train_declaring_no_life_leaves_the_bearing_entry_not_evaluated_naming_it():
+    """The honest answer: nothing in the train knows how long the product must run."""
+    from anvilate.components import _rating_entries
+
+    train = _laid_out()  # its RequiredOutput declares a speed band and no life
+    assert train.output.life is None
+    demands = bearing_demands(train, derive_flow(train), "output")
+    assert [d.name for d in demands["E"]] == ["equivalent_load", "speed"]
+    (entry,) = _rating_entries(_bearing_record(50.0), demands["E"])
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "no required life" in entry.detail
+    assert [need.declaration for need in entry.needs] == ["definitions[].demands[required_life]"]
+
+
+def test_a_declared_split_sources_each_bearing_demand_to_the_split_not_to_statics():
+    basis = "the bearing maker's three-point mounting note, table 4"
+    shafts = tuple(
+        s.model_copy(update={"supports": (_support("E", 0, share=0.25, source=basis),
+                                          _support("G", 150, share=0.5, source=basis),
+                                          _support("F", 300, share=0.25, source=basis))})
+        if s.name == "output" else s for s in _laid_out().shafts
+    )  # fmt: skip
+    train = _laid_out(shafts=shafts)
+    demands = bearing_demands(train, derive_flow(train), "output")
+    assert sorted(demands) == ["E", "F", "G"]
+    load = {d.name: d for d in demands["G"]}["equivalent_load"]
+    assert load.value.to("N").magnitude == pytest.approx(11508 * 0.5, rel=1e-3)
+    assert "a declared support split" in load.source
+
+
+def test_the_shaft_and_key_screens_run_on_the_derived_torque_and_bending_moment():
+    """The other two screens the spec names. Neither needs a new wrapper: the torque is the
+    flow's and the bending moment is the statics', and both are Quantities the existing
+    analysis functions already take."""
+    from anvilate.analysis.keys import key_shear_stress
+    from anvilate.analysis.section import bending_stress
+
+    train = _laid_out()
+    flow = derive_flow(train)
+    statics = solve_shaft_statics(train, flow, "output")
+    torque = flow.shaft("output").torque
+    modulus = Quantity(magnitude=pi * 50**3 / 32, unit="mm**3")  # a solid 50 mm shaft
+    bending = bending_stress(moment=statics.peak.magnitude, section_modulus=modulus)
+    # 863.1 N·m over pi x 0.05^3 / 32 = 1.2272e-5 m^3.
+    assert bending.to("MPa").magnitude == pytest.approx(863.1 / 1.2272e-5 / 1e6, rel=2e-3)
+    shear = key_shear_stress(torque=torque, shaft_diameter=_q("50 mm"),
+                             key_width=_q("14 mm"), key_length=_q("70 mm"))  # fmt: skip
+    # F = 2T/d = 2 x 1,648 / 0.05 = 65,900 N over 14 x 70 mm = 9.8e-4 m^2.
+    assert shear.to("MPa").magnitude == pytest.approx(
+        2 * torque.to("N*m").magnitude / 0.05 / 9.8e-4 / 1e6, rel=1e-3
+    )

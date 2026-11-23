@@ -29,7 +29,10 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
       (tangential and radial applied at declared stations by `solve_shaft_statics`, resolved
       with each mesh's declared `line_of_centers`; axial waits on helical gears)
 - [x] 3.2 Two-bearing statics; indeterminate shafts named; declared splits with basis
-- [ ] 3.3 Existing shaft, key and bearing screens fed derived loads as dependent entries
+- [x] 3.3 Existing shaft, key and bearing screens fed derived loads as dependent entries
+      (`bearing_demands` sources each bearing's equivalent load, speed and required life to
+      the derivation it came from; the shaft and key screens take the flow's torque and the
+      statics' peak moment directly)
 - [ ] 3.4 Deflection and slope at gears and bearings; limits declared or from a cited table
 
 ## 4. Heat, motion, data

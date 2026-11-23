@@ -87,6 +87,34 @@ The case study's own bearing reactions are not reproduced here: its shaft layout
 Example 7-2, outside the free chapter. The spans above are the library's test's own, and the
 reactions are hand-derived from them.
 
+## The derived loads reach the existing screens
+
+The rolling-bearing screen already reads an `equivalent_load`, a `speed` and a
+`required_life`. Two of those three are not free, and `bearing_demands` is where they come
+from: the load is the reaction the statics derived, the speed is the one the flow derived,
+and each `Demand` is sourced to the derivation it came from, so the bearing's rating-life
+entry says where its numbers are from instead of resting on a number somebody typed.
+
+```python
+from anvilate.components import _rating_entries
+from anvilate.drivetrain import bearing_demands
+
+demands = bearing_demands(train, flow, "output")   # keyed by support name: E, F
+(entry,) = _rating_entries(bearing_6210, demands["E"])
+entry.life.value          # the ISO 281 L10 rating life, in hours
+```
+
+`required_life` is the train's declared output life (`RequiredOutput.life`). Where the train
+declares none, the demand is left out and the bearing entry reports as not evaluated naming
+it — the honest answer, because nothing in the train knows how long the product must run.
+The equivalent load is the radial reaction alone: a helical train also loads its bearings
+axially, and an equivalent load combining the two with X and Y factors before those axial
+loads are derived would understate the demand, so it is not offered.
+
+The shaft and key screens need no wrapper. The torque is `flow.shaft(name).torque` and the
+bending moment is `statics.peak.magnitude`, and both are quantities the existing analysis
+functions already take.
+
 ## Not yet
 
 Declaring the train inside a product document, axial loads from helical gears, deflection and

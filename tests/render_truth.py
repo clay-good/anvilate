@@ -203,7 +203,7 @@ _QUANTITY = re.compile(r"(-?\d+\.\d+)\s+[A-Za-zµΩ%]")
 # the number and its unit as separate groups is what this must NOT do — a greedy unit run
 # walks straight past the next factor and attaches the exponent to the wrong number.
 _POWERED = re.compile(
-    r"\((-?\d+\.\d+)\s+[A-Za-zµΩ%][^()]*\)\s*(?:\*\*|\^)?\s*([⁰¹²³⁴-⁹]+|\d+(?:\.\d+)?)"
+    r"\((-?\d+\.\d+\s+[A-Za-zµΩ%][^()]*)\)\s*(?:\*\*|\^)?\s*([⁰¹²³⁴-⁹]+|\d+(?:\.\d+)?)"
 )
 
 _SUPERSCRIPT_ONLY = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
@@ -234,9 +234,16 @@ def _rounding_slack(substituted: str) -> float:
     factor, a Poisson ratio, an exponent — and it is exact.
     """
     slack = sum(_relative_half_place(number) for number in _QUANTITY.findall(substituted))
-    for number, exponent in _POWERED.findall(substituted):
+    for group, exponent in _POWERED.findall(substituted):
         power = float(exponent.translate(_SUPERSCRIPT_ONLY))
-        slack += (power - 1.0) * _relative_half_place(number)
+        # Every rounded quantity *inside* the parentheses, not just the first. An exponent
+        # standing on a group stands on all of it: `(3.15 kip / 1.29 kip)^3` cubes both
+        # roundings, and reading only the numerator under-counted the doubt by the
+        # denominator's share — which is how a bearing life printed 2,778 h under a line
+        # that evaluates to 2,808 and the gate called it a defect.
+        slack += (power - 1.0) * sum(
+            _relative_half_place(number) for number in _QUANTITY.findall(group)
+        )
     return max(slack, 0.0)
 
 

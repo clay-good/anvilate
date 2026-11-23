@@ -24,10 +24,14 @@ contradicts the one the flow derives.
 from __future__ import annotations
 
 from math import cos, hypot, isclose, isfinite, pi, sin, tan
+from typing import TYPE_CHECKING
 
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import Named, Provenance, StatableModel
+
+if TYPE_CHECKING:  # the bearing demand type lives with the component record that reads it
+    from .components import Demand
 from .derivation import DerivationAbsence, Underived
 from .refusal import RefusalError, Remedy
 from .scorecard import CheckStatus, Need, ScorecardEntry, ValueSource
@@ -52,6 +56,7 @@ __all__ = [
     "screen_output_speed",
     "check_typed_torque",
     "solve_shaft_statics",
+    "bearing_demands",
 ]
 
 _SOURCE = "the drive train declaration: shafts, gears, meshes, the input and the output"
@@ -263,7 +268,12 @@ class DriveInput(StatableModel):
 
 
 class RequiredOutput(StatableModel):
-    """The output the train must deliver: the shaft, and its speed band."""
+    """The output the train must deliver: the shaft, its speed band, and the life it runs.
+
+    ``life`` is the running time the train must reach, and it is what every bearing's ISO 281
+    rating life is held against. It is optional because a train may be screened on its
+    kinematics alone; without it the bearing demands say so rather than assuming one.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -271,6 +281,7 @@ class RequiredOutput(StatableModel):
     speed_low: Quantity
     speed_high: Quantity
     source: Provenance
+    life: Quantity | None = None
 
     @model_validator(mode="after")
     def _band(self) -> RequiredOutput:
@@ -279,6 +290,8 @@ class RequiredOutput(StatableModel):
         if low > high:
             raise _refuse(f"speed_low {self.speed_low} is above speed_high {self.speed_high}",
                           subject="speed_low, speed_high")  # fmt: skip
+        if self.life is not None:
+            _of(self.life, "[time]", name="required life")
         return self
 
 
@@ -776,3 +789,46 @@ def _moment(name: str, x: float, points: list[tuple[float, float, float]]) -> St
         in_xy=Quantity(magnitude=in_xy, unit="N*m"), in_xz=Quantity(magnitude=in_xz, unit="N*m"),
         magnitude=Quantity(magnitude=hypot(in_xy, in_xz), unit="N*m"),
     )  # fmt: skip
+
+
+def bearing_demands(
+    train: DriveTrain, flow: DriveFlow, shaft: str
+) -> dict[str, tuple[Demand, ...]]:
+    """What each bearing on one shaft is asked to carry, derived rather than typed.
+
+    The existing rolling-bearing screen reads three demands — ``equivalent_load``, ``speed``
+    and ``required_life`` — and until now a product typed all three beside the bearing. Two
+    of them are not free: the load is the reaction :func:`solve_shaft_statics` derives, and
+    the speed is the one :func:`derive_flow` derives for that shaft. This returns them, by
+    support name, each ``Demand`` sourced to the derivation it came from, so the bearing's
+    rating life is screened against the machine and the entry says where its numbers are from.
+
+    ``required_life`` is the train's declared output life. Where the train declares none the
+    demand is left out, and the bearing screen reports its life entry as not evaluated naming
+    it, which is the honest answer: nothing here knows how long the product must run.
+
+    The equivalent load is the radial reaction alone. A train with helical gears also loads
+    its bearings axially, and until those axial loads are derived an equivalent load combining
+    them with X and Y factors would be understating the demand, so it is not offered.
+    """
+    from .components import Demand
+
+    statics = solve_shaft_statics(train, flow, shaft)
+    speed = flow.shaft(shaft).speed
+    rpm = speed.to("rpm").magnitude
+    how = "two-bearing statics" if statics.determinate else "a declared support split"
+    demands: dict[str, tuple[Demand, ...]] = {}
+    for reaction in statics.reactions:
+        each = [
+            Demand(name="equivalent_load", value=reaction.magnitude,
+                   source=f"the drive train's {how} on shaft {shaft}: the radial reaction at "
+                          f"{reaction.support}"),
+            Demand(name="speed", value=speed,
+                   source=f"the drive train flow: shaft {shaft} turns at {rpm:.4g} rpm"),
+        ]  # fmt: skip
+        if train.output is not None and train.output.life is not None:
+            each.append(Demand(name="required_life", value=train.output.life,
+                               source=f"the drive train's required output life "
+                                      f"({train.output.source})"))  # fmt: skip
+        demands[reaction.support] = tuple(each)
+    return demands

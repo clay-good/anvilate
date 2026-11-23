@@ -945,6 +945,7 @@ drivetrain.derive_flow
 drivetrain.screen_output_speed
 drivetrain.check_typed_torque
 drivetrain.solve_shaft_statics
+drivetrain.bearing_demands
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep
