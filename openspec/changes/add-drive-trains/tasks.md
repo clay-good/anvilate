@@ -52,5 +52,7 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
       chapter's published values
       (speeds, torques and tangential loads held, 10th ed. Ch. 18; shafts and bearings
       follow with 3.x)
-- [ ] 4.5 The gear reducer worked product declares its drive train; docs page for drive
+- [x] 4.5 The gear reducer worked product declares its drive train; docs page for drive
       trains
+      (`examples/products/gear_reducer.product.yaml` is three shafts and four gears with a
+      declared train, and `docs/drive-trains.md` is the page)

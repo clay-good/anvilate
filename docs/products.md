@@ -214,7 +214,7 @@ checked and exported in CI. Copy one and change it rather than compose a tree fr
 | Product | What it shows |
 | --- | --- |
 | [`linear_stage`](../examples/products/linear_stage.product.yaml) | A rail pattern whose length a layout parameter drives, a catalog carriage plate, a bought motor, and a `long` variant |
-| [`gear_reducer`](../examples/products/gear_reducer.product.yaml) | Gear stages and an output shaft placed on axis datums; one bought stage placed twice |
+| [`gear_reducer`](../examples/products/gear_reducer.product.yaml) | Three shafts and four gears, with the [drive train](drive-trains.md) that ties them together: 375 rpm and 40 N·m at the output, derived from 10 N·m at 1,500 rpm |
 | [`enclosure`](../examples/products/enclosure.product.yaml) | A catalog box and lid, the lid's lip inside the walls, a board on datum planes, a fan on the lid |
 | [`cart_frame`](../examples/products/cart_frame.product.yaml) | A frame on four casters from two patterns, with a catalog deck plate |
 

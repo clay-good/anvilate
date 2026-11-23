@@ -1,37 +1,11 @@
-# A worked product: a two-stage gear reducer laid out on axes the layout fixes. Move
-# output_x to move the output shaft; the gear stages are bought modules.
+# A worked product: a two-stage spur reducer that is checked as a machine. Its drive
+# train derives every shaft's speed and torque from one declared input, so no mesh and
+# no shaft is screened on a torque somebody typed.
 #   anvilate check examples/products/gear_reducer.product.yaml
-anvilate_product: 1.0.0
+anvilate_product: 1.17.0
 name: gear-reducer
-description: 'A two-stage gear reducer laid out on a base: a motor, two gear stages and an output shaft
-  on axes the layout fixes'
-layout:
-  parameters:
-  - name: output_x
-    value:
-      magnitude: 100
-      unit: mm
-    source: output shaft position the driven machine sets
-  datums:
-  - name: input_axis
-    kind: axis
-    direction: z
-    at:
-    - magnitude: -100
-      unit: mm
-    - magnitude: 0
-      unit: mm
-    - magnitude: 0
-      unit: mm
-  - name: output_axis
-    kind: axis
-    direction: z
-    at:
-    - layout: output_x
-    - magnitude: 0
-      unit: mm
-    - magnitude: 0
-      unit: mm
+description: 'A two-stage spur reducer: three shafts, four gears, and the drive train that ties them together,
+  so every shaft''s speed and torque is derived from one declared input'
 definitions:
 - id: base
   identity:
@@ -39,9 +13,9 @@ definitions:
     source: make
   placeholder:
     envelope:
-    - magnitude: 360
+    - magnitude: 460
       unit: mm
-    - magnitude: 160
+    - magnitude: 200
       unit: mm
     - magnitude: 12
       unit: mm
@@ -49,22 +23,54 @@ definitions:
       magnitude: 5.4
       unit: kg
     reason: base to be detailed once the housing is drawn
-- id: stage
+- id: shaft_blank
   identity:
-    description: gear stage, 2:1
-    source: buy
+    description: plain shaft blank, 30 mm
+    source: make
   placeholder:
     envelope:
-    - magnitude: 60
-      unit: mm
-    - magnitude: 60
+    - magnitude: 40
       unit: mm
     - magnitude: 40
       unit: mm
+    - magnitude: 140
+      unit: mm
     mass:
-      magnitude: 1.2
+      magnitude: 1.1
       unit: kg
-    reason: gear stage bought as a module, not yet chosen
+    reason: shaft to be detailed once the gears are chosen
+- id: pinion
+  identity:
+    description: spur pinion, 18 teeth, module 3
+    source: buy
+  placeholder:
+    envelope:
+    - magnitude: 54
+      unit: mm
+    - magnitude: 54
+      unit: mm
+    - magnitude: 20
+      unit: mm
+    mass:
+      magnitude: 0.5
+      unit: kg
+    reason: pinion bought as a stock gear, not yet chosen
+- id: wheel
+  identity:
+    description: spur wheel, 36 teeth, module 3
+    source: buy
+  placeholder:
+    envelope:
+    - magnitude: 108
+      unit: mm
+    - magnitude: 108
+      unit: mm
+    - magnitude: 20
+      unit: mm
+    mass:
+      magnitude: 1.8
+      unit: kg
+    reason: wheel bought as a stock gear, not yet chosen
 - id: shaft
   identity:
     description: output shaft
@@ -140,23 +146,22 @@ instances:
 - name: base
   item: base
 - name: input
-  item: stage
-- name: second
-  item: stage
+  item: shaft_blank
+- name: p1
+  item: pinion
+- name: counter
+  item: shaft_blank
+- name: w1
+  item: wheel
+- name: p2
+  item: pinion
 - name: output
   item: shaft
+- name: w2
+  item: wheel
 ground: base
 mates:
-- id: input-axis
-  kind: shaft_in_bore
-  place:
-    part: input
-    axis: z
-  'on':
-    part: input_axis
-    axis: z
-  rotation_deg: 0.0
-- id: input-sits
+- id: input-sit
   kind: face_to_face
   place:
     part: input
@@ -164,18 +169,34 @@ mates:
   'on':
     part: base
     face: top
-- id: second-sits
+- id: input-left
+  kind: edge_flush
+  place:
+    part: input
+    face: left
+  'on':
+    part: base
+    face: left
+- id: input-front
+  kind: edge_flush
+  place:
+    part: input
+    face: front
+  'on':
+    part: base
+    face: front
+- id: p1-sit
   kind: face_to_face
   place:
-    part: second
+    part: p1
     face: bottom
   'on':
     part: base
     face: top
-- id: second-beside
+- id: p1-beside
   kind: face_to_face
   place:
-    part: second
+    part: p1
     face: left
   'on':
     part: input
@@ -183,24 +204,96 @@ mates:
   offset:
     magnitude: 10
     unit: mm
-- id: second-front
+- id: p1-front
   kind: edge_flush
   place:
-    part: second
+    part: p1
     face: front
   'on':
-    part: input
+    part: base
     face: front
-- id: output-axis
-  kind: shaft_in_bore
+- id: counter-sit
+  kind: face_to_face
   place:
-    part: output
-    axis: z
+    part: counter
+    face: bottom
   'on':
-    part: output_axis
-    axis: z
-  rotation_deg: 0.0
-- id: output-sits
+    part: base
+    face: top
+- id: counter-beside
+  kind: face_to_face
+  place:
+    part: counter
+    face: left
+  'on':
+    part: p1
+    face: right
+  offset:
+    magnitude: 10
+    unit: mm
+- id: counter-front
+  kind: edge_flush
+  place:
+    part: counter
+    face: front
+  'on':
+    part: base
+    face: front
+- id: w1-sit
+  kind: face_to_face
+  place:
+    part: w1
+    face: bottom
+  'on':
+    part: base
+    face: top
+- id: w1-beside
+  kind: face_to_face
+  place:
+    part: w1
+    face: left
+  'on':
+    part: counter
+    face: right
+  offset:
+    magnitude: 10
+    unit: mm
+- id: w1-front
+  kind: edge_flush
+  place:
+    part: w1
+    face: front
+  'on':
+    part: base
+    face: front
+- id: p2-sit
+  kind: face_to_face
+  place:
+    part: p2
+    face: bottom
+  'on':
+    part: base
+    face: top
+- id: p2-beside
+  kind: face_to_face
+  place:
+    part: p2
+    face: left
+  'on':
+    part: w1
+    face: right
+  offset:
+    magnitude: 10
+    unit: mm
+- id: p2-front
+  kind: edge_flush
+  place:
+    part: p2
+    face: front
+  'on':
+    part: base
+    face: front
+- id: output-sit
   kind: face_to_face
   place:
     part: output
@@ -208,3 +301,122 @@ mates:
   'on':
     part: base
     face: top
+- id: output-beside
+  kind: face_to_face
+  place:
+    part: output
+    face: left
+  'on':
+    part: p2
+    face: right
+  offset:
+    magnitude: 10
+    unit: mm
+- id: output-front
+  kind: edge_flush
+  place:
+    part: output
+    face: front
+  'on':
+    part: base
+    face: front
+- id: w2-sit
+  kind: face_to_face
+  place:
+    part: w2
+    face: bottom
+  'on':
+    part: base
+    face: top
+- id: w2-beside
+  kind: face_to_face
+  place:
+    part: w2
+    face: left
+  'on':
+    part: output
+    face: right
+  offset:
+    magnitude: 10
+    unit: mm
+- id: w2-front
+  kind: edge_flush
+  place:
+    part: w2
+    face: front
+  'on':
+    part: base
+    face: front
+drive_train:
+  shafts:
+  - name: input
+    carries:
+    - p1
+  - name: counter
+    carries:
+    - w1
+    - p2
+  - name: output
+    carries:
+    - w2
+  gears:
+  - item: p1
+    teeth: 18
+    pitch_diameter:
+      magnitude: 54
+      unit: mm
+  - item: w1
+    teeth: 36
+    pitch_diameter:
+      magnitude: 108
+      unit: mm
+  - item: p2
+    teeth: 18
+    pitch_diameter:
+      magnitude: 54
+      unit: mm
+  - item: w2
+    teeth: 36
+    pitch_diameter:
+      magnitude: 108
+      unit: mm
+  meshes:
+  - name: first-stage
+    driver: p1
+    driven: w1
+    efficiency: 1.0
+    source: taken as lossless for this screening, so the derived torques are upper bounds
+    pressure_angle:
+      magnitude: 20
+      unit: degree
+    line_of_centers:
+      magnitude: 0
+      unit: degree
+  - name: second-stage
+    driver: p2
+    driven: w2
+    efficiency: 1.0
+    source: taken as lossless for this screening, so the derived torques are upper bounds
+    pressure_angle:
+      magnitude: 20
+      unit: degree
+    line_of_centers:
+      magnitude: 180
+      unit: degree
+  input:
+    shaft: input
+    speed:
+      magnitude: 1500
+      unit: rpm
+    torque:
+      magnitude: 10
+      unit: N*m
+  output:
+    shaft: output
+    speed_low:
+      magnitude: 370
+      unit: rpm
+    speed_high:
+      magnitude: 380
+      unit: rpm
+    source: the driven machine's rated speed band

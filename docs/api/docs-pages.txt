@@ -28,7 +28,7 @@ design-decisions.md | Start here | README | -
 design-space-exploration.md | Deciding what the answer is worth | README, example-highlights | -
 dfm-rules.md | Deciding what the answer is worth | README | -
 discipline-modules.md | Deciding what the answer is worth | README, contributing-analysis, published-contracts | -
-drive-trains.md | Deciding what the answer is worth | README | -
+drive-trains.md | Deciding what the answer is worth | README, products | -
 durability-screening.md | Deciding what the answer is worth | nothing | -
 embodied-carbon-screening.md | Screening by discipline | example-highlights | -
 evidence-attestation.md | Getting the answer out | evidence-bundle, example-highlights, quality-interchange | -

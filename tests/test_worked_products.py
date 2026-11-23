@@ -129,3 +129,37 @@ def test_combine_writes_a_products_assembly_marked_unvalidated(tmp_path):
     code, stdout, _err = run_cli("combine", name, "--output", str(out), "--unvalidated")
     assert code == EXIT_NOT_EVALUATED and out.exists()
     assert f"wrote {out} (UNVALIDATED)" in stdout
+
+
+def test_the_reducer_is_checked_as_a_machine_and_not_as_a_pile_of_parts():
+    """Drive trains 4.5. The worked reducer declares its drive train, so the numbers its
+    parts are screened on are derived from one input rather than typed beside each part.
+
+    18/36 twice is 4:1, so 1,500 rpm in is 375 rpm out — inside the 370 to 380 band the
+    driven machine asks for — and 10 N·m in is 40 N·m out, which is what the output shaft's
+    own spec is screened under. A different input would be refused against that spec.
+    """
+    from anvilate.drivetrain import derive_flow
+    from anvilate.product_screening import product_screening
+
+    product = parse_product(
+        parse_yaml((_PRODUCTS / "gear_reducer.product.yaml").read_text(encoding="utf-8"))
+    )
+    train = product.drive_train
+    assert train is not None
+    flow = derive_flow(train)
+    assert flow.shaft("output").speed.to("rpm").magnitude == pytest.approx(375.0)
+    assert flow.shaft("output").torque.to("N*m").magnitude == pytest.approx(40.0)
+    assert flow.shaft("counter").speed.to("rpm").magnitude == pytest.approx(750.0)
+    # The output shaft part is screened under 40 N·m, and the train derives 40 N·m: a
+    # document that disagreed with itself would not get this far.
+    report = product_screening(product)
+    entry = [e for e in report.entries if e.name == "output speed"]
+    assert len(entry) == 1 and "375 rpm, inside" in entry[0].detail
+
+    # And it is a real agreement, not an unread field: raise the input and the document is
+    # refused, naming the value its own shaft spec would have to carry instead.
+    document = parse_yaml((_PRODUCTS / "gear_reducer.product.yaml").read_text(encoding="utf-8"))
+    document["drive_train"]["input"]["torque"]["magnitude"] = 12
+    with pytest.raises(ValueError, match="typed with a torque of 40 N.m and the drive train"):
+        product_screening(parse_product(document))
