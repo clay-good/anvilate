@@ -635,6 +635,12 @@ mcp.stateless_gaps
 mcp.PROTOCOL_REVISION
 mcp.tool_catalog
 mcp.wire_definitions
+mesh.FaceSignature
+mesh.SignatureMatch
+mesh.face_signatures
+mesh.match_face_signatures
+mesh.ROUND_TRIP_AREA_TOLERANCE
+mesh.ROUND_TRIP_DISTANCE_TOLERANCE_MM
 modules.Deprecation
 modules.ModuleManifest
 modules.ModuleRegistry

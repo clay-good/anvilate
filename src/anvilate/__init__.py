@@ -174,6 +174,11 @@ that already ran and does one more thing with them:
   missed forty-two models, including one where a copy handed back a plain
   ``dict`` in place of a ``MappingProxyType`` and it could then be mutated in
   place.
+- :mod:`anvilate.mesh` — the mesher boundary: what a tagged face IS, recorded as
+  its area, its area centroid and the way it faces, so a load declared on ``top``
+  lands on ``top`` after a STEP write and a mesher's read have had the name. The
+  match is verified and never assumed — a tag matching nothing, a tag matching two
+  faces, and a face two tags both claim are each refused by name.
 - :mod:`anvilate.modules` — what each discipline module declares about itself —
   version, standards, material properties, tiers, screens — held against the pack it names.
 - :mod:`anvilate.needs` — every declaration a build needed and did not get, in one

@@ -8,6 +8,17 @@ phase 2 needs `add-product-structure`.
 - [ ] 1.1 Solver and mesher discovery (setting, environment, path), version pins, digest
       and solver build recorded in the bundle; `doctor` entries per `add-guided-design-journey`
 - [ ] 1.2 Tag signatures recorded at build; signature matching after import, verified
+      (`anvilate.mesh`: `face_signatures` records each tagged face's area, its AREA
+      centroid and — where the face is flat — the way it faces, and `match_face_signatures`
+      puts those against the faces that came back. Verified, never assumed: a tag matching
+      nothing, a tag matching two faces, and a face two tags both claim are each refused by
+      name, because a load on the wrong face is a different problem solved correctly and
+      nothing downstream says so. The centroid is `CenterOf.MASS` and not the parametric
+      centre — on a shaft's outside surface those differ by a radius — and a curved face
+      records no normal rather than the one at its parametric centre. What waits on 1.3 is
+      the other side: no mesher is wired in, so the signatures of an IMPORTED solid have no
+      producer yet, and the round-trip tolerances are float-noise defaults rather than a
+      mesher's measured ones)
 - [ ] 1.3 Gmsh meshing: second-order tets, size fields from tagged features, physical groups
 - [ ] 1.4 Deck writer (shared with `add-cae-handoff`): materials with sources, supports and
       loads by tag, one step per load case, unit system stated
