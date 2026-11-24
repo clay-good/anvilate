@@ -29,7 +29,14 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
 
 ## 3. First product and optional pieces
 
-- [ ] 3.1 The gear reducer added to the gallery with a one-request journey, offline
+- [x] 3.1 The gear reducer added to the gallery with a one-request journey, offline
+      (`examples/gear_reducer_journey.py`: ONE `build_combination` request, handled in the
+      same process, and everything else read out of the single reply — the item tree, the
+      whole-product checks, the journey stage and the next step. What it teaches is the
+      thing a reader would otherwise get wrong: every whole-product check passes and the
+      design is still not screened, because seven items are placeholders. FEA is not
+      applicable because the document demands none, and optimisation because no study is
+      declared, so neither reads as a failure)
 - [x] 3.2 `doctor` reports optional capabilities as not installed with a per-platform
       command, and exits 0 for them
 - [x] 3.3 One remedy text shared by `doctor` and every tool that needs the capability

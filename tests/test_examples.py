@@ -9402,6 +9402,37 @@ def test_thermal_range_example_repairs_to_not_evaluated_not_to_pass():
     _assert_narrates_rendered("thermal_range_assembly.py", namespace)
 
 
+def test_the_gear_reducer_journey_example_answers_one_request_with_its_whole_journey():
+    """Guided design journey 3.1. The gallery's first product journey, in one request.
+
+    What the example teaches is the thing a reader would otherwise get wrong: the
+    whole-product checks all PASS, and the design is still not screened, because seven of
+    its items are placeholders. A journey read from either half alone says the wrong thing.
+    """
+    pytest.importorskip("build123d")
+    namespace = runpy.run_path(str(_EXAMPLES / "gear_reducer_journey.py"))
+    answer = namespace["answered"]()
+    assert answer["whole_product"]["status"] == "pass"
+    assert any("375 rpm, inside the required 370 to 380 rpm" in e["detail"]
+               for e in answer["whole_product"]["entries"])  # fmt: skip
+    assert answer["journey"]["stage"] == "described"
+    screened = next(s for s in answer["journey"]["stages"] if s["stage"] == "screened")
+    assert screened["state"] == "not_reached" and len(screened["gaps"]) == 7
+    for stage, state in (("simulated", "not_applicable"), ("optimized", "not_applicable")):
+        assert next(s for s in answer["journey"]["stages"] if s["stage"] == stage)["state"] == state
+    step = answer["next"]["steps"][0]
+    assert step["tool"] == "build_combination"
+    assert step["arguments"] == {"declare": "definitions[].spec"}
+    # The one figure the prose quotes that its own source does not carry: the input speed
+    # the 375 rpm output follows from, read back off the document the example asks about.
+    from anvilate._models import parse_yaml
+
+    document = parse_yaml(namespace["_PRODUCT"].read_text(encoding="utf-8"))
+    speed = document["drive_train"]["input"]["speed"]
+    assert speed["unit"] == "rpm"
+    _assert_narrates("gear_reducer_journey.py", float(speed["magnitude"]))
+
+
 def test_enclosure_keepouts_example_fails_on_its_corridor_and_passes_repaired():
     pytest.importorskip("build123d")
     namespace = runpy.run_path(str(_EXAMPLES / "enclosure_keepouts.py"))
