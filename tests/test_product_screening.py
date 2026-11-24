@@ -1404,3 +1404,36 @@ def test_the_load_path_verdict_supersedes_the_item_s_own_no_load_stated():
     assert len(named) == 1 and named[0].status is CheckStatus.FAIL
     # And the card's verdict is the failure, not the not-evaluated that would have masked it.
     assert card.status is CheckStatus.FAIL
+
+
+def test_a_load_at_an_axis_located_interface_sits_on_that_axis():
+    """A face is a place; an axis is a line, and a load at one sits on the line.
+
+    So the point is centred in the two directions ACROSS the axis — which for the bounding
+    box a load path reads is the middle of the body in both — and not pushed to a face.
+    The claim had no test: the face branch was exercised by every other case here and this
+    one by none.
+    """
+    document = _carted(_THREE, ("right", "back"))
+    frame = next(d for d in document["definitions"] if d["id"] == "frame")
+    frame["placeholder"]["interfaces"] = [
+        {"name": "pin", "kind": "pin", "axis": "z",
+         "parameters": {"diameter": _q(12, "mm")}}
+    ]  # fmt: skip
+    payload = {"mass": _q(50, "kg"), "source": "payload spec"}
+    document["screening"]["loads"] = [{**payload, "at": "frame.pin"}]
+    on_axis = product_screening(parse_product(document))
+
+    document["screening"]["loads"] = [{**payload, "item": "frame"}]
+    on_item = product_screening(parse_product(document))
+
+    at_axis, at_item = ({s.body: s for s in r.load_path}["cart/frame"]
+                        for r in (on_axis, on_item))  # fmt: skip
+    # The same place as the item's own middle, and said to be so on purpose: an axis gives
+    # no offset to push the load to.
+    assert at_axis.at_mm == at_item.at_mm
+    assert {r.support: r.force_n for r in at_axis.reactions} == {
+        r.support: r.force_n for r in at_item.reactions
+    }
+    # And it is still reported as having arrived at the interface, not on the item.
+    assert "the load at frame.pin" in _named(on_axis, "load path cart/frame").detail

@@ -1158,3 +1158,46 @@ def test_the_block_renders_itself_as_a_row_and_as_a_sheet():
     assert sheet.startswith("gear data\n")
     for each in data.rows:
         assert f"{each.item} on {each.shaft}, {each.role} in {each.mesh}" in sheet
+
+
+def test_a_row_with_neither_module_nor_pitch_diameter_is_a_row():
+    """The gear data block of a gear nobody has sized yet: teeth and a mesh, and no more."""
+    row = GearDataRow(item="gear 2", shaft="input", teeth=16, mesh="2-3", role="driver",
+                      mates_with="gear 3", mating_teeth=72,
+                      center_distance_basis=NOT_DECLARED)  # fmt: skip
+    cells = dict(zip(GEAR_DATA_COLUMNS, row.cells(), strict=True))
+    assert cells["module"] == cells["pitch diameter"] == NOT_DECLARED
+    assert cells["teeth"] == "16" and cells["ratio"] == "16:72"
+    assert "module" in " ".join(row.unstated()) and "teeth 16" in row.stated()
+
+
+def test_a_gear_with_no_pitch_diameter_has_no_centre_distance_to_state():
+    """Both pitch radii or a declared centre distance; one gear sized is neither."""
+    gears = (_gear("gear 2", 16), Gear(item="gear 3", teeth=72),
+             _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    row = next(r for r in gear_data(_reducer(gears=gears, reverted=False)).rows
+               if r.item == "gear 3")  # fmt: skip
+    assert row.center_distance is None and row.center_distance_basis == NOT_DECLARED
+    assert row.module is None and row.pitch_diameter is None
+    # Its partner is sized, and its row says the same thing: a centre distance is the pair's.
+    partner = next(r for r in gear_data(_reducer(gears=gears, reverted=False)).rows
+                   if r.item == "gear 2")  # fmt: skip
+    assert partner.center_distance is None and partner.module is not None
+
+
+def test_the_block_refuses_a_train_whose_mesh_names_a_gear_it_does_not_declare():
+    """`gear_data` can be called without deriving the flow first, so it checks for itself.
+
+    Both refusals below are the ones `derive_flow` would have raised; reaching them means
+    reaching the block on a train nothing validated, which is a caller's mistake worth a
+    message rather than a KeyError.
+    """
+    stray = _reducer().meshes[0].model_copy(update={"driven": "gear 9"})
+    with pytest.raises(RefusalError, match="mesh 2-3 names gear 9, which is not a declared "
+                                           "gear on a shaft"):  # fmt: skip
+        gear_data(_reducer(meshes=(stray, _reducer().meshes[1])))
+    # And a train whose gears are in none of its meshes has no block at all to write.
+    apart = tuple(m.model_copy(update={"driver": f"x{i}", "driven": f"y{i}"})
+                  for i, m in enumerate(_reducer().meshes))  # fmt: skip
+    with pytest.raises(RefusalError, match="declares no gear in any mesh"):
+        gear_data(_reducer(meshes=apart))
