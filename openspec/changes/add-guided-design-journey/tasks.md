@@ -63,5 +63,12 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
       the result can tell what to do, do it, and see what it was told about close)
 - [ ] 4.2 The journey added to the agent-driving corpus; measured on both target clients
 - [ ] 4.3 The release gate holds the journey to the previous release's measurement
-- [ ] 4.4 README: the reducer request as a fourth "ask in plain English" example, once it
+- [x] 4.4 README: the reducer request as a fourth "ask in plain English" example, once it
       runs end to end
+      (the ask is the reducer in a user's words — two 18/36 stages, 1,500 rpm and 10 N·m in
+      — and "What you get back" gained the row that ask needs: the next step. The row says
+      what the example prints, which is the thing a reader would otherwise get wrong: every
+      whole-machine check passes, the design is still not screened, and it says so, because
+      seven items are placeholders. Verified by running
+      `examples/gear_reducer_journey.py`: nine whole-product entries pass, the stage reads
+      `described`, and the single next step names `definitions[].spec`)

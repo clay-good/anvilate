@@ -43,6 +43,8 @@ codex mcp add anvilate -- "$(which anvilate-mcp)"    # OpenAI Codex
 
 > *Bolt that bracket to the plate with two M6 screws, washers and nuts, and show me the assembly.*
 
+> *Here is my gear reducer: two 18/36 stages, 1,500 rpm and 10 N·m going in. Build it, check the whole machine, and tell me what is still missing.*
+
 **What you get back**
 
 | You get | What it is |
@@ -51,6 +53,7 @@ codex mcp add anvilate -- "$(which anvilate-mcp)"    # OpenAI Codex
 | A picture | The part drawn in four views from its built solid, so you can see what was made. |
 | A STEP file | The solid, to open in the CAD you already use: SolidWorks, Fusion, Onshape, NX, CATIA, FreeCAD. Plates, flanges and lugs also export as a DXF cut profile, and a sheet-metal bracket as its flat blank with the bend lines marked. |
 | A one-page sheet | `anvilate view part.yaml` writes the drawings and every check into one HTML file you can print or send. |
+| The next step | For a whole machine: how far the design has come, and the one thing to do about it, read off the checks rather than chosen. The reducer above comes back with every whole-machine check passing and still not screened, because seven of its items are placeholders — and it says so. |
 
 Your agent writes a short spec from what you asked, and Anvilate does the rest on your
 machine. The files land in `./anvilate-out` (or the folder you name with
