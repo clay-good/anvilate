@@ -171,3 +171,28 @@ def test_a_dimension_label_never_leaves_the_view(size, view):
         assert points
         for x, y in points:
             assert 0 <= float(x) <= width and 0 <= float(y) <= height, (view, size, x, y)
+
+
+def test_every_character_the_sheet_keeps_has_a_glyph_to_draw_it():
+    """Two lists that have to agree, and nothing was holding them together.
+
+    `_plain` decides which characters survive onto a sheet and `_GLYPHS` decides how each
+    one is drawn — and `_text` falls back to a filled box for a character it has no strokes
+    for. So a character allowed through but never drawn does not fail, it prints a box, and
+    the sheet says something the caller did not write.
+    """
+    kept = "".join(chr(c) for c in range(32, 127) if projection._plain(chr(c)) != " ")
+    missing = sorted(c for c in kept.upper() if c != " " and c not in projection._GLYPHS)
+    assert not missing, (
+        f"`_plain` keeps {missing} and `_GLYPHS` has no strokes for them, so each would be "
+        "drawn as a filled box on every sheet that printed one"
+    )
+
+
+def test_a_line_of_text_on_a_sheet_says_what_it_says():
+    """The glyphs are strokes, so without a label the words exist only as line segments."""
+    drawn = projection._text("ratio 18:36", 12, 40, 12.96)
+    assert 'aria-label="ratio 18:36"' in drawn and drawn.count("<path") == 1
+    assert 'aria-label="a &amp; b &lt;c&gt; &quot;d&quot;"' in projection._text(
+        'a & b <c> "d"', 0, 0, 10
+    )

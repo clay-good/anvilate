@@ -13,6 +13,7 @@ import pytest
 pytest.importorskip("build123d")
 
 from anvilate._models import parse_yaml  # noqa: E402
+from anvilate.drivetrain import GEAR_DATA_COLUMNS, NOT_DECLARED  # noqa: E402
 from anvilate.product import Product, parse_product  # noqa: E402
 from anvilate.release import ReleaseRefused, export_package, verify_package  # noqa: E402
 from test_components import _record  # noqa: E402
@@ -169,7 +170,8 @@ def test_the_docs_page_names_every_file_the_package_writes(tmp_path):
     page = (_ROOT / "docs" / "release-package.md").read_text()
     first_cells = re.findall(r"^\| (`[^|]+`) \|", page, re.M)
     named = {name for cell in first_cells for name in re.findall(r"`([^`]+)`", cell)}
-    shapes = {"bom.csv", "bom.xlsx", "buy.csv", "manifest.json", "bom-<profile>.csv",
+    shapes = {"bom.csv", "bom.xlsx", "buy.csv", "gear-data.csv", "manifest.json",
+              "bom-<profile>.csv",
               "machined/<part number>_<revision>.step", ".html",
               "laser/<part number>_<revision>.dxf", "laser/cut-list.csv", "print/plate.3mf",
               "step/<part number>_<revision>.step", "step/<product>.step",
@@ -376,3 +378,57 @@ def test_the_drawings_are_gathered_into_one_pdf_marked_like_the_package(tmp_path
     assert {f.path: f.sha256 for f in again.files}["drawings/package.pdf"] == {
         f.path: f.sha256 for f in manifest.files
     }["drawings/package.pdf"]
+
+
+# --- the gear data block -------------------------------------------------------------------
+
+_REDUCER = _ROOT / "examples" / "products" / "gear_reducer.product.yaml"
+
+
+def test_the_package_carries_the_gear_data_block_and_prints_it_on_the_products_sheet(tmp_path):
+    """Drive trains 4.3. A gear cannot be made or bought from a view that can dimension its
+    bore and nothing about its teeth, so the block goes in the package and on the sheet."""
+    manifest = export_package(_REDUCER, tmp_path, release=False)
+    assert {f.path for f in manifest.files if f.role == "gear data"} == {"gear-data.csv"}
+    rows = _rows(tmp_path / "gear-data.csv")
+    assert list(rows[0]) == list(GEAR_DATA_COLUMNS)
+    assert [(r["item"], r["shaft"], r["mesh"], r["role"]) for r in rows] == [
+        ("p1", "input", "first-stage", "driver"),
+        ("w1", "counter", "first-stage", "driven"),
+        ("p2", "counter", "second-stage", "driver"),
+        ("w2", "output", "second-stage", "driven"),
+    ]
+    # Module 3 on 18 and 36 teeth, 20 degrees declared on both meshes, and a centre distance
+    # of (54 + 108)/2 = 81 mm that no mesh declares, so the row says where it came from.
+    assert rows[0]["module"] == "3 mm" and rows[1]["module"] == "3 mm"
+    assert rows[0]["pitch diameter"] == "54 mm" and rows[1]["pitch diameter"] == "108 mm"
+    assert rows[0]["pressure angle"] == "20 deg" and rows[0]["ratio"] == "18:36"
+    assert rows[0]["center distance"] == "81 mm"
+    assert rows[0]["center distance basis"] == "from the pitch radii"
+    # The gears are bought as stock gears not yet chosen, so what they will be cut to is not
+    # declared — and the block says that rather than filling it in.
+    assert rows[0]["basic rack"] == rows[0]["accuracy class"] == NOT_DECLARED
+
+    (sheet,) = [f.path for f in manifest.files if f.role == "assembly drawing"]
+    drawing = (tmp_path / sheet).read_text(encoding="utf-8")
+    # The sheet draws letters, digits and a little punctuation; a comma becomes a space.
+    assert "GEAR DATA" in drawing
+    assert "P1 ON INPUT  DRIVER IN FIRST-STAGE" in drawing
+    assert "TEETH 18  MODULE 3 MM  PITCH DIAMETER 54 MM  PRESSURE ANGLE 20 DEG" in drawing
+    # The ratio keeps its colon: "18 36" is two numbers a reader has to guess the relation
+    # of, so the renderer's character set has the one punctuation mark that says it.
+    assert "RATIO 18:36" in drawing
+    # The gears are stock gears not yet chosen, so the sheet names what they do not declare
+    # once, together, rather than printing "not declared" five times for each of them.
+    assert "NOT DECLARED: PROFILE SHIFT  BASIC RACK  ACCURACY CLASS  SPAN MEASUREMENT" in drawing
+    # The exploded sheet is the same views pulled apart; the block belongs on one of them.
+    (exploded,) = [f.path for f in manifest.files if f.role == "exploded assembly drawing"]
+    assert "GEAR DATA" not in (tmp_path / exploded).read_text(encoding="utf-8")
+
+
+def test_a_product_with_no_drive_train_writes_no_gear_data(tmp_path):
+    manifest = export_package(_STAGE, tmp_path, release=False)
+    assert not [f for f in manifest.files if f.role == "gear data"]
+    assert not (tmp_path / "gear-data.csv").exists()
+    (sheet,) = [f.path for f in manifest.files if f.role == "assembly drawing"]
+    assert "GEAR DATA" not in (tmp_path / sheet).read_text(encoding="utf-8")

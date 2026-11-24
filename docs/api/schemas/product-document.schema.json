@@ -678,13 +678,73 @@
     },
     "Gear": {
       "additionalProperties": false,
-      "description": "One gear: the item it is, its teeth, and its pitch diameter when declared.",
+      "description": "One gear: the item it is, its teeth, its pitch diameter, and what it is cut to.\n\nEverything after ``pitch_diameter`` is the data block: what a drawing view cannot\ndimension and a gear cannot be made or bought without. Each is optional and none is\nsupplied from this library — :func:`gear_data` names the fields a gear does not declare\nrather than filling them in, because a basic rack or an accuracy class nobody declared\nis a number a gear shop would cut to.\n\nNo helix angle and no hand: the loads this module derives are a spur train's. A declared\nhelix angle would make an axial load that :func:`solve_shaft_statics` does not carry, and\na helical gear screened as a spur one is a wrong answer rather than a missing one.",
       "properties": {
+        "accuracy_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accuracy Class"
+        },
+        "basic_rack": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basic Rack"
+        },
         "item": {
           "title": "Item",
           "type": "string"
         },
+        "over_pins_measurement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "pitch_diameter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "profile_shift": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": -1,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profile Shift"
+        },
+        "span_measurement": {
           "anyOf": [
             {
               "$ref": "#/$defs/Quantity"
@@ -2460,7 +2520,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.18.0",
+  "$id": "urn:anvilate:schema:product-document:1.19.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
@@ -2486,7 +2546,8 @@
         "1.15.0",
         "1.16.0",
         "1.17.0",
-        "1.18.0"
+        "1.18.0",
+        "1.19.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -2618,5 +2679,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.18.0"
+  "x-anvilate-version": "1.19.0"
 }

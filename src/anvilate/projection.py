@@ -313,10 +313,20 @@ def _text(text: str, x: float, y: float, height: float, *, anchor: str = "start"
                     [(left + index * advance + px * unit, y - py * unit) for px, py in stroke]
                 )
             )
+    # Labelled with what it says. These glyphs are strokes, not text, so without this the
+    # words on a sheet exist only as line segments: a screen reader has nothing to read,
+    # and nothing — a reader, a grep, or a test — can find a line the sheet prints.
     return (
         f'<path d="{" ".join(segments)}" fill="none" stroke="{_INK}" '
-        f'stroke-width="{max(1.0, height / 9):.2f}"/>'
+        f'stroke-width="{max(1.0, height / 9):.2f}" role="text" '
+        f'aria-label="{_escaped(text)}"/>'
     )
+
+
+def _escaped(text: str) -> str:
+    """``text`` as an XML attribute value."""
+    return (text.replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace('"', "&quot;"))  # fmt: skip
 
 
 def _dimension(
@@ -510,7 +520,12 @@ def _document(width: int, height: int, label: str, body: Sequence[str]) -> bytes
 
 
 def _plain(text: str) -> str:
-    return "".join(c if c.isalnum() or c in " .-_" else " " for c in text)
+    """``text`` reduced to the characters this renderer draws, the rest blanked.
+
+    The colon is in the set because a sheet has to be able to print a ratio: ``18:36``
+    blanked to ``18 36`` is two numbers a reader has to guess the relation of.
+    """
+    return "".join(c if c.isalnum() or c in " .-_:" else " " for c in text)
 
 
 def render_view(
@@ -613,6 +628,7 @@ def render_assembly(
     width_px: int,
     unit: str = "mm",
     dimensions: bool = True,
+    notes: Sequence[str] = (),
 ) -> tuple[bytes, int]:
     """A combination on one image: four views, each body in its own tone, and a parts list.
 
@@ -621,11 +637,16 @@ def render_assembly(
     ``marks`` put a numbered balloon on a body: ``(number, index into bodies)``.
     ``parts_list`` are the rows printed under the views, one per line of the bill of
     materials, so the numbers in the picture can be read off beside it.
+    ``notes`` are further rows printed under the parts list, after one blank row: a data
+    block the views cannot carry, such as a gear's teeth and the rack they are cut to.
     """
     from build123d import Compound
 
     lines = each_one(lines, str, named="lines")
     parts_list = each_one(parts_list, str, named="parts_list")
+    notes = each_one(notes, str, named="notes")
+    # One blank row between the two, so a reader never reads a note as a parts-list line.
+    printed = [*parts_list, *(("", *notes) if notes else ())]
     shape = Compound(children=[solid for _label, solid, _envelope in bodies])
     tags: dict[str, list[Any]] = {}
     palettes: dict[str, tuple[str, str, str]] = {}
@@ -646,7 +667,7 @@ def render_assembly(
     title = max(11.0, min(18.0, width_px / 50))
     small = title * 0.72
     row = small * 1.7
-    height_px = round(views_px + row * (len(parts_list) + 1))
+    height_px = round(views_px + row * (len(printed) + 1))
     body = [_text(_plain(name).upper(), 12, header * 0.45, title)]
     body.append(_text("   ".join(_plain(line).upper() for line in lines), 12, header * 0.85, small))
     for index, view in enumerate(VIEWS):
@@ -672,6 +693,6 @@ def render_assembly(
         f'{_polyline([(0, views_px), (width_px, views_px)])}" '
         f'fill="none" stroke="{_HIDDEN}"/>'
     )
-    for number, text in enumerate(parts_list):
+    for number, text in enumerate(printed):
         body.append(_text(_plain(text).upper(), 12, views_px + row * (number + 1), small))
     return _document(width_px, height_px, f"{_plain(name)} assembly", body), height_px

@@ -51,7 +51,18 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
       item's bounding box about it and gauges every envelope against the declared
       `min_clearance`, skipping one shaft's own items, gears in mesh, and pairs a mate
       holds. The worked reducer declares no axis until its gears sit on their shafts)
-- [ ] 4.3 Gear data block on drawings and in the release package
+- [x] 4.3 Gear data block on drawings and in the release package
+      (`gear_data` at document schema 1.19.0: teeth, module, pitch diameter, pressure angle,
+      profile shift, basic rack, accuracy class and the span or over-pins dimension, beside
+      the mesh the gear runs in, its mating gear, the ratio and the centre distance. It is
+      `gear-data.csv` in the release package and the block printed under the parts list of
+      the product's own assembly sheet. A field the gear does not declare reads
+      `not declared`, never a blank. Three refusals the block rests on: a mesh whose gears
+      are cut to different modules, which the centre-distance check cannot see; a gear two
+      meshes give two pressure angles; and a gear no mesh names. No helix angle or hand —
+      the axial load one makes waits on 3.1, and a helical gear screened as a spur one is a
+      wrong answer rather than a missing one. The gears are bought items with no part
+      drawing of their own, so the block is on the assembly sheet)
 - [ ] 4.4 Shigley power transmission case study as a golden test, re-derived from the
       chapter's published values
       (speeds, torques and tangential loads held, 10th ed. Ch. 18; shafts and bearings

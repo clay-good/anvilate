@@ -185,6 +185,60 @@ shaft is the overhanging-beam case and this is not it. A stepped shaft bends on 
 that changes along it, and averaging the steps would report a deflection nothing has, so
 `ShaftStiffness` takes one diameter and a stepped shaft waits.
 
+## The gear data block
+
+**A drawing view can dimension a gear's bore and face width and nothing about its teeth.**
+Everything a gear is actually made or bought by — the module, the tooth count, the rack the
+form follows, the accuracy it is cut to, the dimension it is inspected over — lives in a data
+block beside the views. `gear_data` writes it from the train:
+
+```python
+from anvilate.drivetrain import gear_data
+
+block = gear_data(train)
+block.to_csv()      # the eighteen columns, as the release package's gear-data.csv
+block.lines()       # field and value down the page, as the assembly sheet prints it
+```
+
+| Column | Where it comes from |
+| --- | --- |
+| item, shaft | the gear's item path, and the shaft the train says carries it |
+| teeth | declared on the gear |
+| module | derived: the pitch diameter over the tooth count |
+| pitch diameter | declared on the gear |
+| pressure angle | the mesh the gear runs in |
+| profile shift | declared on the gear; a design choice, so it cites no source |
+| basic rack, accuracy class | declared on the gear as a value **and** the standard it is to: `ISO 53:1998 profile A`, not a bare `A` |
+| span measurement, over-pins measurement | declared on the gear; which one a shop measures depends on the gear and its tooling, so neither is derived from the other |
+| mesh, role | the mesh, and whether this gear is its driver or its driven gear |
+| mates with, mating teeth | the gear at the other end of that mesh, and its teeth |
+| ratio | derived: the driver's teeth to the driven gear's |
+| center distance | the mesh's own when it declares one, and the sum of the two pitch radii when it does not |
+| center distance basis | which of those two the centre distance on this row is |
+
+Nothing here is supplied from this library, and a field the gear does not declare reads
+`not declared` rather than a blank: a blank cell reads as a value of nothing, and a basic
+rack nobody declared is a number a gear shop would cut to. The worked reducer's gears are
+bought as stock gears not yet chosen, so its block carries their teeth, module, pitch
+diameter and pressure angle and says the rest is not declared.
+
+One row per gear **per mesh**. A gear in two meshes — an idler — has one set of teeth and two
+mating gears, and the mating gear, the ratio and the centre distance are the mesh's and not
+the gear's, so neither row has to be read against the other to be understood.
+
+Three things a block cannot state while the declaration contradicts itself, so each is
+refused by `derive_flow` before the block is written:
+
+| Refused | Why |
+| --- | --- |
+| a mesh whose two gears are cut to different modules (4.233 mm and 6.35 mm) | two gears in mesh are cut to one module, and the centre-distance check cannot see this: the sum of the two pitch radii closes whatever the modules are. Held to 1%, so a pitch diameter written to three figures is not a mismatch and the closest two stock modules — 3 and 3.25, 8% apart — still are |
+| a gear two meshes give two pressure angles (20° and 25°) | the angle is the tooth form the gear was cut with; a train may carry a 20° stage and a 14.5° one, but not one gear in both |
+| a gear no mesh names | a gear that meshes with nothing is not in the train, and has no mating gear to state |
+
+There is no helix angle and no hand. The loads this module derives are a spur train's: a
+declared helix angle would make an axial load `solve_shaft_statics` does not carry, and a
+helical gear screened as a spur one is a wrong answer rather than a missing one.
+
 ## What the machine sweeps while it runs
 
 A clearance that holds with the machine stopped can close the moment it runs. A shaft that
@@ -211,9 +265,9 @@ declares no axis sweeps nothing and the entry says which declaration is missing.
 
 ## Not yet
 
-Axial loads from helical gears, a stepped shaft's curve, a bundled table of bearing and gear
-bending limits, the gear data block on the drawing, mesh geometry and rating against the gear
-standards, and the heat balance: the last two wait on a standard read rather than remembered.
+Helical gears and the axial loads they make, a stepped shaft's curve, a bundled table of
+bearing and gear bending limits, mesh geometry and rating against the gear standards, and the
+heat balance: the last two wait on a standard read rather than remembered.
 
 The worked reducer declares no shaft axis: its gear placeholders are boxes placed beside
 their shafts rather than turned about them, and sweeping a box that is not on the axis would

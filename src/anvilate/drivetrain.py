@@ -19,16 +19,25 @@ pitch-line velocity and tangential load. It refuses what a machine cannot be:
 :func:`screen_output_speed` holds the output speed against the required band, and
 :func:`check_typed_torque` refuses a torque typed on a mesh inside the train that
 contradicts the one the flow derives.
+
+:func:`gear_data` writes the gear data block: what each gear is, cut to and inspected over,
+beside the mesh it runs in. A drawing view can dimension a gear's bore and face width and
+nothing about its teeth, so the block is how a gear is made or bought, and it goes on the
+assembly sheet and into the release package as ``gear-data.csv``.
 """
 
 from __future__ import annotations
 
+import csv
+import io
+import textwrap
+from collections.abc import Sequence
 from math import cos, hypot, isclose, pi, sin, tan
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
-from ._models import Named, Provenance, StatableModel
+from ._models import ItemCollection, Named, Provenance, StatableModel
 
 if TYPE_CHECKING:  # the bearing demand type lives with the component record that reads it
     from .components import Demand
@@ -69,6 +78,12 @@ __all__ = [
     "ShaftCurve",
     "solve_shaft_curve",
     "screen_shaft_curve",
+    "GEAR_DATA_COLUMNS",
+    "NOT_DECLARED",
+    "SHEET_WIDTH",
+    "GearDataRow",
+    "GearData",
+    "gear_data",
 ]
 
 _SOURCE = "the drive train declaration: shafts, gears, meshes, the input and the output"
@@ -103,7 +118,18 @@ def _of_angle(value: Quantity, *, name: str) -> float:
 
 
 class Gear(StatableModel):
-    """One gear: the item it is, its teeth, and its pitch diameter when declared."""
+    """One gear: the item it is, its teeth, its pitch diameter, and what it is cut to.
+
+    Everything after ``pitch_diameter`` is the data block: what a drawing view cannot
+    dimension and a gear cannot be made or bought without. Each is optional and none is
+    supplied from this library — :func:`gear_data` names the fields a gear does not declare
+    rather than filling them in, because a basic rack or an accuracy class nobody declared
+    is a number a gear shop would cut to.
+
+    No helix angle and no hand: the loads this module derives are a spur train's. A declared
+    helix angle would make an axial load that :func:`solve_shaft_statics` does not carry, and
+    a helical gear screened as a spur one is a wrong answer rather than a missing one.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
     # A product document declares this, so every number in it is finite.
@@ -112,11 +138,26 @@ class Gear(StatableModel):
     item: Named
     teeth: int = Field(ge=1, le=10_000, strict=True)
     pitch_diameter: Quantity | None = None
+    # The profile-shift coefficient x: a design choice, not a number read from a table, so
+    # it declares no source. Outside +/-1 the tooth is not the form these screens describe.
+    profile_shift: float | None = Field(default=None, ge=-1, le=1, allow_inf_nan=False)
+    # The rack the tooth form follows and the accuracy the gear is cut to, each as a value
+    # and the standard it is to in one cited statement: the field is "ISO 53:1998 profile A"
+    # and "ISO 1328-1:2013 class 7", never a bare "A" or "7" that no reader can resolve.
+    basic_rack: Provenance | None = None
+    accuracy_class: Provenance | None = None
+    # What the gear is inspected over. Which of the two a shop measures depends on the gear
+    # and its tooling, so neither is derived from the other.
+    span_measurement: Quantity | None = None
+    over_pins_measurement: Quantity | None = None
 
     @model_validator(mode="after")
     def _sized(self) -> Gear:
-        if self.pitch_diameter is not None:
-            _of(self.pitch_diameter, "[length]", name=f"{self.item} pitch_diameter")
+        for value, name in ((self.pitch_diameter, "pitch_diameter"),
+                            (self.span_measurement, "span_measurement"),
+                            (self.over_pins_measurement, "over_pins_measurement")):  # fmt: skip
+            if value is not None:
+                _of(value, "[length]", name=f"{self.item} {name}")
         return self
 
 
@@ -463,8 +504,10 @@ def derive_flow(train: DriveTrain) -> DriveFlow:
 
     A driven gear turns at the driver's speed times the driver's teeth over its own, and
     receives the driver's power times the mesh efficiency. Refused, naming what to correct:
-    a gear on no shaft, a shaft two paths give different speeds, a shaft nothing drives, a
-    center distance that does not close, a reverted layout whose stages differ.
+    a gear on no shaft or in no mesh, a shaft two paths give different speeds, a shaft
+    nothing drives, a center distance that does not close, a mesh whose two gears are cut to
+    different modules, a gear two meshes cut to different pressure angles, a reverted layout
+    whose stages differ.
     """
     if not isinstance(train, DriveTrain):
         raise _refuse("train must be a DriveTrain", subject="train")
@@ -487,6 +530,11 @@ def derive_flow(train: DriveTrain) -> DriveFlow:
         if on[mesh.driver] == on[mesh.driven]:
             raise _refuse(f"mesh {mesh.name} joins two gears on one shaft, "
                           f"{on[mesh.driver]}", subject="meshes")  # fmt: skip
+    meshed = {g for m in train.meshes for g in (m.driver, m.driven)}
+    idle = sorted(set(gears) - meshed)
+    if idle:
+        raise _refuse(f"gears {idle} are declared and mesh with nothing; a gear in the train "
+                      "runs in at least one mesh", subject="gears")  # fmt: skip
     if train.input.shaft not in names:
         raise _refuse(f"the input drives {train.input.shaft}, which is not a declared shaft",
                       subject="input")  # fmt: skip
@@ -561,10 +609,55 @@ def _mesh_state(mesh: Mesh, gears: dict[str, Gear], torque: float, omega: float)
     )  # fmt: skip
 
 
+def _one_tooth_form(train: DriveTrain) -> None:
+    """A gear is cut to one pressure angle, so every mesh it runs in declares the same one.
+
+    Each mesh declares its own angle, which is right — a train can carry a 20-degree stage
+    and a 14.5-degree one. What it cannot carry is one gear in both of them: the angle is
+    the tooth form the gear was cut with, so two meshes that give one gear two angles have
+    one of them wrong, and both the radial load split and the data block would state it.
+    """
+    seen: dict[str, tuple[str, float]] = {}
+    for mesh in train.meshes:
+        if mesh.pressure_angle is None:
+            continue
+        angle = mesh.pressure_angle.to("degree").magnitude
+        for gear in (mesh.driver, mesh.driven):
+            first = seen.setdefault(gear, (mesh.name, angle))
+            if not isclose(first[1], angle, rel_tol=1e-9):
+                raise _refuse(
+                    f"gear {gear} runs in mesh {first[0]} at a pressure angle of "
+                    f"{first[1]:.4g} degrees and in mesh {mesh.name} at {angle:.4g} degrees; "
+                    "a gear is cut to one pressure angle",
+                    subject="pressure_angle",
+                )  # fmt: skip
+
+
 def _closes(train: DriveTrain, gears: dict[str, Gear]) -> None:
+    _one_tooth_form(train)
     sums: list[tuple[str, float]] = []
     for mesh in train.meshes:
         a, b = gears[mesh.driver].pitch_diameter, gears[mesh.driven].pitch_diameter
+        if a is not None and b is not None:
+            # Two gears in mesh are cut to one module. The centre-distance check below
+            # cannot see a mismatch, because the sum of the two pitch radii closes whatever
+            # the modules are: 54 mm on 18 teeth and 108 mm on 27 sum to the same 81 mm as
+            # 54 and 108 on 18 and 36, and only one of those two pairs can run.
+            first = a.to("m").magnitude / gears[mesh.driver].teeth
+            second = b.to("m").magnitude / gears[mesh.driven].teeth
+            # One percent, which is neither of the two tolerances it might have been. Tighter
+            # refuses a document that is right: a pitch diameter written to three figures —
+            # 2.67 in for the case study's 16/6 — is 0.125% off the module it came from, and
+            # at 1e-3 that reads as a mismatch. Looser stops seeing the thing it is for: the
+            # closest two stock modules are 3 and 3.25, which are 8% apart, and the closest
+            # two diametral pitches 6 and 7, which are 17%.
+            if not isclose(first, second, rel_tol=1e-2):
+                raise _refuse(
+                    f"mesh {mesh.name} joins {mesh.driver} at a module of "
+                    f"{first * 1000:.4g} mm to {mesh.driven} at {second * 1000:.4g} mm; two "
+                    "gears in mesh are cut to one module",
+                    subject="teeth, pitch_diameter",
+                )  # fmt: skip
         computed = None if a is None or b is None else (a.to("m").magnitude
                                                          + b.to("m").magnitude) / 2  # fmt: skip
         declared = (None if mesh.center_distance is None
@@ -1140,3 +1233,289 @@ def screen_shaft_curve(
 def _within(value: Quantity, limit: Quantity, kind: str) -> bool:
     unit = "degree" if kind == "slope" else "mm"
     return value.to(unit).magnitude <= limit.to(unit).magnitude
+
+
+#: The gear data block's columns, in the order a drawing and ``gear-data.csv`` print them.
+GEAR_DATA_COLUMNS = (
+    "item", "shaft", "teeth", "module", "pitch diameter", "pressure angle", "profile shift",
+    "basic rack", "accuracy class", "span measurement", "over-pins measurement", "mesh",
+    "role", "mates with", "mating teeth", "ratio", "center distance", "center distance basis",
+)  # fmt: skip
+
+#: What a cell says when the declaration holds nothing for it. Not a blank: a blank cell is
+#: read as a value of nothing, and a reader cannot tell it from a field the writer dropped.
+NOT_DECLARED = "not declared"
+
+# A cell a spreadsheet would evaluate rather than show. The same leads `service_life` guards,
+# for the same reason: a profile shift of -0.5 is a number, not the start of a formula.
+_FORMULA_LEADS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(cell: str) -> str:
+    return "'" + cell if cell.startswith(_FORMULA_LEADS) else cell
+
+
+#: How wide a line of the sheet block may be, in characters.
+#:
+#: Measured against the sheet :mod:`anvilate.release` draws rather than guessed: it is
+#: 1,100 px wide, its small text is 12.96 px tall, and ``projection._text_width`` advances
+#: 5.6 units of a sixth of that per character — 12.096 px — from x = 12. So 89 characters
+#: reach the edge of the paper, 86 once a line is indented under its gear, and 80 leaves
+#: room for a sheet drawn a little narrower. A line past it is not wrapped by the renderer;
+#: it is simply drawn off the page, which is why this is checked and not trusted.
+SHEET_WIDTH = 80
+
+
+def _grouped(pieces: Sequence[str], width: int) -> list[str]:
+    """``pieces`` joined with commas into the fewest lines no wider than ``width``.
+
+    A piece stays whole while it fits, so a field and its value are read together. One
+    longer than ``width`` on its own is wrapped and not left to overhang: the sheet's
+    renderer does not wrap, it simply draws a long line past the edge of the paper, and a
+    citation nobody can read the end of is worth no more than one that was cut.
+    """
+    lines: list[str] = []
+    for piece in pieces:
+        if lines and len(lines[-1]) + 2 + len(piece) <= width:
+            lines[-1] = f"{lines[-1]}, {piece}"
+        else:
+            lines.append(piece)
+    return [part for line in lines for part in (textwrap.wrap(line, width=width) or [line])]
+
+
+#: How the sheet introduces the fields a gear does not declare.
+_MISSING = f"{NOT_DECLARED}: "
+
+
+def _mm(value: Quantity | None) -> str:
+    return NOT_DECLARED if value is None else f"{value.to('mm').magnitude:.4g} mm"
+
+
+def _deg(value: Quantity | None) -> str:
+    return NOT_DECLARED if value is None else f"{value.to('degree').magnitude:.4g} deg"
+
+
+#: Where a row's centre distance came from. Spelled out rather than built from
+#: :data:`NOT_DECLARED`, because a ``Literal`` takes literals and a name inside one is a
+#: type nothing checks.
+_CentreBasis = Literal["declared", "from the pitch radii", "not declared"]
+
+
+class GearDataRow(StatableModel):
+    """One gear's data block, read from the side of one mesh it runs in.
+
+    A gear that runs in two meshes — an idler, or a countershaft's wheel and pinion when
+    they are one part — gets one row per mesh, because the mating gear, the ratio and the
+    centre distance are properties of the mesh and not of the gear. Its own tooth data
+    repeats, and nothing in the block has to be read against a second column to be
+    understood.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    item: Named
+    shaft: Named
+    teeth: int = Field(ge=1, le=10_000, strict=True)
+    mesh: Named
+    role: Literal["driver", "driven"]
+    mates_with: Named
+    mating_teeth: int = Field(ge=1, le=10_000, strict=True)
+    module: Quantity | None = None
+    pitch_diameter: Quantity | None = None
+    pressure_angle: Quantity | None = None
+    profile_shift: float | None = Field(default=None, ge=-1, le=1, allow_inf_nan=False)
+    basic_rack: Provenance | None = None
+    accuracy_class: Provenance | None = None
+    span_measurement: Quantity | None = None
+    over_pins_measurement: Quantity | None = None
+    center_distance: Quantity | None = None
+    center_distance_basis: _CentreBasis
+
+    @model_validator(mode="after")
+    def _agrees(self) -> GearDataRow:
+        """The module cannot disagree with the diameter and the tooth count it came from.
+
+        It is carried as a field because a gear is ordered by its module, and a reader of
+        the row should not have to divide to get it. Carrying it means it can be written
+        wrong, so the row is the one place that checks it: a block whose module does not
+        follow from its own two numbers is a block that cannot be cut to.
+        """
+        if self.module is None:
+            if self.pitch_diameter is not None:
+                raise _refuse(f"{self.item} gives a pitch diameter and no module; the module "
+                              "is the diameter over the tooth count",
+                              subject="module")  # fmt: skip
+            return self
+        if self.pitch_diameter is None:
+            raise _refuse(f"{self.item} gives a module and no pitch diameter; neither "
+                          "follows from the tooth count alone",
+                          subject="pitch_diameter")  # fmt: skip
+        follows = self.pitch_diameter.to("mm").magnitude / self.teeth
+        if not isclose(self.module.to("mm").magnitude, follows, rel_tol=1e-9):
+            raise _refuse(f"{self.item} states a module of {self.module} beside a pitch "
+                          f"diameter of {self.pitch_diameter} on {self.teeth} teeth, which "
+                          f"is a module of {follows:.6g} mm", subject="module")  # fmt: skip
+        return self
+
+    def ratio(self) -> str:
+        """The mesh's tooth ratio, driver teeth to driven teeth, from this gear's side."""
+        driver, driven = ((self.teeth, self.mating_teeth) if self.role == "driver"
+                          else (self.mating_teeth, self.teeth))  # fmt: skip
+        return f"{driver}:{driven}"
+
+    def cells(self) -> tuple[str, ...]:
+        """The row in :data:`GEAR_DATA_COLUMNS` order, every value or what it does not say."""
+        return (
+            self.item, self.shaft, str(self.teeth), _mm(self.module), _mm(self.pitch_diameter),
+            _deg(self.pressure_angle),
+            NOT_DECLARED if self.profile_shift is None else f"{self.profile_shift:.4g}",
+            self.basic_rack or NOT_DECLARED, self.accuracy_class or NOT_DECLARED,
+            _mm(self.span_measurement), _mm(self.over_pins_measurement), self.mesh, self.role,
+            self.mates_with, str(self.mating_teeth), self.ratio(), _mm(self.center_distance),
+            self.center_distance_basis,
+        )  # fmt: skip
+
+    def _fields(self) -> tuple[tuple[str, str | None], ...]:
+        """Each of the row's values as ``(field, value)``, with ``None`` for undeclared.
+
+        The labels are :data:`GEAR_DATA_COLUMNS`' own names and the values are
+        :meth:`cells`', so the sheet and the CSV cannot come to say different things. The
+        three the sheet's heading line already states — the item, its shaft and the mesh it
+        runs in — are not repeated. The centre distance is never ``None``: a row that has
+        none says so in its basis, which travels with it.
+        """
+        shift = None if self.profile_shift is None else f"{self.profile_shift:.4g}"
+        return (
+            ("teeth", str(self.teeth)),
+            ("module", _mm(self.module) if self.module else None),
+            ("pitch diameter", _mm(self.pitch_diameter) if self.pitch_diameter else None),
+            ("pressure angle", _deg(self.pressure_angle) if self.pressure_angle else None),
+            ("profile shift", shift),
+            ("basic rack", self.basic_rack),
+            ("accuracy class", self.accuracy_class),
+            ("span measurement", _mm(self.span_measurement) if self.span_measurement else None),
+            ("over-pins measurement",
+             _mm(self.over_pins_measurement) if self.over_pins_measurement else None),
+            ("mates with", f"{self.mates_with} at {self.mating_teeth} teeth"),
+            ("ratio", self.ratio()),
+            ("center distance",
+             f"{_mm(self.center_distance)} ({self.center_distance_basis})"),
+        )  # fmt: skip
+
+    def stated(self) -> tuple[str, ...]:
+        """Each field the gear declares, as "<field> <value>"."""
+        return tuple(f"{field} {value}" for field, value in self._fields() if value is not None)
+
+    def unstated(self) -> tuple[str, ...]:
+        """The names of the fields it does not declare."""
+        return tuple(field for field, value in self._fields() if value is None)
+
+    def __str__(self) -> str:
+        return "  ".join(self.cells())
+
+
+class GearData(ItemCollection, StatableModel):
+    """Every gear's data block, one row per mesh each gear runs in.
+
+    One field, so ``len``, iteration and ``in`` answer about the rows and not about the
+    model's own field names, which is what pydantic would otherwise have them say.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    rows: tuple[GearDataRow, ...] = Field(min_length=1, max_length=256)
+
+    def to_csv(self) -> str:
+        """The block as CSV: the header row, then every gear in declaration order."""
+        out = io.StringIO()
+        writer = csv.writer(out, lineterminator="\n")
+        writer.writerow(GEAR_DATA_COLUMNS)
+        for row in self.rows:
+            writer.writerow([_csv_safe(cell) for cell in row.cells()])
+        return out.getvalue()
+
+    def lines(self) -> tuple[str, ...]:
+        """The block as lines for a drawing sheet: a heading per gear, then its fields.
+
+        Field and value together, down the sheet, rather than the CSV's eighteen columns
+        across it: a row of that table is over two hundred characters and would run off the
+        edge of the sheet it was printed on. Every field the CSV carries is here — the ones
+        the gear declares with their values, and the rest named together on one
+        ``not declared`` line — grouped into lines no wider than :data:`SHEET_WIDTH`, so a
+        long citation wraps instead of being drawn off the page. A drawing prints only
+        letters, digits and a little punctuation, so no value here is written with a degree
+        sign or a middle dot.
+        """
+        out = ["gear data"]
+        for row in self.rows:
+            out.append(f"{row.item} on {row.shaft}, {row.role} in {row.mesh}")
+            out += [f"   {line}" for line in _grouped(row.stated(), SHEET_WIDTH - 3)]
+            # The fields the gear does not declare, named once together rather than one
+            # "not declared" line each. The CSV says it per field, because a column has to
+            # hold something; a sheet that said it twelve times over four gears would bury
+            # the four values that are there.
+            missing = _grouped(row.unstated(), SHEET_WIDTH - len(_MISSING) - 3)
+            for number, line in enumerate(missing):
+                out.append(f"   {_MISSING}{line}" if number == 0 else f"      {line}")
+        return tuple(out)
+
+    def __str__(self) -> str:
+        return "\n".join(self.lines())
+
+
+def gear_data(train: DriveTrain) -> GearData:
+    """The gear data block of a declared drive train, one row per gear per mesh.
+
+    Derived: the module, from each gear's pitch diameter over its tooth count; the pressure
+    angle, from the mesh the gear runs in; the ratio, from the two tooth counts; and the
+    centre distance, which is the mesh's own when it declares one and the sum of the pitch
+    radii when it does not — the row says which of the two it is. Everything else is the
+    declaration's, and a field the gear does not declare reads :data:`NOT_DECLARED`.
+
+    The gears are walked in declaration order and the meshes within each gear in theirs, so
+    the block a product writes twice is the same block both times.
+    """
+    if not isinstance(train, DriveTrain):
+        raise _refuse("train must be a DriveTrain", subject="train")
+    on = _carriers(train)
+    gears = {g.item: g for g in train.gears}
+    rows: list[GearDataRow] = []
+    for gear in train.gears:
+        for mesh in train.meshes:
+            if gear.item not in (mesh.driver, mesh.driven):
+                continue
+            other = mesh.driven if gear.item == mesh.driver else mesh.driver
+            mating = gears.get(other)
+            if mating is None or other not in on or gear.item not in on:
+                raise _refuse(f"mesh {mesh.name} names {other}, which is not a declared gear "
+                              "on a shaft; the train's flow is derived before its data block",
+                              subject="meshes")  # fmt: skip
+            radii = (gear.pitch_diameter, mating.pitch_diameter)
+            distance: Quantity | None = None
+            basis: _CentreBasis = "not declared"
+            if mesh.center_distance is not None:
+                distance, basis = mesh.center_distance, "declared"
+            elif all(r is not None for r in radii):
+                total = sum(r.to("mm").magnitude for r in radii if r is not None) / 2
+                distance, basis = Quantity(magnitude=total, unit="mm"), "from the pitch radii"
+            module = (
+                None
+                if gear.pitch_diameter is None
+                else Quantity(
+                    magnitude=gear.pitch_diameter.to("mm").magnitude / gear.teeth, unit="mm"
+                )
+            )
+            rows.append(GearDataRow(
+                item=gear.item, shaft=on[gear.item], teeth=gear.teeth, mesh=mesh.name,
+                role="driver" if gear.item == mesh.driver else "driven", mates_with=other,
+                mating_teeth=mating.teeth, module=module, pitch_diameter=gear.pitch_diameter,
+                pressure_angle=mesh.pressure_angle, profile_shift=gear.profile_shift,
+                basic_rack=gear.basic_rack, accuracy_class=gear.accuracy_class,
+                span_measurement=gear.span_measurement,
+                over_pins_measurement=gear.over_pins_measurement,
+                center_distance=distance, center_distance_basis=basis,
+            ))  # fmt: skip
+    if not rows:
+        raise _refuse("the train declares no gear in any mesh, so it has no data block",
+                      subject="meshes")  # fmt: skip
+    return GearData(rows=tuple(rows))

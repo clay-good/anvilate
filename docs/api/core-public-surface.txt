@@ -952,6 +952,12 @@ drivetrain.solve_shaft_statics
 drivetrain.bearing_demands
 drivetrain.solve_shaft_curve
 drivetrain.screen_shaft_curve
+drivetrain.GEAR_DATA_COLUMNS
+drivetrain.NOT_DECLARED
+drivetrain.SHEET_WIDTH
+drivetrain.GearDataRow
+drivetrain.GearData
+drivetrain.gear_data
 industry.industry_profile
 journey.NEXT_STEP_TOOLS
 journey.NextStep

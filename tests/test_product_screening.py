@@ -950,10 +950,20 @@ def test_a_train_that_cannot_be_a_machine_is_refused_before_anything_is_built():
     document["drive_train"]["shafts"].append({"name": "base", "carries": ["base"]})
     with pytest.raises(ValueError, match="driven by nothing from the input"):
         parse_product(document)
+    # 54 mm on 18 teeth and 216 mm on 72 are both module 3, and their radii sum to 135 mm.
+    document = _reducer_document()
+    document["drive_train"]["meshes"][0]["center_distance"] = _q(150, "mm")
+    with pytest.raises(ValueError, match="declares a center distance of 150 mm and its "
+                                         "pitch radii sum to 135 mm"):  # fmt: skip
+        parse_product(document)
+    # And a mesh whose two gears are not cut to one module, which the centre-distance check
+    # cannot see at all: the sum of the two pitch radii closes whatever the modules are, so
+    # this pair would have passed above with a centre distance of 77 mm declared on it.
     document = _reducer_document()
     document["drive_train"]["gears"][1]["pitch_diameter"] = _q(100, "mm")
-    document["drive_train"]["meshes"][0]["center_distance"] = _q(135, "mm")
-    with pytest.raises(ValueError, match="declares a center distance of 135 mm"):
+    document["drive_train"]["meshes"][0]["center_distance"] = _q(77, "mm")
+    with pytest.raises(ValueError, match="joins pinion at a module of 3 mm to wheel at "
+                                         "1.389 mm"):  # fmt: skip
         parse_product(document)
 
 

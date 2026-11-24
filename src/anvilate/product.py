@@ -1059,7 +1059,10 @@ class Product(StatableModel):
     # 1.17.0 the drive train over its items — which shafts carry which gears, which gears
     # mesh, the one input and the output it must deliver — and 1.18.0 the axis each shaft
     # turns about, which is what lets a turning item sweep an envelope and have its clearance
-    # checked while the machine runs; an older document reads unchanged.
+    # checked while the machine runs, and 1.19.0 each gear's data block — the profile shift,
+    # the basic rack, the accuracy class and the dimension it is inspected over, which are
+    # what a gear is made or bought by and what no drawing view can dimension; an older
+    # document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -1080,6 +1083,7 @@ class Product(StatableModel):
         "1.16.0",
         "1.17.0",
         "1.18.0",
+        "1.19.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

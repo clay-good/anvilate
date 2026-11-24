@@ -14,10 +14,14 @@ from math import pi
 import pytest
 
 from anvilate.drivetrain import (
+    GEAR_DATA_COLUMNS,
+    NOT_DECLARED,
+    SHEET_WIDTH,
     DriveInput,
     DriveShaft,
     DriveTrain,
     Gear,
+    GearDataRow,
     Mesh,
     RequiredOutput,
     ShaftStation,
@@ -26,6 +30,7 @@ from anvilate.drivetrain import (
     bearing_demands,
     check_typed_torque,
     derive_flow,
+    gear_data,
     screen_output_speed,
     screen_shaft_curve,
     solve_shaft_curve,
@@ -710,3 +715,278 @@ def test_the_curve_renders_its_span_and_every_point_and_names_an_unknown_one():
     assert lines[2] == "  gear 5 at 150 mm: 0.1019 mm, 0°"
     with pytest.raises(RefusalError, match="no point named 'Z'"):
         curve.point("Z")
+
+
+# --- the gear data block ------------------------------------------------------------------
+# A drawing view dimensions a gear's bore and face width and nothing about its teeth, so the
+# block is how a gear is made or bought. Its rule is that it states what the declaration
+# holds and what the train derives, and names the rest as not declared rather than filling it
+# in: a basic rack or an accuracy class nobody declared is a number a gear shop would cut to.
+
+
+def test_the_block_states_one_row_per_gear_per_mesh_with_the_module_and_ratio_derived():
+    data = gear_data(_reducer())
+    assert [(r.item, r.mesh, r.role, r.mates_with) for r in data.rows] == [
+        ("gear 2", "2-3", "driver", "gear 3"),
+        ("gear 3", "2-3", "driven", "gear 2"),
+        ("gear 4", "4-5", "driver", "gear 5"),
+        ("gear 5", "4-5", "driven", "gear 4"),
+    ]
+    first = data.rows[0]
+    # P = 6 teeth/in, so the module is 1/6 in = 4.2333 mm, and 16 teeth give 2.6667 in.
+    assert first.module.to("mm").magnitude == pytest.approx(25.4 / 6, rel=1e-12)
+    assert first.pitch_diameter.to("in").magnitude == pytest.approx(16 / 6, rel=1e-12)
+    assert first.ratio() == "16:72" and data.rows[1].ratio() == "16:72"
+    # No mesh declares a centre distance, so every row says the sum of the pitch radii is
+    # where its own came from: (2.6667 + 12)/2 in = 7.3333 in = 186.267 mm.
+    assert first.center_distance_basis == "from the pitch radii"
+    assert first.center_distance.to("mm").magnitude == pytest.approx(186.2666, rel=1e-5)
+
+
+def test_a_declared_centre_distance_is_the_rows_and_says_so():
+    meshes = tuple(m.model_copy(update={"center_distance": _q("7.3333 in")})
+                   for m in _reducer().meshes)  # fmt: skip
+    row = gear_data(_reducer(meshes=meshes)).rows[0]
+    assert row.center_distance_basis == "declared"
+    assert row.center_distance.to("in").magnitude == pytest.approx(7.3333, rel=1e-9)
+
+
+def test_every_declared_field_reaches_the_block_and_an_undeclared_one_says_so():
+    gears = (Gear(item="gear 2", teeth=16, pitch_diameter=_q("2.6667 in"), profile_shift=0.3,
+                  basic_rack="ISO 53:1998 profile A", accuracy_class="ISO 1328-1:2013 class 7",
+                  span_measurement=_q("23.14 mm"), over_pins_measurement=_q("29.08 mm")),
+             _gear("gear 3", 72), _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    rows = gear_data(_reducer(gears=gears)).rows
+    cells = dict(zip(GEAR_DATA_COLUMNS, rows[0].cells(), strict=True))
+    assert cells["profile shift"] == "0.3" and cells["basic rack"] == "ISO 53:1998 profile A"
+    assert cells["accuracy class"] == "ISO 1328-1:2013 class 7"
+    assert (cells["span measurement"], cells["over-pins measurement"]) == ("23.14 mm", "29.08 mm")
+    # The reducer's meshes declare no pressure angle and gear 3 declares none of the rest.
+    assert cells["pressure angle"] == NOT_DECLARED
+    bare = dict(zip(GEAR_DATA_COLUMNS, rows[1].cells(), strict=True))
+    assert bare["profile shift"] == bare["basic rack"] == NOT_DECLARED
+    assert bare["accuracy class"] == bare["span measurement"] == NOT_DECLARED
+    assert bare["over-pins measurement"] == NOT_DECLARED
+
+
+def test_the_sheet_block_and_the_csv_say_the_same_thing():
+    """Two renderings of one block, and only the CSV's columns are named in one place.
+
+    The sheet prints field and value down the page because a row of the CSV is over two
+    hundred characters wide; that is a second renderer, and a second renderer is where a
+    field added to one and not the other goes unnoticed. So the gate is every value of
+    every row: a cell the sheet drops is a cell this finds.
+    """
+    gears = (Gear(item="gear 2", teeth=16, pitch_diameter=_q("2.6667 in"), profile_shift=0.3,
+                  basic_rack="ISO 53:1998 profile A", accuracy_class="ISO 1328-1:2013 class 7",
+                  span_measurement=_q("23.14 mm"), over_pins_measurement=_q("29.08 mm")),
+             _gear("gear 3", 72), _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    data = gear_data(_reducer(gears=gears))
+    sheet = "\n".join(data.lines())
+    assert data.lines()[0] == "gear data"
+    for row in data.rows:
+        for column, cell in zip(GEAR_DATA_COLUMNS, row.cells(), strict=True):
+            assert cell in sheet, f"the sheet block drops the {column} {cell!r}"
+    # Every column name too, so a field the gear does not declare is still named: the sheet
+    # gathers those onto one "not declared" line instead of repeating the phrase per field.
+    # All but the five the heading line already states and the basis, which the sheet
+    # carries inside the centre distance it qualifies rather than as a field of its own.
+    stated_in_the_heading = ("item", "shaft", "mesh", "role", "mating teeth")
+    for column in GEAR_DATA_COLUMNS:
+        if column not in (*stated_in_the_heading, "center distance basis"):
+            assert column in sheet, f"the sheet block never names the {column!r} field"
+    # Gear 2 declares every field of its own; the reducer's meshes declare no pressure
+    # angle, so that is the one thing missing from its row. Gear 3 declares none of them.
+    assert "not declared: pressure angle\n" in sheet
+    assert ("not declared: pressure angle, profile shift, basic rack, accuracy class\n"
+            "      span measurement, over-pins measurement") in sheet  # fmt: skip
+
+
+def test_no_line_of_the_sheet_block_is_drawn_off_the_page():
+    """The renderer does not wrap. A line past the paper's width is simply drawn past it.
+
+    So the gate is the sheet's own arithmetic, not the string's length: `release` draws at
+    1,100 px and `projection._text_width` says how wide a line of that sheet's small text
+    is. The first block written here overflowed by nine characters and every string-length
+    assertion over it passed.
+    """
+    from anvilate.projection import _plain, _text_width
+
+    width_px = 1100  # what `release._assembly_drawings` asks for
+    small = max(11.0, min(18.0, width_px / 50)) * 0.72
+    # And the constant itself against that sheet, so raising it fails here rather than on
+    # the paper: 89 characters reach the edge, and a block line is indented three under its
+    # gear.
+    assert SHEET_WIDTH + 3 <= (width_px - 12) / _text_width("x", small)
+    cited = "ISO 1328-1:2013 class 7 to a tolerance class nobody would write out this long"
+    gears = (Gear(item="gear 2", teeth=16, pitch_diameter=_q("2.6667 in"), profile_shift=0.3,
+                  basic_rack=cited, accuracy_class=cited, span_measurement=_q("23.14 mm"),
+                  over_pins_measurement=_q("29.08 mm")),
+             _gear("gear 3", 72), _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    for line in gear_data(_reducer(gears=gears)).lines():
+        drawn = 12 + _text_width(_plain(line).upper(), small)
+        assert drawn <= width_px, f"{line!r} is drawn {drawn - width_px:.0f} px off the page"
+
+
+def test_the_csv_header_is_the_blocks_columns_and_a_negative_shift_is_not_a_formula():
+    gears = (Gear(item="gear 2", teeth=16, pitch_diameter=_q("2.6667 in"), profile_shift=-0.3),
+             _gear("gear 3", 72), _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    text = gear_data(_reducer(gears=gears)).to_csv()
+    header, first = text.splitlines()[:2]
+    assert header == ",".join(GEAR_DATA_COLUMNS)
+    # "-0.3" is a number a spreadsheet would read as the start of a formula.
+    assert "'-0.3" in first and first.startswith("gear 2,input,16,")
+
+
+def test_an_idler_gets_a_row_per_mesh_with_its_own_mating_data_in_each():
+    """A gear in two meshes has one set of teeth and two mating gears, and the row is per
+    mesh so neither row has to be read against the other to be understood."""
+    train = DriveTrain(
+        shafts=(DriveShaft(name="input", carries=("gear 2",)),
+                DriveShaft(name="idler", carries=("gear 3",)),
+                DriveShaft(name="output", carries=("gear 4",))),
+        gears=(_gear("gear 2", 16), _gear("gear 3", 24), _gear("gear 4", 48)),
+        meshes=(Mesh(name="2-3", driver="gear 2", driven="gear 3", efficiency=1.0,
+                     source=_SHIGLEY),
+                Mesh(name="3-4", driver="gear 3", driven="gear 4", efficiency=1.0,
+                     source=_SHIGLEY)),
+        input=DriveInput(shaft="input", speed=_q("1750 rpm"), power=_q("20 hp")),
+    )  # fmt: skip
+    rows = [r for r in gear_data(train).rows if r.item == "gear 3"]
+    assert [(r.mesh, r.role, r.mates_with, r.ratio()) for r in rows] == [
+        ("2-3", "driven", "gear 2", "16:24"),
+        ("3-4", "driver", "gear 4", "24:48"),
+    ]
+    assert {r.teeth for r in rows} == {24} and {r.shaft for r in rows} == {"idler"}
+
+
+def test_a_module_that_does_not_follow_from_the_diameter_and_the_teeth_is_refused():
+    """The module is carried because a gear is ordered by it, and carried means writable."""
+    fields = {"item": "gear 2", "shaft": "input", "teeth": 16, "mesh": "2-3",
+              "role": "driver", "mates_with": "gear 3", "mating_teeth": 72,
+              "pitch_diameter": _q("2.6667 in"), "center_distance_basis": NOT_DECLARED}  # fmt: skip
+    # A refusal raised inside a model validator reaches the caller as pydantic's own
+    # ValidationError, which is a ValueError; the message is the refusal's.
+    with pytest.raises(ValueError, match="which is a module of 4.23"):
+        GearDataRow(**fields, module=_q("5 mm"))
+    with pytest.raises(ValueError, match="gives a pitch diameter and no module"):
+        GearDataRow(**fields)
+    with pytest.raises(ValueError, match="gives a module and no pitch diameter"):
+        GearDataRow(**{**fields, "pitch_diameter": None}, module=_q("5 mm"))
+
+
+def test_a_mesh_whose_gears_are_cut_to_different_modules_is_refused():
+    """And the centre-distance check cannot see it: the sum of the two pitch radii closes
+    whatever the two modules are, so this is the only thing standing between a pair that
+    cannot run and a flow derived from it."""
+    gears = (_gear("gear 2", 16), Gear(item="gear 3", teeth=48, pitch_diameter=_q("12 in")),
+             _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    closes = tuple(m.model_copy(update={"center_distance": _q("7.3333 in")})
+                   if m.name == "2-3" else m for m in _reducer().meshes)  # fmt: skip
+    with pytest.raises(RefusalError, match="joins gear 2 at a module of 4.233 mm to gear 3 "
+                                           "at 6.35 mm"):  # fmt: skip
+        derive_flow(_reducer(gears=gears, meshes=closes, reverted=False))
+
+
+def test_a_gear_two_meshes_cut_to_different_pressure_angles_is_refused():
+    angled = (_reducer().meshes[0].model_copy(update={"pressure_angle": _q("20 degree")}),
+              Mesh(name="3-4", driver="gear 3", driven="gear 4", efficiency=1.0,
+                   source=_SHIGLEY, pressure_angle=_q("25 degree")))  # fmt: skip
+    shafts = (DriveShaft(name="input", carries=("gear 2",)),
+              DriveShaft(name="countershaft", carries=("gear 3",)),
+              DriveShaft(name="output", carries=("gear 4",)))  # fmt: skip
+    with pytest.raises(RefusalError, match="gear 3 runs in mesh 2-3 at a pressure angle of 20 "
+                                           "degrees and in mesh 3-4 at 25 degrees"):  # fmt: skip
+        derive_flow(_reducer(shafts=shafts, meshes=angled, reverted=False,
+                             gears=(_gear("gear 2", 16), _gear("gear 3", 72),
+                                    _gear("gear 4", 16))))  # fmt: skip
+
+
+def test_a_declared_gear_in_no_mesh_is_refused_naming_it():
+    gears = (*_reducer().gears, _gear("spare", 20))
+    holds = DriveShaft(name="output", carries=("gear 5", "spare"))
+    shafts = (*_reducer().shafts[:2], holds)
+    with pytest.raises(RefusalError, match=r"gears \['spare'\] are declared and mesh with "
+                                           "nothing"):  # fmt: skip
+        derive_flow(_reducer(gears=gears, shafts=shafts))
+
+
+def test_the_block_refuses_what_is_not_a_drive_train():
+    with pytest.raises(RefusalError, match="train must be a DriveTrain"):
+        gear_data("a reducer")
+
+
+def test_a_helix_angle_is_not_a_field_a_gear_can_declare():
+    """A declared helix angle would make an axial load `solve_shaft_statics` does not carry,
+    and a helical gear screened as a spur one is a wrong answer rather than a missing one."""
+    with pytest.raises(ValueError, match="helix_angle"):
+        Gear(item="gear 2", teeth=16, helix_angle=_q("20 degree"))
+
+
+def test_the_docs_page_quotes_the_refusals_the_block_rests_on():
+    """docs/drive-trains.md argues the block from three refusals; each is the library's.
+
+    A number quoted only in prose has no gate, and these three are the whole case for why
+    the block can state one module and one pressure angle per gear.
+    """
+    from pathlib import Path
+
+    page = (Path(__file__).parents[1] / "docs" / "drive-trains.md").read_text(encoding="utf-8")
+    gears = (_gear("gear 2", 16), Gear(item="gear 3", teeth=48, pitch_diameter=_q("12 in")),
+             _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    with pytest.raises(RefusalError) as modules:
+        derive_flow(_reducer(gears=gears, reverted=False))
+    assert "4.233 mm and 6.35 mm" in page
+    for figure in ("4.233 mm", "6.35 mm"):
+        assert figure in str(modules.value)
+    angled = (_reducer().meshes[0].model_copy(update={"pressure_angle": _q("20 degree")}),
+              Mesh(name="3-4", driver="gear 3", driven="gear 4", efficiency=1.0,
+                   source=_SHIGLEY, pressure_angle=_q("25 degree")))  # fmt: skip
+    shafts = (DriveShaft(name="input", carries=("gear 2",)),
+              DriveShaft(name="countershaft", carries=("gear 3",)),
+              DriveShaft(name="output", carries=("gear 4",)))  # fmt: skip
+    with pytest.raises(RefusalError) as angles:
+        derive_flow(_reducer(shafts=shafts, meshes=angled, reverted=False,
+                             gears=(_gear("gear 2", 16), _gear("gear 3", 72),
+                                    _gear("gear 4", 16))))  # fmt: skip
+    assert "20° and 25°" in page
+    assert "of 20 degrees" in str(angles.value) and "at 25 degrees" in str(angles.value)
+    # The page's claim that a gear no mesh names is refused, and the block's own columns.
+    assert "a gear no mesh names" in page
+    for column in GEAR_DATA_COLUMNS:
+        assert column in page, f"the page does not say what the {column!r} column is"
+
+
+def test_a_pitch_diameter_rounded_to_three_figures_is_not_a_module_mismatch():
+    """The case study prints 2.67 in for 16/6, which is 0.125% off the module it came from.
+
+    The module gate has to be loose enough not to refuse that and tight enough to catch a
+    real mismatch, and the two are three orders of magnitude apart: the closest two stock
+    modules are 8% apart.
+    """
+    rounded = (Gear(item="gear 2", teeth=16, pitch_diameter=_q("2.67 in")),
+               _gear("gear 3", 72), _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    flow = derive_flow(_reducer(gears=rounded, reverted=False))
+    assert flow.shaft("output").speed.to("rpm").magnitude == pytest.approx(86.42, rel=1e-3)
+    # And the smallest real step is still caught: module 3 against 3.25 on the same teeth.
+    stepped = (Gear(item="gear 2", teeth=16, pitch_diameter=_q("48 mm")),
+               Gear(item="gear 3", teeth=72, pitch_diameter=_q("234 mm")),
+               _gear("gear 4", 16), _gear("gear 5", 72))  # fmt: skip
+    with pytest.raises(RefusalError, match="at a module of 3 mm to gear 3 at 3.25 mm"):
+        derive_flow(_reducer(gears=stepped, reverted=False))
+
+
+def test_a_blank_citation_is_refused_rather_than_read_as_not_declared():
+    """`not declared` in a cell stands for a field that is absent, and only for that.
+
+    The block renders a missing citation as `not declared`, which would read the same for a
+    citation that is there and says nothing — so the field refuses blank at the document,
+    and the cell never has to tell the two apart.
+    """
+    for blank in ("", "   "):
+        with pytest.raises(ValueError, match="basic_rack"):
+            Gear(item="gear 2", teeth=16, basic_rack=blank)
+        with pytest.raises(ValueError, match="accuracy_class"):
+            Gear(item="gear 2", teeth=16, accuracy_class=blank)
+    with pytest.raises(ValueError, match="span_measurement must be positive"):
+        Gear(item="gear 2", teeth=16, span_measurement=_q("0 mm"))

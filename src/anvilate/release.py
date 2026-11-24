@@ -9,6 +9,10 @@ ERP, purchasing and CAD already read:
   and the line's files;
 - ``buy.csv``, every purchased item once, its quantity summed across every instance and
   every variant exported, with the paths that use it;
+- ``gear-data.csv``, the gear data block of a product that declares a drive train: what
+  each gear is, is cut to and is inspected over, beside the mesh it runs in. The same
+  block is printed on the product's own assembly sheet, because a gear cannot be made or
+  bought from a view that can dimension its bore and nothing about its teeth;
 - ``step/<part number>_<revision>.step`` for each catalog part, and ``step/<product>.step``
   for the assembly;
 - ``parameters/<part number>.csv`` for each item that reads layout parameters: each by
@@ -35,6 +39,7 @@ from typing import Any, Literal
 from pydantic import ConfigDict, Field, model_validator
 
 from ._models import EMPTY_MAP, FrozenMap, Named, StatableModel, each_one
+from .drivetrain import gear_data
 from .product import (
     Product,
     ProductNode,
@@ -270,7 +275,11 @@ def export_package(
                    for v in product.variants]  # fmt: skip
     step_files, unrouted = _route_parts(product, shelf, tree, out, authorization, files)
     leaves = _placed_leaves(product, shelf, None, root)[0]
-    _assembly_drawings(tree, leaves, out, authorization, files)
+    # Derived once and rendered twice, which is the block's own rule: the sheet and the CSV
+    # are two readings of one derivation and cannot come to say different things.
+    data = None if product.drive_train is None else gear_data(product.drive_train)
+    _assembly_drawings(tree, leaves, out, authorization, files,
+                       () if data is None else data.lines())  # fmt: skip
     rows, dotted = _bom_rows(product, shelf, tree, placed, step_files)
     _write(out, "bom.csv", _csv(BOM_COLUMNS, rows), files, "bom")
     _write(out, "bom.xlsx", _xlsx(rows), files, "bom")
@@ -278,6 +287,8 @@ def export_package(
         columns, cells = profile.apply(rows, dotted)
         _write(out, f"bom-{_safe(profile.name)}.csv", _csv(columns, cells), files, "bom")
     _write(out, "buy.csv", _csv(_BUY_COLUMNS, _buy_rows(chosen, shelf)), files, "buy list")
+    if data is not None:
+        _write(out, "gear-data.csv", data.to_csv(), files, "gear data")
     if plan is not None:
         # Two files and not one appended to `buy.csv`: a spare is bought because a
         # declared maintenance rule says it will be consumed, and the buy list is what
@@ -539,6 +550,7 @@ def _assembly_drawings(
     out: Path,
     authorization: Any,
     files: list[tuple[str, str]],
+    block: Sequence[str] = (),
 ) -> None:
     """One assembly drawing per product node: four views, a balloon per find number, the
     parts list, and the node's part number and revision.
@@ -547,6 +559,12 @@ def _assembly_drawings(
     A draft's drawings say it is unvalidated, as its other files do. Every sheet is also
     gathered, in tree order, into ``drawings/package.pdf``, whose properties carry the
     export watermark.
+
+    ``block`` is the gear data block, printed under the parts list of the product's own
+    sheet and of no other. The drive train is declared on the product document, so its
+    gears' data belongs on the sheet of the product that declares it; repeating it on a
+    sub-assembly's sheet would put a gear's tooth data on a drawing that does not show the
+    gear.
     """
     from .export.svg_pdf import svgs_to_pdf
     from .projection import render_assembly
@@ -588,6 +606,7 @@ def _assembly_drawings(
                 + (" exploded" if exploded else ""),
                 lines=[described, *status],
                 parts_list=rows,
+                notes=block if node.path == tree.path and not exploded else (),
                 marks=marks,
                 width_px=1100,
                 dimensions=not exploded,
