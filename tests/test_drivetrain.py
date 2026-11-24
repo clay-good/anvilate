@@ -211,9 +211,11 @@ def _station(item: str, mm: float) -> ShaftStation:
 def _laid_out(**overrides) -> DriveTrain:
     """The case study's reducer with its gears and bearings placed along each shaft.
 
-    Shigley's Chapter 18 gives no shaft layout — the bearing positions belong to its Example
-    7-2, outside the free chapter — so these spans are this test's own, and the expected
-    reactions below are hand-derived from them, not quoted.
+    These spans are this test's own, and the expected reactions below are hand-derived from
+    them rather than quoted. The chapter's force analysis is in its Example 7-2, outside the
+    free chapter — but its Fig. 18-2 does give the intermediate shaft's own layout, and
+    `_as_the_chapter_lays_out_the_countershaft` below uses that one to hold this library
+    against the reactions the chapter prints.
     """
     shafts = (
         DriveShaft(name="input", carries=("gear 2",),
@@ -990,3 +992,142 @@ def test_a_blank_citation_is_refused_rather_than_read_as_not_declared():
             Gear(item="gear 2", teeth=16, accuracy_class=blank)
     with pytest.raises(ValueError, match="span_measurement must be positive"):
         Gear(item="gear 2", teeth=16, span_measurement=_q("0 mm"))
+
+
+# --- The published case study, end to end (drive trains 4.4) ------------------------------
+#
+# Edition, read and not recalled: the chapter itself prints no edition or copyright line.
+# Its page print-marks carry the book's ISBN-10, 0073398209, and McGraw-Hill's own
+# information centre for that ISBN says "The tenth edition of Shigley's Mechanical
+# Engineering Design..." — which is where the 10th-edition citation in this file comes from.
+# https://highered.mheducation.com/sites/0073398209/information_center_view0/index.html
+
+
+def _as_the_chapter_lays_out_the_countershaft(**overrides) -> DriveTrain:
+    """The case study's intermediate shaft, placed off its own Fig. 18-2 (page 936).
+
+    The figure's dimension chain along that shaft, in inches, is
+
+        1/4, 1, 3/4, 1 1/2, 4, 2, 3/4, 1, 1/4
+
+    which sums to the 11.5 in the text states and whose 4 in is the gear spacing it names.
+    Read as segment lengths from the left end, the middle of each component sits at 0.75 in
+    (bearing A), 2.75 in (gear 3, 1.5 in face), 8.50 in (gear 4, 2.0 in face) and 10.75 in
+    (bearing B).
+    """
+    shafts = tuple(
+        s.model_copy(update={
+            "supports": (ShaftSupport(name="A", at=_q("0.75 in")),
+                         ShaftSupport(name="B", at=_q("10.75 in"))),
+            "stations": (ShaftStation(item="gear 3", at=_q("2.75 in")),
+                         ShaftStation(item="gear 4", at=_q("8.50 in"))),
+        }) if s.name == "countershaft" else s
+        for s in _laid_out().shafts
+    )  # fmt: skip
+    return _laid_out(**{"shafts": shafts, **overrides})
+
+
+def test_the_case_studys_countershaft_reproduces_its_published_bearing_reactions():
+    """The whole chain against numbers somebody else published, on their own layout.
+
+    Flow, mesh split, two-bearing statics and bearing demand, from one declared input to the
+    two reactions Section 18-9 prints:
+
+        RAz = 115.0 lbf   RAy = 356.7 lbf   RA = 375 lbf
+        RBz = 1776.0 lbf  RBy = 725.3 lbf   RB = 1918 lbf
+
+    Nothing about them is typed into this library: the layout is the chapter's Fig. 18-2 and
+    everything else follows from 20 hp at 1,750 rpm through 16/72 and 16/72 at 6 teeth/in.
+
+    Two tenths of a percent, and not tighter, because the chapter's own inputs are rounded:
+    it prints Wt23 = 540.0 lbf for a load of 540.217, and RAz is the difference of 1,891 and
+    1,776 — two numbers an order of magnitude larger — so that rounding arrives at A
+    magnified about fifteen times. RB, which is not a difference of near-equals, lands within
+    two parts in a hundred thousand.
+    """
+    train = _as_the_chapter_lays_out_the_countershaft()
+    statics = solve_shaft_statics(train, derive_flow(train), "countershaft")
+    assert statics.determinate
+    published = {"A": (356.7, 115.0, 375.0), "B": (725.3, 1776.0, 1918.0)}
+    for support, (radial_plane, tangential_plane, resultant) in published.items():
+        reaction = statics.reaction(support)
+        # A reaction opposes the load that raised it, so the signed components are the
+        # chapter's magnitudes with the sense the library carries them in.
+        assert abs(reaction.y.to("lbf").magnitude) == pytest.approx(radial_plane, rel=2e-3)
+        assert abs(reaction.z.to("lbf").magnitude) == pytest.approx(tangential_plane, rel=2e-3)
+        assert reaction.magnitude.to("lbf").magnitude == pytest.approx(resultant, rel=2e-3)
+    # The two planes are not interchangeable, and that is the whole reason B carries five
+    # times what A does: the two radial loads act the same way and ADD, while the two
+    # tangential loads oppose and the bearings carry only their DIFFERENCE. Equilibrium in
+    # each plane says so in the chapter's own numbers.
+    loads = {m.mesh: m for m in derive_flow(train).meshes}
+    tangential = [loads[n].tangential_load.to("lbf").magnitude for n in ("2-3", "4-5")]
+    radial = [loads[n].radial_load.to("lbf").magnitude for n in ("2-3", "4-5")]
+    carried = [statics.reaction(name) for name in ("A", "B")]
+    assert sum(r.z.to("lbf").magnitude for r in carried) == pytest.approx(
+        tangential[1] - tangential[0], rel=1e-9
+    )
+    assert sum(abs(r.y.to("lbf").magnitude) for r in carried) == pytest.approx(
+        radial[0] + radial[1], rel=1e-9
+    )
+    # And the chapter's bending-moment remark: "The bending moment is largest at gear 4."
+    assert statics.peak is not None and statics.peak.at_item == "gear 4"
+
+
+def test_the_case_studys_bearings_are_asked_for_the_life_the_specification_names():
+    """Section 18-9's design life, through the demands the bearing screen reads.
+
+    The chapter writes LD = (12 000 h)(60 min/h)(389 rev/min) = 2.8e8 rev. The 389 is this
+    library's 388.9 rounded, and the demands carry the hours and the speed separately, so
+    the product is formed here and held to the revolutions the chapter prints.
+    """
+    life = _laid_out().output.model_copy(update={"life": _q("12000 hour")})
+    train = _as_the_chapter_lays_out_the_countershaft(output=life)
+    flow = derive_flow(train)
+    demands = bearing_demands(train, flow, "countershaft")
+    assert set(demands) == {"A", "B"}
+    carried = {d.name: d.value for d in demands["B"]}
+    assert carried["required_life"].to("hour").magnitude == pytest.approx(12_000)
+    assert carried["speed"].to("rpm").magnitude == pytest.approx(388.89, rel=1e-4)
+    # In revolutions, which means reading the speed as rpm and not as "1/minute": a
+    # rotational speed converted to an inverse time comes back in RADIANS per minute, 2*pi
+    # times the number wanted, and the chapter's 2.8e8 would land at 1.76e9.
+    revolutions = (carried["required_life"].to("hour").magnitude * 60
+                   * carried["speed"].to("rpm").magnitude)  # fmt: skip
+    assert revolutions == pytest.approx(2.8e8, rel=5e-3)
+    # The load the bearing is screened on is B's reaction, not a number typed beside it.
+    assert carried["equivalent_load"].to("lbf").magnitude == pytest.approx(1918.0, rel=2e-3)
+    assert "two-bearing statics" in next(d for d in demands["B"]
+                                         if d.name == "equivalent_load").source  # fmt: skip
+
+
+def test_the_docs_page_quotes_the_reactions_this_library_derives():
+    """docs/drive-trains.md prints both columns of the case-study table side by side.
+
+    The left column is the chapter's and the test above holds the library to it. The right
+    column is this library's own, to four figures — a number quoted only in prose, which is
+    exactly the kind that goes stale without anything noticing.
+    """
+    from pathlib import Path
+
+    page = (Path(__file__).parents[1] / "docs" / "drive-trains.md").read_text(encoding="utf-8")
+    life = _laid_out().output.model_copy(update={"life": _q("12000 hour")})
+    train = _as_the_chapter_lays_out_the_countershaft(output=life)
+    flow = derive_flow(train)
+    statics = solve_shaft_statics(train, flow, "countershaft")
+    for support in ("A", "B"):
+        reaction = statics.reaction(support)
+        for value in (reaction.magnitude, reaction.z, reaction.y):
+            printed = f"{abs(value.to('lbf').magnitude):.1f}"
+            assert printed in page, f"the page does not print {support}'s {printed} lbf"
+    # And the layout the page reads off Fig. 18-2, taken from the train rather than retyped.
+    here = next(s for s in train.shafts if s.name == "countershaft")
+    placed = [(s.name, s.at) for s in here.supports] + [(s.item, s.at) for s in here.stations]
+    for name, at in placed:
+        inches = at.to("in").magnitude
+        assert f"{inches:g}" in page or f"{inches:.2f}" in page, f"{name} is not on the page"
+    assert "2.80e8 rev" in page
+    carried = {d.name: d.value for d in bearing_demands(train, flow, "countershaft")["B"]}
+    revolutions = (carried["required_life"].to("hour").magnitude * 60
+                   * carried["speed"].to("rpm").magnitude)  # fmt: skip
+    assert f"{revolutions:.3g}".replace("+0", "") == "2.8e8"

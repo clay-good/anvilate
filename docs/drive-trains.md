@@ -48,6 +48,29 @@ and 16/72 at 6 teeth/in gives 388.9 and 86.42 rpm, torques of 60.0, 270 and 1,21
 and tangential loads of 540.2 and 2,431 lbf. The chapter prints 540.0 for the first, from
 the pitch diameter rounded to 2.67 in; the library takes the exact 16/6 in.
 
+**And the whole chain, on the chapter's own layout.** Its Fig. 18-2 dimensions the
+intermediate shaft, which puts bearing A at 0.75 in, gear 3 at 2.75, gear 4 at 8.50 and
+bearing B at 10.75; Section 18-9 then prints what those two bearings carry. Flow, mesh
+split, two-bearing statics and bearing demand together land on it:
+
+| Section 18-9 prints | This library derives |
+| --- | --- |
+| RA = 375 lbf (RAz = 115.0, RAy = 356.7) | 374.4 lbf (114.8, 356.4) |
+| RB = 1918 lbf (RBz = 1776.0, RBy = 725.3) | 1918.3 lbf (1776.0, 725.0) |
+| LD = (12 000 h)(60 min/h)(389 rev/min) = 2.8e8 rev | 2.80e8 rev, from the declared life and the derived 388.9 rpm |
+| "the bending moment is largest at gear 4" | the peak station is gear 4 |
+
+Two parts in a thousand, and no tighter, because the chapter's own inputs are rounded: RAz
+is the difference between 1,891 and 1,776 lbf, so the rounding in its printed 540.0 arrives
+at A magnified about fifteen times. RB, which is not a difference of near-equals, lands
+within two parts in a hundred thousand. The chapter's force analysis and deflection check
+are in its Chapter 7 and are not quotable from the free chapter.
+
+The two bearings differ by a factor of five because the two planes are not interchangeable:
+the two radial loads act the same way and add, while the two tangential loads oppose and the
+bearings carry only their difference. That is what the declared `line_of_centers` of 0 and
+180 degrees means, and the test holds both plane equilibria rather than the resultants alone.
+
 ## A product declares its drive train
 
 A product document carries the machine it is, over the items it already has, at schema

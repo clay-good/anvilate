@@ -47,7 +47,22 @@ graph check with a definite answer.
 Shigley's *Mechanical Engineering Design*, Chapter 18, "Power Transmission Case Study",
 published free by McGraw-Hill:
 https://highered.mheducation.com/sites/dl/free/0073398209/1036702/Chapter18.pdf
-(probably the 10th edition; confirm the edition before citing it in a test).
+
+**Edition settled 2026-11-23.** The chapter prints no edition or copyright line; its page
+print-marks carry the book's ISBN-10, 0073398209. McGraw-Hill's own information centre for
+that ISBN says "The tenth edition of Shigley's Mechanical Engineering Design...", so the
+10th edition is read and not recalled:
+https://highered.mheducation.com/sites/0073398209/information_center_view0/index.html
+(Open Library's record for the same ISBN gives Budynas and Nisbett, McGraw-Hill Education,
+LC classification TJ230.S5 2015, and states no edition number.)
+
+**The layout is in the free chapter after all.** Fig. 18-2 on page 936 dimensions the
+intermediate shaft — 1/4, 1, 3/4, 1 1/2, 4, 2, 3/4, 1, 1/4 in, summing to the 11.5 in the
+text states — which puts bearing A at 0.75 in, gear 3 at 2.75, gear 4 at 8.50 and bearing B
+at 10.75. Section 18-9 then prints the reactions those produce: RA = 375 lbf
+(RAz = 115.0, RAy = 356.7) and RB = 1918 lbf (RBz = 1776.0, RBy = 725.3), against a design
+life of 12,000 h = 2.8e8 rev at 389 rev/min. Only the force analysis itself (Ex. 7-2) and
+the deflection check (Ex. 7-3) are outside this chapter.
 20 hp at 1,750 rpm, output 82 to 88 rpm, compound reverted layout, 12,000 h life. Teeth
 16/72 and 16/72; ω3 = 388.9 rpm, ω5 = 86.42 rpm; T2 = 60.0, T3 = 270, T5 = 1,215 lbf·ft;
 P = 6 teeth/in; face widths 1.5 in and 2.0 in; Wt23 = 540.0 lbf, Wt45 = 2,431 lbf. Its

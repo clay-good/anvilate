@@ -63,10 +63,17 @@ Depends on `add-product-structure`. Uses `add-interface-contracts` and
       the axial load one makes waits on 3.1, and a helical gear screened as a spur one is a
       wrong answer rather than a missing one. The gears are bought items with no part
       drawing of their own, so the block is on the assembly sheet)
-- [ ] 4.4 Shigley power transmission case study as a golden test, re-derived from the
+- [x] 4.4 Shigley power transmission case study as a golden test, re-derived from the
       chapter's published values
-      (speeds, torques and tangential loads held, 10th ed. Ch. 18; shafts and bearings
-      follow with 3.x)
+      (10th ed. Ch. 18, the edition read off McGraw-Hill's information centre for the ISBN
+      the chapter's print-marks carry rather than recalled. Speeds, torques and tangential
+      loads were already held; now the countershaft is laid out from the chapter's own
+      Fig. 18-2 and the whole chain — flow, mesh split, two-bearing statics, bearing
+      demand — is held to the reactions Section 18-9 prints: RA = 375 lbf and RB = 1918 lbf
+      with both components of each, and the 12,000 h design life as 2.8e8 revolutions. To
+      two parts in a thousand, because the chapter's own Wt is printed rounded and RAz is
+      the difference of two numbers an order of magnitude larger. Its force analysis
+      (Ex. 7-2) and deflection check (Ex. 7-3) are in Chapter 7 and not quotable from here)
 - [x] 4.5 The gear reducer worked product declares its drive train; docs page for drive
       trains
       (`examples/products/gear_reducer.product.yaml` is three shafts and four gears with a
