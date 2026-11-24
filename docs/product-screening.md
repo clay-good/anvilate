@@ -184,5 +184,22 @@ zero or negative, and for any two joint axes that are parallel or coincident: a 
 coaxial hinges counts −9 and moves. Mates between two items that a declared joint joins are
 read as part of that joint, not as welding them.
 
+## Where these checks come out
+
+`anvilate check <product>.yaml` prints the item tree first and then **the product as a
+whole** — every check on this page — and its exit code is the worse of the two. Over MCP,
+`build_combination` given a product returns the tree as `product`, these checks as
+`whole_product`, and the `next` steps and `journey` stage read from both together. In
+Python it is `product_screening(product)`, beside `place_product` for the item tree.
+
+Both halves are needed, and reading one alone says the wrong thing. An item whose own
+checks pass can sit under a product whose mass budget does not. And the other way round: an
+item is screened when the product is **placed**, before any load path exists, so a caster
+whose rating reads a load reports that the product states no load for it — while the load
+path, run afterwards, derives that load and can fail the same caster on it. Where the two
+meet, the whole-product verdict wins, because it is the one computed with the load;
+`load_path_supersedes(placed, screening)` names those checks, the command line says how
+many it dropped and which, and the JSON carries them as `superseded`.
+
 Not yet built: side connections in the load path, part screens other than a caster's and a
 guide's fed their loads, and fastener and tool counts.

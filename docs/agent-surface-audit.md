@@ -37,7 +37,7 @@ on the machine this audit ran on, so its column is from documentation and not fr
 | `run_fea_validation` | pipeline | `spec`, `convergence_tol` (optional) | `scorecard` | yes | 470 characters | a task | none |
 | `read_scorecard` | pipeline | `subject` | `scorecard` | no | 195 characters | 1 s | none |
 | `export_artifact` | pipeline | `subject`, `format`, `ifc_schema` (optional), `draft` (optional) | `format`, `bundle`, `sha256`, `file`, `validated`, `note`, `files`, `draft`, `journey` | yes | 783 characters | 2 s | export, combination |
-| `build_combination` | combination | `combination`, `library` (optional), `node` (optional) | `combination`, `scorecard`, `subject`, `product`, `node`, `next`, `journey` | yes | 939 characters | 15 s | combination |
+| `build_combination` | combination | `combination`, `library` (optional), `node` (optional) | `combination`, `scorecard`, `subject`, `product`, `whole_product`, `node`, `next`, `journey` | yes | 939 characters | 15 s | combination |
 | `run_study` | design search | `subject`, `study` | `study`, `file` | yes | 619 characters | 5 s | none |
 | `list_context` | reads the user's files | `folder` | `inventory` | no | 338 characters | 1 s | context |
 | `read_cad_file` | reads the user's files | `source`, `unit` (optional), `material` (optional), `spec` (optional) | `facts`, `seed`, `readings` | no | 854 characters | 10 s | context |

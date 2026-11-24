@@ -917,6 +917,11 @@ def _catalog() -> tuple[ToolDefinition, ...]:
                     "scorecard": {"$ref": _SCORECARD_REF},
                     "subject": _SUBJECT_SCHEMA,
                     "product": {"$ref": _PRODUCT_SUMMARY_REF},
+                    # For a product: the checks only the whole product has — its mass
+                    # roll-up and budget, the clearances between its items standing still
+                    # and turning, how its load reaches the floor, its mobility and its
+                    # drive train's. `product` is each item's own card; these are not on it.
+                    "whole_product": {"$ref": _SCORECARD_REF},
                     "node": {"$ref": _NODE_CARD_REF},
                     "next": {"$ref": _NEXT_STEPS_REF},
                     "journey": {"$ref": _JOURNEY_STATE_REF},
@@ -2762,6 +2767,7 @@ def _build_product(arguments: Mapping[str, Any]) -> dict[str, Any]:
         product_tree,
         summarize_product,
     )
+    from .product_screening import product_screening
 
     try:
         product = parse_product(arguments["combination"])
@@ -2773,12 +2779,28 @@ def _build_product(arguments: Mapping[str, Any]) -> dict[str, Any]:
         if "node" in arguments:
             return {"node": placed.card.find(arguments["node"]).model_dump(mode="json")}
         tree = product_tree(product, library=library)
+        screening = product_screening(product, library=library)
     except GeometryUnavailable as failure:
         raise _Unavailable(str(failure)) from failure
     except ProductError as refused:
         raise _InvalidArguments([f"product: {refused}"], operation="build_combination") from refused
+    from .journey import NextSteps, journey_state, next_steps
+    from .product_screening import _product_scorecard
+    from .scorecard import Scorecard
+
     more = "any node's full card: build_combination with the same product and node PATH"
-    return {"product": summarize_product(placed, tree, more=more).model_dump(mode="json")}
+    # The tree is each item's own card; `whole_product` is what only the product has — its
+    # mass roll-up, how close its items come, how its load reaches the floor, its drive
+    # train. The journey reads both, because an item that passes under a product whose own
+    # budget does not is not a design that has been screened.
+    card = _product_scorecard(placed, screening)
+    steps = next_steps(card, tool="build_combination", export_format="step")
+    return {
+        "product": summarize_product(placed, tree, more=more).model_dump(mode="json"),
+        "whole_product": Scorecard(entries=screening.entries).model_dump(mode="json"),
+        "next": NextSteps(steps=steps).model_dump(mode="json"),
+        "journey": journey_state(card).model_dump(mode="json"),
+    }
 
 
 def _built_combination(handle: str) -> Any:

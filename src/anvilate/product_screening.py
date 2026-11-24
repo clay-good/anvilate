@@ -47,12 +47,14 @@ from .scorecard import (
     Comparison,
     LimitSense,
     Need,
+    Scorecard,
     ScorecardEntry,
     ValueSource,
 )
 from .units import Quantity
 
 __all__ = [
+    "load_path_supersedes",
     "Reaction",
     "LoadStep",
     "MassContribution",
@@ -187,6 +189,65 @@ class ProductScreening(StatableModel):
     cost_lines: tuple[CostLine, ...] = ()
     costs: tuple[NodeCost, ...] = ()
     entries: tuple[ScorecardEntry, ...] = ()
+
+
+def load_path_supersedes(placed: Any, screening: ProductScreening) -> tuple[str, ...]:
+    """The item checks the whole-product screening answered that the item could not.
+
+    An item's own card is made when the product is placed, before any load path exists, so
+    a component whose rating reads a load reports that the product states no load for it.
+    The screening then derives that load from the one the product declares and runs the
+    same check with it — and can fail a caster the item's own card called not evaluated.
+
+    Both entries exist and only one of them was computed with the load. These are the names
+    of the ones that were not, so a card can drop them and a reader can be told why the
+    verdict beside an item differs from the verdict under the product.
+    """
+    if not isinstance(screening, ProductScreening):
+        raise _refuse("screening must be the ProductScreening of this product",
+                      subject="screening")  # fmt: skip
+    answered = {entry.name for entry in screening.entries}
+    found: list[str] = []
+
+    def walk(card: Any) -> None:
+        for entry in card.entries:
+            if f"{card.path} {entry.name}" in answered:
+                found.append(f"{card.path} {entry.name}")
+        for child in card.children:
+            walk(child)
+
+    walk(placed.card)
+    return tuple(found)
+
+
+def _product_scorecard(placed: Any, screening: ProductScreening) -> Scorecard:
+    """Every check a product has, as one card: each item's own, and the product's own.
+
+    The item cards are a tree and the whole-product checks are a flat list, and anything
+    that wants a verdict or a next step over the product — the command line, the server,
+    the journey — has to read both. An item whose own checks pass sits under a product
+    whose mass budget does not, and a card carrying only one of the two says the wrong
+    thing about the design.
+
+    Each item's entry is renamed by the path that owns it, so two items running the same
+    check are told apart. The whole-product entries already name what they are about, and
+    where the two meet the whole-product one wins: see :func:`load_path_supersedes`. One
+    name carrying two verdicts would be a card that contradicts itself, and the one to keep
+    is the one computed with more of the design in hand.
+    """
+    superseded = set(load_path_supersedes(placed, screening))
+    entries: list[ScorecardEntry] = []
+
+    def walk(card: Any) -> None:
+        for entry in card.entries:
+            name = f"{card.path} {entry.name}"
+            if name not in superseded:
+                entries.append(entry.model_copy(update={"name": name}))
+        for child in card.children:
+            walk(child)
+
+    walk(placed.card)
+    return Scorecard(entries=(*entries, *screening.entries))
 
 
 def _need(declaration: str, takes: str, dimension: str, units: tuple[str, ...]) -> Need:

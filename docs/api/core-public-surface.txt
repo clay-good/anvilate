@@ -726,6 +726,7 @@ product.ProductSummary
 product.summarize_product
 product.place_product
 product.write_product_step
+product_screening.load_path_supersedes
 product_screening.Reaction
 product_screening.LoadStep
 product_screening.MassContribution

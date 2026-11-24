@@ -53,7 +53,13 @@ def test_check_prints_the_summary_tree_and_fails_with_the_product(tmp_path):
     )  # fmt: skip
     drive = next(line for line in lines if line.strip().startswith("stage/drive[2] ["))
     assert "1 finding — interference:" in drive and "stage/drive[2]/bracket" in drive
-    assert f"anvilate check {tmp_path / 'stage.product.yaml'} --node PATH" in lines[-1]
+    hint = f"anvilate check {tmp_path / 'stage.product.yaml'} --node PATH"
+    assert any(hint in line for line in lines)
+    # And after the tree, the checks only the whole product has. Until these were printed
+    # they were reachable from Python and from nowhere a user could see.
+    whole = lines.index(next(line for line in lines if line.startswith("the product as a whole")))
+    assert whole > lines.index(next(line for line in lines if hint in line))
+    assert any("load path stage/base" in line for line in lines[whole:])
 
 
 def test_check_reads_one_nodes_full_card(tmp_path):

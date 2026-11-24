@@ -4238,6 +4238,12 @@ def _check_product(
     """``check`` on a product document: place it, and print its summary tree or one node.
 
     Sub-products are read from the other ``*.product.yaml`` files beside it, by name.
+
+    The tree is each item's own card. Beside it go the checks only the WHOLE product has —
+    its mass roll-up and budget, how close its items come to each other standing still and
+    turning, how its load reaches the floor, its mobility, and its drive train's. Those are
+    what `product_screening` derives, and until they were printed here they were reachable
+    from Python and from nowhere a user or an agent could see.
     """
     import yaml
 
@@ -4248,6 +4254,8 @@ def _check_product(
         product_tree,
         summarize_product,
     )
+    from .product_screening import _product_scorecard, load_path_supersedes, product_screening
+    from .scorecard import Scorecard
 
     path, _document = found
     try:
@@ -4255,6 +4263,13 @@ def _check_product(
         library = {**_product_library(path), **library}
         placed = place_product(product, library=library, root=path.parent)
         tree = product_tree(product, library=library)
+        screening = product_screening(product, library=library, root=path.parent)
+        whole = Scorecard(entries=screening.entries)
+        superseded = load_path_supersedes(placed, screening)
+        # The verdict is over both halves at once, with the superseded item entries
+        # dropped, so a caster the load path fails is not softened by the same caster's
+        # own "no load stated".
+        overall = _product_scorecard(placed, screening).status
     except (ProductError, yaml.YAMLError, OSError, UnicodeDecodeError) as refused:
         print(f"anvilate check: {path}: {refused}", file=err)
         return EXIT_BAD_REQUEST
@@ -4275,14 +4290,27 @@ def _check_product(
     summary = summarize_product(
         placed, tree, more=f"any node's full card: anvilate check {path} --node PATH"
     )
+    # The verdict is the worse of the two: a product whose items each pass and whose own
+    # mass budget fails has not passed, and reporting the tree's verdict alone would say
+    # it had.
     if args.format == "json":
-        document = machine_document(
-            "check", {"status": summary.status.value, "product": summary.model_dump(mode="json")}
-        )
+        document = machine_document("check", {
+            "status": overall.value, "product": summary.model_dump(mode="json"),
+            "whole_product": whole.model_dump(mode="json"),
+            "superseded": list(superseded),
+        })  # fmt: skip
         print(json.dumps(document, indent=2), file=out)
     else:
         print(summary, file=out)
-    return _product_ci_reports(args, path, placed.card, tree, EXIT_CODES[summary.status], err=err)
+        if whole.entries:
+            print(f"\nthe product as a whole: {whole.status.value}", file=out)
+            for entry in whole.entries:
+                print(f"  {entry.status.value} — {entry.name}: {entry.detail}", file=out)
+        if superseded:
+            print(f"\n{len(superseded)} of those answer a check the item's own card above "
+                  "could not, because an item is screened before any load path exists: "
+                  + ", ".join(superseded), file=out)  # fmt: skip
+    return _product_ci_reports(args, path, placed.card, tree, EXIT_CODES[overall], err=err)
 
 
 def _product_ci_reports(args, path: Path, card, tree, verdict: int, *, err) -> int:

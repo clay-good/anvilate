@@ -20,6 +20,14 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
       (a caster's and a linear guide's rating read their load-path entry; bearings need an
       axis their record lacks; catalog parts' own screens are not fed yet)
 
+- [x] 1.5 These checks reach a user and an agent
+      (`product_screening` was called from tests and nothing else: no shipped surface ran
+      it, so the mass roll-up, clearances, load path, mobility, cost and every drive-train
+      check were reachable from Python and nowhere else. `anvilate check` now prints them
+      under the item tree and takes the worse of the two verdicts; `build_combination` over
+      MCP returns them as `whole_product` beside `next` and `journey`, and one card carries
+      both halves for the verdict and the journey, at cli-output 1.79.0)
+
 ## 2. Roll-ups
 
 - [x] 2.1 Mass, center of mass, inertia per node with basis per contribution

@@ -37,10 +37,10 @@ from .scorecard import CheckStatus, Scorecard, ValueSource
 
 __all__: list[str] = []
 
-CLI_OUTPUT_SCHEMA_VERSION = "1.78.0"
+CLI_OUTPUT_SCHEMA_VERSION = "1.79.0"
 CLI_OUTPUT_SCHEMA_ID = f"urn:anvilate:schema:cli-output:{CLI_OUTPUT_SCHEMA_VERSION}"
-SchemaId = Literal["urn:anvilate:schema:cli-output:1.78.0"]
-SchemaVersion = Literal["1.78.0"]
+SchemaId = Literal["urn:anvilate:schema:cli-output:1.79.0"]
+SchemaVersion = Literal["1.79.0"]
 
 
 class _WireModel(RevalidatedModel):
@@ -144,13 +144,24 @@ class CheckOutput(_WireModel):
 
 
 class ProductCheckOutput(_WireModel):
-    """``check`` on a product document: its summary tree, or one node's full card."""
+    """``check`` on a product document: its summary tree, or one node's full card.
+
+    ``whole_product`` carries the checks only the whole product has — its mass roll-up and
+    budget, the clearances between its items standing still and turning, how its load
+    reaches the floor, its mobility and its drive train's checks. ``status`` is the worse of
+    that card and the tree, because a product whose items each pass and whose own budget
+    does not has not passed.
+    """
 
     schema_: SchemaId = Field(alias="schema")
     schema_version: SchemaVersion
     command: Literal["check"]
     status: CheckStatus
     product: ProductSummary | None = None
+    whole_product: Scorecard | None = None
+    # The item checks `whole_product` answered that the item's own card could not, so a
+    # reader meets the two differing verdicts knowing which one had the load path.
+    superseded: tuple[Named, ...] = ()
     node: NodeCard | None = None
 
 

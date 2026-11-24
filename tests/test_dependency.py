@@ -521,6 +521,10 @@ _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
     "packs/structural.py:screen_structure<-screen_shear_plate": (
         "a structure's card is its members' cards, aggregated, not computed from them"
     ),
+    "cli.py:_check_product<-_product_scorecard": (
+        "the command reads the aggregate card's verdict to report and to exit on; the card "
+        "is every item's checks and the product's own put together, computed from neither"
+    ),
 }
 
 

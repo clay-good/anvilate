@@ -20,7 +20,7 @@ pytest.importorskip("build123d")
 from anvilate._models import parse_yaml  # noqa: E402
 from anvilate.product import parse_product  # noqa: E402
 from anvilate.product_screening import product_screening  # noqa: E402
-from anvilate.scorecard import CheckStatus  # noqa: E402
+from anvilate.scorecard import CheckStatus, Scorecard  # noqa: E402
 from test_interfaces import _hinge  # noqa: E402
 from test_product_cards import _box, _definition, _seat  # noqa: E402
 
@@ -1309,3 +1309,98 @@ def test_a_load_states_an_item_or_an_interface_and_not_both_or_neither():
     del document["screening"]["loads"][0]["at"]
     with pytest.raises(ValueError, match="states neither an item nor an at"):
         parse_product(document)
+
+
+# --- One card for the whole design, and the journey over it -------------------------------
+
+
+def test_the__product_scorecard_carries_every_item_s_checks_and_the_product_s_own():
+    """Two halves that have to be read together.
+
+    The item cards are a tree and the whole-product checks are a flat list. A card carrying
+    only one of them says the wrong thing: an item that passes under a product whose own
+    load path is not determined is not a design anything has screened.
+    """
+    from anvilate.product import place_product
+    from anvilate.product_screening import _product_scorecard
+
+    product = parse_product(_carted(_THREE, ("right", "back")))
+    placed = place_product(product)
+    screening = product_screening(product)
+    card = _product_scorecard(placed, screening)
+    names = [e.name for e in card.entries]
+    # Every whole-product entry, under the name it already has.
+    for entry in screening.entries:
+        assert entry.name in names
+    # And every item's own, renamed by the path that owns it, so two items running the
+    # same check are told apart.
+    assert sum(1 for n in names if n.endswith(" caster load")) == 3
+    assert "cart/caster1 cart/caster1 caster load" not in names
+    assert len(card.entries) > len(screening.entries)
+    with pytest.raises(ValueError, match="screening must be the ProductScreening"):
+        _product_scorecard(placed, "not a screening")
+
+
+def test_the_product_journey_reads_the_items_and_the_product_together():
+    """The reducer is not a screened design: seven of its items are placeholders.
+
+    A journey over the whole-product checks alone would call it screened, because those
+    checks all pass. The step it names is the one that would actually move it on.
+    """
+    from pathlib import Path
+
+    from anvilate.journey import journey_state, next_steps
+    from anvilate.product import load_product, place_product
+    from anvilate.product_screening import _product_scorecard
+
+    path = Path(__file__).parents[1] / "examples" / "products" / "gear_reducer.product.yaml"
+    product, library = load_product(path)
+    placed = place_product(product, library=library, root=path.parent)
+    screening = product_screening(product, library=library, root=path.parent)
+    assert Scorecard(entries=screening.entries).status is CheckStatus.PASS
+    card = _product_scorecard(placed, screening)
+    state = journey_state(card)
+    assert state.stage == "described"
+    screened = next(s for s in state.stages if s.stage == "screened")
+    assert screened.state == "not_reached"
+    assert any("placeholder has no verdict" in gap for gap in screened.gaps)
+    first = next_steps(card, tool="build_combination", export_format="step")[0]
+    assert first.tool == "build_combination" and "definitions[].spec" in str(first)
+
+
+def test_the_load_path_verdict_supersedes_the_item_s_own_no_load_stated():
+    """The contradiction this closes, in the cart's own numbers.
+
+    An item is screened when the product is placed, before any load path exists, so a
+    caster's own card says the product states no load for it. The screening then derives
+    that load from the declared payload and fails caster3's rating with it. Both entries
+    carry the same name, and only one of them was computed with the load.
+    """
+    from anvilate.product import place_product
+    from anvilate.product_screening import _product_scorecard, load_path_supersedes
+
+    product = parse_product(_carted(_THREE, ("right", "back")))
+    placed, screening = place_product(product), product_screening(product)
+
+    def walk(card, found):
+        found += [(f"{card.path} {e.name}", e) for e in card.entries]
+        for child in card.children:
+            walk(child, found)
+        return found
+
+    own = dict(walk(placed.card, []))
+    # The item's own card: not evaluated, and it says why — it has no load to check with.
+    assert own["cart/caster3 caster load"].status is CheckStatus.NOT_EVALUATED
+    assert "states no load for this component" in own["cart/caster3 caster load"].detail
+    # The product's: the same check, failed, on the load the path delivered.
+    fed = next(e for e in screening.entries if e.name == "cart/caster3 caster load")
+    assert fed.status is CheckStatus.FAIL
+
+    assert set(load_path_supersedes(placed, screening)) == {
+        f"cart/caster{n} caster load" for n in (1, 2, 3)
+    }
+    card = _product_scorecard(placed, screening)
+    named = [e for e in card.entries if e.name == "cart/caster3 caster load"]
+    assert len(named) == 1 and named[0].status is CheckStatus.FAIL
+    # And the card's verdict is the failure, not the not-evaluated that would have masked it.
+    assert card.status is CheckStatus.FAIL
