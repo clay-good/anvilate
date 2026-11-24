@@ -21,6 +21,20 @@
 - [x] 2.5 Additive: material extrusion, powder bed fusion
       (extrusion: overhang and wall; powder bed fusion: wall)
 - [ ] 2.6 Weldments: torch access, single-side distortion warning
+      (the **single-side warning** ships: a face-to-face mate carrying one fillet weld is
+      welded from one side and pulls towards it, and a mate carrying two is balanced, which
+      is the one thing about weld distortion a combination's declaration decides on its
+      own. It states no magnitude — the size of the pull depends on the process, the heat
+      input and the restraint, none of which the document says — so it names the joints and
+      stops. Groove and plug welds are excluded, with the reason. It declares the
+      catalogued mode `a weldment that comes out of the fixture bent`, which applies to a
+      welded connection whose build is also declared, cited to TWI's Job Knowledge page on
+      distortion.
+      **Torch access is not built**: a weld's location is its mate's, so the geometry is
+      reachable, but the approach model — the angle a torch comes in at and the clearance
+      its nozzle needs — is a shop convention this change would have to choose, and a
+      chosen convention is not a practice DEFAULT of the kind `dfm._PRACTICE` labels. It
+      needs a source or an owner's call)
 
 ## 3. Reporting
 

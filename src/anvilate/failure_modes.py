@@ -843,6 +843,23 @@ DEFAULT_CATALOG = ModeCatalog(
             citation="ISO 14253-1:2017 decision rules for verifying conformity with specifications",
         ),
         FailureMode(
+            id="a weldment that comes out of the fixture bent",
+            description=(
+                "angular distortion of a joint welded from one side only, the weld metal "
+                "contracting on that side alone and rotating the parts towards it, found when "
+                "the weldment is unclamped rather than on the drawing"
+            ),
+            # Both keys: a welded connection whose build is declared. The one-sidedness is a
+            # fact about how the joint goes together, which an element on its own never states.
+            applicability=Applicability(elements=("welded_connection",), assembly=True),
+            stage=DiscoveryStage.PRODUCTION,
+            citation=(
+                "TWI Job Knowledge, 'Distortion \u2014 types and causes': angular distortion "
+                "arises because the weld is deposited on one side, balanced double-sided welds "
+                "contract uniformly, and restraint buys straightness with residual stress"
+            ),
+        ),
+        FailureMode(
             id="thermal ratcheting of a clearance",
             description=(
                 "a running clearance closing over repeated thermal cycles as the parts grow "

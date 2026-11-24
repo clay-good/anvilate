@@ -67,6 +67,7 @@ Each of these is an entry on the combination's card.
 | pin fit | Whether every mated hole is the dowel pin's own diameter. A pin locates by filling its hole, so one in a clearance hole fails and names the holes to ream. |
 | pin length | Whether the pin is a length ISO 2338 stocks for its diameter, and sits inside both parts with half its length each side of the plane they meet on. |
 | weld | A declared weld, not evaluated: its strength is screened as a `welded_connection` element with its load. |
+| weld distortion | Advisory. A mate carrying ONE fillet weld is welded from one side and pulls towards it as the bead cools; two welds on the mate balance it and the advisory does not appear. It names the catalogued mode *a weldment that comes out of the fixture bent*, and the two ways out: weld the other side, or restrain the part and accept the residual stress that leaves. It states no magnitude — how far a joint moves depends on the process, the heat input and how the part is held, none of which a combination says — so it names the joints with the problem and stops there. A groove weld fills the joint rather than sitting on one side of it, and a plug weld is inside a hole; neither is advised on. |
 | interference | Every pair of bodies whose boxes meet is intersected. An overlap fails, naming the pair and the volume they share. |
 
 Fasteners are **envelopes**: a bolt is a cylinder with a head, a nut a hexagon, a dowel

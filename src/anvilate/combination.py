@@ -497,6 +497,42 @@ class Combination(StatableModel):
         return self
 
 
+#: What a one-sided fillet weld does, and the two ways out of it. No number: the size of
+#: the angular pull depends on the joint, the process, the heat input and the restraint,
+#: and this says only which joints have the problem — which the declaration alone decides.
+_PULLS_TOWARDS_THE_WELD = (
+    "a joint welded from one side only pulls towards that side as the bead cools, and "
+    "nothing in the declaration balances it: weld the other side too, which contracts "
+    "evenly, or hold the part in a fixture and accept the residual stress restraint leaves"
+)
+
+
+def _single_sided(mate: Any, welds: list[Any], moving: Any, fixed: Any) -> list[ScorecardEntry]:
+    """An advisory on a face-to-face joint welded from one side (geometric DFM 2.6).
+
+    This is the one thing about weld distortion the declaration decides on its own: a mate
+    carrying ONE fillet weld is welded from one side, and one carrying two is balanced. It
+    is advisory and it states no magnitude — how far a joint pulls depends on the process,
+    the heat input and how the part is held, none of which a combination says. Naming the
+    joints with the problem is the useful part; a number here would be invented.
+
+    Groove and plug welds are not advised on: a groove weld fills the joint rather than
+    sitting on one side of it, and a plug weld is inside a hole.
+    """
+    fillets = [weld for weld in welds if weld.type == "fillet"]
+    if len(fillets) != 1:
+        return []
+    return [ScorecardEntry(
+        name=f"{mate.id} weld distortion",
+        status=CheckStatus.WARNING,
+        detail=(f"'{moving.id}' is joined to '{fixed.id}' by one "
+                f"{fillets[0].size.to('mm').magnitude:g} mm fillet weld: "
+                f"{_PULLS_TOWARDS_THE_WELD}"),
+        underived=_MEASURED,
+        addresses=("a weldment that comes out of the fixture bent",),
+    )]  # fmt: skip
+
+
 def parse_combination(document: Mapping[str, Any]) -> Combination:
     """A combination document as its typed model, refusing what it cannot place."""
     from pydantic import ValidationError
@@ -1872,20 +1908,21 @@ def build_combination(combination: Combination) -> BuiltCombination:
                 bodies, checks = _seated_key(key, mate, moving, fixed)
                 hardware += bodies
                 entries += checks
-        for weld in combination.welds:
-            if weld.mate == mate.id:
-                entries.append(
-                    ScorecardEntry(
-                        name=f"{mate.id} weld",
-                        status=CheckStatus.NOT_EVALUATED,
-                        detail=(
-                            f"a {weld.size.to('mm').magnitude:g} mm {weld.type} weld joins "
-                            f"'{moving.id}' to '{fixed.id}'. It is declared, not checked "
-                            "here: screen it as a welded_connection element with its load"
-                        ),
-                        underived=_MEASURED,
-                    )
+        on_this_mate = [weld for weld in combination.welds if weld.mate == mate.id]
+        for weld in on_this_mate:
+            entries.append(
+                ScorecardEntry(
+                    name=f"{mate.id} weld",
+                    status=CheckStatus.NOT_EVALUATED,
+                    detail=(
+                        f"a {weld.size.to('mm').magnitude:g} mm {weld.type} weld joins "
+                        f"'{moving.id}' to '{fixed.id}'. It is declared, not checked "
+                        "here: screen it as a welded_connection element with its load"
+                    ),
+                    underived=_MEASURED,
                 )
+            )
+        entries += _single_sided(mate, on_this_mate, moving, fixed)
 
     parts = tuple(placed[part.id] for part in combination.parts)
     labelled = [(part.id, part.shape) for part in parts]

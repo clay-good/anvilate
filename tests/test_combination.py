@@ -1169,3 +1169,38 @@ def test_an_exploded_picture_is_drawn_and_says_so(tmp_path):
         "--picture", str(picture), "--exploded",
     )  # fmt: skip
     assert code == 2 and picture.read_bytes().startswith(b"\x89PNG") and f"wrote {picture}" in out
+
+
+def test_a_joint_welded_from_one_side_is_advised_that_it_will_pull():
+    """Geometric DFM 2.6, the half the declaration decides on its own.
+
+    A mate carrying ONE fillet weld is welded from one side and pulls towards it as the
+    bead cools; one carrying two is balanced. That is the whole rule, and it states no
+    magnitude on purpose — how far a joint moves depends on the process, the heat input
+    and how the part is held, none of which a combination says.
+    """
+    built = _built("lug_on_base_plate")
+    entries = {e.name: e for e in built.card.entries}
+    advisory = entries["welded weld distortion"]
+    assert advisory.status is CheckStatus.WARNING
+    assert "one 6 mm fillet weld" in advisory.detail
+    assert "pulls towards that side as the bead cools" in advisory.detail
+    assert "weld the other side too" in advisory.detail
+    # Advisory: it names the problem and no number, because none is derivable from this.
+    assert advisory.comparison is None and advisory.safety_factor is None
+
+    def balanced(document):
+        document["welds"].append(dict(document["welds"][0]))
+
+    both = _built("lug_on_base_plate", balanced)
+    assert "welded weld distortion" not in {e.name for e in both.card.entries}
+    # Both welds are still reported as declared-and-unchecked, as one was.
+    assert sum(1 for e in both.card.entries if e.name == "welded weld") == 2
+
+    def grooved(document):
+        document["welds"][0]["type"] = "groove"
+
+    # A groove weld fills the joint rather than sitting on one side of it.
+    assert "welded weld distortion" not in {
+        e.name for e in _built("lug_on_base_plate", grooved).card.entries
+    }
