@@ -68,6 +68,18 @@ are read back.
 `draft: true` (absent otherwise, and out of the roll-up and the predicate), so a reviewer
 holding only the file cannot take it for a review-ready one.
 
+**A design a search chose says so too.** Applying a study's proposed edit records it on the
+document as `study_derived` — which study, its seed, the digest of its full record, and the
+paths it moved. The review package reads that off the spec rather than being handed it, and
+puts it in the manifest whole and in the dossier's opening lines:
+
+```text
+Study 'lug-mass' (seed 7, record sha256:a1b2…) chose element_params.thickness
+```
+
+A reviewer deciding what to look at hardest is entitled to know which numbers nobody chose
+by hand. A design nobody searched for says nothing there, rather than an empty flourish.
+
 ### The work, not just the verdict
 
 A check that carries a derivation renders it under its line — the formula, the values put

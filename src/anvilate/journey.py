@@ -316,6 +316,14 @@ def write_review_package(
     the manifest). Writing it records no review: the dossier still reads "not yet reviewed"
     until a named reviewer records one, and the manifest says so. ``write(name, data)``
     writes one file and returns where it went (``path``, ``bytes``, ``sha256``).
+
+    **A design a search chose says so here too.** ``apply_search_diff`` records each applied
+    study on the spec as ``study_derived`` — which study, its seed, the digest of its full
+    record and the paths it moved — so the package reads it off the spec rather than being
+    handed it. It goes in the manifest whole, and in the dossier's opening lines, because a
+    reviewer deciding what to check should know which numbers nobody chose by hand. Without
+    it the only trace was one digest among the per-field digests, which says a field exists
+    and nothing about what it says.
     """
     import json
 
@@ -338,7 +346,15 @@ def write_review_package(
     dossier = build_dossier(card, toolchain=toolchain)
     head = (f"DRAFT: not review-ready; no verdict for {', '.join(unrun)}" if draft
             else f"Review-ready for content sha256:{digest}")  # fmt: skip
-    lines = [head, _RECORDS_NO_REVIEW, "", dossier.summary(), "",
+    derived = _study_derivations(spec)
+    chosen = [
+        f"Study '{record['study']}' (seed {record['seed']}, record "
+        f"sha256:{record['record_sha256']}) chose {', '.join(record['changed'])}"
+        for record in derived
+    ]
+    lines = [head, _RECORDS_NO_REVIEW, "",
+             *([*chosen, ""] if chosen else []),
+             dossier.summary(), "",
              *(item.headline for item in dossier.items)]  # fmt: skip
     files = [
         write(f"{stem}.review.{mark}bundle.json",
@@ -354,6 +370,7 @@ def write_review_package(
         "records_review": False,
         "statement": _RECORDS_NO_REVIEW,
         "journey": state.model_dump(mode="json"),
+        "study_derived": derived,
         "files": [{"name": _name(f["path"]), "sha256": f["sha256"]} for f in files],
     }
     listed = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
@@ -369,6 +386,22 @@ def _name(path: str) -> str:
     from pathlib import PurePath
 
     return PurePath(path).name
+
+
+def _study_derivations(spec: Any) -> list[dict[str, Any]]:
+    """Each study the spec says chose part of it, as the spec itself records them.
+
+    Read from the document rather than taken as an argument: a design that came out of a
+    search carries that on its face, and a package that had to be TOLD could be written
+    without it by a caller who did not know to.
+    """
+    records = getattr(spec, "study_derived", ()) or ()
+    return [
+        {"study": str(record.study), "seed": int(record.seed),
+         "record_sha256": str(record.record_sha256),
+         "changed": [str(path) for path in record.changed]}
+        for record in records
+    ]  # fmt: skip
 
 
 def _field_digests(spec: Any) -> dict[str, str]:

@@ -28,8 +28,12 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
 ## 2. Finish line
 
 - [ ] 2.1 `review_package` export format: bundle, dossier, release files, study record
-      (bundle, dossier and manifest, over MCP and at the shell; release files and a study
-      record are not in it yet)
+      (bundle, dossier, manifest and the **study record**, over MCP and at the shell. The
+      study is read off the spec's own `study_derived` — which `apply_search_diff` writes
+      when a study's edit is applied — rather than passed in, so a package cannot be
+      written without it by a caller who did not know to; it goes in the manifest whole and
+      in the dossier's opening lines, where the reviewer reads. Release files are not in it
+      yet: those are a product's, and this package is a part's)
 - [x] 2.2 Draft marking in every file; refusal short of `review_ready` without `draft`
 - [x] 2.3 The package records no review (held by a test against `responsible-charge-review`)
 

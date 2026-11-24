@@ -299,3 +299,44 @@ def test_a_draft_package_never_counts_as_written():
     written, changed = package_standing({"draft": False, "content_sha256": "x",
                                          "spec_fields": {}}, spec, card)  # fmt: skip
     assert not written and "name" in changed
+
+
+def test_a_design_a_search_chose_says_so_in_the_package(monkeypatch, tmp_path):
+    """Guided design journey 2.1: the study record, read off the spec rather than passed.
+
+    `apply_search_diff` writes `study_derived` onto the document — which study, its seed,
+    the digest of its full record, the paths it moved. The package reads it there, so a
+    package cannot be written without it by a caller who did not know to pass it.
+
+    What a reviewer gets out of it is which numbers nobody chose by hand. Before this the
+    only trace was one digest among the per-field digests, which says a field exists and
+    nothing about what it says.
+    """
+    import json
+
+    from anvilate.mcp import _export_artifact, _run_validation
+    from anvilate.spec import load_spec_yaml
+
+    monkeypatch.setenv("ANVILATE_OUT", str(tmp_path))
+    document = load_spec_yaml((_EXAMPLES / "padeye.spec.yaml").read_text()).model_dump(mode="json")
+    chose = {"study": "lug-mass", "seed": 7, "record_sha256": "a" * 64,
+             "changed": ["element_params.thickness", "element_params.width"]}  # fmt: skip
+    handle = _run_validation({"spec": {**document, "study_derived": [chose]}})["subject"]
+    result = _export_artifact({"subject": handle, "format": "review_package"})
+    names = [Path(f["path"]).name for f in result["files"]]
+
+    # In the manifest, whole: a reviewer can find the record this design came out of.
+    manifest = json.loads((tmp_path / names[2]).read_text())
+    assert manifest["study_derived"] == [chose]
+    # And in the dossier's opening lines, where the reviewer actually reads.
+    dossier = (tmp_path / names[1]).read_text()
+    assert ("Study 'lug-mass' (seed 7, record sha256:" + "a" * 64
+            + ") chose element_params.thickness, element_params.width") in dossier  # fmt: skip
+    assert dossier.index("lug-mass") < dossier.index("not yet reviewed")
+
+    # A design nobody searched for says nothing rather than an empty flourish.
+    plain = _export_artifact({"subject": _screened("padeye.spec.yaml"),
+                              "format": "review_package"})  # fmt: skip
+    plain_names = [Path(f["path"]).name for f in plain["files"]]
+    assert json.loads((tmp_path / plain_names[2]).read_text())["study_derived"] == []
+    assert "Study '" not in (tmp_path / plain_names[1]).read_text()
