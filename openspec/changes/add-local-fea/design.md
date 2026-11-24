@@ -80,3 +80,39 @@ pip cannot install CalculiX. The options are:
 
 The spec permits all three and forbids only a silent download. The tasks start with option
 1 and leave 2 and 3 to the owner.
+
+### The licensing question, which is not the provisioning one (found 2026-11-24)
+
+The three options above are about *how to install* the solver. There is a second question
+underneath them that this note did not state, and it is the one that actually stops the
+work: **Anvilate is MIT, and both programs are GPL-2.0+.**
+
+It matters because the easy-looking provisioning answer is the one with the question.
+Checked on PyPI 2026-11-24: gmsh 4.15.2 publishes `py2.py3-none-*` wheels for
+manylinux x86_64, macOS (x86_64 and arm64) and Windows. They carry no ABI tag, so one
+wheel installs on every Python this project supports, CI included. Adding
+`mesh = ["gmsh>=4.15,<4.16"]` would therefore just work — which is exactly why the
+licensing question has to be answered before it is done rather than after.
+
+What the repository does today, for comparison. Every optional extra states its license
+class in `pyproject.toml`, and the strongest is LGPL: `ifc` takes IfcOpenShell
+(LGPL-3.0-or-later), justified there as "the same license class as the OCCT bindings the
+geometry extra already imports, loaded in-process and never modified". There is no GPL
+dependency anywhere in the project, and GPL is a different class from LGPL: its
+reciprocity reaches a work that links it, and importing `gmsh` in-process is linking.
+
+The two programs are not in the same position, and that is the useful part:
+
+| | How it would be used | Exposure |
+| --- | --- | --- |
+| CalculiX `ccx` | A subprocess, writing a deck and reading `.frd`/`.dat` (task 1.5 already says "sandboxed ccx subprocess") | Running a program is not linking it; this is the ordinary arrangement |
+| Gmsh | The tasks say "Gmsh meshing" with size fields and physical groups, which reads as the Python API — in-process, and therefore linking | The question |
+
+So the decision the owner owes is narrower than it first looks: **may Gmsh be imported, or
+must it be driven as a subprocess too** (it has a command line and `.geo`/`.msh` files, so
+a subprocess pipeline is possible and keeps Anvilate at arm's length), **or does the
+project accept a GPL optional extra and say so?** Nothing here needs a lawyer to *frame*;
+it needs the owner to choose, and the choice changes what task 1.3 is allowed to be.
+
+Until it is chosen, 1.1 and 1.3 are blocked on a decision and not on engineering. 1.2
+(tag signatures) was built without either program and does not touch this.

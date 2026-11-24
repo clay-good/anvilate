@@ -7,6 +7,15 @@ phase 2 needs `add-product-structure`.
 
 - [ ] 1.1 Solver and mesher discovery (setting, environment, path), version pins, digest
       and solver build recorded in the bundle; `doctor` entries per `add-guided-design-journey`
+      — **waits on the owner's licensing decision** (design.md, "The licensing question"):
+      what this discovers depends on whether Gmsh may be imported or must be a subprocess.
+      Two further notes from 2026-11-24. The version pins cannot be written from here:
+      neither program is installed on this machine, so what `ccx -v` and `gmsh --version`
+      actually print has not been READ, and a parser written from a remembered format is
+      the thing this repository refuses. And `doctor`'s entry should stay as it is until
+      the pipeline exists — it says no FEA backend is shipped, which is true; telling a
+      user to install CalculiX before 1.3 to 1.7 are built would point them at something
+      Anvilate cannot yet use
 - [ ] 1.2 Tag signatures recorded at build; signature matching after import, verified
       (`anvilate.mesh`: `face_signatures` records each tagged face's area, its AREA
       centroid and — where the face is flat — the way it faces, and `match_face_signatures`
@@ -20,6 +29,12 @@ phase 2 needs `add-product-structure`.
       producer yet, and the round-trip tolerances are float-noise defaults rather than a
       mesher's measured ones)
 - [ ] 1.3 Gmsh meshing: second-order tets, size fields from tagged features, physical groups
+      — **waits on the same decision.** "Meshing with size fields and physical groups"
+      reads as the Python API, which is in-process and therefore linking a GPL-2.0+ library
+      into an MIT project; a subprocess pipeline over `.geo`/`.msh` is the alternative and
+      is a different design. The wheel is not the obstacle: gmsh 4.15.2 publishes
+      `py2.py3-none` wheels that install on every Python here and in CI (checked
+      2026-11-24), which is precisely why the licence has to be settled first
 - [ ] 1.4 Deck writer (shared with `add-cae-handoff`): materials with sources, supports and
       loads by tag, one step per load case, unit system stated
 - [ ] 1.5 Sandboxed ccx subprocess with CPU, memory and time caps; cancellation leaves no
