@@ -1222,3 +1222,90 @@ def test_a_product_with_no_declared_clearance_gets_no_swept_entry():
     report = product_screening(parse_product(_turning_document(clearance=None)))
     assert report.swept  # the envelopes are still reported
     assert [e for e in report.entries if e.name == "swept clearance"] == []
+
+
+# --- A load at an interface, where that interface is (product screening 1.1) --------------
+
+
+def _hung(face: str, on_item: bool = False) -> dict:
+    """The cart, with the FRAME offering a mounting face and the payload arriving there.
+
+    The frame is 600 x 400 and stands on three casters, so where its load lands decides how
+    the three share it — which is the thing worth checking. The plate, by contrast, rests on
+    one patch: whatever acts on it goes to that one support wherever it acted, so a position
+    on the plate could not be observed from below it.
+
+    ``on_item`` declares the same payload on the item instead. Same force, different place.
+    """
+    document = _carted(_THREE, ("right", "back"))
+    frame = next(d for d in document["definitions"] if d["id"] == "frame")
+    # A placeholder states its interfaces inside itself, not beside it.
+    frame["placeholder"]["interfaces"] = [{"name": "pad", "kind": "mounting_face",
+                                           "face": face}]  # fmt: skip
+    payload = {"mass": _q(50, "kg"), "source": "payload spec"}
+    document["screening"]["loads"] = [
+        {**payload, "item": "frame"} if on_item else {**payload, "at": "frame.pad"}
+    ]
+    return document
+
+
+def test_a_load_at_an_interface_arrives_where_the_interface_is():
+    """A face is off to one side of the item it is on, and the load path is a moment
+    calculation, so the two places are not interchangeable.
+
+    The frame is 600 mm across. A load at its LEFT face acts 300 mm to the -x side of the
+    load on the item, and at its RIGHT face 300 mm to the +x side, so the three put three
+    different resultants over the casters and three different shares on them.
+    """
+    carried = {}
+    for name, document in (("item", _hung("left", on_item=True)),
+                           ("left", _hung("left")), ("right", _hung("right"))):  # fmt: skip
+        report = product_screening(parse_product(document))
+        frame = {s.body: s for s in report.load_path}["cart/frame"]
+        carried[name] = {r.support: r.force_n for r in frame.reactions}
+        # The same force arrives however it is declared; only where it lands differs.
+        assert frame.carries_n == pytest.approx(63 * 9.80665)
+    assert carried["left"] != carried["item"] != carried["right"]
+    # caster1 is the -x pair's front corner, so moving the load towards -x loads it more
+    # and moving it towards +x loads it less. The item's own middle sits between the two.
+    assert (carried["right"]["cart/caster1"]
+            < carried["item"]["cart/caster1"]
+            < carried["left"]["cart/caster1"])  # fmt: skip
+
+
+def test_the_load_path_entry_names_the_interface_a_load_arrived_at():
+    """A reader following a number down meets where it came in, not just which item."""
+    report = product_screening(parse_product(_hung("left")))
+    detail = _named(report, "load path cart/frame").detail
+    assert "490.3 N as the load at frame.pad (payload spec)" in detail
+    on_item = product_screening(parse_product(_hung("left", on_item=True)))
+    assert (
+        "490.3 N as the load on frame (payload spec)"
+        in _named(on_item, "load path cart/frame").detail
+    )
+
+
+def test_a_load_at_an_interface_nothing_offers_is_refused_at_parse():
+    document = _hung("left")
+    document["screening"]["loads"][0]["at"] = "frame.nowhere"
+    with pytest.raises(ValueError, match="'frame' offers no interface 'nowhere'"):
+        parse_product(document)
+    document = _hung("left")
+    document["screening"]["loads"][0]["at"] = "nosuchitem.pad"
+    with pytest.raises(ValueError, match="which is not an instance of 'cart'"):
+        parse_product(document)
+    document = _hung("left")
+    document["screening"]["loads"][0]["at"] = "frame"
+    with pytest.raises(ValueError, match="is not item.interface"):
+        parse_product(document)
+
+
+def test_a_load_states_an_item_or_an_interface_and_not_both_or_neither():
+    document = _hung("left")
+    document["screening"]["loads"][0]["item"] = "frame"
+    with pytest.raises(ValueError, match="states both an item and an at"):
+        parse_product(document)
+    document = _hung("left")
+    del document["screening"]["loads"][0]["at"]
+    with pytest.raises(ValueError, match="states neither an item nor an at"):
+        parse_product(document)

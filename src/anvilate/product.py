@@ -650,27 +650,46 @@ class LateralAcceleration(StatableModel):
 
 
 class ProductLoad(StatableModel):
-    """A load the product carries: on an item, as a force down or a mass under gravity."""
+    """A load the product carries, as a force down or a mass under gravity.
+
+    It names where it arrives: an ``item``, or an ``at`` of ``item.interface``. The two are
+    not the same place. A load on an item acts at the middle of the item, which is the
+    honest reading when all the declaration says is which item carries it. A load at an
+    interface acts where that interface is — at the centre of the face it is on — and a
+    face is off to one side of the item it belongs to, so the moment it makes about what
+    the item rests on is different. That difference is the whole of what a load path
+    computes, so the two are declared apart rather than one standing in for the other.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
     states_requirements = True
 
-    item: Named
+    item: Named | None = None
+    at: Named | None = None
     force: Quantity | None = None
     mass: Quantity | None = None
     source: Provenance
 
+    @property
+    def where(self) -> str:
+        """What the load names, for a message: the item or the interface reference."""
+        return self.item if self.item is not None else str(self.at)
+
     @model_validator(mode="after")
     def _one(self) -> ProductLoad:
+        if (self.item is None) == (self.at is None):
+            stated = "both an item and an at" if self.item else "neither an item nor an at"
+            raise _refuse(f"a load states {stated}; a load arrives on one item or at one "
+                          "interface", subject="screening.loads")  # fmt: skip
         if (self.force is None) == (self.mass is None):
             stated = "both" if self.force else "neither"
-            raise _refuse(f"load on '{self.item}' states {stated} of force and mass; a load "
+            raise _refuse(f"load on '{self.where}' states {stated} of force and mass; a load "
                           "states one", subject="screening.loads")  # fmt: skip
         value, dimension = ((self.force, "[force]") if self.force is not None
                             else (self.mass, "[mass]"))  # fmt: skip
         assert value is not None
         if not (value.has_dimension(dimension) and value.magnitude > 0):
-            raise _refuse(f"load on '{self.item}' is {value}; it is a positive "
+            raise _refuse(f"load on '{self.where}' is {value}; it is a positive "
                           f"{dimension.strip('[]')}", subject="screening.loads")  # fmt: skip
         return self
 
@@ -1061,8 +1080,10 @@ class Product(StatableModel):
     # turns about, which is what lets a turning item sweep an envelope and have its clearance
     # checked while the machine runs, and 1.19.0 each gear's data block — the profile shift,
     # the basic rack, the accuracy class and the dimension it is inspected over, which are
-    # what a gear is made or bought by and what no drawing view can dimension; an older
-    # document reads unchanged.
+    # what a gear is made or bought by and what no drawing view can dimension, and 1.20.0
+    # a load that arrives at a named interface rather than on an item, which puts it where
+    # that interface is instead of in the middle of the item; an older document reads
+    # unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -1084,6 +1105,7 @@ class Product(StatableModel):
         "1.17.0",
         "1.18.0",
         "1.19.0",
+        "1.20.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None
@@ -1235,6 +1257,11 @@ class Product(StatableModel):
                               f"'{self.ground}', which stays where it is; put it on the on side",
                               subject="connections[].place")  # fmt: skip
             connected |= {connection.on, connection.place}
+        for load in self.screening.loads if self.screening is not None else ():
+            # Resolved here, at parse, so a load at an interface nothing offers is refused
+            # before a load path is solved rather than when the solver first looks for it.
+            if load.at is not None:
+                self.interface_at(load.at, "screening.loads[].at")
         for left_open in self.open_interfaces:
             self.interface_at(left_open.at, "open_interfaces[].at")
             if left_open.at in connected:

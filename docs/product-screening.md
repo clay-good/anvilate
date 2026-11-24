@@ -76,6 +76,30 @@ entry below the split**, not only on the body it divided: a reader following a n
 down to a caster meets the assumption at each step rather than once at the top, where it
 is easy to read as applying only there.
 
+### Where a load arrives
+
+A load names **one item** or **one interface**, and they are not the same place:
+
+```yaml
+loads:
+- {item: frame, mass: {magnitude: 50, unit: kg}, source: payload spec}   # at the middle
+- {at: frame.pad, mass: {magnitude: 50, unit: kg}, source: payload spec} # where the pad is
+```
+
+A load on an item acts at the middle of the item, which is the honest reading when all the
+declaration says is which item carries it. A load `at` an `item.interface` acts where that
+interface is — at the centre of the face it is on, which is off to one side of the item —
+and an axis-located interface puts it on that axis. That offset is not cosmetic: the load
+path is a moment calculation, so the same 50 kg at a 600 mm frame's left face and at its
+right face put different shares on the casters underneath, and one of the two can be the
+difference between a caster inside its rating and one over it.
+
+The interface is resolved when the document is parsed, so a load at an interface nothing
+offers is refused by name before any path is solved. Each body's entry then says what
+arrived on it directly and where from — `of which 490.3 N as the load at frame.pad
+(payload spec)` — so a reader following a number down meets the declaration that put it
+there rather than only a total.
+
 A declared `vertical_acceleration`, gravity included and acting down, is what the path is
 carried at: each body's weight and each load given as a mass are m·a rather than m·g, and a
 load given as a force is carried as stated. At `{magnitude: 2, unit: g0}` the cart's 63 kg
@@ -160,5 +184,5 @@ zero or negative, and for any two joint axes that are parallel or coincident: a 
 coaxial hinges counts −9 and moves. Mates between two items that a declared joint joins are
 read as part of that joint, not as welding them.
 
-Not yet built: lateral accelerations, loads on interfaces, side connections in the load path,
-part screens other than a caster's and a guide's fed their loads, and fastener and tool counts.
+Not yet built: side connections in the load path, part screens other than a caster's and a
+guide's fed their loads, and fastener and tool counts.

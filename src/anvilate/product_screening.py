@@ -41,7 +41,7 @@ from .budget import (
 )
 from .derivation import DerivationAbsence, Underived
 from .frame import FrameSolution
-from .product import Product, Split, _placed_leaves, _refuse, place_product
+from .product import _OUTWARD, Product, Split, _placed_leaves, _refuse, place_product
 from .scorecard import (
     CheckStatus,
     Comparison,
@@ -782,6 +782,39 @@ def _overlap(a: Any, b: Any) -> tuple[float, float, float] | None:
     return (x1 - x0) * (y1 - y0), (x0 + x1) / 2, (y0 + y1) / 2
 
 
+#: Which end of a body's bounding box each face is, as (axis index, +1 for the high side).
+#: The senses are `product._OUTWARD`'s, read off it rather than written again here.
+_FACE_END = {
+    face: (axis, 1 if normal[axis] > 0 else -1)
+    for face, normal in _OUTWARD.items()
+    for axis in (max(range(3), key=lambda i: abs(normal[i])),)
+}  # fmt: skip
+
+
+def _where(product: Product, load: Any, target: Any) -> tuple[float, float, float]:
+    """Where a load arrives on its body, as (x, y, height) in millimetres.
+
+    On an item, the middle of it: all the declaration says is which item carries the load.
+
+    At an interface, where that interface is. A face-located interface puts the load at the
+    centre of its own face, which is off to one side of the item along one axis and centred
+    along the other two — and that offset is what gives the load a different moment about
+    whatever the item rests on. An axis-located interface is a line, not a point, so the
+    load sits on that line: centred in the two directions across it, which for the bounding
+    box this reads is the middle of the body in both.
+    """
+    low, high = target.box_min_mm, target.box_max_mm
+    middle = [(low[i] + high[i]) / 2 for i in range(3)]
+    if load.at is None:
+        return middle[0], middle[1], middle[2]
+    _item, interface = product.interface_at(str(load.at), "screening.loads[].at")
+    face = getattr(interface, "face", None)
+    if face is not None:
+        axis, sense = _FACE_END[face]
+        middle[axis] = high[axis] if sense > 0 else low[axis]
+    return middle[0], middle[1], middle[2]
+
+
 def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[ScorecardEntry]]:
     """Each body's load, carried down to the bodies it rests on and from the lowest to the floor.
 
@@ -804,6 +837,7 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
     # force passes down undiminished; what grows as it goes is its moment about whatever
     # the next body rests on, so the height it was delivered at travels with it.
     horizontal: dict[str, list[tuple[float, float]]] = {b.path: [] for b in bodies}
+    arrived: dict[str, list[tuple[float, str]]] = {b.path: [] for b in bodies}
     for body in bodies:
         if body.mass_kg is not None and body.mass_kg > 0:
             x, y, z = body.center_of_mass_mm
@@ -811,21 +845,25 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
             if sideways > 0:
                 horizontal[body.path].append((body.mass_kg * sideways, z))
     for load in declared.loads if declared is not None else ():
-        base = f"{product.name}/{load.item}"
+        item = load.item if load.item is not None else str(load.at).rpartition(".")[0]
+        base = f"{product.name}/{item}"
         held = [b for b in bodies if b.path == base or b.path.startswith((base + "/", base + "["))]
         if not held:
-            raise _refuse(f"a load is on '{load.item}', which is not an item of "
+            raise _refuse(f"a load is on '{item}', which is not an item of "
                           f"'{product.name}'", subject="product")  # fmt: skip
         target = held[0]
         force = (load.force.to("N").magnitude if load.force is not None
                  else load.mass.to("kg").magnitude * a)  # type: ignore[union-attr]  # fmt: skip
-        cx = (target.box_min_mm[0] + target.box_max_mm[0]) / 2
-        cy = (target.box_min_mm[1] + target.box_max_mm[1]) / 2
-        incoming[target.path].append((force, cx, cy, f"the load on {load.item} ({load.source})"))
+        cx, cy, height = _where(product, load, target)
+        arrives = f"the load on {item}" if load.at is None else f"the load at {load.at}"
+        incoming[target.path].append((force, cx, cy, f"{arrives} ({load.source})"))
+        # Kept so the entry can say where each declared load came in. Without it the only
+        # thing a reader sees is the body's total, and a load at an interface reads exactly
+        # like the same load on the item — while landing somewhere else.
+        arrived[target.path].append((force, f"{arrives} ({load.source})"))
         if sideways > 0 and load.mass is not None:
             # A load given as a MASS is accelerated sideways too; one given as a force is
             # a force, and this does not invent a direction for it.
-            height = (target.box_min_mm[2] + target.box_max_mm[2]) / 2
             horizontal[target.path].append((load.mass.to("kg").magnitude * sideways, height))
     splits = {split.body: split for split in (declared.splits if declared is not None else ())}
     unknown: set[str] = set()
@@ -904,6 +942,11 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
                               shift_mm=round(shift, 3)))  # fmt: skip
         carried = "; ".join(f"{r.force_n:.4g} N to {r.support} at ({r.at_mm[0]:g}, "
                             f"{r.at_mm[1]:g})" for r in reactions)  # fmt: skip
+        arrivals_note = (
+            ", of which " + " and ".join(f"{f:.4g} N as {label}" for f, label in arrived[body.path])
+            if arrived[body.path]
+            else ""
+        )
         upstream_note = (
             "; it carries a share assumed above it — " + "; ".join(inherited[body.path])
             if inherited[body.path]
@@ -916,6 +959,7 @@ def _load_path(product: Product, placed: Any) -> tuple[list[LoadStep], list[Scor
             else ""
         )
         detail = (f"{body.path} carries {total:.4g} N{at} acting at ({xw:.4g}, {yw:.4g}) mm"
+                  + arrivals_note
                   + (f": {carried}; ΣFz, ΣMx and ΣMy balance" if reactions else "")
                   + sideways_note + (f"; {note}" if note else "")
                   + upstream_note)  # fmt: skip

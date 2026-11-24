@@ -1883,8 +1883,20 @@
     },
     "ProductLoad": {
       "additionalProperties": false,
-      "description": "A load the product carries: on an item, as a force down or a mass under gravity.",
+      "description": "A load the product carries, as a force down or a mass under gravity.\n\nIt names where it arrives: an ``item``, or an ``at`` of ``item.interface``. The two are\nnot the same place. A load on an item acts at the middle of the item, which is the\nhonest reading when all the declaration says is which item carries it. A load at an\ninterface acts where that interface is — at the centre of the face it is on — and a\nface is off to one side of the item it belongs to, so the moment it makes about what\nthe item rests on is different. That difference is the whole of what a load path\ncomputes, so the two are declared apart rather than one standing in for the other.",
       "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At"
+        },
         "force": {
           "anyOf": [
             {
@@ -1897,8 +1909,16 @@
           "default": null
         },
         "item": {
-          "title": "Item",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item"
         },
         "mass": {
           "anyOf": [
@@ -1917,7 +1937,6 @@
         }
       },
       "required": [
-        "item",
         "source"
       ],
       "title": "ProductLoad",
@@ -2520,7 +2539,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.19.0",
+  "$id": "urn:anvilate:schema:product-document:1.20.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
@@ -2547,7 +2566,8 @@
         "1.16.0",
         "1.17.0",
         "1.18.0",
-        "1.19.0"
+        "1.19.0",
+        "1.20.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -2679,5 +2699,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.19.0"
+  "x-anvilate-version": "1.20.0"
 }

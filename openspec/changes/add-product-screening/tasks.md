@@ -5,9 +5,13 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 
 ## 1. Load path
 
-- [ ] 1.1 Product loads and accelerations on items and interfaces
-      (loads on items, a vertical acceleration and a **lateral** acceleration are built;
-      loads on interfaces are not)
+- [x] 1.1 Product loads and accelerations on items and interfaces
+      (a load names one `item` or one `at` of `item.interface`, at document schema 1.20.0.
+      On an item it acts at the middle of it; at an interface it acts where that interface
+      is — the centre of its face, or on its axis — which is a different moment about
+      whatever the item rests on and so a different share on each support. The interface is
+      resolved at parse, and each body's load-path entry now names what arrived on it
+      directly and where from. A vertical and a **lateral** acceleration were already built)
 - [x] 1.2 Rigid-body equilibrium over determinate paths; connection forces with their
       equilibrium
 - [x] 1.3 Indeterminacy named with redundant connections; downstream not evaluated;
