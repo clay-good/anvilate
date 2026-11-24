@@ -970,6 +970,7 @@ journey.JourneyState
 journey.journey_state
 journey.write_review_package
 journey.package_standing
+journey.steps_after_refusal
 capabilities.Capability
 capabilities.CAPABILITIES
 capabilities.capability

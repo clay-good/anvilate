@@ -477,3 +477,62 @@ def test_the_catalog_says_each_thing_with_one_word():
     for word in retired:
         assert re.search(rf"(?<![-_`\w]){word}s?(?![-_\w])", f"returns a {word} to pass on")
     assert not re.search(r"(?<![-_`\w])elements?(?![-_\w])", "set element_type, finite-element")
+
+
+def test_a_refused_call_carries_the_same_typed_steps_a_result_does():
+    """Guided design journey 1.1, over the wire.
+
+    A refusal already travelled with what to write instead, as prose in `remedies`. It is
+    the answer an agent is most likely to act on without reading closely, and it was the
+    one answer whose "what to do next" was not the typed shape every result uses.
+    """
+    from anvilate.mcp import handle_request
+
+    reply = handle_request({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "run_validation", "arguments": {"spec": {"nope": 1}}},
+    })  # fmt: skip
+    data = reply["error"]["data"]
+    assert data["remedies"], "the refusal itself knows what to write instead"
+    steps = data["next"]["steps"]
+    # One step per remedy, naming the tool that was refused, and saying it was refused.
+    assert [s["tool"] for s in steps] == ["run_validation"] * len(data["remedies"])
+    assert all(s["reason"].startswith("the call was refused: ") for s in steps)
+    assert [s["reason"].removeprefix("the call was refused: ") for s in steps] == data["remedies"]
+
+
+def test_a_refusal_with_nothing_to_add_names_no_step():
+    """`steps_after_refusal` invents nothing: no remedy, no step.
+
+    An unavailable tool is the case that matters — it is not the caller's to fix and not
+    worth retrying, so it carries a remedy about capability and no step to call it again.
+    """
+    from anvilate.journey import steps_after_refusal
+
+    assert steps_after_refusal("run_validation", ()) == ()
+    with pytest.raises(ValueError, match="the name of the call that was refused"):
+        steps_after_refusal("", ("do something",))
+
+
+def test_every_published_tool_can_be_refused_and_still_answer():
+    """EVERY tool, not one: the first draft of this held the refused tool against the five
+    a card-derived step may name, and the other seven raised out of the journey module
+    instead of refusing. A refusal is a call of ANY kind that did not happen.
+
+    So the sweep calls each published tool with arguments its own schema rejects and reads
+    the refusal back. What it holds is that the server answers — a JSON-RPC error with a
+    code, not an exception — and that where there are remedies there are steps naming that
+    same tool.
+    """
+    from anvilate.mcp import handle_request
+
+    for tool in tool_catalog():
+        reply = handle_request({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": tool.name, "arguments": {"\u00ff not a field": 1}},
+        })  # fmt: skip
+        assert "error" in reply, f"{tool.name} did not refuse arguments it cannot take"
+        data = reply["error"].get("data", {})
+        steps = data.get("next", {}).get("steps", [])
+        assert len(steps) == len(data.get("remedies", [])), tool.name
+        assert all(s["tool"] == tool.name for s in steps), tool.name

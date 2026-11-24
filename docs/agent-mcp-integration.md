@@ -515,6 +515,13 @@ task-dispatched: run_fea_validation
 (-32602, "run_validation requires 'spec'")
 ```
 
+- **Every refusal that names a tool carries what to write instead, twice.**
+  `error.data.remedies` is the prose, and `error.data.next` is the same thing as the typed
+  steps a successful result carries: one step per remedy, naming the tool to call again.
+  Read `next` and you never have to parse the message. This holds for every published
+  tool, not only the five a card-derived step can name. Three refusals carry no `next`,
+  because there is no tool to call again: an unknown tool name, a malformed request, and
+  `-32000` TOOL_UNAVAILABLE — whose remedy is about the capability, not about retrying.
 - **`-32602` is yours to fix.** The arguments did not match the published `inputSchema`.
 - **A refusal that names `anvilate fetch` is the user's to act on.** Some reference data,
   such as AISC's W-shapes, may be read but not shipped, so it is downloaded once with the

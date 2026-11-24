@@ -13,6 +13,9 @@ one fixed precedence:
 5. checks held back by a value nobody declared, one step per missing declaration;
 6. when nothing holds the result back, the export of the review package.
 
+A call that was REFUSED has no card to read, and :func:`steps_after_refusal` turns its own
+remedies into the same typed steps, naming the tool to call again.
+
 The list is a function of the result: the same card gives the same steps, and it is never
 empty, because a result short of review always has something left to do, even if that is
 exporting a draft. Every tool it names is one the server publishes, which a test holds
@@ -41,6 +44,7 @@ __all__ = [
     "NextStep",
     "NextSteps",
     "next_steps",
+    "steps_after_refusal",
 ]
 
 #: Every tool a step may name. A test holds each against the server's published catalog.
@@ -89,6 +93,36 @@ class NextSteps(ItemCollection, StatableModel):
 
 def _value(value: float, unit: str | None) -> str:
     return f"{value:.4g} {unit}".strip() if unit else f"{value:.4g}"
+
+
+def steps_after_refusal(tool: str, remedies: Sequence[str]) -> tuple[NextStep, ...]:
+    """The steps a REFUSED call names: call it again, each time with one correction.
+
+    A refusal already travels with what to write instead. Until this, it travelled as
+    prose in the error, beside a result whose steps were typed — so the one answer an
+    agent is most likely to act on blindly was the one it had to parse.
+
+    ``tool`` is whichever tool was called, and it is NOT held against
+    :data:`NEXT_STEP_TOOLS`. That list is the tools a step DERIVED FROM A CARD may name —
+    five of them — and a refusal is a call of any kind that did not happen, so every tool
+    the server publishes can raise one. Holding a refusal to the derived list turned a
+    clean refusal of `describe_part` into an exception out of this module, which is the
+    opposite of what a refusal path is for. What the name is held to lives where the
+    catalog does: the agent-surface test refuses every published tool in turn and reads
+    the steps back.
+
+    A refusal with no remedy of its own produces no step rather than an invented one — the
+    caller is told what was wrong and this has nothing to add to it.
+    """
+    if not isinstance(tool, str) or not tool.strip():
+        raise _JourneyInputError(
+            f"tool is the name of the call that was refused; got {tool!r}",
+            remedies=(Remedy(action="replace", subject="tool", source="the tool result"),),
+        )
+    return tuple(
+        NextStep(tool=tool, reason=f"the call was refused: {remedy}")
+        for remedy in dict.fromkeys(each_one(remedies, str, named="remedies"))
+    )
 
 
 def next_steps(

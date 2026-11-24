@@ -1735,7 +1735,26 @@ class _Unavailable(RuntimeError):
     """
 
 
-def _error(request_id: Any, code: int, message: str, **data: Any) -> dict[str, Any]:
+def _error(
+    request_id: Any, code: int, message: str, *, tool: str | None = None, **data: Any
+) -> dict[str, Any]:
+    """One JSON-RPC error, with its remedies also carried as the typed steps a result uses.
+
+    ``tool`` is the call that was refused. Given one, every remedy in ``data`` becomes a
+    step naming it, so a client reads the same shape whether the call succeeded or not and
+    never has to parse the message. It is built HERE rather than at each refusal so that a
+    refusal added later cannot forget it.
+
+    Left out deliberately where there is no tool to call again: an unknown tool name, a
+    malformed request, and TOOL_UNAVAILABLE — whose remedy is about the capability and not
+    about retrying, since an unbuilt operation is not the caller's to fix.
+    """
+    from .journey import NextSteps, steps_after_refusal
+
+    if tool is not None and data.get("remedies"):
+        steps = steps_after_refusal(tool, data["remedies"])
+        if steps:
+            data = {**data, "next": NextSteps(steps=steps).model_dump(mode="json")}
     error: dict[str, Any] = {"code": code, "message": message}
     if data:
         error["data"] = data
@@ -2265,6 +2284,7 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             request_id,
             INVALID_PARAMS,
             "arguments must be a JSON object",
+            tool=tool.name,
             remedies=[_argument_remedy(tool)],
         )
     issues = _argument_issues(tool, arguments)
@@ -2273,6 +2293,7 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             request_id,
             INVALID_PARAMS,
             "; ".join(issues),
+            tool=tool.name,
             issues=issues,
             remedies=[_argument_remedy(tool)],
         )
@@ -2355,6 +2376,7 @@ def handle_request(request: Mapping[str, Any]) -> dict[str, Any] | None:
             request_id,
             INVALID_PARAMS,
             str(refusal),
+            tool=tool.name,
             issues=list(refusal.issues),
             remedies=[str(remedy) for remedy in refusal.remedies],
         )

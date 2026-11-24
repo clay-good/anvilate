@@ -8,10 +8,16 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
 
 - [ ] 1.1 `next` on every workflow result, derived from the card by the precedence rule;
       a test walks every rule against the live tool catalog
-      (`anvilate.journey`, next-steps 1.0.0, on `run_validation`, `build_combination` and
-      a **product** result, whose card is every item's checks and the
-      whole product's as one. build_part, FEA and export results, and refusals over the
-      wire, not yet)
+      (`anvilate.journey`, next-steps 1.0.0, on `run_validation`, `build_combination`, a
+      **product** result — whose card is every item's checks and the whole product's as
+      one — and a **refused** call over the wire, for EVERY published tool and not only
+      the five a card-derived step may name: the error builder turns the refusal's own
+      remedies into the same typed steps, naming the tool to call again, so the answer an
+      agent is most likely to act on without reading is no longer the one whose next step
+      arrived as prose. It is built in `_error` so a refusal added later cannot forget it.
+      No step where there is no tool to call again — an unknown tool name, a malformed
+      request, or an unavailable tool, whose remedy is about the capability. build_part,
+      FEA and export results not yet)
 - [x] 1.2 Journey stage and per-stage gaps on part, combination and product results
       (`journey_state`, journey-state 1.0.0, on `run_validation`, `build_combination` and
       a product result. The reducer reads `described` and not `screened`, because seven of
