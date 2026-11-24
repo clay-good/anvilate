@@ -36,7 +36,14 @@ Depends on `add-product-structure` for the worked product. The `simulated` and
 
 ## 4. Measurement
 
-- [ ] 4.1 The *design a product* journey walked call by call in an offline test
+- [x] 4.1 The *design a product* journey walked call by call in an offline test
+      (`tests/test_mcp_product.py`: two `build_combination` calls through the server's own
+      request handler in-process, where the second is the step the FIRST one named. A rig
+      with one placeholder reads `described`, its `screened` gap names that placeholder and
+      its first step says to declare `definitions[].spec`; doing exactly that and nothing
+      else closes the gap, the stage reads `screened`, and the step moves on to writing the
+      review package. The point is not that the stage advances but that an agent with only
+      the result can tell what to do, do it, and see what it was told about close)
 - [ ] 4.2 The journey added to the agent-driving corpus; measured on both target clients
 - [ ] 4.3 The release gate holds the journey to the previous release's measurement
 - [ ] 4.4 README: the reducer request as a fourth "ask in plain English" example, once it
