@@ -1131,3 +1131,30 @@ def test_the_docs_page_quotes_the_reactions_this_library_derives():
     revolutions = (carried["required_life"].to("hour").magnitude * 60
                    * carried["speed"].to("rpm").magnitude)  # fmt: skip
     assert f"{revolutions:.3g}".replace("+0", "") == "2.8e8"
+
+
+def test_the_block_renders_itself_as_a_row_and_as_a_sheet():
+    """Both `__str__`s, read against the row's own values rather than against `cells`.
+
+    A rendering nobody has read can drop the field that tells two objects apart and stay
+    green, so the assertions here go to the data the row holds, not to the method the
+    rendering is built from — which would agree with itself however wrong it was.
+    """
+    data = gear_data(_reducer())
+    row = data.rows[0]
+    rendered = str(row)
+    assert rendered.startswith(f"{row.item}  {row.shaft}  {row.teeth}  ")
+    for value in (row.mesh, row.role, row.mates_with, str(row.mating_teeth), row.ratio()):
+        assert value in rendered, f"the row's rendering drops {value!r}"
+    assert f"{row.pitch_diameter.to('mm').magnitude:.4g} mm" in rendered
+    assert f"{row.center_distance.to('mm').magnitude:.4g} mm" in rendered
+    assert row.center_distance_basis in rendered
+    # The reducer's meshes declare no pressure angle and its gears no rack or class, and
+    # the row says so in each of those four places rather than leaving them blank.
+    assert rendered.count(NOT_DECLARED) == len(row.unstated())
+
+    sheet = str(data)
+    assert sheet.splitlines() == list(data.lines())
+    assert sheet.startswith("gear data\n")
+    for each in data.rows:
+        assert f"{each.item} on {each.shaft}, {each.role} in {each.mesh}" in sheet
