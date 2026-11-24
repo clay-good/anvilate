@@ -1584,6 +1584,36 @@
       "title": "Mesh",
       "type": "object"
     },
+    "Mounting": {
+      "additionalProperties": false,
+      "description": "How an item is installed, where that decides what its own rating reads.\n\n``axis`` is the axis the item turns about or runs along, in the product's coordinates.\nA rolling bearing is the case this exists for: its rating reads an equivalent load, and\nwhether the load the product's path delivers is RADIAL or AXIAL depends on which way\nthe bearing faces. The same force is a bearing's ordinary duty on a horizontal shaft\nand a thrust it may not be built for on a vertical one.\n\nNothing infers it. A bearing's envelope is a box, and a box has no axis; a part's\nlongest side is not what it turns about. An item that declares no mounting is not\nscreened on a load whose direction nobody stated.",
+      "properties": {
+        "axis": {
+          "enum": [
+            "x",
+            "y",
+            "z"
+          ],
+          "title": "Axis",
+          "type": "string"
+        },
+        "item": {
+          "title": "Item",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item",
+        "axis",
+        "source"
+      ],
+      "title": "Mounting",
+      "type": "object"
+    },
     "OpenInterface": {
       "additionalProperties": false,
       "description": "An interface left unconnected on purpose, as ``item.interface``, and why.",
@@ -2052,7 +2082,7 @@
     },
     "Screening": {
       "additionalProperties": false,
-      "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth, as a budget whose terms are the bodies;\n``max_cg_height`` is the highest the centre of mass may sit above the product's lowest\npoint; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection. ``loads`` are what the product carries, which travel down\nthrough the bodies they rest on to the floor; ``splits`` divide a body's load among\nmore supports than determine it, each with its basis. ``vertical_acceleration`` is the\nacceleration the load path is carried at, gravity included and acting down: each body's\nweight and each load given as a mass are carried at m·a rather than m·g.\n``lateral_acceleration`` is the sideways part, with the direction it points: it makes a\nhorizontal force at each body's centre of mass, and the moment of that force moves the\npoint each body's load acts at — which is how a product that stands up under gravity\ntips over on a truck.",
+      "description": "What the product as a whole is held to.\n\n``mass_growth`` is the growth allowance per mass maturity; ``max_mass`` is checked on\nthe predicted mass, basic plus growth, as a budget whose terms are the bodies;\n``max_cg_height`` is the highest the centre of mass may sit above the product's lowest\npoint; ``min_tilt`` is the tilt the centre of mass must\nstay inside the footprint up to; ``min_clearance`` the least gap between any two items\nthat share no connection. ``loads`` are what the product carries, which travel down\nthrough the bodies they rest on to the floor; ``splits`` divide a body's load among\nmore supports than determine it, each with its basis. ``vertical_acceleration`` is the\nacceleration the load path is carried at, gravity included and acting down: each body's\nweight and each load given as a mass are carried at m·a rather than m·g.\n``lateral_acceleration`` is the sideways part, with the direction it points: it makes a\nhorizontal force at each body's centre of mass, and the moment of that force moves the\npoint each body's load acts at — which is how a product that stands up under gravity\ntips over on a truck. ``mountings`` say which way an item faces, where its own rating\ndepends on it — a bearing's load is radial or axial by the axis it sits on.",
       "properties": {
         "chains": {
           "default": [],
@@ -2146,6 +2176,15 @@
             }
           ],
           "default": null
+        },
+        "mountings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Mounting"
+          },
+          "maxItems": 256,
+          "title": "Mountings",
+          "type": "array"
         },
         "needs": {
           "anyOf": [
@@ -2539,7 +2578,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:product-document:1.20.0",
+  "$id": "urn:anvilate:schema:product-document:1.21.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Anvilate product document: items defined once (a catalog part's Design Spec, a sub-product or a placeholder) with their identity, placed as instances singly or in patterns, located by mates onto the ground and the layout's datums, with the layout's driving parameters and named variants. Generated from anvilate.product.Product.",
@@ -2567,7 +2606,8 @@
         "1.17.0",
         "1.18.0",
         "1.19.0",
-        "1.20.0"
+        "1.20.0",
+        "1.21.0"
       ],
       "title": "Anvilate Product",
       "type": "string"
@@ -2699,5 +2739,5 @@
   ],
   "title": "Product",
   "type": "object",
-  "x-anvilate-version": "1.20.0"
+  "x-anvilate-version": "1.21.0"
 }

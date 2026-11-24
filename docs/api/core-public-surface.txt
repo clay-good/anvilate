@@ -702,6 +702,7 @@ product.Limit
 product.ProductLoad
 product.Split
 product.Expansion
+product.Mounting
 product.Thermal
 product.ChainLink
 product.ProductChain

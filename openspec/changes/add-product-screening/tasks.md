@@ -17,8 +17,15 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
 - [x] 1.3 Indeterminacy named with redundant connections; downstream not evaluated;
       declared splits accepted with basis
 - [ ] 1.4 Part screens fed interface loads as dependent entries
-      (a caster's and a linear guide's rating read their load-path entry; bearings need an
-      axis their record lacks; catalog parts' own screens are not fed yet)
+      (a caster's and a linear guide's rating read their load-path entry, and a rolling
+      bearing's now does too, at document schema 1.21.0: `screening.mountings` says which
+      axis an item is mounted on, so the path's vertical force is known to be a RADIAL load
+      on a horizontal axis — fed as the equivalent load — and on a vertical one it is a
+      thrust, reported not evaluated because combining it needs X and Y factors this does
+      not derive. A bearing with no mounting is not screened on a direction nobody stated;
+      an envelope is a box and a box has no axis. Being fed is not a verdict: a rating life
+      still wants the speed and the life, and the entry now asks for those rather than
+      saying the product states no load. Catalog parts' own screens are not fed yet)
 
 - [x] 1.5 These checks reach a user and an agent
       (`product_screening` was called from tests and nothing else: no shipped surface ran

@@ -1103,9 +1103,77 @@ def _solve(
 # The families whose rating reads the load a body carries down the vertical path, by the
 # demand that load is and the entry it feeds. A body on the path passes its load through
 # its bottom contact, normal to the face it rests on: the rated direction of a caster and of
-# a guide's carriage on a rail lying on its support. A bearing's load is radial or axial by
-# an axis its record does not state, so it is not fed a share it might not carry that way.
+# a guide's carriage on a rail lying on its support.
 _PATH_RATED = {"caster": ("load", "caster load"), "linear_guide": ("load", "guide load")}
+
+#: The families whose rating reads a load whose DIRECTION decides what it is. A rolling
+#: bearing's equivalent load is radial or axial by the axis it is mounted on, and the
+#: product's path delivers a vertical force either way — so the same number is ordinary duty
+#: on a horizontal shaft and a thrust the bearing may not be built for on a vertical one.
+#: `screening.mountings` is where a product says which, and nothing infers it.
+_AXIS_RATED = {"ball_bearing": ("equivalent_load", "bearing rating life"),
+               "roller_bearing": ("equivalent_load", "bearing rating life")}  # fmt: skip
+
+
+def _axis_rated(
+    product: Product, record: Any, step: LoadStep, declared: Mapping[str, Any]
+) -> list[ScorecardEntry]:
+    """A bearing on the load path, screened on that load only where it is a RADIAL one.
+
+    The product's path delivers a vertical force. On a bearing mounted about a horizontal
+    axis that force is radial, which is the equivalent load its rating reads. On one
+    mounted about ``z`` the same force arrives along the bearing's own axis, and an
+    equivalent load combining a thrust with X and Y factors is not derived here — so it is
+    reported as not evaluated rather than screened on a number that means something else.
+
+    A bearing with no declared mounting is not screened either, and the entry names the
+    declaration to add. Guessing the axis from the envelope would be choosing, for the
+    caller, which of two very different duties the bearing is in.
+    """
+    from .components import Demand, _rating_entries
+
+    demand_name, check = _AXIS_RATED[record.family]
+    item = step.body.rpartition("/")[2]
+    mounting = declared.get(item) or declared.get(step.body)
+    where = f"load path {step.body}"
+    if mounting is None:
+        return [ScorecardEntry(
+            name=f"{step.body} {check}", status=CheckStatus.NOT_EVALUATED,
+            detail=(f"not evaluated: '{where}' carries {step.carries_n:.4g} N, and nothing "
+                    f"says which way {item} is mounted; the same force is a radial load on "
+                    "a horizontal axis and a thrust on a vertical one"),
+            needs=(_need("screening.mountings", "the axis this bearing turns about, with "
+                         "the source that states it", "[]", ()),),
+        )]  # fmt: skip
+    if mounting.axis == "z":
+        return [ScorecardEntry(
+            name=f"{step.body} {check}", status=CheckStatus.NOT_EVALUATED,
+            detail=(f"not evaluated: {item} is mounted about z, so the "
+                    f"{step.carries_n:.4g} N of '{where}' arrives along its own axis as a "
+                    "thrust; an equivalent load combining an axial load with the X and Y "
+                    f"factors of this bearing is not derived here ({mounting.source})"),
+            needs=(_need("component.demands", "the equivalent load this bearing carries, "
+                         "with the X and Y factors it was combined with", "[force]",
+                         ("N", "kN", "lbf")),),
+        )]  # fmt: skip
+    if step.status is CheckStatus.NOT_EVALUATED:
+        return [ScorecardEntry(
+            name=f"{step.body} {check}", status=CheckStatus.NOT_EVALUATED,
+            detail=f"reads '{where}', which is not evaluated: {step.note}",
+            needs=(_need("screening.splits", "the share of the load this bearing carries",
+                         "[]", ()),),
+        )]  # fmt: skip
+    demand = Demand(name=demand_name, value=Quantity(magnitude=step.carries_n, unit="N"),
+                    source=(f"'{where}': the radial load it carries, mounted about "
+                            f"{mounting.axis} ({mounting.source})"))  # fmt: skip
+    found = []
+    for entry in _rating_entries(record, (demand,)):
+        if entry.name == check:
+            found.append(entry.model_copy(update={
+                "name": f"{step.body} {check}",
+                "detail": f"{entry.detail}; reads '{where}' as a radial load",
+            }))  # fmt: skip
+    return found
 
 
 def _rated_from_path(
@@ -1119,11 +1187,18 @@ def _rated_from_path(
     used = _occurrences(product, shelf)
     definitions = _definitions(product, shelf)
     by_path = {path: definitions[key] for key, paths in used.items() for path in paths}
+    declared = {m.item: m for m in (product.screening.mountings
+                                    if product.screening is not None else ())}  # fmt: skip
     entries = []
     for step in steps:
         definition = by_path.get(step.body)
         record = definition.component if definition is not None else None
-        if record is None or record.family not in _PATH_RATED:
+        if record is None:
+            continue
+        if record.family in _AXIS_RATED:
+            entries.extend(_axis_rated(product, record, step, declared))
+            continue
+        if record.family not in _PATH_RATED:
             continue
         demand_name, check = _PATH_RATED[record.family]
         name = f"load path {step.body}"

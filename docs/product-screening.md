@@ -201,5 +201,30 @@ meet, the whole-product verdict wins, because it is the one computed with the lo
 `load_path_supersedes(placed, screening)` names those checks, the command line says how
 many it dropped and which, and the JSON carries them as `superseded`.
 
-Not yet built: side connections in the load path, part screens other than a caster's and a
-guide's fed their loads, and fastener and tool counts.
+### A bearing's load is radial or axial by how it is mounted
+
+A caster and a linear guide take the path's load in the direction they are rated for: the
+load goes down through the contact they rest on. A rolling bearing does not. The same
+vertical force is ordinary radial duty on a horizontal shaft and a **thrust** on a vertical
+one, and a bearing is often not built for the second. Nothing infers which: an envelope is
+a box, and a box has no axis.
+
+```yaml
+mountings:
+- {item: bearing, axis: x, source: the assembly drawing, sheet 2}
+```
+
+| What the product says | What the bearing's rating gets |
+| --- | --- |
+| nothing | not evaluated, naming `screening.mountings` — the force could be either duty |
+| `axis: x` or `axis: y` | the path's load as its **equivalent load**, sourced to the path entry and the mounting |
+| `axis: z` | not evaluated: the load arrives along the bearing's own axis, and an equivalent load combining a thrust with this bearing's X and Y factors is not derived here |
+
+Being fed the load is not the same as having a verdict. A rating life also needs the speed
+the bearing turns at and the life it must reach, and where the product has not said so the
+entry asks for those — which is the difference from before, when it said only that the
+product stated no load. A bearing on a declared drive train gets all three already, from
+the flow and the required output's life.
+
+Not yet built: side connections in the load path, catalog parts' own screens fed their
+loads, and fastener and tool counts.

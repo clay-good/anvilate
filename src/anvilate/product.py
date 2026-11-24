@@ -92,6 +92,7 @@ __all__ = [
     "ProductLoad",
     "Split",
     "Expansion",
+    "Mounting",
     "Thermal",
     "ChainLink",
     "ProductChain",
@@ -715,6 +716,28 @@ class Split(StatableModel):
         return self
 
 
+class Mounting(StatableModel):
+    """How an item is installed, where that decides what its own rating reads.
+
+    ``axis`` is the axis the item turns about or runs along, in the product's coordinates.
+    A rolling bearing is the case this exists for: its rating reads an equivalent load, and
+    whether the load the product's path delivers is RADIAL or AXIAL depends on which way
+    the bearing faces. The same force is a bearing's ordinary duty on a horizontal shaft
+    and a thrust it may not be built for on a vertical one.
+
+    Nothing infers it. A bearing's envelope is a box, and a box has no axis; a part's
+    longest side is not what it turns about. An item that declares no mounting is not
+    screened on a load whose direction nobody stated.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    states_requirements = True
+
+    item: Named
+    axis: Literal["x", "y", "z"]
+    source: Provenance
+
+
 class Expansion(StatableModel):
     """A material's coefficient of thermal expansion, as the declaration read it, cited."""
 
@@ -1002,7 +1025,8 @@ class Screening(StatableModel):
     ``lateral_acceleration`` is the sideways part, with the direction it points: it makes a
     horizontal force at each body's centre of mass, and the moment of that force moves the
     point each body's load acts at — which is how a product that stands up under gravity
-    tips over on a truck.
+    tips over on a truck. ``mountings`` say which way an item faces, where its own rating
+    depends on it — a bearing's load is radial or axial by the axis it sits on.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -1025,6 +1049,9 @@ class Screening(StatableModel):
     needs: MaterialNeeds | None = None
     # Items separated for service, which assembly economy never proposes merging.
     serviced: tuple[Named, ...] = Field(default=(), max_length=256)
+    # How an item is installed, where its own rating depends on it: a bearing's equivalent
+    # load is radial or axial by the axis it is mounted on, and nothing infers that.
+    mountings: tuple[Mounting, ...] = Field(default=(), max_length=256)
 
     @model_validator(mode="after")
     def _dimensions(self) -> Screening:
@@ -1082,8 +1109,10 @@ class Product(StatableModel):
     # the basic rack, the accuracy class and the dimension it is inspected over, which are
     # what a gear is made or bought by and what no drawing view can dimension, and 1.20.0
     # a load that arrives at a named interface rather than on an item, which puts it where
-    # that interface is instead of in the middle of the item; an older document reads
-    # unchanged.
+    # that interface is instead of in the middle of the item, and 1.21.0 how an item is
+    # mounted — the axis it turns about or runs along — where its own rating depends on it,
+    # which is how a bearing's load is known to be radial rather than axial; an older
+    # document reads unchanged.
     anvilate_product: Literal[
         "1.0.0",
         "1.1.0",
@@ -1106,6 +1135,7 @@ class Product(StatableModel):
         "1.18.0",
         "1.19.0",
         "1.20.0",
+        "1.21.0",
     ] = PRODUCT_VERSION
     name: Named
     description: Provenance | None = None

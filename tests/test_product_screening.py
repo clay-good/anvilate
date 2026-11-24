@@ -1437,3 +1437,107 @@ def test_a_load_at_an_axis_located_interface_sits_on_that_axis():
     }
     # And it is still reported as having arrived at the interface, not on the item.
     assert "the load at frame.pin" in _named(on_axis, "load path cart/frame").detail
+
+
+# --- A bearing's load is radial or axial by how it is mounted (screening 1.4) -------------
+
+
+def _borne(axis: str | None = None) -> dict:
+    """The cart with a ball bearing under the plate, mounted about ``axis`` when stated.
+
+    The bearing is a bought component with a dynamic load rating, so its rating life is a
+    check the product can feed — once something says which way the thing faces.
+    """
+    from anvilate.units import Quantity
+    from test_components import _record
+
+    record = _record("ball_bearing", {"dynamic_load_rating": _q(9, "kN")})
+    record = record.model_copy(update={
+        "envelope": tuple(Quantity(magnitude=v, unit="mm") for v in (52, 52, 15)),
+        "mass": Quantity(magnitude=0.13, unit="kg"),
+    })  # fmt: skip
+    document = _carted(_THREE, ("right", "back"))
+    document["definitions"].append({
+        "id": "bearing", "identity": {"description": "bearing", "source": "buy",
+                                      "part_number": "B-1"},
+        "component": record.model_dump(mode="json"),
+    })  # fmt: skip
+    document["instances"].append({"name": "bearing", "item": "bearing"})
+    # Seated ON the plate, not under the frame: a fourth support beneath the frame would
+    # make it indeterminate, and then nothing below it is evaluated at all.
+    document["mates"] += [
+        {"id": "bearing-sit", "kind": "face_to_face",
+         "place": {"part": "bearing", "face": "bottom"},
+         "on": {"part": "plate", "face": "top"}},
+        *({"id": f"bearing-{f}", "kind": "edge_flush",
+           "place": {"part": "bearing", "face": f},
+           "on": {"part": "plate", "face": f}} for f in ("right", "back")),
+    ]  # fmt: skip
+    if axis is not None:
+        document["screening"]["mountings"] = [
+            {"item": "bearing", "axis": axis, "source": "the assembly drawing, sheet 2"}
+        ]
+    return document
+
+
+def _bearing_entry(document: dict):
+    report = product_screening(parse_product(document))
+    return next(e for e in report.entries if e.name.endswith("bearing rating life"))
+
+
+def test_a_bearing_with_no_declared_mounting_is_not_screened_on_a_direction_nobody_stated():
+    """The same force is ordinary duty on a horizontal shaft and a thrust on a vertical one.
+
+    An envelope is a box and a box has no axis, so guessing would be choosing — for the
+    caller — which of two very different duties the bearing is in.
+    """
+    entry = _bearing_entry(_borne())
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "nothing says which way bearing is mounted" in entry.detail
+    assert "a thrust on a vertical one" in entry.detail
+    assert [n.declaration for n in entry.needs] == ["screening.mountings"]
+
+
+def test_a_bearing_on_a_horizontal_axis_takes_the_path_load_as_its_radial_one():
+    """Fed, and what it still lacks is named exactly.
+
+    The equivalent load now comes from the path rather than from a number typed beside the
+    bearing. A rating life needs two more things the product has not said — the speed it
+    turns at and the life it must reach — so the entry asks for those instead of the load,
+    which is the whole difference from before: it used to say the product stated no load.
+    """
+    document = _borne("x")
+    entry = _bearing_entry(document)
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "reads 'load path cart/bearing' as a radial load" in entry.detail
+    assert "no speed, required life" in entry.detail
+    assert "states no load for this component" not in entry.detail
+
+    # And the load it was fed is the one the path derived, to the newton.
+    report = product_screening(parse_product(document))
+    step = next(s for s in report.load_path if s.body.endswith("/bearing"))
+    assert step.status is CheckStatus.PASS and step.carries_n > 0
+    # A bearing on a VERTICAL axis under the same load is not fed at all, which is what
+    # makes the mounting a real input rather than a label.
+    assert "as a radial load" not in _bearing_entry(_borne("z")).detail
+
+
+def test_a_bearing_on_a_vertical_axis_says_the_load_arrives_as_a_thrust():
+    """Not screened, and the reason is the honest one: an equivalent load combining a
+    thrust needs X and Y factors this does not have."""
+    entry = _bearing_entry(_borne("z"))
+    assert entry.status is CheckStatus.NOT_EVALUATED
+    assert "mounted about z" in entry.detail and "as a thrust" in entry.detail
+    assert "the assembly drawing, sheet 2" in entry.detail
+    assert [n.declaration for n in entry.needs] == ["component.demands"]
+
+
+def test_a_mounting_states_one_axis_and_where_it_came_from():
+    document = _borne("x")
+    document["screening"]["mountings"][0]["axis"] = "w"
+    with pytest.raises(ValueError, match="axis"):
+        parse_product(document)
+    document = _borne("x")
+    del document["screening"]["mountings"][0]["source"]
+    with pytest.raises(ValueError, match="source"):
+        parse_product(document)
