@@ -123,6 +123,13 @@ modules:
   radius out of both, with the least favourable governing. Read from the European
   Commission JRC report that reproduces Table 5.2, and checked against the two
   classifications that report works in full
+- :mod:`~anvilate.analysis.en1993_resistance` — what the class is for: EN 1993-1-1 §6.2
+  cross-section resistance. Tension (the gross section's plastic resistance against the net
+  section's ultimate, the smaller governing), compression, bending with the modulus its
+  class calls for, plastic shear with its f_y/√3, and the interactions — the §6.2.8 shear
+  reduction, §6.2.9.1's axial reduction of the plastic moment with its a ≤ 0,5 cap, and
+  §6.2.9's biaxial sum. Every partial factor is an argument with no default, because it is
+  a nationally determined parameter
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   the minimum section second moment a load requires, the eccentric-load secant
   stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
@@ -1988,6 +1995,21 @@ from .en1993_classification import (
     outstand_flange_class,
     rolled_i_section_class,
     tubular_section_class,
+)
+from .en1993_resistance import (
+    TensionGoverned,
+    TensionResistance,
+    axial_reduction_negligible,
+    bending_resistance,
+    bending_resistance_with_shear,
+    biaxial_bending_utilisation,
+    compression_resistance,
+    reduced_plastic_moment_major,
+    reduced_plastic_moment_minor,
+    shear_buckling_check_needed,
+    shear_reduction_rho,
+    shear_resistance,
+    tension_resistance,
 )
 from .energy_storage import (
     battery_backup_time,
@@ -4380,6 +4402,19 @@ __all__ = [
     "angle_in_compression_class",
     "tubular_section_class",
     "rolled_i_section_class",
+    "TensionGoverned",
+    "TensionResistance",
+    "tension_resistance",
+    "compression_resistance",
+    "bending_resistance",
+    "shear_resistance",
+    "shear_buckling_check_needed",
+    "shear_reduction_rho",
+    "bending_resistance_with_shear",
+    "axial_reduction_negligible",
+    "reduced_plastic_moment_major",
+    "reduced_plastic_moment_minor",
+    "biaxial_bending_utilisation",
     "axial_stress",
     "axial_elongation",
     "axial_stiffness",

@@ -56,8 +56,54 @@ is class 3 against class 4. The sweep that catches this is running the arithmeti
 claim before the claim ships; see also the example's root-radius paragraph, whose first
 draft had the error running in the unsafe direction when it is in fact conservative.
 
+## What is built (task 2.2)
+
+`anvilate.analysis.en1993_resistance` — §6.2 cross-section resistance, which is what the
+class is for. Tension (§6.2.3, the gross section's plastic resistance against the net
+section's ultimate, the smaller governing), compression (§6.2.4), bending with the modulus
+its class calls for (§6.2.5(2)), plastic shear with its f_y/√3 (§6.2.6), and the
+interactions: the §6.2.8 shear reduction with ρ, §6.2.9.1's axial reduction of the plastic
+moment with its a ≤ 0,5 cap, and §6.2.9's biaxial sum.
+
+**Every partial factor is an argument with no default.** γ_M0 and γ_M2 are nationally
+determined parameters, and a partial factor that defaults silently is the one number in a
+resistance nobody notices is wrong. Bundling the recommended values as typed inputs with a
+cited override is task 1.2, and until it exists the factor is stated at every call.
+
+**A typo in the source, recorded rather than reproduced.** The report's Eq. (1.27) prints
+`N_pl,Rd = A·f_y/γ_M0` — a verbatim repeat of its Eq. (1.26) — where it means the
+net-section ultimate resistance. The surrounding sentence names A_net, f_u and γ_M2, and the
+report's own Eq. (1.28) rearranges `N_u,Rd > N_pl,Rd` into
+`A_net/A > (f_y/0,9f_u)·(γ_M2/γ_M0)`, which is satisfied only by
+`N_u,Rd = 0,9·A_net·f_u/γ_M2`. That identity, swept across the boundary it defines, is a
+test.
+
+**Anchored on four published results**, all replayed: an HEB 340's N_c,Rd of 6066,95 kN
+(printed 6067,0), and two complete axial-plus-bending reductions. The report rounds its
+intermediates — n = 0,30 for 0,29758, a = 0,24 for 0,23745 — so each worked example is
+replayed twice, once on the report's own rounded figures (reproducing its printed answer
+exactly) and once unrounded, with the 1,21 kNm difference asserted rather than hidden. The
+second example is the valuable one: its area ratio comes out 0,545 and clause 6.2.9.1(5)
+caps it at 0,5, and leaving the cap out reports **more** resistance than the clause allows.
+
+**Three defects this work turned up in itself**, each now a test:
+
+- `_quantity` hands back each value's own magnitude, so comparing a net area against a gross
+  one directly read 8 566 mm² as larger than 100 cm² — the same section in two units, and a
+  refusal for a perfectly ordinary net section. Both sides are converted now.
+- `biaxial_bending_utilisation` used α and β as exponents with `require_finite` buried in a
+  loop, where the exponent census could not see it. `base ** nan` is 1,0 at base 1,0, so a
+  NaN exponent returned a utilisation of exactly 2,0 — an ordinary-looking overload. It
+  routes through a private helper taking the value positionally now.
+- The module docstring first claimed η = 1,0 is conservative for the shear-buckling trigger.
+  η divides: a larger η *lowers* the threshold and asks for the check sooner. 1,0 is the
+  source's conservative value for η's role in the EN 1993-1-5 resistance and the permissive
+  end of this trigger, and saying only the first half was wrong.
+
 ## What is not built
 
-Tasks 1.2 to 1.4, 2.2 to 2.4, 3.2, 3.3 and 4.1 to 4.4 are untouched. Classification is the
-foundation they all stand on — every resistance in §6.2 branches on the class — so it is
-first, not a slice taken for being easy.
+Tasks 1.2 to 1.4, 2.3, 2.4, 3.2, 3.3 and 4.1 to 4.4 are untouched, and 1.1 and 2.5 wait on
+EN 1993-1-1:2022. §6.2.9.1's second condition for neglecting the axial reduction — the one
+on the web's own share — is not implemented either: the source does not state it, so it was
+not read, and `axial_reduction_negligible` says in its docstring that a False answer means
+only that the first condition does not excuse the reduction.

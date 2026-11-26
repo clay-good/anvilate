@@ -9871,3 +9871,37 @@ def test_eurocode_classification_example_reproduces_the_reports_two_sections():
     # And every refusal is a sentence, not an empty string.
     assert all(message.strip() for message in namespace["refusals"]().values())
     _assert_narrates_computed("eurocode_section_classification.py", namespace)
+
+
+def test_eurocode_beam_column_example_carries_the_class_through_to_a_resistance():
+    """Classification is a branch, not an answer: this is the branch taken.
+
+    Two things it must get right and the report lets us check: the reduction factor itself,
+    and the a <= 0,5 cap, which runs UNCONSERVATIVE if it is left out — an uncapped ratio
+    reports more moment resistance than the clause allows.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "eurocode_beam_column_resistance.py"))
+    d = namespace["eurocode_beam_column_resistance"]()
+
+    assert round(d["plastic_axial_kn"], 1) == pytest.approx(5726.2, abs=0.06)
+    assert round(d["plastic_moment_knm"], 1) == pytest.approx(762.9, abs=0.05)
+    # The reduction applies: N_Ed is above a quarter of N_pl,Rd.
+    assert d["applied_axial_kn"] > d["quarter_of_it_kn"]
+    assert d["reduced_moment_knm"] < d["plastic_moment_knm"]
+    # And the whole gap to the report's printed 606,9 is its own rounding of n and a.
+    assert d["on_the_reports_rounding_knm"] == pytest.approx(606.9, abs=0.05)
+    assert d["rounding_gap_knm"] == pytest.approx(
+        d["reduced_moment_knm"] - d["on_the_reports_rounding_knm"], rel=1e-9
+    )
+    assert 0 < d["rounding_gap_knm"] < 2.0
+    # The cap, and which direction leaving it out runs.
+    assert d["second_raw_ratio"] > 0.5
+    assert d["second_capped_knm"] == pytest.approx(81.5, abs=0.05)
+    assert d["second_uncapped_knm"] > d["second_capped_knm"], (
+        "an uncapped area ratio must report MORE than the clause allows, or this test is "
+        "asserting the cap is harmless"
+    )
+    assert d["second_unearned_percent"] > 0
+    # And a class 3 section is refused W_pl rather than answered with it.
+    assert "W_el,min" in namespace["class_three_refusal"]()
+    _assert_narrates_computed("eurocode_beam_column_resistance.py", namespace)

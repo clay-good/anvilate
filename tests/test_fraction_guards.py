@@ -1834,8 +1834,17 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # (test_no_field_of_a_load_case_takes_a_non_finite_value), and
     # test_a_governing_case_is_chosen_even_though_max_drops_a_nan states that the
     # constructor is the only route to the comparison.
+    # 104 -> 105: en1993_resistance.bending_resistance takes a SectionClass, and the
+    # modulus each class needs is a DEFAULTED parameter — so a bound call arrives with every
+    # modulus None and is refused before any value is examined, which is the behaviour
+    # clause 6.2.5(2) asks for (one class, one modulus) and not something to relax for the
+    # binder. Each of its three inputs is refused non-finite in
+    # tests/test_en1993_resistance.py
+    # (test_no_input_of_the_bending_resistance_takes_a_non_finite_value), and
+    # test_a_bound_call_with_no_modulus_is_refused_rather_than_answered pins the reason the
+    # binder cannot reach it.
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 104, (
+    assert len(unbuildable) <= 105, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

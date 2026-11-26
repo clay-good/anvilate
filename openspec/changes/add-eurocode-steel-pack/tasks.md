@@ -25,7 +25,13 @@ Depends on `add-standards-effectivity` (design basis and edition) and
       rather than defaulted, and an outstand has no bending-only column because the table
       gives it none. Anchored on the report's two worked classifications down to their
       intermediate ratios)
-- [ ] 2.2 Cross-section resistance: tension, compression, bending, shear, interactions
+- [x] 2.2 Cross-section resistance: tension, compression, bending, shear, interactions
+      (`anvilate.analysis.en1993_resistance`: §6.2.3 to §6.2.6 plus the §6.2.8 shear
+      reduction, §6.2.9.1's axial reduction with its a ≤ 0,5 cap and §6.2.9's biaxial sum.
+      Partial factors are arguments with no default until 1.2 types them. Anchored on four
+      published results, with the source's own Eq. (1.27) typo recorded and recovered from
+      its Eq. (1.28). §6.2.9.1(4)'s second condition is not implemented: the source does not
+      state it)
 - [ ] 2.3 Flexural buckling by the cited curves; lateral-torsional buckling
 - [ ] 2.4 Bending and axial interaction by the declared method
 - [ ] 2.5 Edition differences registered where the two generations diverge

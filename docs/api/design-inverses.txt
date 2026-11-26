@@ -214,3 +214,4 @@ strain_gauge.gauge_strain_from_resistance
 stress.max_shear_stress_plane
 thermal.heat_exchanger_effectiveness_from_temperatures
 torsion.hollow_shaft_diameter_for_bending_torsion
+en1993_resistance.shear_buckling_check_needed
