@@ -8,7 +8,7 @@ survive, a truncated sweep reporting a best, a lighter-but-failing design ranked
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from itertools import combinations
 
 import pytest
@@ -23,7 +23,9 @@ from anvilate.explore import (
     StudyEvaluation,
     halton_sequence,
     run_study,
+    tiered_evaluator,
 )
+from anvilate.refusal import RefusalError
 from anvilate.scorecard import CheckStatus, Scorecard, ScorecardEntry
 
 
@@ -343,3 +345,184 @@ def test_the_grid_values_hit_both_bounds_exactly():
     assert parameter.grid_values() == (4.0, 6.0, 8.0, 10.0, 12.0)
     two = Parameter(name="t", low=4.0, high=12.0, unit="mm", steps=2)
     assert two.grid_values() == (4.0, 12.0)
+
+
+# --- tiered evaluation: cheapest first, and a record of what ran ------------------------
+#
+# A study spends almost all of its time in the evaluator, and most candidates are refuted by
+# something cheap. The point of tiering is that the expensive tier never runs for those, and
+# the point of the per-point record is that a reader can see it did not.
+
+
+def _tier(name: str, *, passes: Callable[[Mapping[str, float]], bool], counter: dict) -> tuple:
+    """A tier that counts its own calls, so a test can assert what did not run."""
+
+    def evaluate(design: Mapping[str, float]) -> StudyEvaluation:
+        counter[name] = counter.get(name, 0) + 1
+        ok = passes(design)
+        return StudyEvaluation(
+            objectives={"mass": design["t"] * 2.0},
+            scorecard=Scorecard(
+                entries=(
+                    ScorecardEntry(
+                        name=f"{name} check",
+                        status=CheckStatus.PASS if ok else CheckStatus.FAIL,
+                        detail=f"{name} on t={design['t']:g}",
+                    ),
+                )
+            ),
+        )
+
+    return (name, evaluate)
+
+
+def test_the_expensive_tier_does_not_run_for_a_design_the_cheap_one_refutes():
+    """The whole point: 1 expensive call for 2 designs, not 2."""
+    calls: dict[str, int] = {}
+    evaluate = tiered_evaluator(
+        [
+            _tier("wall", passes=lambda d: d["t"] >= 3.0, counter=calls),
+            _tier("stress", passes=lambda d: True, counter=calls),
+        ]
+    )
+    refuted = evaluate({"t": 1.0})
+    survived = evaluate({"t": 5.0})
+
+    assert calls == {"wall": 2, "stress": 1}
+    assert refuted.tiers == ("wall",)
+    assert survived.tiers == ("wall", "stress")
+    # The entries of every tier that ran, concatenated, and no others.
+    assert [e.name for e in refuted.scorecard.entries] == ["wall check"]
+    assert [e.name for e in survived.scorecard.entries] == ["wall check", "stress check"]
+    assert refuted.scorecard.status is CheckStatus.FAIL
+    assert survived.scorecard.passed
+
+
+def test_a_tier_that_could_not_run_stops_the_chain_as_a_failure_does():
+    """NOT_EVALUATED is not a pass: a design whose cheap check could not run has not
+    earned an expensive one."""
+    calls: dict[str, int] = {}
+
+    def unevaluated(design: Mapping[str, float]) -> StudyEvaluation:
+        calls["cheap"] = calls.get("cheap", 0) + 1
+        return StudyEvaluation(
+            objectives={"mass": 1.0},
+            scorecard=Scorecard(
+                entries=(
+                    ScorecardEntry(
+                        name="wall",
+                        status=CheckStatus.NOT_EVALUATED,
+                        detail="the wall thickness was not declared",
+                    ),
+                )
+            ),
+        )
+
+    evaluate = tiered_evaluator(
+        [("wall", unevaluated), _tier("stress", passes=lambda d: True, counter=calls)]
+    )
+    result = evaluate({"t": 5.0})
+    assert result.tiers == ("wall",)
+    assert calls == {"cheap": 1}
+    assert not result.scorecard.passed
+
+
+def test_a_later_tier_may_refine_an_objective_and_the_later_value_wins():
+    """Within one point's evaluation nothing has been ranked yet, so a refinement is not a
+    result changing under a reader."""
+
+    def coarse(design: Mapping[str, float]) -> StudyEvaluation:
+        return StudyEvaluation(
+            objectives={"mass": 10.0},
+            scorecard=Scorecard(
+                entries=(ScorecardEntry(name="a", status=CheckStatus.PASS, detail="estimate"),)
+            ),
+        )
+
+    def exact(design: Mapping[str, float]) -> StudyEvaluation:
+        return StudyEvaluation(
+            objectives={"mass": 10.25},
+            scorecard=Scorecard(
+                entries=(ScorecardEntry(name="b", status=CheckStatus.PASS, detail="meshed"),)
+            ),
+        )
+
+    result = tiered_evaluator([("estimate", coarse), ("mesh", exact)])({"t": 1.0})
+    assert result.objectives["mass"] == 10.25
+    assert result.tiers == ("estimate", "mesh")
+
+
+def test_the_record_reaches_every_point_of_a_search():
+    """The saving is only visible if the per-point record survives into the result."""
+    from anvilate.search import SearchStrategy, SearchStudy, SearchVariable, run_search
+
+    calls: dict[str, int] = {}
+    study = SearchStudy(
+        name="tiered",
+        objective="mass",
+        variables=(SearchVariable(name="t", low=1.0, high=6.0),),
+        strategy=SearchStrategy.LOCAL,
+        evaluations=24,
+        seed=7,
+        # Starting just above the cheap tier's limit, so the refinement straddles it and
+        # the run contains both kinds of point.
+        start={"t": 3.1},
+    )
+    evaluate = tiered_evaluator(
+        [
+            _tier("wall", passes=lambda d: d["t"] >= 3.0, counter=calls),
+            _tier("stress", passes=lambda d: True, counter=calls),
+        ]
+    )
+    result = run_search(study, evaluate)
+
+    assert result.points, "the search evaluated nothing"
+    assert all(point.tiers[0] == "wall" for point in result.points)
+    cut_short = [p for p in result.points if p.tiers == ("wall",)]
+    assert cut_short, "no point was refuted by the cheap tier, so the test proves nothing"
+    assert all(not p.feasible for p in cut_short)
+    # The expensive tier ran only for the points that got past the cheap one.
+    expensive = calls.get("stress", 0)
+    assert expensive, "the expensive tier never ran, so the test proves nothing"
+    assert expensive == len(result.points) - len(cut_short)
+    assert expensive < calls["wall"], "tiering saved nothing"
+
+
+def test_an_undivided_evaluator_records_no_tiers():
+    """An empty tuple is the ordinary case, not a missing record."""
+    plain = StudyEvaluation(
+        objectives={"mass": 1.0},
+        scorecard=Scorecard(
+            entries=(ScorecardEntry(name="a", status=CheckStatus.PASS, detail="d"),)
+        ),
+    )
+    assert plain.tiers == ()
+
+
+def test_tiers_must_be_a_non_empty_list_of_named_callables():
+    with pytest.raises(RefusalError, match="it is empty"):
+        tiered_evaluator([])
+    with pytest.raises(RefusalError, match="name, evaluate"):
+        tiered_evaluator([("only a name",)])  # type: ignore[list-item]
+    with pytest.raises(RefusalError, match="per-point record shows"):
+        tiered_evaluator([("", lambda d: None)])
+    with pytest.raises(RefusalError, match="not callable"):
+        tiered_evaluator([("wall", "not a function")])  # type: ignore[list-item]
+
+
+def test_two_tiers_with_one_name_are_refused():
+    """The record names the tiers that ran, and two with one name cannot be told apart."""
+    calls: dict[str, int] = {}
+    with pytest.raises(RefusalError, match="used twice"):
+        tiered_evaluator(
+            [
+                _tier("wall", passes=lambda d: True, counter=calls),
+                ("wall", _tier("other", passes=lambda d: True, counter=calls)[1]),
+            ]
+        )
+
+
+def test_a_tier_returning_the_wrong_type_is_refused_naming_it():
+    evaluate = tiered_evaluator([("wall", lambda design: {"mass": 1.0})])
+    with pytest.raises(RefusalError, match="returned a dict"):
+        evaluate({"t": 1.0})

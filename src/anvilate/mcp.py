@@ -238,7 +238,9 @@ _SCORECARD_REF = "urn:anvilate:schema:scorecard:1.16.0"
 # 1.34.0 follows Design Spec 1.23.0.
 # 1.35.0 adds `draft`, absent unless a draft review package wrote the bundle.
 # 1.36.0 follows Design Spec 1.24.0.
-_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.36.0"
+# 1.37.0 adds `tiers` to a design point: the evaluation tiers that ran for it, empty
+# unless the study used a tiered evaluator.
+_BUNDLE_REF = "urn:anvilate:schema:evidence-bundle:1.37.0"
 _GEOMETRY_REF = "urn:anvilate:schema:geometry-summary:1.5.0"
 _VIEWPORT_REF = "urn:anvilate:schema:viewport-image:1.3.0"
 _MEASUREMENT_REF = "urn:anvilate:schema:geometry-measurement:1.2.0"

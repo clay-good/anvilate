@@ -30,7 +30,14 @@ independent and optional.
 
 ## 2. Search with FEA in the loop
 
-- [ ] 2.1 Tiered evaluation, cheapest first; per-point record of tiers run
+- [x] 2.1 Tiered evaluation, cheapest first; per-point record of tiers run
+      (`explore.tiered_evaluator` composes several evaluators into the one callable a sweep
+      or a search already takes, running them in the caller's order and stopping at the
+      first whose scorecard does not pass. The tiers that ran reach `StudyEvaluation.tiers`
+      and from there `DesignPoint.tiers` and `SearchPoint.tiers`, so the saving is visible.
+      A `NOT_EVALUATED` tier stops the chain as a `FAIL` does; every tier returns the
+      objectives, since a point refuted first still has to be placed, and a later tier may
+      refine an earlier estimate)
 - [ ] 2.2 Content-digest evaluation cache, shared with `add-local-fea`'s result store
 - [ ] 2.3 One MCP tool and one CLI command; task with progress and cancellation
       (`anvilate study` and the `run_study` MCP tool over a screened subject, study-summary

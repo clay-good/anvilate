@@ -97,6 +97,33 @@ evaluator. A non-finite one is refused rather than sorted, because NaN compares 
 against everything: it would neither dominate nor be dominated, and would sit on the
 front for a reason that is not a reason.
 
+## Tiered evaluation: don't mesh a design a wall thickness already ruled out
+
+A study spends almost all of its time in the evaluator, and most candidates are refuted by
+something cheap. `anvilate.explore.tiered_evaluator` turns several evaluators into one that
+runs them **cheapest first and stops at the first whose scorecard does not pass**:
+
+```python
+from anvilate.explore import tiered_evaluator
+
+evaluate = tiered_evaluator([
+    ("geometry", screen_geometry),   # cheap: walls, clearances, mass budget
+    ("closed form", screen_checks),  # the T1 analytical library
+    ("mesh", run_fea),               # expensive, and most points never reach it
+])
+```
+
+Every point's record says which tiers ran — `StudyEvaluation.tiers`, carried onto
+`DesignPoint.tiers` and `SearchPoint.tiers` — so the saving is visible rather than claimed:
+a point whose tuple is one name long is one the expensive tiers never saw.
+
+Three things it is careful about. **The order is your claim, not a measurement**: nothing
+here knows what an evaluator costs, so a list in the wrong order is still correct, just not
+quick. **Every tier returns the objectives**, because a point refuted at the first tier still
+has to be placed, and a later tier may refine an estimate an earlier one made. And a tier
+that comes back `NOT_EVALUATED` stops the chain exactly as a `FAIL` does — a design whose
+cheap check could not run has not earned an expensive one.
+
 ## Search: the best design found under a budget
 
 When the box is too big to sweep, `anvilate.search.run_search` spends the budget where it

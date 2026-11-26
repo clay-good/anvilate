@@ -396,6 +396,7 @@ explore.Parameter
 explore.Objective
 explore.Study
 explore.StudyEvaluation
+explore.tiered_evaluator
 explore.DesignPoint
 explore.StudyResult
 explore.run_study

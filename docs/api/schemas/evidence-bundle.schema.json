@@ -1250,6 +1250,14 @@
         },
         "status": {
           "$ref": "#/$defs/CheckStatus"
+        },
+        "tiers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tiers",
+          "type": "array"
         }
       },
       "required": [
@@ -4756,7 +4764,7 @@
       "type": "object"
     }
   },
-  "$id": "urn:anvilate:schema:evidence-bundle:1.36.0",
+  "$id": "urn:anvilate:schema:evidence-bundle:1.37.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Anvilate evidence bundle: every screening layer's contribution for one part, with one rolled-up status, the scorecard, and the spec the verdicts were computed from. A layer that never ran is an absent key, not a null one — the two are different facts and the bundle refuses to collapse them. Carries the screening disclaimer unconditionally. Generated from anvilate.bundle.BundleDocument.",
   "properties": {
@@ -4994,5 +5002,5 @@
   ],
   "title": "BundleDocument",
   "type": "object",
-  "x-anvilate-version": "1.36.0"
+  "x-anvilate-version": "1.37.0"
 }

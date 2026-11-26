@@ -279,6 +279,10 @@ class SearchPoint(StatableModel):
     feasible: bool
     violation: float = Field(ge=0)
     governing_check: str | None = None
+    #: The evaluation tiers that ran for this point, when the evaluator was built by
+    #: `explore.tiered_evaluator`. A short tuple on an infeasible point is the saving it
+    #: bought: the expensive tiers never ran for that design.
+    tiers: tuple[str, ...] = ()
 
 
 class SearchResult(BaseModel):
@@ -430,6 +434,7 @@ def run_search(
                 status=card.status, feasible=card.status in _PASSING,
                 violation=violation(card),
                 governing_check=None if governing is None else governing.name,
+                tiers=result.tiers,
             )  # fmt: skip
             points.append(point)
             indices.append(point.index)

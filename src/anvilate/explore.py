@@ -35,6 +35,7 @@ from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from itertools import product
 from math import isfinite
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -66,6 +67,7 @@ __all__ = [
     "Objective",
     "Study",
     "StudyEvaluation",
+    "tiered_evaluator",
     "DesignPoint",
     "StudyResult",
     "run_study",
@@ -332,12 +334,114 @@ class StudyEvaluation(RevalidatedModel):
     ``scorecard`` decides feasibility. Splitting them is deliberate: the objectives are
     what the point is *ranked* by and the scorecard is what makes it *admissible*, and
     conflating the two is how a lighter-but-failing design ends up on a front.
+
+    ``tiers`` names the evaluation tiers that ran, in order, when the evaluator was built
+    by :func:`tiered_evaluator`. Empty means the evaluator is a single undivided one, which
+    is the ordinary case and not a missing record.
     """
 
     model_config = ConfigDict(frozen=True)
 
     objectives: FrozenMap[str, float]
     scorecard: Scorecard
+    tiers: tuple[str, ...] = ()
+
+
+def tiered_evaluator(
+    tiers: Sequence[tuple[str, Callable[[Mapping[str, float]], StudyEvaluation]]],
+) -> Callable[[Mapping[str, float]], StudyEvaluation]:
+    """Several evaluators as one, run **cheapest first** and stopped at the first failure.
+
+    A study spends almost all of its time in the evaluator, and most candidate designs are
+    refuted by something cheap: a wall thinner than the process allows, a mass over budget,
+    a bearing outside its rated life. Running an expensive check on a design a cheap one
+    has already ruled out is the waste this removes.
+
+    ``tiers`` is ``[(name, evaluate), ...]`` in the order they should run. Each one takes
+    the design and returns a :class:`StudyEvaluation`, exactly as an undivided evaluator
+    does. The combined evaluator runs them in order and **stops at the first whose
+    scorecard does not pass**, returning what it has: the entries of every tier that ran,
+    concatenated, and ``tiers`` naming them. A point refuted at the first tier therefore
+    carries one tier's entries and one name, and a point that survives carries all of them.
+
+    **The order is the caller's claim, not something this measures.** Nothing here knows
+    what an evaluator costs; "cheapest first" is a property of the list as given, and a list
+    in the wrong order still produces correct answers, just not quickly.
+
+    **Every tier returns the objectives**, because the objectives are what a point is ranked
+    by and a point refuted at tier one still has to be placed. That is the usual shape in
+    any case: mass and cost are cheap, and it is the checks that are expensive. A later tier
+    may **refine** an objective an earlier one estimated, and the later value wins — within
+    one point's evaluation nothing has been ranked yet, so a refinement is not a result
+    changing under a reader.
+
+    The feasibility test is the scorecard's own ``passed``, so a tier that comes back
+    ``NOT_EVALUATED`` stops the chain just as a ``FAIL`` does: a design whose cheap check
+    could not run has not earned an expensive one.
+    """
+    ordered = list(tiers)
+    if not ordered:
+        raise _explore_refusal(
+            "tiers is the evaluators to run in order, cheapest first, and it is empty",
+            subject="tiers",
+            source="the study's evaluators, ordered cheapest first by the caller",
+        )
+    names: list[str] = []
+    for entry in ordered:
+        if not isinstance(entry, tuple) or len(entry) != 2:
+            raise _explore_refusal(
+                f"each tier is a (name, evaluate) pair; got {entry!r}",
+                subject="tiers",
+                source="the study's evaluators, ordered cheapest first by the caller",
+            )
+        name, evaluate = entry
+        if not isinstance(name, str) or not name.strip():
+            raise _explore_refusal(
+                f"a tier's name is what the per-point record shows; got {name!r}",
+                subject="tiers",
+                source="the study's evaluators, ordered cheapest first by the caller",
+            )
+        if not callable(evaluate):
+            raise _explore_refusal(
+                f"the tier {name!r} is not callable; each one takes a design and returns a "
+                f"StudyEvaluation",
+                subject="tiers",
+                source="the study's evaluators, ordered cheapest first by the caller",
+            )
+        names.append(name)
+    repeated = sorted({name for name in names if names.count(name) > 1})
+    if repeated:
+        raise _explore_refusal(
+            f"these tier names are used twice: {repeated}; the per-point record names the "
+            f"tiers that ran, and two with one name cannot be told apart in it",
+            subject="tiers",
+            source="the study's evaluators, ordered cheapest first by the caller",
+        )
+
+    def combined(design: Mapping[str, float]) -> StudyEvaluation:
+        objectives: dict[str, float] = {}
+        entries: list[Any] = []
+        ran: list[str] = []
+        for name, evaluate in ordered:
+            result = evaluate(design)
+            if not isinstance(result, StudyEvaluation):
+                raise _explore_refusal(
+                    f"the tier {name!r} returned a {type(result).__name__}, not a StudyEvaluation",
+                    subject="tiers",
+                    source="the study's evaluators, ordered cheapest first by the caller",
+                )
+            objectives.update(result.objectives)
+            entries.extend(result.scorecard.entries)
+            ran.append(name)
+            if not result.scorecard.passed:
+                break
+        return StudyEvaluation(
+            objectives=objectives,
+            scorecard=Scorecard(entries=tuple(entries)),
+            tiers=tuple(ran),
+        )
+
+    return combined
 
 
 class DesignPoint(RevalidatedModel):
@@ -365,6 +469,9 @@ class DesignPoint(RevalidatedModel):
     feasible: bool
     fragile: bool = False
     governing_check: str | None = None
+    #: The evaluation tiers that ran for this point, when the evaluator was tiered. A short
+    #: tuple on an infeasible point is the saving: it says the expensive tiers never ran.
+    tiers: tuple[str, ...] = ()
     governing_safety_factor: float | None = None
 
 
@@ -522,6 +629,7 @@ def run_study(
                 # run has not been shown to work, and the front is "the best thing that
                 # works", not "the best thing we did not disprove".
                 feasible=card.passed,
+                tiers=evaluation.tiers,
                 fragile=bool(card.fragile()),
                 governing_check=governing.name if governing is not None else None,
                 governing_safety_factor=governing.safety_factor if governing is not None else None,
