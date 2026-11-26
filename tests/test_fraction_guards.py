@@ -1775,6 +1775,16 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
         if any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in parameters):
             unbuildable.append(label)
             continue
+        # A function with NO parameters is in none of these buckets. `all()` over an empty
+        # sequence is True, so without this it falls into `text_readers` — "reads everything
+        # from text" said of a function that reads nothing at all, and the fix a reader would
+        # then be told to make is a test putting a NaN inside text there is none of. The
+        # vacuous path went unexercised until the first such function existed
+        # (`en1993_resistance.recommended_annex`, which returns a bundled constant), which is
+        # why it is only being closed now. Such a function has no input to poison, so the
+        # non-finite probes have nothing to say about it.
+        if not parameters:
+            continue
         if all(
             str(p.annotation).replace(" | None", "") in ("str", "<class 'str'>") for p in parameters
         ):
@@ -2182,3 +2192,37 @@ def test_the_unit_bearing_interval_reader_actually_reads_one():
         "beam.simply_supported_offset_load_deflection_at",
         "beam.simply_supported_offset_load_slope_at",
     } <= reached
+
+
+def test_the_leftover_classifier_does_not_call_a_no_argument_function_a_text_reader():
+    """The gate's own premise, on the shape that exposed it.
+
+    `all(... for p in parameters)` is True over an empty sequence, so a function with no
+    parameters at all was being classified as one that "reads everything from text" — and
+    the remedy that classification prescribes is a test putting a NaN inside text the
+    function never takes. Attacking the gate rather than the code it flagged is what this
+    asserts: the two readings of an empty parameter list, side by side.
+    """
+    empty: list[str] = []
+    assert all(annotation == "str" for annotation in empty), "the vacuous truth that caused it"
+    # And the live surface: the classifier's own input, so this cannot pass on a fixture
+    # while the real one drifts.
+    import importlib
+    import inspect
+    import pathlib as _pathlib
+
+    from anvilate import analysis as _analysis
+
+    root = _pathlib.Path(_analysis.__path__[0])
+    no_arguments = []
+    for path in sorted(root.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        module = importlib.import_module(f"anvilate.analysis.{path.stem}")
+        for name in getattr(module, "__all__", ()):
+            found = getattr(module, name, None)
+            if inspect.isfunction(found) and not inspect.signature(found).parameters:
+                no_arguments.append(f"{path.stem}.{name}")
+    assert no_arguments, "no zero-argument function left, so this gate guards nothing"
+    _unguarded, _examined = _exponent_sites()
+    assert "en1993_resistance.recommended_annex" in no_arguments

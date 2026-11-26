@@ -13,15 +13,19 @@ would look like a 1 kNm disagreement with the source.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from anvilate.analysis.en1993_classification import SectionClass
 from anvilate.analysis.en1993_resistance import (
+    NationalParameter,
     TensionGoverned,
     axial_reduction_negligible,
     bending_resistance,
     bending_resistance_with_shear,
     biaxial_bending_utilisation,
     compression_resistance,
+    national_annex,
+    recommended_annex,
     reduced_plastic_moment_major,
     reduced_plastic_moment_minor,
     shear_buckling_check_needed,
@@ -569,3 +573,169 @@ def test_a_bound_call_with_no_modulus_is_refused_rather_than_answered():
         bending_resistance(
             section_class=SectionClass.CLASS_1, yield_strength=_S355, partial_factor_m0=_M0
         )
+
+
+# --- the nationally determined parameters -------------------------------------------------
+
+
+def test_the_recommended_values_are_the_ones_the_source_states():
+    """γ_M0 = 1,00, γ_M1 = 1,00, γ_M2 = 1,25, with λ_LT,0 and β from the §6.3.2.3 page."""
+    annex = recommended_annex()
+    assert annex.gamma_m0 == 1.00
+    assert annex.gamma_m1 == 1.00
+    assert annex.gamma_m2 == 1.25
+    assert annex.lambda_lt_0 == 0.40
+    assert annex.beta_lt == 0.75
+    assert annex.overridden == ()
+    assert annex.outside_recommendation == ()
+    assert "recommended values throughout" in str(annex)
+
+
+def test_every_parameter_is_present_and_cited():
+    """A caller never has to know which were overridden in order to read a value."""
+    annex = recommended_annex()
+    assert {p.parameter for p in annex.parameters} == set(NationalParameter)
+    for parameter in annex.parameters:
+        assert parameter.recommended
+        assert parameter.source.strip()
+        assert "EN 1993-1-1" in parameter.source
+
+
+def test_gamma_m0_and_gamma_m1_are_separate_parameters():
+    """They happen to share a recommended value, and a National Annex may part them.
+
+    §6.2's cross-section resistances divide by γ_M0 and §6.3's buckling resistances by
+    γ_M1. Reading one where the other belongs is silent while both are 1,00, which is
+    exactly why they are two parameters here and not one.
+    """
+    parted = national_annex(
+        "a state that parts them",
+        overrides=[(NationalParameter.GAMMA_M1, 1.10, "NA.2.x of that annex")],
+    )
+    assert parted.gamma_m0 == 1.00
+    assert parted.gamma_m1 == 1.10
+    assert parted.overridden == (NationalParameter.GAMMA_M1,)
+
+
+def test_an_override_replaces_one_value_and_leaves_the_rest_recommended():
+    annex = national_annex(
+        "UK National Annex to BS EN 1993-1-1",
+        overrides=[(NationalParameter.GAMMA_M2, 1.10, "NA.2.2 of the UK National Annex")],
+    )
+    assert annex.gamma_m2 == 1.10
+    assert annex.of(NationalParameter.GAMMA_M2).source == "NA.2.2 of the UK National Annex"
+    assert not annex.of(NationalParameter.GAMMA_M2).recommended
+    # And everything else is still the recommendation, still cited.
+    assert annex.gamma_m0 == 1.00 and annex.of(NationalParameter.GAMMA_M0).recommended
+    assert annex.overridden == (NationalParameter.GAMMA_M2,)
+    assert "1 of 5 chosen nationally" in str(annex)
+
+
+def test_an_override_without_a_citation_is_refused():
+    """A partial factor differing from the recommendation is what a reviewer has to trace."""
+    with pytest.raises((RefusalError, ValidationError)):
+        national_annex("somewhere", overrides=[(NationalParameter.GAMMA_M2, 1.10, "")])
+
+
+def test_a_gamma_below_one_is_refused_in_an_annex_too():
+    with pytest.raises(RefusalError, match="at least 1"):
+        national_annex("somewhere", overrides=[(NationalParameter.GAMMA_M0, 0.9, "NA.2.1")])
+
+
+def test_a_parameter_overridden_twice_is_refused():
+    """Two values would leave which applies to the order of a list."""
+    with pytest.raises(RefusalError, match="overridden twice"):
+        national_annex(
+            "somewhere",
+            overrides=[
+                (NationalParameter.GAMMA_M2, 1.10, "NA.2.2"),
+                (NationalParameter.GAMMA_M2, 1.25, "NA.2.2 again"),
+            ],
+        )
+
+
+def test_a_value_outside_the_recommended_bound_is_reported_and_not_refused():
+    """λ_LT,0 is recommended as a MAXIMUM of 0,40 and β as a MINIMUM of 0,75.
+
+    A National Annex is entitled to choose outside the recommendation, so this reports it
+    rather than enforcing a bound the standard frames as advice — and the partial factors,
+    which carry no bound, are always within.
+    """
+    high = national_annex(
+        "a state above the plateau",
+        overrides=[(NationalParameter.LAMBDA_LT_0, 0.60, "NA clause for that state")],
+    )
+    assert high.lambda_lt_0 == 0.60
+    assert high.outside_recommendation == (NationalParameter.LAMBDA_LT_0,)
+    assert not high.of(NationalParameter.LAMBDA_LT_0).within_recommendation
+
+    low = national_annex(
+        "a state below beta",
+        overrides=[(NationalParameter.BETA_LT, 0.70, "NA clause for that state")],
+    )
+    assert low.outside_recommendation == (NationalParameter.BETA_LT,)
+
+    # Inside the bound, and a partial factor, are both within.
+    inside = national_annex(
+        "a state inside",
+        overrides=[
+            (NationalParameter.LAMBDA_LT_0, 0.20, "NA clause"),
+            (NationalParameter.GAMMA_M2, 1.40, "NA clause"),
+        ],
+    )
+    assert inside.outside_recommendation == ()
+
+
+def test_the_annex_feeds_the_resistances_it_was_built_for():
+    """The whole point: a value read once, passed where the clause says it belongs."""
+    annex = recommended_annex()
+    resistance = compression_resistance(
+        area=Q("170.9 cm^2"), yield_strength=_S355, partial_factor_m0=annex.gamma_m0
+    )
+    assert _kn(resistance) == pytest.approx(6066.95, abs=0.01)
+    tension = tension_resistance(
+        area=Q("100 cm^2"),
+        yield_strength=_S355,
+        partial_factor_m0=annex.gamma_m0,
+        net_area=Q("80 cm^2"),
+        ultimate_strength=Q("490 MPa"),
+        partial_factor_m2=annex.gamma_m2,
+    )
+    assert _kn(tension.net_section) == pytest.approx(2822.4, abs=0.1)
+
+
+def test_nothing_reaches_for_the_annex_on_its_own():
+    """A design is worked under one jurisdiction's annex and the pack cannot know which.
+
+    So the factors stay arguments with no defaults; the annex removes the retyping, not the
+    decision. Asserted on the signatures, because a default added later would silently make
+    every call site mean something it did not say.
+    """
+    import inspect
+
+    for function, names in (
+        (compression_resistance, ("partial_factor_m0",)),
+        (shear_resistance, ("partial_factor_m0",)),
+        (bending_resistance, ("partial_factor_m0",)),
+    ):
+        signature = inspect.signature(function)
+        for name in names:
+            assert signature.parameters[name].default is inspect.Parameter.empty, (
+                function.__name__,
+                name,
+            )
+
+
+def test_an_annex_needs_a_name_and_well_formed_overrides():
+    with pytest.raises(RefusalError, match="named for the jurisdiction"):
+        national_annex("")
+    with pytest.raises(RefusalError, match="parameter, value, source"):
+        national_annex("somewhere", overrides=[(NationalParameter.GAMMA_M2, 1.1)])  # type: ignore[list-item]
+    with pytest.raises(RefusalError, match="names a NationalParameter"):
+        national_annex("somewhere", overrides=[("gamma_M2", 1.1, "NA.2.2")])  # type: ignore[list-item]
+
+
+@pytest.mark.parametrize("poison", [float("nan"), float("inf")])
+def test_a_non_finite_override_is_refused(poison: float):
+    with pytest.raises((RefusalError, ValueError)):
+        national_annex("somewhere", overrides=[(NationalParameter.GAMMA_M2, poison, "NA.2.2")])

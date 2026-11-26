@@ -129,7 +129,11 @@ modules:
   class calls for, plastic shear with its f_y/√3, and the interactions — the §6.2.8 shear
   reduction, §6.2.9.1's axial reduction of the plastic moment with its a ≤ 0,5 cap, and
   §6.2.9's biaxial sum. Every partial factor is an argument with no default, because it is
-  a nationally determined parameter
+  a nationally determined parameter — and those are typed here too: `recommended_annex()`
+  carries EN 1993-1-1's own γ_M0 = 1,00, γ_M1 = 1,00, γ_M2 = 1,25, λ_LT,0 ≤ 0,40 and
+  β ≥ 0,75 with their citation, and `national_annex` replaces any of them with a member
+  state's, each override needing its own clause. Nothing reaches for it on its own: a design
+  is worked under one jurisdiction's annex and the pack cannot know which
 - :mod:`~anvilate.analysis.en1993_buckling` — and what the MEMBER can carry: EN 1993-1-1
   §6.3.1 flexural buckling and §6.3.2 lateral-torsional buckling. The five European design
   buckling curves and their imperfection factors, the non-dimensional slenderness, the
@@ -2023,6 +2027,9 @@ from .en1993_classification import (
     tubular_section_class,
 )
 from .en1993_resistance import (
+    NationalAnnex,
+    NationallyDeterminedParameter,
+    NationalParameter,
     TensionGoverned,
     TensionResistance,
     axial_reduction_negligible,
@@ -2030,6 +2037,8 @@ from .en1993_resistance import (
     bending_resistance_with_shear,
     biaxial_bending_utilisation,
     compression_resistance,
+    national_annex,
+    recommended_annex,
     reduced_plastic_moment_major,
     reduced_plastic_moment_minor,
     shear_buckling_check_needed,
@@ -4431,6 +4440,11 @@ __all__ = [
     "angle_in_compression_class",
     "tubular_section_class",
     "rolled_i_section_class",
+    "NationalParameter",
+    "NationallyDeterminedParameter",
+    "NationalAnnex",
+    "recommended_annex",
+    "national_annex",
     "TensionGoverned",
     "TensionResistance",
     "tension_resistance",

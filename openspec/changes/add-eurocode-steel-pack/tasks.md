@@ -11,8 +11,15 @@ Depends on `add-standards-effectivity` (design basis and edition) and
       (the 2005+A1:2014 generation is read, from the European Commission JRC report that
       reproduces Table 5.2 with its clause numbers; see design.md. **EN 1993-1-1:2022 could
       not be read from here**, so nothing claims to answer it and 2.5 waits with it)
-- [ ] 1.2 Nationally determined parameters as typed inputs with bundled recommended values
+- [x] 1.2 Nationally determined parameters as typed inputs with bundled recommended values
       and cited user override
+      (`NationalParameter`, `NationallyDeterminedParameter` and `NationalAnnex` in
+      `en1993_resistance`; `recommended_annex()` bundles γ_M0 = 1,00, γ_M1 = 1,00,
+      γ_M2 = 1,25, λ_LT,0 ≤ 0,40 and β ≥ 0,75 with the citation they were read from, and
+      `national_annex` overrides any of them with a member state's, each needing its own
+      clause. A γ below 1 is refused; a value outside a recommended bound is reported by
+      `outside_recommendation` rather than refused, since an annex may choose outside.
+      Nothing defaults to an annex: the resistances still take their factors explicitly)
 - [ ] 1.3 Steel grade records S235 to S460 by thickness range, cited to the product standard
 - [ ] 1.4 European profiles through the open-geometry importer; properties computed
 

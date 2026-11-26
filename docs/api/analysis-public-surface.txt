@@ -2031,3 +2031,8 @@ en1993_buckling.lateral_torsional_buckling_resistance
 anchorage.FrameAnchorDemand
 anchorage.FrameAnchorage
 anchorage.frame_anchor_demand
+en1993_resistance.NationalParameter
+en1993_resistance.NationallyDeterminedParameter
+en1993_resistance.NationalAnnex
+en1993_resistance.recommended_annex
+en1993_resistance.national_annex

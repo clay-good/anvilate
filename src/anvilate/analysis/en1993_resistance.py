@@ -61,6 +61,7 @@ module. Nothing here answers EN 1993-1-1:2022.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 from math import isfinite, sqrt
 
@@ -72,6 +73,11 @@ from ..units import Quantity, render, require_finite
 from .en1993_classification import SectionClass
 
 __all__ = [
+    "NationalParameter",
+    "NationallyDeterminedParameter",
+    "NationalAnnex",
+    "recommended_annex",
+    "national_annex",
     "TensionGoverned",
     "TensionResistance",
     "tension_resistance",
@@ -191,6 +197,245 @@ def _factor(value: float, name: str) -> float:
 def _newtons(area_mm2: float, stress_mpa: float, factor: float) -> Quantity:
     """``area·stress/factor`` as a force, with mm² and MPa giving newtons directly."""
     return Quantity(magnitude=area_mm2 * stress_mpa / factor, unit="N")
+
+
+class NationalParameter(StrEnum):
+    """A nationally determined parameter this pack reads (EN 1993-1-1 §2 and §6.3.2.3).
+
+    A Eurocode leaves certain values to each member state, to be set in a National Annex,
+    and recommends one where the state does not choose. These are the ones the resistance
+    and buckling modules take: the three partial factors, and the two the rolled-section
+    lateral-torsional method needs.
+    """
+
+    GAMMA_M0 = "gamma_M0"
+    GAMMA_M1 = "gamma_M1"
+    GAMMA_M2 = "gamma_M2"
+    LAMBDA_LT_0 = "lambda_LT_0"
+    BETA_LT = "beta_LT"
+
+
+#: EN 1993-1-1's own recommended value for each, and the bound the recommendation states
+#: where it states one: ``(value, bound)`` with bound "max", "min" or None.
+_RECOMMENDED: dict[NationalParameter, tuple[float, str | None]] = {
+    NationalParameter.GAMMA_M0: (1.00, None),
+    NationalParameter.GAMMA_M1: (1.00, None),
+    NationalParameter.GAMMA_M2: (1.25, None),
+    NationalParameter.LAMBDA_LT_0: (0.40, "max"),
+    NationalParameter.BETA_LT: (0.75, "min"),
+}
+
+_RECOMMENDED_SOURCE = (
+    "EN 1993-1-1's recommended value, as the European Commission JRC report Eurocodes: "
+    "Background and Applications - Design of Steel Buildings states it"
+)
+
+
+class NationallyDeterminedParameter(StatableModel):
+    """One nationally determined parameter: its value, and where that value came from.
+
+    ``source`` is not decoration. A partial factor is the number a resistance is divided by,
+    and a reader checking a design has to be able to tell EN 1993-1-1's recommendation from
+    a member state's choice — so ``recommended`` says which this is, and ``source`` says
+    where to look either way. A blank citation is refused, as every citation here is.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    states_requirements = True
+
+    parameter: NationalParameter
+    value: float
+    source: Provenance
+    #: True when this is EN 1993-1-1's own recommendation rather than a state's choice.
+    recommended: bool
+
+    @property
+    def within_recommendation(self) -> bool:
+        """Whether the value sits on the recommended side of the bound, where there is one.
+
+        EN 1993-1-1 recommends λ_LT,0 as a **maximum** of 0,40 and β as a **minimum** of
+        0,75; the partial factors are recommended outright, with no bound, so they are
+        always within. A False here is **not** an error and is not refused: a National Annex
+        is entitled to choose outside the recommendation, and the honest thing is to let a
+        reader see that it did rather than to enforce a bound the standard frames as advice.
+        """
+        _, bound = _RECOMMENDED[self.parameter]
+        if bound is None:
+            return True
+        limit = _RECOMMENDED[self.parameter][0]
+        return self.value <= limit if bound == "max" else self.value >= limit
+
+
+class NationalAnnex(StatableModel):
+    """The nationally determined parameters a design is worked under.
+
+    Build one with :func:`recommended_annex` for EN 1993-1-1's own values, or with
+    :func:`national_annex` to override any of them with a member state's. Every parameter is
+    present in either case, so a caller never has to know which were overridden to read a
+    value — ``overridden`` says which were, when that is the question.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    states_requirements = True
+
+    name: Named
+    parameters: tuple[NationallyDeterminedParameter, ...]
+
+    def of(self, parameter: NationalParameter) -> NationallyDeterminedParameter:
+        """One parameter, with its value and its citation."""
+        found = next((p for p in self.parameters if p.parameter is parameter), None)
+        if found is None:  # pragma: no cover - both constructors fill every parameter
+            raise KeyError(f"{parameter} is not in this annex")
+        return found
+
+    def value_of(self, parameter: NationalParameter) -> float:
+        """One parameter's value, for passing to a resistance."""
+        return self.of(parameter).value
+
+    @property
+    def gamma_m0(self) -> float:
+        """γ_M0, which §6.2's cross-section resistances divide by."""
+        return self.value_of(NationalParameter.GAMMA_M0)
+
+    @property
+    def gamma_m1(self) -> float:
+        """γ_M1, which §6.3's buckling resistances divide by — not the same factor as γ_M0."""
+        return self.value_of(NationalParameter.GAMMA_M1)
+
+    @property
+    def gamma_m2(self) -> float:
+        """γ_M2, which the net-section and joint resistances divide by."""
+        return self.value_of(NationalParameter.GAMMA_M2)
+
+    @property
+    def lambda_lt_0(self) -> float:
+        """λ_LT,0, the plateau of the §6.3.2.3 rolled-section method."""
+        return self.value_of(NationalParameter.LAMBDA_LT_0)
+
+    @property
+    def beta_lt(self) -> float:
+        """β, the slenderness coefficient of the §6.3.2.3 rolled-section method."""
+        return self.value_of(NationalParameter.BETA_LT)
+
+    @property
+    def overridden(self) -> tuple[NationalParameter, ...]:
+        """The parameters a member state chose, rather than took the recommendation for."""
+        return tuple(p.parameter for p in self.parameters if not p.recommended)
+
+    @property
+    def outside_recommendation(self) -> tuple[NationalParameter, ...]:
+        """The parameters whose value sits outside the bound the recommendation states."""
+        return tuple(p.parameter for p in self.parameters if not p.within_recommendation)
+
+    def __str__(self) -> str:
+        chosen = self.overridden
+        if not chosen:
+            return f"{self.name}: EN 1993-1-1's recommended values throughout"
+        return f"{self.name}: {len(chosen)} of {len(self.parameters)} chosen nationally"
+
+
+def recommended_annex() -> NationalAnnex:
+    """EN 1993-1-1's own recommended values for every parameter this pack reads.
+
+    γ_M0 = 1,00, γ_M1 = 1,00 and γ_M2 = 1,25; λ_LT,0 recommended as a maximum of 0,40 and β
+    as a minimum of 0,75. Each carries the citation it was read from.
+
+    **This is a default to declare, not a default to assume.** Nothing in the resistance or
+    buckling functions reaches for it: they still take their factors as arguments with no
+    defaults, because a design is worked under one jurisdiction's annex and the pack cannot
+    know which. What this removes is the retyping, not the decision — a caller writes
+    ``partial_factor_m0=annex.gamma_m0`` and a reader can see which annex that was.
+    """
+    return NationalAnnex(
+        name="EN 1993-1-1 recommended values",
+        parameters=tuple(
+            NationallyDeterminedParameter(
+                parameter=parameter,
+                value=value,
+                source=_RECOMMENDED_SOURCE,
+                recommended=True,
+            )
+            for parameter, (value, _bound) in _RECOMMENDED.items()
+        ),
+    )
+
+
+def national_annex(
+    name: str,
+    *,
+    overrides: Sequence[tuple[NationalParameter, float, str]] = (),
+) -> NationalAnnex:
+    """A member state's annex: the recommended values, with the ones it chose replaced.
+
+    ``overrides`` is ``[(parameter, value, source), ...]`` and **every one needs its own
+    citation** — the clause of the National Annex it was read from. That is the whole point
+    of the type: a partial factor differing from the recommendation is the kind of number a
+    reviewer has to be able to trace, and an uncited one is a number nobody can check.
+
+    Parameters not overridden keep the recommendation and stay marked ``recommended``, so
+    the annex is always complete and ``overridden`` says exactly what the state changed.
+
+    A γ below 1 is refused, as it is everywhere in this pack: it divides a resistance, and
+    below 1 it would report more than the characteristic value. A λ_LT,0 or β outside the
+    recommended bound is **not** refused — see
+    :attr:`NationallyDeterminedParameter.within_recommendation`.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise _refuse(
+            f"a national annex is named for the jurisdiction it belongs to; got {name!r}",
+            subject="name",
+            source=_ANNEX_SOURCE,
+        )
+    chosen: dict[NationalParameter, tuple[float, str]] = {}
+    for entry in overrides:
+        if not isinstance(entry, tuple) or len(entry) != 3:
+            raise _refuse(
+                f"each override is a (parameter, value, source) triple; got {entry!r}",
+                subject="overrides",
+                source=_ANNEX_SOURCE,
+            )
+        parameter, value, source = entry
+        if not isinstance(parameter, NationalParameter):
+            raise _refuse(
+                f"an override names a NationalParameter; got {parameter!r}",
+                subject="overrides",
+                source=_ANNEX_SOURCE,
+            )
+        if parameter in chosen:
+            raise _refuse(
+                f"{parameter.value} is overridden twice; an annex gives each parameter one "
+                f"value and two would leave which applies to the order of a list",
+                subject="overrides",
+                source=_ANNEX_SOURCE,
+            )
+        require_finite(value, name=parameter.value)
+        if parameter.value.startswith("gamma") and value < 1.0:
+            raise _refuse(
+                f"{parameter.value} divides a resistance and is at least 1; got {value}",
+                subject="overrides",
+                source=_ANNEX_SOURCE,
+            )
+        if value <= 0:
+            raise _refuse(
+                f"{parameter.value} must be positive; got {value}",
+                subject="overrides",
+                source=_ANNEX_SOURCE,
+            )
+        chosen[parameter] = (float(value), source)
+    return NationalAnnex(
+        name=name,
+        parameters=tuple(
+            NationallyDeterminedParameter(
+                parameter=parameter,
+                value=chosen[parameter][0] if parameter in chosen else value,
+                source=chosen[parameter][1] if parameter in chosen else _RECOMMENDED_SOURCE,
+                recommended=parameter not in chosen,
+            )
+            for parameter, (value, _bound) in _RECOMMENDED.items()
+        ),
+    )
 
 
 class TensionGoverned(StrEnum):
