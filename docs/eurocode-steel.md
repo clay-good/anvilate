@@ -54,6 +54,72 @@ and [`examples/eurocode_member_buckling.py`](../examples/eurocode_member_bucklin
 | N_cr | Computed, by `anvilate.analysis.column.euler_buckling_load`, which is already π²EI/(KL)². |
 | ε, H_f, R_μ, χ, χ_LT, ρ | Computed, from the clause. |
 
+## A member carrying compression and bending
+
+A column with a moment on it is not a column. EN 1993-1-1 §6.3.3 couples the two through
+four interaction factors and writes two inequalities, one per buckling axis — and which one
+governs is not predictable from the member. Of the source's two worked beam-columns, the
+IPE 360 column is governed about **z** (0.88 against 0.57) and the RHS 200x150x8 about **y**
+(0.90 against 0.72). Checking one and assuming the other follows gets one of them wrong.
+
+**Which method is yours to declare.** The standard gives two alternative sets of interaction
+factors — Annex A (Method 1) and Annex B (Method 2) — developed by different groups, and
+they disagree; on that hollow section the source finds Method 2 the less conservative. This
+pack carries **Method 2 only**, and asking for Method 1 refuses rather than handing back
+Method 2's numbers under the other name. There is no default.
+
+**The one trap worth knowing.** `k_yy`'s bound is a ceiling and `k_zy`'s is a floor. The
+expressions look alike, and on the source's own column the difference is a sixth of a
+percent — unbounded `k_zy` is 0.9646 and its floor is 0.9660, so the floor governs. Taken
+the wrong way the second inequality comes out 0.8773 instead of 0.8782, which is not a
+difference anyone would notice. The two bounds coincide at a slenderness of 1.0 and separate
+either side of it.
+
+**Where it refuses**, because the source does not state it and this pack does not ship a
+clause it has not read: a minor-axis moment (`k_yz` and `k_zz` are not carried, and dropping
+the term would make both inequalities *smaller*); class 3 and 4 sections; `k_zy` below a
+slenderness of 0.4, where Table B.2 branches; and `k_zy` for a member not susceptible to
+torsional deformation, except the one allowance the source works — a rectangular hollow
+section in compression and uniaxial major-axis bending may take `k_zy` = 0, which makes the
+second inequality a pure flexural-buckling check.
+
+Whether a member is susceptible to torsional deformation is a declaration too. It turns on
+restraint, not on the cross-section: the same open I section is susceptible unrestrained and
+may be taken as not susceptible when it is restrained torsionally and laterally along its
+length.
+
+## Bolted connections, by category
+
+EN 1993-1-8 does not have *a* way to design a bolted connection; it has five, and the five
+ask for different checks. Category A lets the plies slip into bearing and checks shear and
+bearing. B and C preload the bolts and forbid slip — B at the serviceability limit state, C
+at the ultimate one, and C does not require the shear check that B does. D and E are tension
+connections. So the category is a declaration with no default, and `category_requirements`
+says what each one asks for.
+
+**Slip resistance reads a declared slip factor.** μ belongs to the *friction surface*, not
+to the bolt: Table 3.7's four classes run 0.5 down to 0.2, so the same steel and the same
+bolts give a **2.5x** range depending on surface preparation alone. The hole is a second
+lever, costing up to 37%, and its ordering is not intuition's — a short slot parallel to the
+load (k_s = 0.76) is worth more than a long slot perpendicular to it (0.70). An applied
+tension relieves the preload at 0.8 per unit, and once it has spent the whole clamp the
+connection has lost its mechanism, which refuses rather than returning zero.
+
+**Three places where the source disagrees with itself**, each recorded rather than smoothed
+over, because picking a reading silently would be asserting a judgement the pack never
+showed:
+
+| What | The table says | Its worked example does | This pack |
+| --- | --- | --- | --- |
+| α_v for a class 6.8 bolt | 0.5 | 0.6 | follows the table (117.6 kN, not 141.1) |
+| f_ub/f_u denominator | — | prints 360, computes with 510 | 510, which is S355's f_u |
+| k_1 for an inner bolt | 1.4·e₂/d₀ − 1.7 | 2.8·e₂/d₀ − 1.7 | **refuses** — they differ by 5x |
+
+**Where it refuses** otherwise: a preload on any class but 8.8 and 10.9, a slip resistance
+for a category that has no slip check, and a tension that relieves the entire clamp. The
+group-of-fasteners rule and the long-joint reduction are not carried — they are properties
+of a joint layout this module does not model.
+
 ## What the pack is checked against
 
 The three modules are read from a public document, and they are checked against that

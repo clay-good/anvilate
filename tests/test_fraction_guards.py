@@ -1753,7 +1753,26 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # quantity-and-number functions are all reached, including the two that take
     # TabulatedCoefficient models — the binder builds those. A reader that only ever
     # ratchets down is a reader that stops being a claim about the surface.
-    assert share >= 0.841, (
+    # 0.841 -> 0.839 on 2026-11-26, for three functions and with their cause: the EN 1993
+    # beam-column module's `interaction_factor_kyy`, `interaction_factor_kzy` and
+    # `hollow_section_kzy_allowance` each take an enum-typed REQUIRED parameter — the
+    # interaction method, the torsional susceptibility, the section class — and the binder
+    # builds a call out of numbers and quantities, not out of enum members. These are not
+    # incidental signatures that could be widened to suit the probe: EN 1993-1-1 gives two
+    # alternative sets of interaction factors that disagree, so which one applies is a
+    # declaration with no default, and that declaration is the reason the module exists.
+    # Their non-finite inputs are each refused by name in tests/test_en1993_interaction.py
+    # (`test_a_non_finite_input_refuses_rather_than_poisoning_a_utilisation`). Lower this
+    # again only with the same kind of reason written here.
+    # 0.839 -> 0.838 on 2026-11-26, for the EN 1993-1-8 bolt module and with the same cause
+    # as the line above it: ten of its thirteen functions take an enum-typed REQUIRED
+    # parameter — the bolt class, the category, the friction class, the hole type, the shear
+    # plane, the bolt position. Every one of those is a DECLARATION the standard itself
+    # demands: a connection has no resistance until its category is named, and a slip factor
+    # belongs to a surface preparation that nothing in a bolt can imply. Widening these
+    # signatures so the binder could reach them would delete the module's whole point. Their
+    # non-finite inputs are refused by name in tests/test_en1993_bolts.py.
+    assert share >= 0.838, (
         f"the probes reach {len(reached):,} of {len(surface):,} public analysis functions "
         f"({share:.1%}); the gates above are written as claims about the whole surface, so "
         "a drop here is a claim quietly narrowing"
@@ -1860,7 +1879,15 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # exists because `max(0.0, -nan)` returns 0,0 rather than a NaN — asserted beside it in
     # test_max_really_does_drop_a_nan_which_is_why_that_guard_exists.
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 106, (
+    # 106 -> 109: the EN 1993 beam-column module's three interaction-factor functions each
+    # take an enum-typed required parameter. EN 1993-1-1 gives two alternative sets of these
+    # factors which disagree with each other, and Annex B reads a different table depending
+    # on whether the member is susceptible to torsional deformation — so the method and the
+    # susceptibility are declarations with no default, and a signature that let the binder
+    # omit them would be a worse module with a better number here.
+    # 109 -> 119: the EN 1993-1-8 bolt module's ten enum-taking functions, for the reason
+    # given at the share floor above.
+    assert len(unbuildable) <= 119, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

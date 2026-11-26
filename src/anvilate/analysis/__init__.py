@@ -141,6 +141,18 @@ modules:
   curve-selection tables — a rolled I with h/b ≤ 2 is curve *a* generally and curve *b*
   alternatively — and the alternative method's own second cap at 1/λ̄_LT². N_cr comes from
   `column.euler_buckling_load` and M_cr is declared, because EN 1993-1-1 gives neither
+- :mod:`~anvilate.analysis.en1993_interaction` — and what a member carrying BOTH can:
+  EN 1993-1-1 §6.3.3, bending and axial compression. The two interaction inequalities, and
+  Annex B (Method 2)'s factors for them — which method applies is a declaration with no
+  default, because Annex A and Annex B are alternatives that disagree, and Annex A refuses
+  rather than answering under the other's name. k_yy's bound is a ceiling and k_zy's is a
+  floor, which is the pair's one real trap
+- :mod:`~anvilate.analysis.en1993_bolts` — and how the members are joined: EN 1993-1-8 §3,
+  bolted connections BY CATEGORY. The five categories of Table 3.2 and the different set of
+  checks each asks for, both strength tables, Table 3.4's shear, bearing, tension and
+  punching resistances with their combined check, and slip resistance from a declared slip
+  factor — the friction surface's class, not the bolt's. Three places where the source
+  disagrees with itself are recorded rather than smoothed: inner-bolt k_1 refuses outright
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   the minimum section second moment a load requires, the eccentric-load secant
   stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
@@ -2002,6 +2014,27 @@ from .embodied_carbon import (
     material_loss_mass,
     with_declared_factors,
 )
+from .en1993_bolts import (
+    BoltCategory,
+    BoltClass,
+    BoltPosition,
+    BoltShearPlane,
+    FrictionClass,
+    HoleType,
+    bearing_factor_alpha_b,
+    bearing_factor_k1,
+    bearing_resistance,
+    bolt_strengths,
+    bolt_tension_resistance,
+    category_requirements,
+    combined_shear_and_tension,
+    preload_force,
+    punching_shear_resistance,
+    shear_factor,
+    shear_resistance_per_plane,
+    slip_factor,
+    slip_resistance,
+)
 from .en1993_buckling import (
     EuropeanBucklingCurve,
     buckling_may_be_neglected,
@@ -2025,6 +2058,16 @@ from .en1993_classification import (
     outstand_flange_class,
     rolled_i_section_class,
     tubular_section_class,
+)
+from .en1993_interaction import (
+    InteractionMethod,
+    TorsionalSusceptibility,
+    axial_utilisation,
+    beam_column_utilisations,
+    equivalent_uniform_moment_factor,
+    hollow_section_kzy_allowance,
+    interaction_factor_kyy,
+    interaction_factor_kzy,
 )
 from .en1993_resistance import (
     NationalAnnex,
@@ -4447,6 +4490,7 @@ __all__ = [
     "national_annex",
     "TensionGoverned",
     "TensionResistance",
+    "bolt_tension_resistance",
     "tension_resistance",
     "compression_resistance",
     "bending_resistance",
@@ -4459,6 +4503,33 @@ __all__ = [
     "reduced_plastic_moment_minor",
     "biaxial_bending_utilisation",
     "EuropeanBucklingCurve",
+    "BoltCategory",
+    "BoltClass",
+    "BoltPosition",
+    "FrictionClass",
+    "HoleType",
+    "BoltShearPlane",
+    "bearing_factor_alpha_b",
+    "bearing_factor_k1",
+    "bearing_resistance",
+    "bolt_strengths",
+    "category_requirements",
+    "combined_shear_and_tension",
+    "preload_force",
+    "punching_shear_resistance",
+    "shear_factor",
+    "shear_resistance_per_plane",
+    "slip_factor",
+    "slip_resistance",
+    "bolt_tension_resistance",
+    "InteractionMethod",
+    "TorsionalSusceptibility",
+    "axial_utilisation",
+    "beam_column_utilisations",
+    "equivalent_uniform_moment_factor",
+    "hollow_section_kzy_allowance",
+    "interaction_factor_kyy",
+    "interaction_factor_kzy",
     "curve_imperfection_factor",
     "reference_slenderness",
     "non_dimensional_slenderness",

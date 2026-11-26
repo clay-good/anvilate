@@ -9940,3 +9940,90 @@ def test_eurocode_buckling_example_shows_the_curve_is_the_design_decision():
     assert max(r["slenderness"] for r in rows) == 2.0
     assert rows[-1]["alternative"] == pytest.approx(0.25, abs=1e-9)
     _assert_narrates_computed("eurocode_member_buckling.py", namespace)
+
+
+def test_eurocode_beam_column_example_shows_the_two_axes_disagreeing():
+    """The two inequalities, and the pair of bounds that point opposite ways.
+
+    The part worth a test is that the two worked members are governed about **different**
+    axes: a reader who checks one inequality and assumes the other follows gets one of them
+    wrong, and an example where both members happened to be governed the same way would not
+    show it.
+
+    The other is the bound direction. k_yy's is a ceiling and k_zy's is a floor, on
+    expressions that look alike, and the difference on the source's own column is 0.14% —
+    so this asserts which of the two candidate values each factor actually takes, not just
+    that the answer is plausible.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "eurocode_beam_column_interaction.py"))
+    d = namespace["eurocode_beam_column_interaction"]()
+
+    # The two members are governed about different axes, which is the example's point.
+    assert d["column_about_z"] > d["column_about_y"], "the column is governed about z"
+    assert d["hollow_about_y"] > d["hollow_about_z"], "the hollow section about y"
+    # Both members are verified, as the source concludes.
+    for key in ("column_about_y", "column_about_z", "hollow_about_y", "hollow_about_z"):
+        assert d[key] <= 1.0, key
+
+    # k_zy's bound is a FLOOR: the larger of the two candidates is what is returned.
+    assert d["column_k_zy"] > d["column_k_zy_unbounded"]
+    assert d["column_k_zy"] == pytest.approx(0.966, abs=0.0005)
+    # And reading it as a ceiling understates the second inequality by a tenth of a percent
+    # — small enough that only a test of the direction catches it.
+    assert d["column_z_if_bound_read_as_ceiling"] < d["column_about_z"]
+    assert 0.0 < d["column_z_understated_percent"] < 0.2
+
+    column = namespace["worked_column"]()
+    # k_yy's bound is a CEILING, and it does not bind on this member.
+    assert column["k_yy"] < column["k_yy_cap"]
+
+    hollow = namespace["worked_hollow_section"]()
+    # The allowance makes the second inequality a pure flexural-buckling check: the moment
+    # term is gone, so the left-hand side IS the axial term.
+    assert hollow["k_zy"] == 0.0
+    assert hollow["about_z"] == pytest.approx(d["hollow_about_z"])
+    # C_my sits exactly on Table B.3's floor for this member (ψ = -0,50).
+    assert hollow["c_my"] == pytest.approx(0.40)
+
+    # The two bounds coincide at a slenderness of 1,0 and separate either side of it, which
+    # is why a test at 1,0 alone could not tell the two readings apart.
+    rows = {row["slenderness"]: row for row in namespace["which_bound_governs"]()}
+    at_one = rows[1.0]
+    assert at_one["k_yy_line"] == pytest.approx(at_one["k_yy_cap"])
+    assert at_one["k_zy_line"] == pytest.approx(at_one["k_zy_floor"])
+    assert rows[2.0]["k_yy"] == pytest.approx(rows[2.0]["k_yy_cap"]), "the cap binds above 1"
+    assert rows[2.0]["k_zy"] == pytest.approx(rows[2.0]["k_zy_floor"]), "the floor does too"
+    assert rows[0.5]["k_yy"] == pytest.approx(rows[0.5]["k_yy_line"]), "the line below it"
+
+    _assert_narrates_computed("eurocode_beam_column_interaction.py", namespace)
+
+
+def test_eurocode_bolted_connection_example_shows_the_category_is_the_decision():
+    """The two levers a slip-resistant connection has, and the asymmetric combined check."""
+    namespace = runpy.run_path(str(_EXAMPLES / "eurocode_bolted_connection.py"))
+    d = namespace["eurocode_bolted_connection"]()
+
+    # Bearing governs the category A joint; the preloaded one resists more before slipping.
+    assert d["bearing_kn"] < d["shear_kn"]
+    assert d["slip_kn"] > d["bearing_kn"]
+    assert d["slip_kn"] < d["preload_kn"], "slip resistance is less than the clamp itself"
+
+    # The friction surface is worth a factor of 2.5 across Table 3.7's four classes.
+    assert d["surface_spread_factor"] == pytest.approx(2.5, abs=1e-9)
+    # And the hole costs up to 37%.
+    assert d["worst_hole_share"] == pytest.approx(0.63, abs=1e-9)
+    # Tension spends more than half the resistance well before it undoes the preload.
+    assert 50.0 < d["tension_cost_percent"] < 60.0
+
+    # The combined check is NOT linear: the 1,4 under the tension term is why.
+    assert d["combined_utilisation"] < d["linear_utilisation"]
+    assert d["combined_utilisation"] == pytest.approx(0.6 + 0.6 / 1.4, abs=1e-9)
+
+    # The hole ordering the example calls counter-intuitive, asserted rather than asserted
+    # in prose alone: a short parallel slot beats a long perpendicular one.
+    holes = {row["hole"]: row["resistance_kn"] for row in namespace["the_hole_is_part_of_it"]()}
+    assert holes["short slot parallel"] > holes["long slot perpendicular"]
+    assert d["short_parallel_share"] == pytest.approx(0.76, abs=1e-9)
+    assert d["long_perpendicular_share"] == pytest.approx(0.70, abs=1e-9)
+
+    _assert_narrates_computed("eurocode_bolted_connection.py", namespace)

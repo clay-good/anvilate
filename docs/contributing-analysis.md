@@ -218,8 +218,8 @@ Two corollaries worth internalizing:
 **A public analysis function refuses a NaN or an infinity rather than answering one, and
 the gate holds that over most of the surface — not all of it.** It is held by
 `test_no_analysis_function_answers_a_non_finite_input_with_a_number_or_a_crash`, which binds
-1,567 of the library's 1,862 public functions and substitutes each poison value one
-parameter at a time. The remaining 295 are not exempt — they are unreached, which is a
+1,577 of the library's 1,881 public functions and substitutes each poison value one
+parameter at a time. The remaining 304 are not exempt — they are unreached, which is a
 different thing, and the share is itself gated by
 `test_the_probe_population_covers_the_share_of_the_surface_it_claims_to`. It has to be:
 the binder builds a call out of a function's own declarations, so a guard it cannot talk
@@ -293,7 +293,7 @@ job backs — which would excuse a skip forever — fails the build instead.
 
 ## Finding the guards nothing has ever run
 
-A line-trace of the suite says **around 52% of the roughly 6,400 `raise` sites in the imported modules
+A line-trace of the suite says **around 52% of the roughly 6,700 `raise` sites in the imported modules
 never execute**. Most are dimension and positivity checks whose absence a reader would
 notice. The subset worth hunting is the one whose *condition carries a domain constant* —
 a Poisson's ratio that cannot reach 0.5, an angle range a formula's geometry requires, a

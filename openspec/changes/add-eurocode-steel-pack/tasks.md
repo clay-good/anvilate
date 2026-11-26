@@ -45,13 +45,42 @@ Depends on `add-standards-effectivity` (design basis and edition) and
       method's second cap at 1/λ̄_LT². N_cr reuses `column.euler_buckling_load`; M_cr is
       declared because EN 1993-1-1 does not give it. Anchored on a worked column and the
       same beam worked at two critical moments)
-- [ ] 2.4 Bending and axial interaction by the declared method
+- [x] 2.4 Bending and axial interaction by the declared method
+      (`en1993_interaction`: §6.3.3's two inequalities (Eqs. 6.61 and 6.62) and Annex B
+      (Method 2)'s factors for them. `InteractionMethod` is a required argument with no
+      default — Annex A and Annex B are alternatives that disagree, so Method 1 refuses
+      rather than answering under its own name with the other's numbers. So is
+      `TorsionalSusceptibility`, which turns on restraint rather than on the section.
+      k_yy's bound is a **ceiling** and k_zy's a **floor**; they coincide at a slenderness
+      of 1,0. Refuses a minor-axis moment (k_yz and k_zz not carried, and dropping the term
+      would make both sides smaller), classes 3 and 4, and k_zy below λ̄_z = 0,4 where
+      Table B.2 branches and the source never prints it. Both of the report's worked
+      beam-columns replay exactly, one on each Annex B table, and they are governed about
+      **different axes** — the column about z, the hollow section about y.
+      One figure of the source's does not reproduce and is recorded rather than matched:
+      it prints k_zy's unbounded value as 0,966 and its floor as 0,947, where its own
+      printed inputs give 0,9646 and 0,9660. The governing k_zy is 0,966 either way, so
+      the example's conclusion stands; the two intermediates are asserted nowhere)
 - [ ] 2.5 Edition differences registered where the two generations diverge
 
 ## 3. Joints (EN 1993-1-8)
 
 - [ ] 3.1 Read EN 1993-1-8:2005 and EN 1993-1-8:2024; record clauses and editions
-- [ ] 3.2 Bolted connections by category; slip resistance from a declared slip factor
+- [x] 3.2 Bolted connections by category; slip resistance from a declared slip factor
+      (`en1993_bolts`: Table 3.2's five categories with the different set of checks each
+      requires, both strength tables (3.1 and 3.4), shear/bearing/tension/punching with the
+      asymmetric combined check, and slip resistance from a declared μ — the friction
+      SURFACE's class, not the bolt's — with k_s by hole type and the 0,8 tension relief.
+      `BoltCategory` has no default: a connection has no resistance until its category is
+      named, and category C does not require the shear check that B does.
+      Three internal contradictions in the source are recorded rather than smoothed: it
+      takes α_v = 0,6 for a class 6.8 bolt where its own Table 3.4 gives 0,5 (this pack
+      follows the table, so 117,6 kN against the example's 141,1); it prints α_b's
+      denominator as 360 while computing with 510; and its inner-bolt k_1 differs between
+      its table and its example by a factor of five, so **inner-bolt k_1 refuses** rather
+      than guessing. α_b and k_1 themselves replay exactly: 0,606, 0,811 and 2,5.
+      Not carried: the group-of-fasteners rule and the long-joint reduction, which need a
+      bolt layout this module does not model)
 - [ ] 3.3 Fillet welds by the directional and simplified methods, declared
       (**read and stopped**: Eq. 2.14's first inequality and Table 4.1's β_w are in hand,
       but the report prints `σ⊥ ≤ f_u/γ_M2` where the expected form carries 0,9, and it
