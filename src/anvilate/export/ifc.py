@@ -50,6 +50,7 @@ __all__ = [
     "IfcPart",
     "IfcSweptProfile",
     "combination_ifc_parts",
+    "product_ifc_parts",
     "ifc_class_for",
     "ifc_part",
     "measure_ifc",
@@ -248,7 +249,11 @@ class IfcPart:
     """One part to export: its identity, its mesh in millimetres, and what was found on it.
 
     ``tag`` identifies this instance within the file: it is the element's ``Tag``. The
-    part number, which several instances may share, is ``part_number``. ``vertices`` and
+    part number, which several instances may share, is ``part_number``. ``assembly_path``
+    is where this part sits under the file's root assembly — the names of the sub-assemblies
+    above it, outermost first — so a product's tree survives the export as nested
+    ``IfcElementAssembly`` objects. Empty means directly under the root, which is where a
+    combination's parts sit. ``vertices`` and
     ``triangles`` are a closed, outward-facing mesh in millimetres in the part's own frame,
     which is the file's unless ``placement`` moves it; a ``profile`` replaces the mesh as
     the written geometry. ``card_digest`` is the digest of this part's own scorecard.
@@ -270,6 +275,7 @@ class IfcPart:
     placement: tuple[tuple[tuple[float, float, float], ...], tuple[float, float, float]] | None = (
         None
     )
+    assembly_path: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -323,7 +329,8 @@ def _content_digest(name: str, schema: str, assembly: str | None, parts: Sequenc
                 (
                     part.tag, part.name, part.element_type, part.material, part.mass_kg,
                     part.part_number, part.card_digest, sorted(part.extra.items()),
-                    part.profile, part.placement, tuple(map(tuple, part.vertices)),
+                    part.profile, part.placement, part.assembly_path,
+                    tuple(map(tuple, part.vertices)),
                     tuple(map(tuple, part.triangles)),
                 )
             ).encode()
@@ -450,7 +457,9 @@ def render_ifc(
     """``parts`` as the bytes of one IFC file of the declared ``schema``.
 
     With ``assembly`` the parts are aggregated under one ``IfcElementAssembly`` of that
-    name, and the assembly, not each part, is what the storey contains.
+    name, and the assembly, not each part, is what the storey contains. A part whose
+    ``assembly_path`` is set is aggregated under a nested ``IfcElementAssembly`` per name on
+    that path, so a product's tree is exported as a tree.
 
     Each part is one element of the class its element maps to (:func:`ifc_class_for`),
     with its swept profile or, without one, a faceted B-rep of its mesh, its material, the
@@ -589,7 +598,35 @@ def render_ifc(
             ObjectPlacement=placement,
             PredefinedType="NOTDEFINED",
         )
-        owned("IfcRelAggregates", "assembly", RelatingObject=whole, RelatedObjects=elements)
+        # One IfcElementAssembly per distinct prefix of the parts' assembly paths, each
+        # aggregated under its own parent — so a product three levels deep arrives three
+        # levels deep rather than flattened into one bag of elements. With every path empty
+        # (a combination) this is the single assembly it has always been, with the same
+        # seeds, so the same bytes.
+        made: dict[tuple[str, ...], Any] = {(): whole}
+        kids: dict[tuple[str, ...], list[Any]] = {}
+        for element, part in zip(elements, parts, strict=True):
+            path = tuple(part.assembly_path)
+            for depth in range(1, len(path) + 1):
+                prefix = path[:depth]
+                if prefix not in made:
+                    seed = "assembly:" + "/".join(prefix)
+                    made[prefix] = owned(
+                        "IfcElementAssembly",
+                        seed,
+                        Name=prefix[-1],
+                        ObjectPlacement=placement,
+                        PredefinedType="NOTDEFINED",
+                    )
+                    kids.setdefault(prefix[:-1], []).append(made[prefix])
+            kids.setdefault(path, []).append(element)
+        for prefix, related in kids.items():
+            owned(
+                "IfcRelAggregates",
+                "assembly" if not prefix else "assembly:" + "/".join(prefix),
+                RelatingObject=made[prefix],
+                RelatedObjects=related,
+            )
         contained = [whole]
     owned(
         "IfcRelContainedInSpatialStructure",
@@ -1041,3 +1078,115 @@ def combination_ifc_parts(built: Any) -> list[IfcPart]:
             )
         )
     return parts
+
+
+def product_ifc_parts(
+    product: Any,
+    *,
+    library: Any = None,
+    root: Any = None,
+    cache: Any = None,
+) -> list[IfcPart]:
+    """A placed product's items as IFC parts, each carrying where it sits in the tree.
+
+    One part per placed occurrence, in its own frame with the product's solved placement,
+    tagged by its path (which is unique) and numbered by its part number (which a repeated
+    item shares). ``assembly_path`` is the chain of sub-product names above it, so
+    :func:`render_ifc` with ``assembly=`` the product's name writes the tree as nested
+    ``IfcElementAssembly`` objects rather than one flat bag of elements. ``library`` and
+    ``root`` are what :func:`~anvilate.product.place_product` takes.
+
+    **Every item must be a part with an archetype IFC has a class for.** A reference item is
+    skipped — it is what the product is checked against and is never made — and anything
+    else without a mapped archetype is refused naming it and its path. A placeholder is the
+    common case: it is a mass and an envelope, with no archetype at all, and writing one as
+    an ``IfcBuildingElementProxy`` would put a shape into a model that reads as a real
+    element and carries no element identity. That is the proxy the spec forbids, so a
+    product still resting on placeholders is refused here and exported once its items are
+    designed.
+    """
+    from ..product import _placed_leaves, product_tree
+    from ..screening import screen_spec
+
+    tree = product_tree(product, library=library)
+    nodes = {node.path: node for node in tree.walk()}
+    leaves, _rebuilt, _reused, _extra, _tables, _joints = _placed_leaves(
+        product, library, cache, root
+    )
+
+    unmapped: list[str] = []
+    parts: list[IfcPart] = []
+    for leaf in leaves:
+        if leaf.kind == "reference":
+            continue
+        node = nodes[leaf.path]
+        element_type = getattr(leaf.spec, "element_type", None)
+        if element_type is None:
+            unmapped.append(f"{leaf.path} is a {leaf.kind} and has no archetype")
+            continue
+        try:
+            ifc_class_for(element_type, "IFC4")
+        except ValueError:
+            unmapped.append(f"{leaf.path} is a {element_type}, which no IFC class maps")
+            continue
+        card = screen_spec(leaf.spec)
+        part = ifc_part(
+            leaf.spec,
+            leaf.geometry,
+            card,
+            tag=leaf.path,
+            part_number=node.part_number,
+        )
+        parts.append(
+            _replace(
+                part,
+                name=f"{node.part_number} {node.description}",
+                placement=_rows_and_shift(leaf.where),
+                assembly_path=_assembly_path(leaf.path, nodes),
+                extra={
+                    "CardStatus": card.status.value,
+                    "Assembly": product.name,
+                    "Path": leaf.path,
+                },  # fmt: skip
+            )
+        )
+    if unmapped:
+        raise _refuse(
+            "IFC has no element for these items, and a shape written as a proxy reads as a "
+            "real element with no identity: " + "; ".join(unmapped),
+            subject="product",
+            source=_MESH_SOURCE,
+        )
+    if not parts:
+        raise _refuse(
+            f"{product.name} has no item IFC can hold; an IFC file holds at least one part",
+            subject="product",
+            source=_MESH_SOURCE,
+        )
+    return parts
+
+
+def _assembly_path(path: str, nodes: Mapping[str, Any]) -> tuple[str, ...]:
+    """The names of the sub-product assemblies above ``path``, outermost first.
+
+    The root is not among them: it is the file's own assembly, named by the product. Each
+    one is named the way a CAD tree shows it, part number and description, so a reader sees
+    the same label on the assembly as on the item.
+    """
+    segments = path.split("/")
+    out: list[str] = []
+    for depth in range(2, len(segments)):
+        above = nodes.get("/".join(segments[:depth]))
+        if above is not None:
+            out.append(f"{above.part_number} {above.description}")
+    return tuple(out)
+
+
+def _rows_and_shift(where: Any) -> Any:
+    """A build123d ``Location`` as the rotation rows and shift ``IfcPart.placement`` wants."""
+    if where is None:
+        return None
+    matrix = where.wrapped.Transformation()
+    rows = tuple(tuple(float(matrix.Value(r + 1, c + 1)) for c in range(3)) for r in range(3))
+    shift = where.position
+    return (rows, (float(shift.X), float(shift.Y), float(shift.Z)))

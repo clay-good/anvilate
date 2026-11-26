@@ -15,9 +15,13 @@ Builds on the export layer in `src/anvilate/export` and the release package.
 
 - [x] 2.1 IFC4 writer through the optional toolkit; units declared; header with the
       watermark when unvalidated
-- [ ] 2.2 Products as aggregation with transforms and part numbers as tags — done for
-      combinations (`combination_ifc_parts`, `IfcElementAssembly`, fasteners); a product
-      document is refused for IFC until its tree is mapped
+- [x] 2.2 Products as aggregation with transforms and part numbers as tags — combinations
+      (`combination_ifc_parts`, `IfcElementAssembly`, fasteners) and now products:
+      `product_ifc_parts` carries each item's `assembly_path` and `render_ifc` writes one
+      nested `IfcElementAssembly` per sub-product, so a tree arrives as a tree. The path is
+      in the content digest the GlobalIds are seeded from, so a flattened tree is not the
+      same file. An item with no mapped archetype — a placeholder above all — is refused
+      naming it rather than written as a proxy; a reference item is skipped
 - [x] 2.3 IFC 4.3 as a declared option; unsupported capabilities refused by name
       — `--ifc-schema IFC4X3_ADD2` on `export` and `combine`, `ifc_schema` on MCP; a schema
       named for a non-IFC output is refused. Every mapped element writes and validates in

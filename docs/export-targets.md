@@ -38,7 +38,24 @@ combine frame.combination.yaml --output frame.ifc` writes a combination as one
 tag, and each bolt, nut and washer an `IfcMechanicalFastener` from its tabulated envelope
 (`BOLT`; a nut and a washer are `USERDEFINED`, which neither schema enumerates). A
 combination holding a part IFC has no class for, such as the bracket on its mounting plate,
-is refused naming it. A product document still writes STEP only, and says so. IFC4 is the default; `--ifc-schema
+is refused naming it.
+
+`anvilate combine product.product.yaml --output product.ifc` writes a **product** the same
+way, with one difference that is the point of it: a product is a tree, so it arrives as a
+tree. Each sub-product is its own nested `IfcElementAssembly`, named as a CAD tree shows it
+(part number and description), under the assembly named for the product; each item is
+tagged by its path, which is unique, and numbered by its part number, which a repeated item
+shares. The transform the product solved for each occurrence is its placement.
+
+Every item has to be a designed part whose archetype IFC has a class for. A **placeholder**
+is refused naming it: it is a mass and an envelope with no archetype at all, and writing
+one as an `IfcBuildingElementProxy` would put a shape into a building model that reads as a
+real element and carries no element identity. That is the proxy this export does not write,
+so a product resting on placeholders — which is most of them early on — is refused until
+its items are designed. A reference item is skipped rather than refused: it is what the
+product is checked against and is never made.
+
+IFC4 is the default; `--ifc-schema
 IFC4X3_ADD2` (MCP: `ifc_schema`) writes IFC 4.3, where a base plate is its own `BASE_PLATE`
 type, and naming a schema for a file that is not IFC is refused rather than ignored.
 

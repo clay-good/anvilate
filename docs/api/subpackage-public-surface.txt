@@ -51,6 +51,7 @@ export.ifc.combination_ifc_parts
 export.ifc.ifc_class_for
 export.ifc.ifc_part
 export.ifc.measure_ifc
+export.ifc.product_ifc_parts
 export.ifc.render_ifc
 export.qif.QIF_NAMESPACE
 export.qif.QIF_VERSION

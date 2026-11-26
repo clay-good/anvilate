@@ -2095,6 +2095,8 @@ class _Leaf:
         where: Any = None,
         kind: str = "",
         parts: tuple[tuple[str, Any], ...] = (),
+        spec: Any = None,
+        geometry: Any = None,
     ) -> None:
         self.path, self.shape, self.placeholder, self.mass = path, shape, placeholder, mass
         # The centre of mass as a vertex, moved with the shape; ``assumed`` when it is a
@@ -2106,12 +2108,22 @@ class _Leaf:
         self.kind = kind or ("placeholder" if placeholder else "part")
         # A reference's solids, each at its path in the file, moved with the leaf.
         self.parts = parts
+        # The Design Spec this leaf was built from, where it has one. A component, a
+        # placeholder and a reference do not, and an exporter that needs an archetype —
+        # IFC does, to pick an element class — asks for it and refuses by name without it.
+        self.spec = spec
+        # The BuiltGeometry as built, in its own frame, with its tagged faces and
+        # dimensions. `built` above is only its solid; an exporter that writes a mesh plus
+        # a placement (IFC) needs the whole record, and it must stay unmoved — the
+        # placement is what carries where the occurrence went.
+        self.geometry = geometry
 
     def moved(self, path: str, where: Any) -> _Leaf:
         return _Leaf(path, self.shape.moved(where), self.placeholder, self.mass,
                      self.com.moved(where), self.assumed, self.entries, self.key, self.built,
                      where if self.where is None else where * self.where, self.kind,
-                     tuple((name, part.moved(where)) for name, part in self.parts))  # fmt: skip
+                     tuple((name, part.moved(where)) for name, part in self.parts),
+                     spec=self.spec, geometry=self.geometry)  # fmt: skip
 
 
 class _Assembly:
@@ -2228,7 +2240,8 @@ def _placed_leaves(
                 centre = built.shape.center(CenterOf.MASS)
                 return built, spec, _Leaf(path, built.shape, False, mass,
                                           Vertex(centre.X, centre.Y, centre.Z), False,
-                                          screen_spec(spec).entries)  # fmt: skip
+                                          screen_spec(spec).entries, spec=spec,
+                                          geometry=built)  # fmt: skip
             if definition.reference is not None:
                 return _reference_built(definition.reference, folder, path)
             if definition.component is not None:
@@ -2298,7 +2311,8 @@ def _placed_leaves(
                 built, spec, leaf = store[key]
                 inner = [_Leaf(path, leaf.shape, leaf.placeholder, leaf.mass, leaf.com,
                                leaf.assumed, leaf.entries, key, kind=leaf.kind,
-                               parts=leaf.parts)]  # fmt: skip
+                               parts=leaf.parts, spec=leaf.spec,
+                               geometry=leaf.geometry)]  # fmt: skip
             else:
                 sub = shelf[definition.product or ""]
                 built = assemble(sub, path)

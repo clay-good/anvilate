@@ -4209,13 +4209,25 @@ def _combine_product(args: argparse.Namespace, *, out, err) -> int:
         print(f"anvilate combine: {args.combination}: {refused}", file=err)
         return EXIT_BAD_REQUEST
     print(summary, file=out)
-    if args.output is not None and args.output.suffix.lower() == ".ifc":
+    as_ifc = args.output is not None and args.output.suffix.lower() == ".ifc"
+    if args.ifc_schema is not None and not as_ifc:
         print(
-            "anvilate combine: a product document writes a STEP assembly; IFC is written for a "
-            "combination of structural parts. Name a .step file",
+            "anvilate combine: --ifc-schema chooses the schema of an .ifc --output, and none is "
+            "named; drop --ifc-schema, or write an .ifc file",
             file=err,
         )
         return EXIT_BAD_REQUEST
+    if as_ifc:
+        # Before the gate: an item IFC has no element for is refused as it stands, not after
+        # being told to pass --unvalidated for a file it will never get.
+        from .export.ifc import product_ifc_parts
+        from .refusal import RefusalError
+
+        try:
+            parts = product_ifc_parts(product, library=library, root=args.combination.parent)
+        except (RefusalError, ValueError) as failure:
+            print(f"anvilate combine: {failure}", file=err)
+            return EXIT_BAD_REQUEST
     if args.output is not None:
         try:
             authorization = authorize_export(placed.card.flattened(), override=args.unvalidated)
@@ -4226,8 +4238,22 @@ def _combine_product(args: argparse.Namespace, *, out, err) -> int:
         except ValueError as failure:
             print(f"anvilate combine: {failure}. Remove --unvalidated.", file=err)
             return EXIT_BAD_REQUEST
-        write_product_step(product, args.output, authorization=authorization, library=library,
-                           root=args.combination.parent)  # fmt: skip
+        if as_ifc:
+            from .export.dxf import _atomic_path
+            from .export.ifc import render_ifc
+
+            data = render_ifc(
+                parts,
+                name=product.name,
+                authorization=authorization,
+                schema=args.ifc_schema or "IFC4",
+                assembly=product.name,
+            )
+            with _atomic_path(args.output) as staging:
+                staging.write_bytes(data)
+        else:
+            write_product_step(product, args.output, authorization=authorization, library=library,
+                               root=args.combination.parent)  # fmt: skip
         print(f"wrote {args.output} ({authorization.status})", file=out)
     return EXIT_CODES[summary.status]
 

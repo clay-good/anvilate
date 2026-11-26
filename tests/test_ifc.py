@@ -439,7 +439,7 @@ def test_a_combinations_fasteners_are_mechanical_fasteners_in_their_holes():
         _near(m, body.shape.bounding_box(), 0.05)
 
 
-def test_combine_writes_an_ifc_assembly_and_a_product_is_told_to_write_step(tmp_path):
+def test_combine_writes_an_ifc_assembly_and_names_what_it_cannot_hold(tmp_path):
     from cli_output import run_cli
 
     target = tmp_path / "frame.ifc"
@@ -457,12 +457,17 @@ def test_combine_writes_an_ifc_assembly_and_a_product_is_told_to_write_step(tmp_
         "--output", str(bracket), "--unvalidated",
     )  # fmt: skip
     assert code == 3 and not bracket.exists() and "'mounting_plate' has no IFC class" in err
+    # A product writes IFC now, but not this one: every item of the cart frame is a
+    # placeholder, which is a mass and an envelope with no archetype at all. Writing one as
+    # a proxy is the thing the spec forbids, so each is named.
     product = tmp_path / "cart.ifc"
     code, _out, err = run_cli(
         "combine", str(_REPO / "examples/products/cart_frame.product.yaml"),
         "--output", str(product),
     )  # fmt: skip
-    assert code == 3 and not product.exists() and "a product document writes a STEP" in err
+    assert code == 3 and not product.exists()
+    assert "IFC has no element for these items" in err
+    assert "cart-frame/frame is a placeholder and has no archetype" in err
 
 
 def test_a_stub_as_long_as_its_flange_is_wide_is_still_swept_along_its_length():
@@ -616,3 +621,196 @@ def test_the_schema_is_a_declared_option_on_both_surfaces_and_only_for_ifc(tmp_p
     assert ifcopenshell.file.from_string(written).schema_identifier == "IFC4X3_ADD2"
     refused = call("export_artifact", {"subject": handle, "format": "step", "ifc_schema": "IFC4"})
     assert "ifc_schema" in json.dumps(refused) and "error" in json.dumps(refused)
+
+
+# --- a product's tree as nested aggregation ---------------------------------------------
+#
+# A combination is one level: parts under one IfcElementAssembly. A product is a tree, and
+# the spec asks for "the product tree as aggregation with transforms preserved and part
+# numbers as element tags". Flattening it would lose the only structure the file carries.
+
+
+def _structural_product(folder: Path) -> Path:
+    """A column base: a plate at the root, and a gusset inside a sub-product.
+
+    Both archetypes map to IFC classes, which is what the bundled example products do not
+    have — every one of them is machine-building, where the items are placeholders or
+    archetypes IFC has no element for.
+    """
+    import yaml
+
+    plate = yaml.safe_load((_REPO / "examples/base_plate.spec.yaml").read_text(encoding="utf-8"))
+    gusset = yaml.safe_load(
+        (_REPO / "examples/parts/gusset_plate.spec.yaml").read_text(encoding="utf-8")
+    )
+
+    def definition(id_: str, **kind) -> dict:
+        return {"id": id_, "identity": {"description": id_, "source": "make"}, **kind}
+
+    def seat(part: str, on: str) -> list[dict]:
+        return [
+            {"id": f"{part}-sit", "kind": "face_to_face",
+             "place": {"part": part, "face": "bottom"}, "on": {"part": on, "face": "top"}},
+            {"id": f"{part}-left", "kind": "edge_flush",
+             "place": {"part": part, "face": "left"}, "on": {"part": on, "face": "left"}},
+            {"id": f"{part}-front", "kind": "edge_flush",
+             "place": {"part": part, "face": "front"}, "on": {"part": on, "face": "front"}},
+        ]  # fmt: skip
+
+    (folder / "bracket.product.yaml").write_text(
+        yaml.safe_dump({
+            "anvilate_product": "1.0.0", "name": "bracket",
+            "definitions": [definition("gusset", spec=gusset)],
+            "instances": [{"name": "gusset", "item": "gusset"}], "ground": "gusset",
+        }),
+        encoding="utf-8",
+    )  # fmt: skip
+    path = folder / "column-base.product.yaml"
+    path.write_text(
+        yaml.safe_dump({
+            "anvilate_product": "1.0.0", "name": "column-base",
+            "definitions": [definition("plate", spec=plate),
+                            definition("bracket", product="bracket")],
+            "instances": [{"name": "plate", "item": "plate"},
+                          {"name": "bracket", "item": "bracket"}],
+            "ground": "plate", "mates": seat("bracket", "plate"),
+        }),
+        encoding="utf-8",
+    )  # fmt: skip
+    return path
+
+
+def _product_parts(path: Path):
+    from anvilate.cli import _product_library
+    from anvilate.export.ifc import product_ifc_parts
+    from anvilate.product import load_product
+
+    product, library = load_product(path)
+    library = {**_product_library(path), **library}
+    return product, library, product_ifc_parts(product, library=library, root=path.parent)
+
+
+def _product_authorization(path: Path, library):
+    """The gate's verdict on the product's OWN card, the way the CLI derives it."""
+    from anvilate.product import load_product, place_product
+
+    product, _ = load_product(path)
+    placed = place_product(product, library=library, root=path.parent)
+    return _authorized(placed.card.flattened())
+
+
+def test_a_products_items_carry_their_place_in_the_tree(tmp_path):
+    product, _library, parts = _product_parts(_structural_product(tmp_path))
+    assert product.name == "column-base"
+    by_tag = {part.tag: part for part in parts}
+    assert set(by_tag) == {"column-base/plate", "column-base/bracket/gusset"}
+    # The root's own item sits directly under the file's assembly; the sub-product's item
+    # sits one level down, under an assembly named for the sub-product.
+    assert by_tag["column-base/plate"].assembly_path == ()
+    assert len(by_tag["column-base/bracket/gusset"].assembly_path) == 1
+    assert by_tag["column-base/bracket/gusset"].assembly_path[0].endswith(" bracket")
+    # Transforms preserved, and part numbers as the element tags' companions.
+    for part in parts:
+        assert part.placement is not None, f"{part.tag} lost where the product put it"
+        assert part.part_number and part.part_number.startswith("PROV-")
+    assert by_tag["column-base/plate"].element_type == "base_plate"
+    assert by_tag["column-base/bracket/gusset"].element_type == "gusset_plate"
+
+
+def test_the_tree_arrives_as_nested_assemblies(tmp_path):
+    path = _structural_product(tmp_path)
+    product, library, parts = _product_parts(path)
+    data = render_ifc(
+        parts,
+        name=product.name,
+        authorization=_product_authorization(path, library),
+        assembly=product.name,
+    )
+    model = ifcopenshell.file.from_string(data.decode("utf-8"))
+    assemblies = {a.Name: a for a in model.by_type("IfcElementAssembly")}
+    assert len(assemblies) == 2, sorted(assemblies)
+    aggregates = {
+        r.RelatingObject.Name: [getattr(o, "Name", None) for o in r.RelatedObjects]
+        for r in model.by_type("IfcRelAggregates")
+        if r.RelatingObject.is_a("IfcElementAssembly")
+    }
+    root = aggregates["column-base"]
+    # The root holds its own item and the sub-assembly — not the sub-assembly's item.
+    assert any(name.endswith(" plate") for name in root)
+    assert any(name.endswith(" bracket") for name in root)
+    assert not any(name.endswith(" gusset") for name in root)
+    bracket = next(name for name in assemblies if name.endswith(" bracket"))
+    assert [name for name in aggregates[bracket] if name.endswith(" gusset")]
+    # And the storey contains the root assembly only.
+    contained = [
+        o for r in model.by_type("IfcRelContainedInSpatialStructure") for o in r.RelatedElements
+    ]
+    assert [o.Name for o in contained] == ["column-base"]
+
+
+def test_a_nested_product_file_passes_the_express_rules(tmp_path):
+    """The aggregation is the part a schema checker has an opinion about."""
+    path = _structural_product(tmp_path)
+    product, library, parts = _product_parts(path)
+    data = render_ifc(
+        parts,
+        name=product.name,
+        authorization=_product_authorization(path, library),
+        assembly=product.name,
+    )
+    assert _problems(data) == []
+
+
+def test_two_trees_of_the_same_parts_are_different_files(tmp_path):
+    """The content digest seeds every GlobalId, so the tree has to be in it.
+
+    Without `assembly_path` in the digest, flattening a product would hand back a file
+    whose every GlobalId matched the nested one — two different models claiming to be the
+    same objects.
+    """
+    from dataclasses import replace
+
+    path = _structural_product(tmp_path)
+    product, library, parts = _product_parts(path)
+    auth = _product_authorization(path, library)
+    nested = render_ifc(parts, name=product.name, authorization=auth, assembly=product.name)
+    flat = render_ifc(
+        [replace(part, assembly_path=()) for part in parts],
+        name=product.name,
+        authorization=auth,
+        assembly=product.name,
+    )
+    assert nested != flat
+    ids = {e.GlobalId for e in ifcopenshell.file.from_string(nested.decode()).by_type("IfcPlate")}
+    flat_ids = {
+        e.GlobalId for e in ifcopenshell.file.from_string(flat.decode()).by_type("IfcPlate")
+    }
+    assert ids.isdisjoint(flat_ids)
+
+
+def test_combine_writes_a_products_ifc_tree(tmp_path):
+    from cli_output import run_cli
+
+    path = _structural_product(tmp_path)
+    target = tmp_path / "column-base.ifc"
+    code, out, err = run_cli("combine", str(path), "--output", str(target))
+    assert code == 0, err
+    assert f"wrote {target} (VALIDATED)" in out
+    model = ifcopenshell.file.from_string(target.read_text(encoding="utf-8"))
+    assert len(model.by_type("IfcElementAssembly")) == 2
+    assert {e.Tag for e in model.by_type("IfcPlate")} == {
+        "column-base/plate",
+        "column-base/bracket/gusset",
+    }
+
+
+def test_an_ifc_schema_named_for_a_product_step_output_is_refused(tmp_path):
+    from cli_output import run_cli
+
+    path = _structural_product(tmp_path)
+    code, _out, err = run_cli(
+        "combine", str(path), "--output", str(tmp_path / "x.step"),
+        "--ifc-schema", "IFC4X3_ADD2",
+    )  # fmt: skip
+    assert code == 3
+    assert "--ifc-schema chooses the schema of an .ifc --output" in err

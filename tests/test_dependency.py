@@ -506,6 +506,11 @@ _READS_A_RESULT_AND_IS_NOT_A_CHECK = {
         "each placed part's own card is copied into its IFC property set as a digest and a "
         "status, and nothing is computed from it"
     ),
+    "export/ifc.py:product_ifc_parts<-screen_spec": (
+        "each product item's own card is copied into its IFC property set as a digest and a "
+        "status, exactly as the combination exporter beside it does, and nothing is "
+        "computed from it"
+    ),
     "product.py:make<-screen_spec": (
         "a part's node in the product card holds the part's own card entries unchanged"
     ),
