@@ -31,7 +31,8 @@ optimiser is a confident answer:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+import hashlib
+from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from enum import StrEnum
 from itertools import product
 from math import isfinite
@@ -68,6 +69,7 @@ __all__ = [
     "Study",
     "StudyEvaluation",
     "tiered_evaluator",
+    "EvaluationCache",
     "DesignPoint",
     "StudyResult",
     "run_study",
@@ -442,6 +444,106 @@ def tiered_evaluator(
         )
 
     return combined
+
+
+class EvaluationCache:
+    """An evaluator that answers a design it has already seen from its own record.
+
+    A search revisits designs. A pattern search steps back onto a point it came from, a
+    local refinement shrinks around one it has already measured, and a start design is often
+    evaluated a second time as the first offspring. Each repeat is a full evaluation of a
+    design whose answer is already known, and with FEA in the loop that is minutes.
+
+    Wrap the evaluator and pass this where one is expected — it is callable, so
+    ``run_search(study, EvaluationCache(evaluate))`` is the whole of it:
+
+        cached = EvaluationCache(evaluate)
+        result = run_search(study, cached)
+        cached.hits, cached.misses      # what it saved, and over how many designs
+
+    **The key is the design's content, not its identity.** Two mappings with the same
+    parameters and the same values are the same design however they were built, and the
+    digest is taken over the sorted ``(name, value)`` pairs with each float written at full
+    precision. Full precision is the point: 3,0 and 3,0000000000000004 are **different
+    designs** and must not share an answer, because a refinement that has walked a
+    ten-thousandth of a millimetre has walked somewhere, and a cache that rounded them
+    together would hand back a stale verdict exactly where a search is most sensitive.
+
+    **It caches what the evaluator returned, not whether that was right.** A
+    :class:`StudyEvaluation` is frozen, so handing the same one back twice is safe; but an
+    evaluator that is not a pure function of its design — one reading a file that changes,
+    or a clock — must not be wrapped, and nothing here can detect that. One cache belongs to
+    one evaluator, for the same reason.
+
+    ``store`` lets the record live somewhere else: pass a mapping and the entries go into
+    it, which is how a cache survives between runs or is shared with a solver's own result
+    store. The default is a fresh dictionary, so an unshared cache is the easy case.
+
+    A cache hit still produces a point, so this does not change what a budget counts or
+    what the record contains — only how long it takes to get there.
+    """
+
+    def __init__(
+        self,
+        evaluate: Callable[[Mapping[str, float]], StudyEvaluation],
+        *,
+        store: MutableMapping[str, StudyEvaluation] | None = None,
+    ) -> None:
+        if not callable(evaluate):
+            raise _explore_refusal(
+                "evaluate is the function from a design to its StudyEvaluation",
+                subject="evaluate",
+                source="the study's evaluator",
+            )
+        if store is not None and not isinstance(store, MutableMapping):
+            raise _explore_refusal(
+                f"store is a mutable mapping from digest to StudyEvaluation; got "
+                f"{type(store).__name__}",
+                subject="store",
+                source="the caller's result store, or none for a fresh one",
+            )
+        self._evaluate = evaluate
+        self._store: MutableMapping[str, StudyEvaluation] = {} if store is None else store
+        self.hits = 0
+        self.misses = 0
+
+    @staticmethod
+    def digest(design: Mapping[str, float]) -> str:
+        """The content digest of one design: sorted names, each value at full precision.
+
+        ``repr`` of a float round-trips exactly in Python, which is what makes this a
+        content key and not an approximation of one.
+        """
+        if not isinstance(design, Mapping):
+            raise _explore_refusal(
+                f"a design is a mapping from parameter name to value; got {type(design).__name__}",
+                subject="design",
+                source="the study's variables and the point being evaluated",
+            )
+        body = "\x1e".join(f"{name}\x1f{float(design[name])!r}" for name in sorted(design))
+        return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+    def __len__(self) -> int:
+        """How many distinct designs the record holds."""
+        return len(self._store)
+
+    def __call__(self, design: Mapping[str, float]) -> StudyEvaluation:
+        key = self.digest(design)
+        held = self._store.get(key)
+        if held is not None:
+            self.hits += 1
+            return held
+        result = self._evaluate(design)
+        if not isinstance(result, StudyEvaluation):
+            raise _explore_refusal(
+                f"the evaluator returned a {type(result).__name__}, not a StudyEvaluation; "
+                f"a cache that stored it would hand the same wrong thing back every time",
+                subject="evaluate",
+                source="the study's evaluator",
+            )
+        self.misses += 1
+        self._store[key] = result
+        return result
 
 
 class DesignPoint(RevalidatedModel):

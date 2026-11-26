@@ -397,6 +397,7 @@ explore.Objective
 explore.Study
 explore.StudyEvaluation
 explore.tiered_evaluator
+explore.EvaluationCache
 explore.DesignPoint
 explore.StudyResult
 explore.run_study

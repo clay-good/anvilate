@@ -124,6 +124,35 @@ has to be placed, and a later tier may refine an estimate an earlier one made. A
 that comes back `NOT_EVALUATED` stops the chain exactly as a `FAIL` does — a design whose
 cheap check could not run has not earned an expensive one.
 
+## The evaluation cache: a design is measured once
+
+A search revisits designs — a pattern step comes back onto a point it left, a local
+refinement shrinks around one it has already measured, a start design is often evaluated
+again as the first offspring. `anvilate.explore.EvaluationCache` wraps the evaluator and
+answers those from its own record:
+
+```python
+from anvilate.explore import EvaluationCache
+
+cached = EvaluationCache(evaluate)
+result = run_search(study, cached)
+cached.hits, cached.misses      # what it saved, and over how many designs
+```
+
+The key is the design's **content**: the sorted `(name, value)` pairs, each float at full
+precision. Full precision is deliberate — 3.0 and 3.0000000000000004 are different designs
+and must not share an answer, because a refinement that has walked a ten-thousandth of a
+millimetre has walked somewhere, and a rounded key would return the verdict from where it
+started, exactly where a search is most sensitive.
+
+Pass `store=` a mapping and the record lives there instead, which is how a cache outlives a
+run or is shared with a solver's own result store. A hit still produces a point, so nothing
+about the budget or the record changes — only how long it takes.
+
+One thing it cannot check for you: it caches what the evaluator **returned**, not whether
+that was right. An evaluator that is not a pure function of its design — one reading a file
+that changes, or a clock — must not be wrapped.
+
 ## Search: the best design found under a budget
 
 When the box is too big to sweep, `anvilate.search.run_search` spends the budget where it

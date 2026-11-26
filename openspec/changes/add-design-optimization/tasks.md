@@ -38,7 +38,12 @@ independent and optional.
       A `NOT_EVALUATED` tier stops the chain as a `FAIL` does; every tier returns the
       objectives, since a point refuted first still has to be placed, and a later tier may
       refine an earlier estimate)
-- [ ] 2.2 Content-digest evaluation cache, shared with `add-local-fea`'s result store
+- [x] 2.2 Content-digest evaluation cache, shared with `add-local-fea`'s result store
+      (`explore.EvaluationCache` wraps an evaluator and is itself callable, so it goes
+      straight where one is expected. The key is the sorted `(name, value)` pairs with each
+      float at full precision — 3,0 and 3,0000000000000004 are different designs and must
+      not share an answer. `store=` takes the caller's own mapping, which is the seam the
+      FEA result store plugs into when it exists; `hits`/`misses` say what it saved)
 - [ ] 2.3 One MCP tool and one CLI command; task with progress and cancellation
       (`anvilate study` and the `run_study` MCP tool over a screened subject, study-summary
       1.0.0; synchronous with at most 2,000 evaluations per call, so the task with

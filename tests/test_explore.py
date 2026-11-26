@@ -12,9 +12,11 @@ from collections.abc import Callable, Mapping
 from itertools import combinations
 
 import pytest
+from pydantic import ValidationError
 
 from anvilate.explore import (
     DesignPoint,
+    EvaluationCache,
     Objective,
     ObjectiveSense,
     Parameter,
@@ -526,3 +528,124 @@ def test_a_tier_returning_the_wrong_type_is_refused_naming_it():
     evaluate = tiered_evaluator([("wall", lambda design: {"mass": 1.0})])
     with pytest.raises(RefusalError, match="returned a dict"):
         evaluate({"t": 1.0})
+
+
+# --- the evaluation cache: a design is measured once ------------------------------------
+
+
+def _counting_evaluator(counter: dict) -> Callable[[Mapping[str, float]], StudyEvaluation]:
+    def evaluate(design: Mapping[str, float]) -> StudyEvaluation:
+        counter["n"] = counter.get("n", 0) + 1
+        return StudyEvaluation(
+            objectives={"mass": design["t"] * 2.0},
+            scorecard=Scorecard(
+                entries=(
+                    ScorecardEntry(
+                        name="wall", status=CheckStatus.PASS, detail=f"t={design['t']:g}"
+                    ),
+                )
+            ),
+        )
+
+    return evaluate
+
+
+def test_a_repeated_design_is_evaluated_once():
+    calls: dict[str, int] = {}
+    cached = EvaluationCache(_counting_evaluator(calls))
+    for t in (1.0, 2.0, 1.0, 1.0, 2.0):
+        cached({"t": t})
+    assert calls["n"] == 2
+    assert (cached.hits, cached.misses) == (3, 2)
+    assert len(cached) == 2
+
+
+def test_the_key_is_the_designs_content_and_not_its_identity():
+    """Two mappings with the same parameters and values are the same design."""
+    assert EvaluationCache.digest({"a": 1.0, "b": 2.0}) == EvaluationCache.digest(
+        {"b": 2.0, "a": 1.0}
+    )
+    assert EvaluationCache.digest({"a": 1.0}) != EvaluationCache.digest({"a": 1.0, "b": 2.0})
+    assert EvaluationCache.digest({"a": 1}) == EvaluationCache.digest({"a": 1.0})
+
+
+def test_full_precision_so_a_refinement_is_never_answered_from_a_stale_point():
+    """3,0 and 3,0000000000000004 are different designs and must not share an answer.
+
+    This is the failure a rounded key would cause, and it would cause it exactly where a
+    search is most sensitive: a local refinement walking a ten-thousandth of a millimetre
+    has walked somewhere, and a cache that rounded the two together would hand back the
+    verdict from where it started.
+    """
+    near = 3.0000000000000004
+    assert near != 3.0
+    assert EvaluationCache.digest({"t": 3.0}) != EvaluationCache.digest({"t": near})
+    calls: dict[str, int] = {}
+    cached = EvaluationCache(_counting_evaluator(calls))
+    cached({"t": 3.0})
+    cached({"t": near})
+    assert calls["n"] == 2, "the two designs shared an answer"
+
+
+def test_the_cached_answer_is_the_same_object_and_cannot_be_mutated_apart():
+    """A StudyEvaluation is frozen, which is what makes handing it back twice safe."""
+    cached = EvaluationCache(_counting_evaluator({}))
+    first = cached({"t": 1.0})
+    second = cached({"t": 1.0})
+    assert first is second
+    with pytest.raises((ValidationError, TypeError, AttributeError)):
+        first.objectives = {"mass": 99.0}  # type: ignore[misc]
+
+
+def test_a_caller_can_bring_its_own_store():
+    """So the record can outlive one run, or be shared with a solver's result store."""
+    store: dict[str, StudyEvaluation] = {}
+    calls: dict[str, int] = {}
+    first_run = EvaluationCache(_counting_evaluator(calls), store=store)
+    first_run({"t": 1.0})
+    assert calls["n"] == 1 and len(store) == 1
+
+    second_run = EvaluationCache(_counting_evaluator(calls), store=store)
+    second_run({"t": 1.0})
+    assert calls["n"] == 1, "the second run re-evaluated a design the store already held"
+    assert (second_run.hits, second_run.misses) == (1, 0)
+
+
+def test_the_cache_saves_work_in_a_real_search():
+    """A search revisits designs, and the cache is only worth having if it catches that."""
+    from anvilate.search import SearchStrategy, SearchStudy, SearchVariable, run_search
+
+    calls: dict[str, int] = {}
+    cached = EvaluationCache(_counting_evaluator(calls))
+    study = SearchStudy(
+        name="cached",
+        objective="mass",
+        variables=(SearchVariable(name="t", low=1.0, high=6.0),),
+        strategy=SearchStrategy.LOCAL,
+        evaluations=40,
+        seed=5,
+        start={"t": 3.0},
+    )
+    result = run_search(study, cached)
+
+    assert result.points, "the search evaluated nothing"
+    assert cached.hits + cached.misses == len(result.points)
+    assert cached.misses == len(cached)
+    assert cached.hits > 0, "no design was revisited, so this proves nothing"
+    assert calls["n"] == cached.misses
+
+
+def test_a_cache_will_not_store_something_that_is_not_an_evaluation():
+    """It would hand the same wrong thing back every time."""
+    cached = EvaluationCache(lambda design: {"mass": 1.0})
+    with pytest.raises(RefusalError, match="not a StudyEvaluation"):
+        cached({"t": 1.0})
+
+
+def test_the_cache_refuses_what_it_cannot_wrap_or_store_in():
+    with pytest.raises(RefusalError, match="evaluate is the function"):
+        EvaluationCache("not a function")  # type: ignore[arg-type]
+    with pytest.raises(RefusalError, match="mutable mapping"):
+        EvaluationCache(_counting_evaluator({}), store=[])  # type: ignore[arg-type]
+    with pytest.raises(RefusalError, match="a design is a mapping"):
+        EvaluationCache.digest([("t", 1.0)])  # type: ignore[arg-type]
