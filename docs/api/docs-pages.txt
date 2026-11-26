@@ -67,7 +67,7 @@ process-piping.md | Screening by discipline | example-highlights | -
 product-screening.md | Start here | components, material-compliance | -
 products.md | Start here | nothing | -
 published-contracts.md | Driving it from an agent | evidence-bundle, mcp-tool-contracts | -
-quality-artifacts.md | Deciding what the answer is worth | README, verification-planning | -
+quality-artifacts.md | Deciding what the answer is worth | README, quality-interchange, verification-planning | -
 quality-interchange.md | Getting the answer out | example-highlights, export-targets, headless-cli | -
 quickstart.md | Start here | README | -
 reinforced-concrete.md | Screening by discipline | example-highlights | -

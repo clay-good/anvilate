@@ -55,7 +55,7 @@ schema test does the rest when a schema directory is pointed at it.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from hashlib import sha256
 from math import isfinite
@@ -63,8 +63,10 @@ from xml.etree import ElementTree as ET
 
 from pydantic import BaseModel, ConfigDict
 
+from .._models import EMPTY_MAP
 from ..attestation import EnvironmentBOM
 from ..bundle import BundleSections
+from ..characteristics import AccountabilityTable, NumberedCharacteristic, SpecialClass
 from ..derivation import DerivationAbsence, Underived
 from ..evidence import SourceRecord
 from ..gdt import (
@@ -429,16 +431,62 @@ def _attribute_nominal(parent: ET.Element, ids: _Ids, *, definition_id: str, nam
     return nominal_id
 
 
+#: QIF 3.0's ``CriticalityLevelEnumType`` (Characteristics.xsd): MINOR, MAJOR, CRITICAL,
+#: KEY, UNDEFINED. The schema enumerates the names and defines none of them, so only one of
+#: them can be claimed as an equivalent of an Anvilate special class.
+#:
+#: ``critical`` maps to ``CRITICAL``: the word is the same in every scheme that has the
+#: tier, and a reader of either document means the same thing by it.
+#:
+#: ``significant`` maps to **nothing in the enumeration**, and is written through QIF's own
+#: ``OtherLevel`` escape ("specifies the criticality level in natural language") instead.
+#: ``MAJOR`` and ``KEY`` are each some *other* scheme's second tier — MIL-STD-style
+#: severity classes, and the automotive key product characteristic — and picking one would
+#: assert an equivalence this document never stated, on the value a receiving inspection
+#: program may set its sampling plan from. The same reasoning as the material-condition
+#: refusal above, one step weaker: there is a faithful element to use, so this writes the
+#: declared class and the customer's symbol rather than refusing.
+_QIF_CRITICALITY_ENUM = {SpecialClass.CRITICAL: "CRITICAL"}
+
+
+def _designator_element(item: ET.Element, designator: NumberedCharacteristic) -> None:
+    """Write ``item``'s CharacteristicDesignator: its number, and its criticality.
+
+    The schema's element order on ``CharacteristicItemBaseType`` is Name, then
+    CharacteristicDesignator, then the rest, so this is called immediately after Name.
+    """
+    characteristic = designator.characteristic
+    element = _sub(item, "CharacteristicDesignator")
+    _sub(element, "Designator", str(designator.number))
+    if characteristic.special is None:  # pragma: no cover - only marked ones are mapped
+        return
+    criticality = _sub(element, "Criticality")
+    level = _QIF_CRITICALITY_ENUM.get(characteristic.special)
+    if level is not None:
+        _sub(criticality, "LevelEnum", level)
+    else:
+        _sub(
+            criticality,
+            "OtherLevel",
+            f"{characteristic.special.value} ({characteristic.symbol})",
+        )
+
+
 def _characteristics(
     ids: _Ids,
     entries: Sequence[tuple[ScorecardEntry, str]],
     formal_standard_id: str,
+    designators: Mapping[str, NumberedCharacteristic] = EMPTY_MAP,
 ) -> tuple[ET.Element, list[tuple[ScorecardEntry, str, str, bool]]]:
     """Build the Characteristics block.
 
     Returns the element and the per-entry records the measurement pass needs: the entry,
     its layer, its characteristic item id, and whether it was written as a numeric
     characteristic.
+
+    ``designators`` maps a check's name to the numbered characteristic it is the check
+    for, and each match gets a CharacteristicDesignator carrying the accountability number
+    and the criticality.
     """
     block = ET.Element("Characteristics")
     _sub(block, "FormalStandardId", formal_standard_id)
@@ -485,6 +533,9 @@ def _characteristics(
         if entry.reference:
             _sub(item, "Description", f"cites {entry.reference}")
         _sub(item, "Name", name)
+        designator = designators.get(entry.name)
+        if designator is not None:
+            _designator_element(item, designator)
         _sub(item, "CharacteristicNominalId", nominal_id)
         records.append((entry, layer, item_id, numeric))
 
@@ -557,6 +608,39 @@ def _document_uuid(content: bytes) -> str:
 _QPID_PLACEHOLDER = "00000000-0000-8000-8000-000000000000"
 
 
+def _designators(
+    table: AccountabilityTable | None,
+    entries: Sequence[tuple[ScorecardEntry, str]],
+) -> Mapping[str, NumberedCharacteristic]:
+    """Marked characteristics by the check name each one names, having refused a mark that
+    names a check this document does not carry."""
+    if table is None:
+        return EMPTY_MAP
+    present = {entry.name for entry, _layer in entries}
+    found: dict[str, NumberedCharacteristic] = {}
+    missing: list[str] = []
+    for row in table.rows:
+        characteristic = row.characteristic
+        if characteristic.special is None or not characteristic.check:
+            continue
+        if characteristic.check not in present:
+            missing.append(
+                f"characteristic {row.number} ({characteristic.description}) is marked "
+                f"{characteristic.special.value} by the check {characteristic.check!r}"
+            )
+            continue
+        found[characteristic.check] = row
+    if missing:
+        raise _qif_refusal(
+            "these marks name a check this bundle does not contain, so the export would "
+            "carry the characteristic with no criticality on it and nobody inspecting the "
+            "part would know a mark was declared: " + "; ".join(missing),
+            subject="characteristics and sections",
+            source=_BUNDLE_SOURCE,
+        )
+    return found
+
+
 def export_qif_results(
     sections: BundleSections,
     *,
@@ -564,6 +648,7 @@ def export_qif_results(
     spec_digest: str,
     bom: EnvironmentBOM,
     authorization: ExportAuthorization,
+    characteristics: AccountabilityTable | None = None,
 ) -> str:
     """Export an evidence bundle's checks as a QIF Results document (ISO 23952).
 
@@ -588,6 +673,20 @@ def export_qif_results(
     an authorization that claims VALIDATED for a bundle whose scorecard does not pass. An
     authorization obtained from a *different*, passing card is the one way to walk around
     the gate, and this is the one exporter positioned to catch it.
+
+    ``characteristics`` is the part's accountability table, and passing it carries the
+    special marks out. Each marked characteristic names the check that makes it special,
+    and the matching QIF characteristic item then gets a ``CharacteristicDesignator``
+    holding the accountability number and the criticality — so the number in the balloon
+    on the drawing, the number in the first-article table and the number in the inspection
+    program are one identifier. Only *marked* characteristics are matched, because the
+    check name is what a :class:`~anvilate.characteristics.SpecialMark` supplies and an
+    unmarked characteristic has none.
+
+    A mark naming a check this bundle does not contain is **refused**, not skipped. The
+    whole point of the mark is that the characteristic gets more attention downstream, and
+    a document that quietly carries none of them is worse than one that will not be
+    written: nobody inspecting the part would know a mark had been declared.
 
     Returns the document as XML text. It is deterministic — the same bundle exports the
     same bytes.
@@ -622,6 +721,8 @@ def export_qif_results(
     if callouts is not None:
         layered.extend((entry, "callouts") for entry in callouts.entries)
     layered.extend((entry, "verification") for entry in _verification_entries(sections))
+
+    designators = _designators(characteristics, layered)
 
     ids = _Ids()
     root = ET.Element(
@@ -705,8 +806,8 @@ def export_qif_results(
     )
     _sub(unit, "UnitName", SAFETY_FACTOR_UNIT)
 
-    characteristics, records = _characteristics(ids, layered, formal_standard_id)
-    root.append(characteristics)
+    block, records = _characteristics(ids, layered, formal_standard_id, designators)
+    root.append(block)
 
     results = _sub(root, "Results")
     results_set = _sub(results, "MeasurementResultsSet", n="1")

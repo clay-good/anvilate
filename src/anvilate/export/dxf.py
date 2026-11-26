@@ -30,6 +30,7 @@ from pydantic import ConfigDict, field_validator
 
 from .._models import RevalidatedModel, each_one
 from ..capabilities import install_remedy
+from ..characteristics import NumberedCharacteristic
 from ..gdt import FeatureControlFrame
 from ..refusal import RefusalError, Remedy
 from ..units import Quantity
@@ -948,6 +949,7 @@ def export_feature_control_frame_dxf(
     authorization: ExportAuthorization,
     text_height: Quantity | None = None,
     origin: tuple[Quantity, Quantity] | None = None,
+    designator: NumberedCharacteristic | None = None,
 ) -> Path:
     """Write one feature control frame to a DXF, as the boxed callout a drawing carries.
 
@@ -962,13 +964,23 @@ def export_feature_control_frame_dxf(
     renders those characters as a missing glyph, and a callout that silently drops its
     modifier crosses as a tighter requirement than the drawing states. ``authorization``
     comes from :func:`~anvilate.export.gate.authorize_export` and its watermark is written
-    into the DXF header. Returns the path
-    written; raises :class:`ImportError` if ezdxf is unavailable.
+    into the DXF header.
+
+    ``designator`` balloons the callout. Pass the
+    :class:`~anvilate.characteristics.NumberedCharacteristic` this frame is, and the
+    drawing carries its accountability number in a balloon above the frame's left end —
+    and, where the characteristic is marked special, the customer's symbol above that. A
+    mark that reaches the accountability table and not the drawing is a mark the shop
+    floor never sees, which is the whole failure this closes; the number is the same one
+    :func:`~anvilate.characteristics.number_characteristics` assigned, so the balloon, the
+    table and the QIF export all quote one identifier.
+
+    Returns the path written; raises :class:`ImportError` if ezdxf is unavailable.
     """
     ezdxf = _require_ezdxf()
     from ezdxf.enums import TextEntityAlignment
 
-    from .fcf import DEFAULT_TEXT_HEIGHT, Arc, Circle, Polyline, frame_drawing
+    from .fcf import DEFAULT_TEXT_HEIGHT, Arc, Circle, Polyline, balloon_for_frame, frame_drawing
 
     if text_height is None:
         text_height = DEFAULT_TEXT_HEIGHT
@@ -978,13 +990,20 @@ def export_feature_control_frame_dxf(
         start = (_mm(origin[0], "origin x"), _mm(origin[1], "origin y"))
     drawing = frame_drawing(frame, text_height=text_height, origin=start)
 
+    strokes = list(drawing.strokes)
+    labels = list(drawing.labels)
+    if designator is not None:
+        balloon = balloon_for_frame(designator, drawing, text_height=text_height)
+        strokes.extend(balloon.strokes)
+        labels.extend(balloon.labels)
+
     doc = ezdxf.new()
     doc.units = ezdxf.units.MM
     _stamp(doc, authorization)
     doc.layers.add(_GDT_LAYER, color=7)
     msp = doc.modelspace()
     attribs = {"layer": _GDT_LAYER}
-    for stroke in drawing.strokes:
+    for stroke in strokes:
         if isinstance(stroke, Polyline):
             msp.add_lwpolyline(stroke.points, close=stroke.closed, dxfattribs=attribs)
         elif isinstance(stroke, Circle):
@@ -999,7 +1018,7 @@ def export_feature_control_frame_dxf(
             )
         else:  # pragma: no cover - the stroke union is closed
             raise TypeError(f"unknown stroke primitive: {type(stroke).__name__}")
-    for text in drawing.labels:
+    for text in labels:
         entity = msp.add_text(text.text, height=text.height, dxfattribs=attribs)
         entity.set_placement(text.center, align=TextEntityAlignment.MIDDLE_CENTER)
 

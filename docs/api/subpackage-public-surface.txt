@@ -34,6 +34,9 @@ export.fcf.Label
 export.fcf.Polyline
 export.fcf.characteristic_symbol
 export.fcf.frame_drawing
+export.fcf.BalloonDrawing
+export.fcf.balloon_drawing
+export.fcf.balloon_for_frame
 export.gate.ExportAuthorization
 export.gate.ExportRecord
 export.gate.ExportRefused

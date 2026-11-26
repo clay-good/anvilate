@@ -213,6 +213,14 @@ with nothing in the numbers to show it.
 A feature control frame and a QIF characteristic definition describe the same thing, so
 `qif_characteristic_mapping(frame)` puts one in the other's vocabulary.
 
+Special marks cross on the characteristic *items*: pass the accountability table as
+`export_qif_results(..., characteristics=table)` and each marked characteristic's item
+gets a `CharacteristicDesignator` holding its balloon number and its criticality. `critical`
+uses the schema's own `CRITICAL` enum member; `significant` goes through `OtherLevel`,
+because QIF's remaining tiers belong to other schemes and a receiving program may set its
+sampling plan from the value. [Quality artifacts](quality-artifacts.md#special-characteristics)
+has the reasoning and the whole table of consumers.
+
 ```python
 from anvilate.export.qif import qif_characteristic_mapping
 ```

@@ -24,9 +24,18 @@ import pytest
 
 from anvilate.attestation import Component, ComponentKind, EnvironmentBOM
 from anvilate.bundle import BundleSections
+from anvilate.characteristics import (
+    AccountabilityTable,
+    CharacteristicKind,
+    CharacteristicRegister,
+    NumberedCharacteristic,
+    SpecialClass,
+)
+from anvilate.characteristics import Characteristic as CharacteristicRecord
 from anvilate.evidence import SourceRecord
 from anvilate.export.gate import authorize_export
 from anvilate.export.qif import (
+    _QIF_CRITICALITY_ENUM,
     _QIF_DATUM_MODIFIER,
     _QIF_DEFINITION_TYPE,
     _QIF_MATERIAL_MODIFIER,
@@ -47,6 +56,7 @@ from anvilate.gdt import (
     FrameModifier,
     MaterialCondition,
 )
+from anvilate.refusal import RefusalError
 from anvilate.scorecard import CheckStatus, Direction, RepairHint, Scorecard, ScorecardEntry
 from anvilate.uncertainty import Symmetric
 from anvilate.units import Quantity
@@ -1357,6 +1367,27 @@ def test_every_qif_name_this_module_emits_exists_in_the_published_schema():
     for element in ("MaterialCondition", "ZoneShape", "TangentPlane", "FreeState"):
         assert f'name="{element}"' in published, element
 
+    # The special-mark vocabulary, held to the schema the same way. The criticality map is
+    # checked in both directions: a level we claim that the schema does not enumerate would
+    # write an invalid document, and a special class we have stopped mapping to an enum
+    # member would be silently going out through `OtherLevel` as free text.
+    for element in (
+        "CharacteristicDesignator",
+        "Designator",
+        "Criticality",
+        "LevelEnum",
+        "OtherLevel",
+    ):
+        assert f'name="{element}"' in published, element
+    for level in _QIF_CRITICALITY_ENUM.values():
+        assert f'<xs:enumeration value="{level}"/>' in published, level
+    unmapped = set(SpecialClass) - set(_QIF_CRITICALITY_ENUM)
+    assert unmapped == {SpecialClass.SIGNIFICANT}, (
+        "the criticality map has moved. A class added to it must name an enumeration "
+        "member the schema actually has; a class removed from it starts crossing as "
+        f"OtherLevel free text. Unmapped now: {sorted(c.value for c in unmapped)}"
+    )
+
     # The standards bodies, both directions. One direction alone is half a gate: a name we
     # emit that the schema dropped writes an invalid document, and a body the schema added
     # that we do not know sends a perfectly ordinary ASME citation down the "other" branch
@@ -1428,3 +1459,253 @@ def test_a_count_that_is_not_a_count_is_a_complaint_and_not_a_crash():
     wrong = qif_schema_issues(document('<Features n="4"><F/></Features>'))
     assert any("declares n=4 but carries 1 children" in issue for issue in wrong), wrong
     assert qif_schema_issues(document()) == []
+
+
+# --- marks carried out of the accountability table and into the document ----------------
+#
+# A special mark that reaches the first-article table and stops there is a mark the
+# inspection program never sees. QIF's own vocabulary for it is
+# `CharacteristicDesignator`, which carries the balloon number and an optional
+# `Criticality` (Characteristics.xsd, `CharacteristicDesignatorType`).
+
+
+def _marked_table() -> AccountabilityTable:
+    """Two marked characteristics and one unmarked, numbered, naming checks on `_card`."""
+    rows = (
+        NumberedCharacteristic(
+            number=3,
+            characteristic=CharacteristicRecord(
+                id="dimension:pin_hole",
+                kind=CharacteristicKind.DIMENSION,
+                where="pin_hole",
+                description="pin hole diameter",
+                nominal="12 mm",
+                tolerance="+0.05/-0",
+                special=SpecialClass.CRITICAL,
+                symbol="◆",
+                reason="customer drawing note 4: load path to the hook",
+                check="bearing stress",
+            ),
+        ),
+        NumberedCharacteristic(
+            number=4,
+            characteristic=CharacteristicRecord(
+                id="dimension:plate_width",
+                kind=CharacteristicKind.DIMENSION,
+                where="plate",
+                description="plate width at the net section",
+                special=SpecialClass.SIGNIFICANT,
+                symbol="SC",
+                reason="customer scheme: significant characteristic",
+                check="net section",
+            ),
+        ),
+        NumberedCharacteristic(
+            number=5,
+            characteristic=CharacteristicRecord(
+                id="dimension:thickness",
+                kind=CharacteristicKind.DIMENSION,
+                where="plate",
+                description="plate thickness",
+            ),
+        ),
+    )
+    return AccountabilityTable(
+        rows=rows,
+        numbering=CharacteristicRegister(part="lug-01", revision="B"),
+    )
+
+
+def _designators(document: str) -> dict[str, dict[str, str]]:
+    """Each characteristic item's designator, by the item's name, as QIF states it."""
+    root = ET.fromstring(document)
+    found: dict[str, dict[str, str]] = {}
+    for item in root.findall(".//q:CharacteristicItems/*", _NS):
+        designator = item.find("q:CharacteristicDesignator", _NS)
+        if designator is None:
+            continue
+        name = item.findtext("q:Name", default="", namespaces=_NS)
+        read = {"Designator": designator.findtext("q:Designator", default="", namespaces=_NS)}
+        criticality = designator.find("q:Criticality", _NS)
+        if criticality is not None:
+            for child in criticality:
+                read[child.tag.removeprefix(f"{{{QIF_NAMESPACE}}}")] = child.text or ""
+        found[name] = read
+    return found
+
+
+def test_a_critical_mark_crosses_as_the_criticality_enum_of_the_same_name():
+    """`critical` is the one tier whose name QIF spells the same, so it uses the enum.
+
+    `CriticalityLevelEnumType` is MINOR, MAJOR, CRITICAL, KEY, UNDEFINED, and the schema
+    defines none of them beyond the name — so CRITICAL is the only one that can be claimed
+    as an equivalent without asserting something the document never said.
+    """
+    sections = _sections()
+    document = export_qif_results(
+        sections,
+        part_name="lug-01",
+        spec_digest="sha256:abc123",
+        bom=_bom(),
+        authorization=_auth(sections),
+        characteristics=_marked_table(),
+    )
+    read = _designators(document)
+    assert read["bearing stress"] == {"Designator": "3", "LevelEnum": "CRITICAL"}
+
+
+def test_a_significant_mark_crosses_as_other_level_rather_than_a_borrowed_tier():
+    """QIF has MAJOR and KEY and neither of them means "significant characteristic".
+
+    Each is some other scheme's second tier, and a receiving program may set its sampling
+    plan from the value — so the declared class and the customer's own symbol go through
+    QIF's `OtherLevel` ("the criticality level in natural language") instead of being
+    coerced onto an enum member that would read as an equivalence nobody stated.
+    """
+    sections = _sections()
+    document = export_qif_results(
+        sections,
+        part_name="lug-01",
+        spec_digest="sha256:abc123",
+        bom=_bom(),
+        authorization=_auth(sections),
+        characteristics=_marked_table(),
+    )
+    read = _designators(document)
+    assert read["net section"] == {"Designator": "4", "OtherLevel": "significant (SC)"}
+    assert "LevelEnum" not in read["net section"]
+
+
+def test_an_unmarked_characteristic_gets_no_designator():
+    """Only a mark supplies a check name, so only a marked characteristic is matched.
+
+    The unmarked row 5 names no check and must not acquire a criticality, and the checks
+    no row names must stay exactly as they were.
+    """
+    sections = _sections()
+    document = export_qif_results(
+        sections,
+        part_name="lug-01",
+        spec_digest="sha256:abc123",
+        bom=_bom(),
+        authorization=_auth(sections),
+        characteristics=_marked_table(),
+    )
+    read = _designators(document)
+    assert set(read) == {"bearing stress", "net section"}
+    assert "plate thickness" not in read
+    # And the rest of the document is untouched: the verdicts still round-trip.
+    verdicts = _read_characteristics(document)
+    assert verdicts["bearing stress"]["value"] == "2.4"
+    assert verdicts["deflection"]["status"] == "PASS"
+
+
+def test_a_mark_naming_a_check_the_bundle_does_not_have_is_refused():
+    """Carrying none of the marks silently is worse than not writing the file.
+
+    The failure this guards is the one that cannot be seen from the output: a mark whose
+    check name no longer matches any entry — a check renamed, a card from another
+    revision — would leave a document that looks complete and tells nobody a
+    characteristic was ever marked special.
+    """
+    table = _marked_table()
+    moved = table.rows[0].characteristic.model_copy(update={"check": "bearing stresss"})
+    broken = table.model_copy(
+        update={"rows": (table.rows[0].model_copy(update={"characteristic": moved}),)}
+    )
+    sections = _sections()
+    with pytest.raises(RefusalError, match="does not contain"):
+        export_qif_results(
+            sections,
+            part_name="lug-01",
+            spec_digest="sha256:abc123",
+            bom=_bom(),
+            authorization=_auth(sections),
+            characteristics=_marked_table().model_copy(
+                update={"rows": broken.rows + table.rows[1:]}
+            ),
+        )
+
+
+def test_a_document_carrying_designators_is_still_self_consistent():
+    """The designator carries no ids, so nothing it adds can break the reference checks."""
+    sections = _sections()
+    document = export_qif_results(
+        sections,
+        part_name="lug-01",
+        spec_digest="sha256:abc123",
+        bom=_bom(),
+        authorization=_auth(sections),
+        characteristics=_marked_table(),
+    )
+    assert qif_schema_issues(document) == []
+
+
+def test_a_document_carrying_designators_validates_against_the_published_schemas():
+    """The element order and the enum value, against the real XSD rather than my reading.
+
+    `CharacteristicDesignator` follows `Name` and precedes `CharacteristicNominalId` in
+    `CharacteristicItemBaseType`'s sequence; an XSD sequence is ordered, so getting this
+    wrong produces a document that reads fine and does not validate. Opt-in exactly like
+    `test_the_document_validates_against_the_published_schemas` above.
+    """
+    etree = pytest.importorskip("lxml.etree")
+    location = os.environ.get("ANVILATE_QIF_XSD")
+    if not location:
+        pytest.skip("set ANVILATE_QIF_XSD to the QIF 3.0 schema package's xsd directory")
+    schema_file = Path(location) / "QIFApplications" / "QIFDocument.xsd"
+    if not schema_file.exists():
+        pytest.skip(f"no QIFDocument.xsd under {location}")
+    schema = etree.XMLSchema(etree.parse(str(schema_file)))
+    sections = _sections()
+    document = export_qif_results(
+        sections,
+        part_name="lug-01",
+        spec_digest="sha256:abc123",
+        bom=_bom(),
+        authorization=_auth(sections),
+        characteristics=_marked_table(),
+    )
+    parsed = etree.fromstring(document.encode("utf-8"))
+    assert schema.validate(parsed), "\n".join(str(e) for e in schema.error_log)
+
+
+def test_one_number_reaches_the_table_the_balloon_and_the_document():
+    """The point of the whole feature, checked across all three consumers at once.
+
+    Each surface was pinned on its own above, which is exactly the shape of gap this repo
+    has been caught by before: every consumer correct against its own fixture and no test
+    that they agree. A renumbering, or a balloon built from a row index rather than the
+    characteristic's number, passes every other test in this file and in test_fcf.py.
+    """
+    pytest.importorskip("ezdxf")
+    from anvilate.characteristics import ACCOUNTABILITY_COLUMNS
+    from anvilate.export.fcf import balloon_drawing
+
+    table = _marked_table()
+    critical = next(row for row in table.rows if row.characteristic.check == "bearing stress")
+
+    # 1. the accountability table
+    csv_rows = table.to_csv().splitlines()
+    # By the column's own name: an `else 0` fallback would have passed here whatever the
+    # table's shape, which is the assertion that cannot fail.
+    number_column = ACCOUNTABILITY_COLUMNS.index("number")
+    assert csv_rows[0].split(",")[number_column] == "number"
+    row = next(line for line in csv_rows[1:] if "pin hole diameter" in line)
+    assert row.split(",")[number_column] == str(critical.number)
+
+    # 2. the balloon on the drawing
+    balloon = balloon_drawing(critical)
+    assert [label.text for label in balloon.labels][0] == str(critical.number)
+
+    # 3. the QIF document
+    sections = _sections()
+    document = export_qif_results(
+        sections,
+        part_name="lug-01",
+        spec_digest="sha256:abc123",
+        bom=_bom(),
+        authorization=_auth(sections),
+        characteristics=table,
+    )
+    assert _designators(document)["bearing stress"]["Designator"] == str(critical.number)

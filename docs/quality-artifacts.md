@@ -173,8 +173,45 @@ customer's symbol and the reason, and optionally the check that makes it special
 that matches no characteristic, or more than one (two frames on one hole, with no `detail`
 to choose), is refused; an unmarked characteristic is never shown as special.
 
-Marks reach the accountability table and the control-plan seed today. Drawings and the QIF
-export do not carry them yet.
+A mark now reaches all four consumers, and they all quote **one number** — the one
+`number_characteristics` assigned, which survives a revision:
+
+| Consumer | What carries the mark |
+| --- | --- |
+| Accountability table | the `special` and `symbol` columns, beside the number |
+| Control-plan seed | one row per special characteristic |
+| Drawing | `export_feature_control_frame_dxf(..., designator=row)` balloons the callout: a circle with the number above the frame's left end, and your customer's symbol above that |
+| QIF | `export_qif_results(..., characteristics=table)` writes a `CharacteristicDesignator` on the matching characteristic item: the number, and the criticality |
+
+The balloon goes above the frame's **left** end because a frame grows to the right as
+datums are added, so that is the one edge that does not move when the callout is edited.
+
+Your customer's symbol is drawn as *text*, while every geometric symbol in a feature
+control frame is drawn stroke by stroke. That difference is deliberate: ISO 1101 fixes the
+shape of a position or flatness symbol, so it is constructed rather than typeset and a
+viewer without a GD&T font cannot drop it. No standard fixes a special-characteristic
+symbol — a filled diamond, a shield, an inverted delta, the letters `SC` — and a
+`SpecialMark` takes it as declared text for exactly that reason. There is no shape to
+draw, only your mark to reproduce.
+
+### What a mark becomes in QIF, and the one tier that is not translated
+
+QIF's vocabulary is `CharacteristicDesignator`, whose `Designator` is the balloon number
+and whose optional `Criticality` is the class. `CriticalityLevelEnumType` enumerates
+MINOR, MAJOR, CRITICAL, KEY and UNDEFINED — and defines none of them beyond the name.
+
+- `critical` → `LevelEnum` **CRITICAL**. The word is the same in every scheme that has the
+  tier, so the equivalence is the schema's own.
+- `significant` → `OtherLevel`, QIF's documented escape for "the criticality level in
+  natural language", carrying the declared class and your symbol (`significant (SC)`).
+  MAJOR and KEY are each some *other* scheme's second tier — MIL-STD-style severity
+  classes, and the automotive key product characteristic. A receiving inspection program
+  may set its sampling plan from this value, so picking one of them would assert an
+  equivalence your document never stated.
+
+A mark whose check names a check the exported bundle does not contain is **refused**. A
+renamed check, or a table from another revision, would otherwise produce a document that
+looks complete and tells nobody a characteristic was ever marked special.
 
 ## Control-plan seed
 

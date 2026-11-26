@@ -13,9 +13,12 @@
 
 - [x] 2.1 Critical and significant marks with symbol and reason on dimensions,
       tolerances, properties
-- [ ] 2.2 Marks carried to drawings, QIF, inspection plan, control-plan seed
-      (carried to the accountability table and the control-plan seed; drawings and QIF
-      not yet)
+- [x] 2.2 Marks carried to drawings, QIF, inspection plan, control-plan seed
+      (the drawing balloons the callout with the characteristic's number and the
+      customer's symbol; QIF writes a `CharacteristicDesignator` with the number and the
+      criticality, schema-validated against the published QIF 3.0 XSD. `critical` uses
+      the schema's CRITICAL enum member; `significant` goes through `OtherLevel` rather
+      than borrowing MAJOR or KEY, which are other schemes' tiers)
 - [x] 2.3 Stable characteristic numbering across revisions; accountability table
 
 ## 3. Plans and records

@@ -32,6 +32,7 @@ from math import cos, radians, sin, tan
 
 from pydantic import BaseModel, ConfigDict
 
+from ..characteristics import NumberedCharacteristic
 from ..gdt import (
     Characteristic,
     FeatureControlFrame,
@@ -64,8 +65,11 @@ __all__ = [
     "Arc",
     "Label",
     "FrameDrawing",
+    "BalloonDrawing",
     "characteristic_symbol",
     "frame_drawing",
+    "balloon_drawing",
+    "balloon_for_frame",
 ]
 
 
@@ -128,6 +132,32 @@ class FrameDrawing(BaseModel):
     width: float
     height: float
     compartment_edges: tuple[float, ...]
+
+
+class BalloonDrawing(BaseModel):
+    """A characteristic's balloon, and its special mark if it has one, as primitives.
+
+    ``strokes`` is the balloon circle and ``labels`` the number inside it, plus the
+    customer's special-characteristic symbol above it when the characteristic is marked.
+    ``center`` and ``radius`` describe the circle, so a caller can run a leader to it.
+
+    **The symbol is text here, and the rest of this module's symbols are geometry.** That
+    is not an oversight. A geometric characteristic symbol is drawn stroke by stroke
+    because ISO 1101 fixes its shape and a viewer without a GD&T font would otherwise show
+    a missing glyph in its place. A special-characteristic symbol is the opposite kind of
+    thing: no standard fixes it, every customer's scheme uses its own — a filled diamond, a
+    shield, an inverted delta, the letters ``SC`` — and a
+    :class:`~anvilate.characteristics.SpecialMark` takes it as declared text for exactly
+    that reason. There is no shape to draw, only the customer's own mark to reproduce, so
+    it crosses as the text the document declared.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    strokes: tuple[Stroke, ...]
+    labels: tuple[Label, ...]
+    center: tuple[float, float]
+    radius: float
 
 
 # --- Symbol constructions, in units of the character height h -------------------------
@@ -701,4 +731,80 @@ def frame_drawing(
         width=total_width,
         height=height,
         compartment_edges=tuple(edges),
+    )
+
+
+#: The balloon circle's radius, in character heights. A number of up to three digits fits
+#: inside a circle of this radius at the drawing's own character height.
+_BALLOON_RADIUS = 1.0
+#: The gap between the balloon's top and the special-characteristic symbol above it.
+_MARK_GAP = 0.45
+
+
+def balloon_drawing(
+    designator: NumberedCharacteristic,
+    *,
+    text_height: Quantity = DEFAULT_TEXT_HEIGHT,
+    origin: tuple[float, float] = (0.0, 0.0),
+) -> BalloonDrawing:
+    """One numbered characteristic as the balloon a drawing carries, in millimetres.
+
+    ``origin`` is the balloon's centre, not a corner, because a balloon is placed by where
+    it points rather than by a bounding box. ``text_height`` is the drawing's predominant
+    character height ``h``; the circle's radius is ``h`` and the number is set at ``h``.
+
+    A characteristic that carries no :class:`~anvilate.characteristics.SpecialMark` gets
+    the balloon and nothing else — every characteristic on a first-article drawing is
+    ballooned, and only a marked one also shows a symbol. An unmarked characteristic
+    drawn with a symbol would be the error that matters here, so the symbol is emitted
+    only when ``designator.characteristic.special`` is set.
+    """
+    h = _mm_height(text_height)
+    radius = _BALLOON_RADIUS * h
+    cx, cy = origin
+    labels = [Label(text=str(designator.number), center=(cx, cy), height=h)]
+    characteristic = designator.characteristic
+    if characteristic.special is not None:
+        # The symbol sits above the balloon rather than inside it: the number is what an
+        # inspection record quotes, and a glyph sharing the circle with it reads as part of
+        # the number.
+        labels.append(
+            Label(
+                text=characteristic.symbol,
+                center=(cx, cy + radius + _MARK_GAP * h + h / 2),
+                height=h,
+            )
+        )
+    return BalloonDrawing(
+        strokes=(Circle(center=(cx, cy), radius=radius),),
+        labels=tuple(labels),
+        center=(cx, cy),
+        radius=radius,
+    )
+
+
+def balloon_for_frame(
+    designator: NumberedCharacteristic,
+    drawing: FrameDrawing,
+    *,
+    text_height: Quantity = DEFAULT_TEXT_HEIGHT,
+) -> BalloonDrawing:
+    """The balloon for ``designator``, placed above ``drawing``'s left end.
+
+    Every number that decides where a balloon sits lives in this module, beside the frame
+    geometry it has to clear, so an exporter asks for the placement rather than
+    recomputing it from the frame's dimensions and drifting out of step with it.
+
+    Above the left end rather than beside it: a frame grows to the right as datums are
+    added, so anything placed to its right moves when the callout is edited, and anything
+    placed to its left collides with the leader. The left end is the one edge that does
+    not move.
+    """
+    h = _mm_height(text_height)
+    x0, y0 = drawing.origin
+    radius = _BALLOON_RADIUS * h
+    return balloon_drawing(
+        designator,
+        text_height=text_height,
+        origin=(x0 + radius, y0 + drawing.height + _MARK_GAP * h + radius),
     )

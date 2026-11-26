@@ -19,6 +19,12 @@ import math
 
 import pytest
 
+from anvilate.characteristics import Characteristic as CharacteristicRecord
+from anvilate.characteristics import (
+    CharacteristicKind,
+    NumberedCharacteristic,
+    SpecialClass,
+)
 from anvilate.export.dxf import export_feature_control_frame_dxf
 from anvilate.export.fcf import (
     Arc,
@@ -27,6 +33,8 @@ from anvilate.export.fcf import (
     _circled_letter,
     _diameter_glyph,
     _statistical_glyph,
+    balloon_drawing,
+    balloon_for_frame,
     characteristic_symbol,
     frame_drawing,
 )
@@ -499,3 +507,119 @@ def test_the_dxf_places_the_frame_where_it_was_asked_to(tmp_path):
     corners = [p for box in boxes for p in box.get_points("xy")]
     assert min(p[0] for p in corners) == pytest.approx(50.0)
     assert min(p[1] for p in corners) == pytest.approx(25.0)
+
+
+# --- the balloon, and the special mark it carries ---------------------------------------
+#
+# A mark that reaches the accountability table and not the drawing is a mark the shop
+# floor never sees. The number in the balloon is the same number the table and the QIF
+# export quote, so the three documents agree on one identifier.
+
+
+def _numbered(number: int, **marks) -> NumberedCharacteristic:
+    return NumberedCharacteristic(
+        number=number,
+        characteristic=CharacteristicRecord(
+            id="geometric_tolerance:pin_hole:position",
+            kind=CharacteristicKind.GEOMETRIC_TOLERANCE,
+            where="pin_hole",
+            detail="position",
+            description="position of the pin hole",
+            **marks,
+        ),
+    )
+
+
+def test_a_balloon_carries_the_number_and_a_marked_one_also_the_symbol():
+    plain = balloon_drawing(_numbered(12), text_height=H)
+    assert [label.text for label in plain.labels] == ["12"]
+    assert len(plain.strokes) == 1
+    marked = balloon_drawing(
+        _numbered(
+            12,
+            special=SpecialClass.CRITICAL,
+            symbol="◆",
+            reason="customer drawing note 4",
+        ),
+        text_height=H,
+    )
+    assert [label.text for label in marked.labels] == ["12", "◆"]
+
+
+def test_the_symbol_sits_above_the_balloon_and_not_inside_it():
+    """A glyph sharing the circle with the number reads as part of the number."""
+    marked = balloon_drawing(
+        _numbered(7, special=SpecialClass.SIGNIFICANT, symbol="SC", reason="customer scheme"),
+        text_height=H,
+    )
+    number, symbol = marked.labels
+    assert number.center == marked.center
+    assert symbol.center[1] - marked.center[1] > marked.radius, "the symbol overlaps the circle"
+
+
+def test_the_balloon_clears_the_frame_it_belongs_to():
+    """Placed above the frame's left end: the one edge that does not move when datums are
+    added, and clear of the box rather than overlapping it."""
+    frame = _frame()
+    drawing = frame_drawing(frame, text_height=H)
+    balloon = balloon_for_frame(_numbered(3), drawing, text_height=H)
+    x0, y0 = drawing.origin
+    assert balloon.center[1] - balloon.radius > y0 + drawing.height, "the balloon sits on the box"
+    assert balloon.center[0] - balloon.radius == pytest.approx(x0), "it is over the left end"
+    # Adding a datum grows the frame to the right and must not move the balloon.
+    wider = frame_drawing(
+        _frame(datums=(DatumReference(letter="A"), DatumReference(letter="B"))), text_height=H
+    )
+    assert wider.width > drawing.width
+    assert balloon_for_frame(_numbered(3), wider, text_height=H).center == balloon.center
+
+
+def test_the_dxf_carries_the_balloon_when_a_designator_is_given(tmp_path):
+    ezdxf = pytest.importorskip("ezdxf")
+    frame = _frame()
+    designator = _numbered(
+        9, special=SpecialClass.CRITICAL, symbol="◆", reason="customer drawing note 4"
+    )
+    bare = export_feature_control_frame_dxf(
+        frame=frame, path=tmp_path / "bare.dxf", authorization=_AUTH, text_height=H
+    )
+    ballooned = export_feature_control_frame_dxf(
+        frame=frame,
+        path=tmp_path / "ballooned.dxf",
+        authorization=_AUTH,
+        text_height=H,
+        designator=designator,
+    )
+    before = list(ezdxf.readfile(bare).modelspace())
+    after = list(ezdxf.readfile(ballooned).modelspace())
+    # One circle and two texts more than the bare frame, and nothing moved off the layer.
+    assert len(after) == len(before) + 3
+    assert {e.dxf.layer for e in after} == {"GDT"}
+    added_text = [e.dxf.text for e in after if e.dxftype() == "TEXT"]
+    assert added_text[-2:] == ["9", "◆"]
+    circles = [e for e in after if e.dxftype() == "CIRCLE"]
+    assert len(circles) == len([e for e in before if e.dxftype() == "CIRCLE"]) + 1
+
+
+def test_the_dxf_without_a_designator_is_byte_for_byte_what_it_always_was(tmp_path):
+    """The balloon is additive: a caller that does not ask for one sees no change.
+
+    Written as a comparison between two runs rather than against a golden file, because
+    the claim is that passing nothing changes nothing, and a golden file would also fail
+    for an unrelated header edit.
+    """
+    ezdxf = pytest.importorskip("ezdxf")
+    frame = _frame()
+    one = export_feature_control_frame_dxf(
+        frame=frame, path=tmp_path / "a.dxf", authorization=_AUTH, text_height=H
+    )
+    two = export_feature_control_frame_dxf(
+        frame=frame,
+        path=tmp_path / "b.dxf",
+        authorization=_AUTH,
+        text_height=H,
+        designator=None,
+    )
+    assert [e.dxftype() for e in ezdxf.readfile(one).modelspace()] == [
+        e.dxftype() for e in ezdxf.readfile(two).modelspace()
+    ]
