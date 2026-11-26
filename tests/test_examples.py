@@ -9808,3 +9808,34 @@ def test_guardrail_post_base_example_puts_three_kilonewtons_into_two_anchors():
     refusal = namespace["two_bolts_across"]()
     assert "resists no moment about it" in refusal
     _assert_narrates_computed("guardrail_post_base_anchors.py", namespace)
+
+
+def test_roof_cabinet_example_shows_the_edition_tripling_the_force():
+    """The finding: nothing about the cabinet changed and the design force went up 3.3x.
+
+    It is the one thing a reader of a seismic anchorage calculation most needs to know,
+    and the figure the example exists to put a number on. The cap is the second finding:
+    on an ordinary roof-mounted cabinet, Eq. 13.3-2 is what the anchors are actually sized
+    by, not Eq. 13.3-1.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "roof_cabinet_component_force_by_edition.py"))
+    d = namespace["roof_cabinet_component_force_by_edition"]()
+
+    assert d["edition_ratio"] == pytest.approx(10.0 / 3.0, rel=1e-6)
+    assert d["force_2022_n"] > d["force_2016_n"]
+    # The 2022 force is the cap, not the equation: Eq. 13.3-2 is doing the work.
+    assert d["force_2022_uncapped_n"] > d["force_2022_n"]
+    assert d["force_2022_n"] == pytest.approx(1.6 * 4700.0, rel=1e-9)
+    # H_f helps a little and R_mu helps; the component factors are what move it.
+    assert d["height_factor"] > 3.0
+    assert d["ductility_factor"] > 1.3
+    # The vertical term is a rounding error here, because the weight barely resisted.
+    assert d["anchor_tension_n"] > d["anchor_tension_without_vertical_n"]
+    assert d["vertical_term_percent"] < 5.0
+    assert d["weight_share_percent"] < 20.0
+    # Two of four anchors take the tension; all four take the shear.
+    demand = namespace["anchor_demand"](with_vertical=True)
+    in_tension = [a for a in demand.anchors if a.tension.to("N").magnitude > 0]
+    assert len(in_tension) == 2
+    assert {a.shear.to("N").magnitude for a in demand.anchors} == {d["anchor_shear_n"]}
+    _assert_narrates_computed("roof_cabinet_component_force_by_edition.py", namespace)

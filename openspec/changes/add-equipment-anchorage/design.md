@@ -34,27 +34,41 @@ concentrate the moment on one corner, and it also lengthens every lever, so the 
 squares in the denominator grows faster than the lever in the numerator. The first draft
 of the docstring claimed the diagonal was worst; the arithmetic refused it.
 
-## What is blocked: the ASCE force (tasks 1.1, 1.2, 1.3)
+## What was read, and where (tasks 1.1, 1.2, 1.3)
 
-Task 1.1 asks for ASCE 7-16 §13.3.1 and ASCE 7-22 §13.3.1 to be **read**, not recalled.
-They could not be read from here:
+Task 1.1 asks for the two editions' §13.3.1 to be **read**, not recalled. ASCE 7 itself
+still cannot be read from here, and the secondary pages that paraphrase it still disagree
+with each other — several present the 7-16 form under a 7-22 heading. What unblocked this
+was going to the **US-government documents the editions were written from**, which are
+public and were not tried in the first pass:
 
-| Source tried | Result |
+| Source | What it gave |
 | --- | --- |
-| ASCE's own §13.3.1 (amplify.asce.org) | 302 to an authenticated login |
-| FEMA P-2082-1, 2020 NEHRP Provisions (fema.gov) | 403 Access Denied |
-| The same at nibs.org and nehrp.gov | 404, and an expired certificate on the mirror |
-| California HCAI and BSC documents reproducing it | the equations are images, not text |
+| [FEMA P-2082-1, 2020 NEHRP Provisions](https://www.fema.gov/sites/default/files/2020-10/fema_2020-nehrp-provisions_part-1-and-part-2.pdf) | "SECTION 13.3.1 SEISMIC DESIGN FORCES. Replace Section 13.3.1 with the following" — the replacement text ASCE/SEI 7-22 adopted. Eqs. 13.3-1 to 13.3-6, §13.3.1.6's vertical force and §13.3.1.7's non-seismic rule, in full. |
+| [NIST GCR 18-917-43](https://doi.org/10.6028/NIST.GCR.18-917-43) (ATC-120) | ASCE/SEI 7-16's Eq. 13.3-1 restated in its §4.1, and both bounds in its §4.4 and §4.5. Also the archetype tables that pin the arithmetic. |
 
-Secondary sources **disagree**: several pages present the ASCE 7-16 form
-(`a_p`, `R_p`, `1 + 2z/h`) under a 7-22 heading, and the ones that do give the 7-22 form
-differ on the symbol set. Implementing from them would be the exact failure this repo has
-already recorded once — an edition shipped from memory, and a formula that was wrong in
-both of its two errors at once.
+The earlier fema.gov 403 was the site refusing one path, not the document being unavailable.
+The lesson worth keeping: **a copyrighted standard's equation structure usually has a
+public ancestor**, because the NEHRP Provisions and the NIST report behind a code change
+are government work. Looking for the ancestor beats reading the paraphrases.
 
-So the force half waits for a readable primary text. What is built below it does not: the
-statics take the lateral force as declared, whatever its origin, which is what the
-proposal says they should.
+`anvilate.analysis.nonstructural_seismic` implements both forms, each naming its edition on
+every result, under the user-supplied-allowables doctrine: `TabulatedCoefficient` carries a
+value, its symbol and the table it was read from, and a blank citation is refused. H_f and
+R_μ are computed; S_DS, I_p and the table rows are the document's.
+
+**How it is pinned.** NIST GCR 18-917-43 Tables 4-12, 4-13 and 4-14 tabulate Fp/Wp for
+archetype buildings at S_DS = 1.0. The four-storey steel OCBF row reproduces cell for cell
+— 0.80, 0.65, 0.51, 0.37 and the 0.30 floor, each again after the report's Ω_0 = 1.5 — and
+Table 4-13's uncapped 3.21 reproduces too, which pins the equation before any bound is
+applied. Five cells is enough to pin the 0.4 constant, both of H_f's terms, R_μ, and both
+tabulated coefficients at once, because no other combination of them lands on all five.
+
+Two differences from the report are recorded rather than smoothed over. ATC-120 recommended
+a 2.0·S_DS·I_p·W_p cap and the Provisions enacted 1.6, which is what is applied. And the
+report carries the building's R_μ down to z/h = 0, where §13.3.1.2 as enacted sets R_μ = 1.0
+— the two readings land on either side of Eq. 13.3-3's floor, which is why R_μ is the
+caller's and not computed inside the force.
 
 ## What task 2.2 needs that does not exist yet
 

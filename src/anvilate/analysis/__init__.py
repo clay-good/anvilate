@@ -507,6 +507,15 @@ modules:
   demand a concrete or steel anchor capacity is checked against. Plus the sweep for the
   governing plan direction of a clause that says "in any direction", whose answer is
   across the pattern's short side and not, as it looks, the diagonal
+- :mod:`~anvilate.analysis.nonstructural_seismic` — the seismic design force on a piece of
+  equipment, by the edition that governs it. The 2022 form
+  (Fp = 0.4·S_DS·I_p·W_p·(H_f/R_μ)·(C_AR/R_po)) read from the 2020 NEHRP Provisions, the
+  text ASCE/SEI 7-22 adopted, with H_f's tenth-power height term and R_μ = (1.1R/Ω_0)^½
+  floored at 1.3; and the 2016 form beside it, because both editions are in force
+  jurisdiction by jurisdiction. Every tabulated coefficient arrives carrying the table it
+  was read from, since the standard's component tables are copyrighted and none is bundled.
+  Plus the concurrent vertical force no coefficient reduces, and §13.3.1.7's rule that a
+  declared non-seismic case larger than Fp governs the strength
 - :mod:`~anvilate.analysis.dowel_yield` — dowel-type timber connections by the yield limit
   equations (AWC TR12 Table 1-1, the generalized published form of the NDS equations): the six
   Johansen modes of a bolt, lag screw, nail or screw through wood, the unreduced 5% offset
@@ -2563,6 +2572,19 @@ from .noise_figure import (
     noise_factor_from_figure,
     receiver_minimum_detectable_signal,
 )
+from .nonstructural_seismic import (
+    ComponentForce,
+    ComponentForceEdition,
+    ForceBound,
+    LateralLoadCase,
+    TabulatedCoefficient,
+    component_seismic_design_force_asce_7_16,
+    component_seismic_design_force_asce_7_22,
+    component_vertical_seismic_force,
+    governing_lateral_load_case,
+    height_amplification_factor,
+    structure_ductility_reduction_factor,
+)
 from .o_ring import (
     SealCondition,
     SealScreen,
@@ -4046,6 +4068,17 @@ __all__ = [
     "anchor_pattern_demand",
     "DIRECTION_SWEEP_STEPS",
     "governing_anchor_direction",
+    "ComponentForceEdition",
+    "ForceBound",
+    "TabulatedCoefficient",
+    "ComponentForce",
+    "LateralLoadCase",
+    "height_amplification_factor",
+    "structure_ductility_reduction_factor",
+    "component_seismic_design_force_asce_7_16",
+    "component_seismic_design_force_asce_7_22",
+    "component_vertical_seismic_force",
+    "governing_lateral_load_case",
     "archimedes_number",
     "galilei_number",
     "drag_force",

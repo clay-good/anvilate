@@ -1749,7 +1749,11 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # of the population on its own guard rather than on the binder's reach. Its inputs are
     # each refused non-finite and by name in tests/test_anchorage.py. Lower this again only
     # with the same kind of reason written here.
-    assert share >= 0.839, (
+    # 0.839 -> 0.841 on 2026-11-26: the nonstructural-component force module's five
+    # quantity-and-number functions are all reached, including the two that take
+    # TabulatedCoefficient models — the binder builds those. A reader that only ever
+    # ratchets down is a reader that stops being a claim about the surface.
+    assert share >= 0.841, (
         f"the probes reach {len(reached):,} of {len(surface):,} public analysis functions "
         f"({share:.1%}); the gates above are written as claims about the whole surface, so "
         "a drop here is a claim quietly narrowing"
@@ -1823,8 +1827,15 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # finite_lengths).
     # 102 -> 103: governing_anchor_direction sweeps the same pattern, so it takes the same
     # sequence of AnchorPosition and is refused for the same reason.
+    # 103 -> 104: governing_lateral_load_case takes a sequence of LateralLoadCase, and the
+    # comparison it makes is a `max` — which drops a NaN candidate rather than propagating
+    # it, so an unguarded force would have made the governing case silently the wrong one.
+    # Every field of a case is refused non-finite in tests/test_nonstructural_seismic.py
+    # (test_no_field_of_a_load_case_takes_a_non_finite_value), and
+    # test_a_governing_case_is_chosen_even_though_max_drops_a_nan states that the
+    # constructor is the only route to the comparison.
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 103, (
+    assert len(unbuildable) <= 104, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )
