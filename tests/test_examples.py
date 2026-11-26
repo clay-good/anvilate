@@ -9905,3 +9905,38 @@ def test_eurocode_beam_column_example_carries_the_class_through_to_a_resistance(
     # And a class 3 section is refused W_pl rather than answered with it.
     assert "W_el,min" in namespace["class_three_refusal"]()
     _assert_narrates_computed("eurocode_beam_column_resistance.py", namespace)
+
+
+def test_eurocode_buckling_example_shows_the_curve_is_the_design_decision():
+    """The spread between the five curves, and the two methods disagreeing on one section.
+
+    The second cap of the alternative method is the part worth a test: without it the
+    alternative would stay more generous than the general method at every slenderness, and
+    the example prints the point where it binds instead.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "eurocode_member_buckling.py"))
+    d = namespace["eurocode_member_buckling"]()
+
+    # The curves are far apart, and ordered.
+    assert d["curve_a0_at_one"] > d["curve_d_at_one"]
+    assert d["a0_over_d_percent"] == pytest.approx(55.3, abs=0.1)
+    # The column: buckling takes a third off the cross-section resistance.
+    assert d["column_buckling_kn"] < d["column_cross_section_kn"]
+    assert d["column_taken_off_percent"] == pytest.approx(30.6, abs=0.1)
+    # And the gap to the report's printed value is its rounding of chi, under 1%.
+    assert 0 < d["column_rounding_gap_percent"] < 1.0
+    # The beam: same section, same curve, two slendernesses, very different answers.
+    assert d["beam_short_slenderness"] > d["beam_long_slenderness"]
+    assert d["beam_short_chi"] < d["beam_long_chi"]
+    assert d["beam_short_resistance_knm"] < d["beam_long_resistance_knm"] / 3
+    # The two methods take different curves from identical geometry.
+    methods = namespace["methods_disagree"]()
+    assert methods["general"] == "a" and methods["alternative"] == "b"
+    # The alternative is more generous in range, and its second cap eventually binds.
+    rows = namespace["method_comparison"]()
+    assert all(row["alternative"] > row["general"] for row in rows)
+    binding = [r for r in rows if r["alternative"] <= r["second_cap"] + 1e-12]
+    assert binding, "the second cap never binds, so the example does not show it"
+    assert max(r["slenderness"] for r in rows) == 2.0
+    assert rows[-1]["alternative"] == pytest.approx(0.25, abs=1e-9)
+    _assert_narrates_computed("eurocode_member_buckling.py", namespace)

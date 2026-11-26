@@ -100,9 +100,44 @@ caps it at 0,5, and leaving the cap out reports **more** resistance than the cla
   source's conservative value for η's role in the EN 1993-1-5 resistance and the permissive
   end of this trigger, and saying only the first half was wrong.
 
+## What is built (task 2.3)
+
+`anvilate.analysis.en1993_buckling` — §6.3.1 flexural buckling and §6.3.2 lateral-torsional
+buckling: the five European design buckling curves and their imperfection factors, the
+non-dimensional slenderness, the reduction factor χ, both curve-selection tables, and the
+alternative method's own second cap at 1/λ̄_LT².
+
+**Two things it deliberately does not compute.** N_cr is already
+`column.euler_buckling_load`, and a second copy of π²EI/(KL)² would be a second place to be
+wrong. M_cr is not in EN 1993-1-1 at all — it depends on the support conditions, the moment
+diagram and where the load acts relative to the shear centre, through C₁, C₂ and k factors
+from the literature — so it is a declared input, as it is in the source's own examples.
+
+**One function serves two clauses.** The general lateral-torsional method's Φ_LT is the
+column's Φ with α_LT in place of α, so `buckling_reduction_factor` is both and there is no
+near-duplicate beside it. What differs is the curve, and `lateral_torsional_curve` carries
+both tables: a rolled I with h/b ≤ 2 is curve *a* under §6.3.2.2 and curve *b* under
+§6.3.2.3. The alternative method is not the general one rearranged, and which method a
+design uses has to be declared rather than inferred.
+
+**Anchored on three published results**, and the pair is the point: an HEB 340 column on
+curve c at λ̄ = 0,75 (Φ = 0,92, χ = 0,69, N_b,Rd = 4186,2 kN), and the same IPE 400 beam on
+curve b worked at M_cr = 164,7 kNm and at 1778,8 kNm. One point on a curve can be hit by a
+wrong curve with a compensating error; two on the same curve cannot.
+
+**The source rounds at every step, and one cell needs both of its roundings.** At
+λ̄_LT = 0,51 the module computes Φ_LT = 0,68275 and χ_LT = 0,8798, which rounds to 0,88 — the
+report prints 0,89, reachable only by rounding Φ_LT to 0,68 first and computing from that
+(0,885). The test says so explicitly rather than widening a tolerance until both fit.
+
+**And two more claims of my own that the arithmetic refused.** The docstring first said
+curve a₀ keeps "about 40% more" than curve d at λ̄ = 1; it is 55%. And the example's beam
+figures were quoted a digit off in three places. Both were caught by the narrated-figure
+gate and by asserting the spread rather than describing it.
+
 ## What is not built
 
-Tasks 1.2 to 1.4, 2.3, 2.4, 3.2, 3.3 and 4.1 to 4.4 are untouched, and 1.1 and 2.5 wait on
+Tasks 1.2 to 1.4, 2.4, 3.2, 3.3 and 4.1 to 4.4 are untouched, and 1.1 and 2.5 wait on
 EN 1993-1-1:2022. §6.2.9.1's second condition for neglecting the axial reduction — the one
 on the web's own share — is not implemented either: the source does not state it, so it was
 not read, and `axial_reduction_negligible` says in its docstring that a False answer means

@@ -130,6 +130,13 @@ modules:
   reduction, §6.2.9.1's axial reduction of the plastic moment with its a ≤ 0,5 cap, and
   §6.2.9's biaxial sum. Every partial factor is an argument with no default, because it is
   a nationally determined parameter
+- :mod:`~anvilate.analysis.en1993_buckling` — and what the MEMBER can carry: EN 1993-1-1
+  §6.3.1 flexural buckling and §6.3.2 lateral-torsional buckling. The five European design
+  buckling curves and their imperfection factors, the non-dimensional slenderness, the
+  reduction factor χ (which the lateral-torsional general method shares verbatim), both
+  curve-selection tables — a rolled I with h/b ≤ 2 is curve *a* generally and curve *b*
+  alternatively — and the alternative method's own second cap at 1/λ̄_LT². N_cr comes from
+  `column.euler_buckling_load` and M_cr is declared, because EN 1993-1-1 gives neither
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   the minimum section second moment a load requires, the eccentric-load secant
   stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
@@ -1984,6 +1991,19 @@ from .embodied_carbon import (
     embodied_carbon_scorecard,
     material_loss_mass,
     with_declared_factors,
+)
+from .en1993_buckling import (
+    EuropeanBucklingCurve,
+    buckling_may_be_neglected,
+    buckling_reduction_factor,
+    curve_imperfection_factor,
+    flexural_buckling_resistance,
+    lateral_torsional_buckling_resistance,
+    lateral_torsional_curve,
+    lateral_torsional_reduction_rolled,
+    lateral_torsional_slenderness,
+    non_dimensional_slenderness,
+    reference_slenderness,
 )
 from .en1993_classification import (
     FlangeTip,
@@ -4415,6 +4435,17 @@ __all__ = [
     "reduced_plastic_moment_major",
     "reduced_plastic_moment_minor",
     "biaxial_bending_utilisation",
+    "EuropeanBucklingCurve",
+    "curve_imperfection_factor",
+    "reference_slenderness",
+    "non_dimensional_slenderness",
+    "buckling_reduction_factor",
+    "flexural_buckling_resistance",
+    "buckling_may_be_neglected",
+    "lateral_torsional_curve",
+    "lateral_torsional_slenderness",
+    "lateral_torsional_reduction_rolled",
+    "lateral_torsional_buckling_resistance",
     "axial_stress",
     "axial_elongation",
     "axial_stiffness",

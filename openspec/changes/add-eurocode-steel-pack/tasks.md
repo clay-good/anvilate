@@ -32,7 +32,12 @@ Depends on `add-standards-effectivity` (design basis and edition) and
       published results, with the source's own Eq. (1.27) typo recorded and recovered from
       its Eq. (1.28). §6.2.9.1(4)'s second condition is not implemented: the source does not
       state it)
-- [ ] 2.3 Flexural buckling by the cited curves; lateral-torsional buckling
+- [x] 2.3 Flexural buckling by the cited curves; lateral-torsional buckling
+      (`anvilate.analysis.en1993_buckling`: the five curves and their α, λ̄, χ, N_b,Rd, both
+      lateral-torsional methods and both curve-selection tables, and the alternative
+      method's second cap at 1/λ̄_LT². N_cr reuses `column.euler_buckling_load`; M_cr is
+      declared because EN 1993-1-1 does not give it. Anchored on a worked column and the
+      same beam worked at two critical moments)
 - [ ] 2.4 Bending and axial interaction by the declared method
 - [ ] 2.5 Edition differences registered where the two generations diverge
 
