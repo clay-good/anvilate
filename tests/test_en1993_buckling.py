@@ -446,6 +446,16 @@ def test_the_eurocode_docs_pages_figures_are_the_modules_own():
     assert f"d/t ≤ {90 * epsilon * epsilon:.2f}, not ≤ {90 * epsilon:.2f}" in page
     assert tubular_section_class(diameter_ratio=60.0, epsilon=epsilon) is SectionClass.CLASS_4
 
+    # The corpus size the page quotes, read from the corpus rather than from the page.
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from test_en1993_golden import WORKED_EXAMPLES
+
+    assert f"There are {len(WORKED_EXAMPLES)}, spread across" in page, (
+        f"the page's corpus count has drifted; the corpus holds {len(WORKED_EXAMPLES)}"
+    )
+
     # And the two statements about the lateral-torsional methods.
     stocky = {"height": Q("300 mm"), "width": Q("300 mm"), "rolled": True}
     assert lateral_torsional_curve(**stocky) is EuropeanBucklingCurve.A

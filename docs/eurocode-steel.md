@@ -54,6 +54,27 @@ and [`examples/eurocode_member_buckling.py`](../examples/eurocode_member_bucklin
 | N_cr | Computed, by `anvilate.analysis.column.euler_buckling_load`, which is already π²EI/(KL)². |
 | ε, H_f, R_μ, χ, χ_LT, ρ | Computed, from the clause. |
 
+## What the pack is checked against
+
+The three modules are read from a public document, and they are checked against that
+document's own worked answers. `tests/test_en1993_golden.py` is the index of those answers:
+one row per figure the report prints, naming the section it comes from, held to the number
+of decimal places that section prints it to. There are 32, spread across classification,
+resistance and buckling, and a reviewer asking what the pack is anchored on can read that
+one table.
+
+The tolerance on each row is derived from the printed precision rather than chosen, so a row
+cannot be made to pass by widening its band — the band is a claim about what the source
+prints, and a separate test checks that claim.
+
+Two things the corpus deliberately does not do. Every row is the **2005** edition: the report
+predates EN 1993-1-1:2022, and no public document reproduces the newer clauses, so the pack
+makes no claim about them. And a worked χ printed to two decimals cannot pin the buckling
+curve's imperfection factor to the two decimals its own table publishes — shifting curve C's
+α from 0,49 to 0,50 leaves the printed answer untouched. So the five curve constants are
+pinned by value against Table 6.1 directly, and the corpus records that this is where that
+job is done.
+
 ## The annex, declared once
 
 The partial factors and the two parameters of the §6.3.2.3 method are nationally determined.

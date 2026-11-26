@@ -6,6 +6,7 @@ import csv
 import io
 import zipfile
 from math import inf
+from types import SimpleNamespace
 from xml.etree import ElementTree
 
 import pytest
@@ -573,3 +574,50 @@ def test_every_label_on_the_free_body_stays_on_the_page():
 
 def test_a_factor_set_renders_its_name_and_its_source():
     assert str(factor_set("14-cfr-25")) == "14-cfr-25 (14 CFR Part 25 (eCFR, current 2026-10-15))"
+
+
+def test_the_report_sorts_every_status_the_row_type_allows():
+    """`MarginRow.status` is the whole `CheckStatus`, so the sort must be total over it.
+
+    The first sort key used to be a mapping from status to rank that held three of the six
+    members, read in one place and only ever compared against zero — a question with two
+    answers, answered by a partial ranking. A row carrying WARNING, OVER_MARGIN or
+    OUT_OF_DEPTH raised `KeyError` while sorting the report. `_row` produces only PASS, FAIL
+    and NOT_EVALUATED today, so nothing reached it; the row type did not say so.
+
+    This drives the real key over every member, so a status added to `CheckStatus` is
+    covered the day it appears rather than the day something constructs it.
+    """
+    from anvilate.margin_of_safety import _evaluated_first
+
+    # Written out rather than derived from the expression under test, so this disagrees with
+    # a wrong implementation instead of restating it.
+    evaluated = {
+        CheckStatus.PASS,
+        CheckStatus.FAIL,
+        CheckStatus.WARNING,
+        CheckStatus.OVER_MARGIN,
+        CheckStatus.OUT_OF_DEPTH,
+    }
+    assert evaluated | {CheckStatus.NOT_EVALUATED} == set(CheckStatus), (
+        "a status was added to CheckStatus and this partition was not updated: "
+        f"{sorted(s.name for s in set(CheckStatus) - evaluated - {CheckStatus.NOT_EVALUATED})}"
+    )
+    for status in CheckStatus:
+        assert _evaluated_first(SimpleNamespace(status=status)) is (status in evaluated), status
+
+
+def test_unevaluated_rows_still_come_first():
+    """The ordering the old mapping produced, pinned so the rewrite did not change it.
+
+    Ranking NOT_EVALUATED at zero and comparing `!= 0` sorted False before True, which put
+    unevaluated rows at the top of the report. That is deliberate — a row nobody could
+    evaluate is the one a reviewer must look at — and it is the kind of behavior a tidy-up
+    silently inverts.
+    """
+    from anvilate.margin_of_safety import _evaluated_first
+
+    statuses = [CheckStatus.PASS, CheckStatus.NOT_EVALUATED, CheckStatus.FAIL]
+    rows = [SimpleNamespace(status=s) for s in statuses]
+    rows.sort(key=_evaluated_first)
+    assert [row.status for row in rows][0] is CheckStatus.NOT_EVALUATED

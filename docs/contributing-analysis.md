@@ -1079,3 +1079,40 @@ The gate is in `test_examples.py` and reads the *printed text*, not the objects,
 objects were always right: a summary claiming three checks must have three entry lines above
 it. It also asserts that at least 150 examples print a card at all, so a change to the
 summary's wording fails loudly instead of quietly gating nothing.
+
+## A map that has to decide, and the three drafts of its gate
+
+`scorecard._STATUS_RANK` carries the house rule in a comment on itself. It replaced an
+if-chain whose bare `return 0` handed `OVER_MARGIN` the passing rung, so an over-engineered
+check lost every tie-break and the card named the wrong governing one. The repair was to make
+the map **total over its enum** and let a new member be a loud `KeyError` at the one place
+that has to choose. Two other modules copied the comment.
+
+A convention held by comments is not held. `margin_of_safety._STATUS_ORDER` broke it: three
+of six statuses, subscripted once, and the result compared only against zero — so a
+two-answer question was being answered by a partial ranking, with `KeyError` waiting for the
+first row carrying any of the other three. `_row` could not produce one, but `MarginRow.status`
+is typed as the whole enum, so a row built directly, or one new branch, would have found it.
+It is now the named function `_evaluated_first`, which is what the sort actually wanted.
+
+**The census is worth more than the fix, and getting it right took three drafts.** Each draft
+accused correct code, and each time the code was right and the detector was wrong:
+
+| Draft | What it flagged | The guard it could not see |
+| --- | --- | --- |
+| 1 | every partial enum-keyed map, 26 of them | most are *membership* sets — `_CARRIES_TANGENT_PLANE` is a set of names and partial by nature |
+| 2 | 8 maps that are subscripted | a validator refusing with `support not in _MOMENT_CHECKS` makes the later subscript safe |
+| 3 | 5 maps | an explicit branch — `member.support is Support.OVERHANG` dispatches away before any `Support`-keyed map is read |
+
+The fourth draft passes with **no exemptions at all**, which is the result worth having: the
+gate is not an exemption list wearing a gate's clothes.
+
+**The relaxation was checked against the bug before being believed.** Each refinement makes
+the census accuse less, and the third one — excusing any member the module compares against
+by identity — could easily have excused the real defect too. It does not:
+`margin_of_safety` compares no `CheckStatus` member by identity anywhere, so `_STATUS_ORDER`'s
+three gaps stay uncovered. That was verified by putting the bug back and watching the census
+fail on it. A gate relaxed until it passes is worse than no gate, because it reports safety.
+
+The detector's four shapes are pinned directly in `test_the_detector_tells_the_four_shapes_apart`,
+since none of them is visible in the census's own green result.

@@ -76,3 +76,42 @@ The proposal says Anvilate "has the last step (the structural pack's cast-in anc
 breakout and pullout screens)". It does not: there is no breakout or pullout screen in
 the tree today. Task 2.2 is therefore a build, not a wiring-up, and it is a concrete
 capacity under ACI 318 Chapter 17 with the same copyright question as the force.
+
+## Task 2.2: why no breakout or pullout screen is here yet
+
+**Searched 2026-11-26 and stopped.** Concrete breakout and pullout need ACI 318 Chapter 17,
+and the public-ancestor route that unblocked the ASCE 7 component force and EN 1993-1-1
+Table 5.2 does not reach it.
+
+What was tried:
+
+- **The originating paper.** Fuchs, Eligehausen and Breen, "Concrete Capacity Design (CCD)
+  Approach for Fastening to Concrete," *ACI Structural Journal* 92(1), 1995, pp. 73–93, is
+  the method Chapter 17 is built on. It is paywalled, and no free full text was found. Its
+  abstract and the secondary literature give the model's shape — a cone at about 35° to the
+  surface, strength scaling with the 1,5 power of effective embedment — but not the
+  coefficients as the code adopted them.
+- **A government document that reproduces the clause.** This is what worked for ASCE 7
+  (FEMA P-2082-1) and EN 1993-1-1 (the JRC report). Searches across UFC, NUREG and NIST GCR
+  returned nothing that reproduces Chapter 17's equations. ACI 349, the nuclear companion
+  that an NRC document might have quoted, is itself paywalled.
+
+**Why the freely available figures were not used anyway.** Commercial calculator pages do
+state the equation, and they disagree: one gives k_c = 24 for cast-in and 17 for
+post-installed anchors, another 17 and 10. The second pair is the SI form of the same
+equation, so at least one page has mixed unit systems while presenting the result as
+US-customary. Picking between them would mean guessing which page converted correctly, and
+a screen whose coefficient cannot be cited to the edition it claims is worse than no screen:
+it would pass this repo's citation gate while resting on a calculator page.
+
+**What would unblock it**, in order of preference:
+
+1. ACI 318-19 Chapter 17 itself, or ACI 349.2R, read directly.
+2. A government or standards-body document that reproduces the clause, found by a narrower
+   search than the two above — a specific UFC number rather than the series.
+3. The owner stating the coefficients and the edition they come from, which the module would
+   then carry as a declared reference the way `TabulatedCoefficient` already does for the
+   ASCE 7 tables.
+
+Until one of those, `frame_anchor_demand` stops at the per-anchor demand and the capacity
+side stays out. That boundary is deliberate and is stated on the module's own surface.

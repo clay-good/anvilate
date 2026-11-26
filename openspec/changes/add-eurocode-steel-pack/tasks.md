@@ -60,7 +60,18 @@ Depends on `add-standards-effectivity` (design basis and edition) and
 
 ## 4. Proof
 
-- [ ] 4.1 Golden tests from published worked examples, re-derived, per edition
+- [x] 4.1 Golden tests from published worked examples, re-derived, per edition
+      (`tests/test_en1993_golden.py`: 32 published figures from the JRC report, each row
+      naming its section and held to the number of decimals that section prints — the band
+      is derived from the printed precision, not written down, so it cannot be widened to
+      make a row pass. A meta-test exercises that. Covers all three modules, with a floor
+      per module. **One edition only**: every row is the 2005 edition, because the 2022
+      edition is behind 1.1's blocker — the JRC report predates it and no public document
+      reproduces its clauses. The per-edition half of this task is open with 1.1.
+      Also records what the corpus does *not* prove: two decimals of χ cannot resolve the
+      imperfection factor to the two decimals its own table publishes, so the curve
+      constants are pinned by value separately. Found by mutating the table and watching
+      every worked row go on passing.)
 - [ ] 4.2 Shared limit states registered once with both code implementations
 - [ ] 4.3 Sample specs: a base plate, a gusset and a beam under a Eurocode design basis
 - [ ] 4.4 A docs page for the Eurocode 3 pack: declaring the design basis and the annex

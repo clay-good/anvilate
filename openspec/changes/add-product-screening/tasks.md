@@ -25,7 +25,22 @@ reuses performance budgets, constraint topology, keepouts and the check dependen
       not derive. A bearing with no mounting is not screened on a direction nobody stated;
       an envelope is a box and a box has no axis. Being fed is not a verdict: a rating life
       still wants the speed and the life, and the entry now asks for those rather than
-      saying the product states no load. Catalog parts' own screens are not fed yet)
+      saying the product states no load.
+
+      The question "which catalog parts are still not fed?" is now answered by a gate rather
+      than by reading the two feeding tables: a census over `FAMILY_RATINGS` requires every
+      family whose rating reads a force to be in `_PATH_RATED`, in `_AXIS_RATED`, or in a
+      list of stated exemptions. It found exactly one unfed family, **gas_spring**, and that
+      one is a decision rather than a gap — a gas spring's rating is its force along its own
+      axis and no document says which way the spring points, so the vertical path force is
+      not the number its rating rates. Reusing `screening.mountings.axis` was rejected:
+      that field means the axis a bearing turns about, and one field with two meanings per
+      family stops being readable. The gate reads both directions, so an exemption whose
+      family is renamed, stops reading a force, or becomes fed fails too, and a third test
+      adds a force-reading family to prove the census refuses it.
+
+      **Open**: a declaration of the direction a gas spring acts along, which would let it be
+      fed the way a bearing is)
 
 - [x] 1.5 These checks reach a user and an agent
       (`product_screening` was called from tests and nothing else: no shipped surface ran

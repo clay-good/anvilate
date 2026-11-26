@@ -6364,3 +6364,182 @@ def test_the_yaml_nesting_limit_is_stated_and_does_not_depend_on_the_caller(wrap
         for deeper in (MAX_YAML_DEPTH + 1, 4 * MAX_YAML_DEPTH):
             with pytest.raises(NestingError, match="nests deeper"):
                 from_below(frames, wrap(deeper))
+
+
+#: Enum-keyed maps that are subscripted somewhere and are deliberately NOT total, with the
+#: reason. Empty, and meant to stay that way: `scorecard._STATUS_RANK` states the house rule
+#: on itself — a map that has to decide should raise `KeyError` on a member nobody has
+#: thought about, rather than answer with whatever the gaps fall through to.
+_PARTIAL_ON_PURPOSE: dict[str, str] = {}
+
+
+def _unguarded_subscripts(tree: ast.AST) -> set[str]:
+    """Names this module reads with ``name[...]`` and never membership-tests.
+
+    Two refinements, both found by pointing the first draft of this census at the package and
+    reading what it accused rather than believing it:
+
+    Membership (``x in name``) and iteration are not subscripts. A map read only to ask
+    whether something is in it is a set of names, and such a set is partial by its nature —
+    that is the whole point of `_CARRIES_MATERIAL_CONDITION` and its neighbours.
+
+    And a map that is *both* membership-tested and subscripted is this repo's ordinary idiom
+    for a partial dispatch: a validator refuses the members the map does not cover, and the
+    subscript downstream is then safe. `packs.structural._MOMENT_CHECKS` is exactly that —
+    `support not in _MOMENT_CHECKS` refuses at construction, so the later
+    `_MOMENT_CHECKS[member.support]` cannot raise. Flagging those was the first draft's
+    mistake, and it accused six maps that are correct.
+
+    The third refinement is the same mistake in another shape. A partial map is also safe
+    behind an explicit branch on the member it lacks: `packs.structural` dispatches
+    `member.support is Support.OVERHANG` to its own pair of functions before any of the four
+    `Support`-keyed maps is read, and `export.fcf` sends `FrameModifier.DIAMETER` and
+    `.STATISTICAL` down their own arms and subscripts only for the rest. So a member the
+    module compares against by identity has been thought about, which is what the house rule
+    actually asks for.
+
+    That refinement was checked against the bug this census was written for before being
+    believed: `margin_of_safety` compares no `CheckStatus` member by identity anywhere, so
+    `_STATUS_ORDER`'s three gaps stay uncovered and the census still accuses it. A relaxation
+    that also hid the one true positive would have left a gate that passes and proves
+    nothing.
+
+    Returns the ungated names and the ``Enum.MEMBER`` spellings the module branches on.
+    """
+    subscripted: set[str] = set()
+    tested: set[str] = set()
+    handled: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+            subscripted.add(node.value.id)
+        elif isinstance(node, ast.Compare):
+            for op, comparator in zip(node.ops, node.comparators, strict=True):
+                if isinstance(op, (ast.In, ast.NotIn)) and isinstance(comparator, ast.Name):
+                    tested.add(comparator.id)
+                elif isinstance(op, (ast.Is, ast.IsNot, ast.Eq, ast.NotEq)) and isinstance(
+                    comparator, ast.Attribute
+                ):
+                    if isinstance(comparator.value, ast.Name):
+                        handled.add(f"{comparator.value.id}.{comparator.attr}")
+    return subscripted - tested, handled
+
+
+def test_every_subscripted_enum_keyed_map_is_total_over_its_enum():
+    """A map that has to decide answers for every member of the enum it is keyed on.
+
+    `scorecard._STATUS_RANK` carries the reasoning in full: it replaced an if-chain whose
+    bare `return 0` gave `OVER_MARGIN` the passing rung, so an over-engineered check lost
+    every tie-break and the card named the wrong governing check. The repair was to make the
+    map total and let a new member be a loud `KeyError` at the one place that has to choose.
+
+    Three modules now carry a comment saying their map is total for that reason, which is a
+    convention held by comments. This holds it by a gate. `margin_of_safety._STATUS_ORDER`
+    is what the gate was written for: three of six statuses, subscripted once, and compared
+    only against zero — a two-answer question answered by a partial ranking, with `KeyError`
+    waiting for the first row that carried any of the other three.
+    """
+    import enum
+    import importlib
+    import pkgutil
+
+    import anvilate
+    from conftest import library_sources
+
+    subscripted: dict[str, tuple[set[str], set[str]]] = {}
+    for path, tree in library_sources():
+        module = "anvilate." + str(path.with_suffix("")).split("src/anvilate/")[1].replace("/", ".")
+        subscripted[module.removesuffix(".__init__")] = _unguarded_subscripts(tree)
+
+    modules = [anvilate]
+    for found in pkgutil.walk_packages(anvilate.__path__, "anvilate."):
+        try:
+            modules.append(importlib.import_module(found.name))
+        except Exception:  # pragma: no cover - a module that cannot import is another test
+            continue
+
+    checked, offenders = 0, []
+    for module in modules:
+        reads, handled = subscripted.get(module.__name__, (set(), set()))
+        for name, value in vars(module).items():
+            if name.startswith("__") or not isinstance(value, dict) or not value:
+                continue
+            kinds = {type(key) for key in value}
+            if len(kinds) != 1:
+                continue
+            kind = kinds.pop()
+            if not (isinstance(kind, type) and issubclass(kind, enum.Enum)):
+                continue
+            if name not in reads:
+                continue  # membership only, which is a set of names and may be partial
+            checked += 1
+            missing = sorted(
+                member.name
+                for member in kind
+                if member not in value and f"{kind.__name__}.{member.name}" not in handled
+            )
+            if missing and name not in _PARTIAL_ON_PURPOSE:
+                offenders.append(f"{module.__name__}.{name} keyed on {kind.__name__} is "
+                                 f"missing {missing}")  # fmt: skip
+
+    assert checked >= 8, (
+        f"the census found only {checked} ungated enum-keyed maps; it has stopped looking"
+    )
+    assert not offenders, (
+        "these maps have to produce a value for any member of their enum and do not cover "
+        "it, so a member nobody thought about is a KeyError in production rather than at "
+        "review: " + "; ".join(offenders)
+    )
+
+
+def test_the_purpose_list_is_about_maps_that_are_still_partial():
+    """The other direction, so an excuse cannot outlive the map it excuses."""
+    import enum
+    import importlib
+
+    for qualified, reason in _PARTIAL_ON_PURPOSE.items():
+        module_name, _, name = qualified.rpartition(".")
+        module = importlib.import_module(module_name)
+        value = getattr(module, name, None)
+        assert isinstance(value, dict) and value, f"{qualified} is excused and is not a map"
+        kind = type(next(iter(value)))
+        assert issubclass(kind, enum.Enum), qualified
+        assert [m for m in kind if m not in value], (
+            f"{qualified} is excused from being total and now is total"
+        )
+        assert len(reason) > 80, f"{qualified}'s reason is too short to be one"
+
+
+def test_the_detector_tells_the_four_shapes_apart():
+    """`_unguarded_subscripts` on each shape it has to distinguish.
+
+    The census above is only as good as this function, and it went through three drafts —
+    each one accusing correct code until the guard it could not see was added. Those three
+    refinements are what this pins, because each is invisible in the census's own result: a
+    detector that quietly stopped recognising the membership guard would make the census
+    fail on six correct maps, and one that over-generalised the identity guard would make it
+    pass on the bug it exists for.
+    """
+    ungated, _ = _unguarded_subscripts(ast.parse("M = {}\nx = M[k]\n"))
+    assert ungated == {"M"}, "a bare subscript is the shape the census is looking for"
+
+    ungated, _ = _unguarded_subscripts(ast.parse("M = {}\nif k in M:\n    x = M[k]\n"))
+    assert ungated == set(), "a membership guard makes a partial map safe"
+
+    ungated, _ = _unguarded_subscripts(ast.parse("M = {}\nif k not in M:\n    raise E\nx = M[k]"))
+    assert ungated == set(), "a refusing membership guard is the repo's usual idiom"
+
+    _, handled = _unguarded_subscripts(
+        ast.parse("if m is Support.OVERHANG:\n    f()\nelse:\n    x = M[m]\n")
+    )
+    assert handled == {"Support.OVERHANG"}, "a branch on the member counts as thinking of it"
+
+    # Equality and negation are the same thought, and both appear in the package.
+    _, handled = _unguarded_subscripts(ast.parse("if m != Frame.DIAMETER:\n    pass\n"))
+    assert handled == {"Frame.DIAMETER"}
+
+    # A comparison against something that is not Enum.MEMBER must not excuse anything: this
+    # is the over-generalisation that would have hidden the bug the census was written for.
+    _, handled = _unguarded_subscripts(ast.parse("if a.b.c is d.e.f:\n    pass\n"))
+    assert handled == set(), "only a plain Enum.MEMBER spelling is a guard"
+    _, handled = _unguarded_subscripts(ast.parse("if x is None:\n    pass\n"))
+    assert handled == set()

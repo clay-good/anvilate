@@ -228,3 +228,26 @@ the flow and the required output's life.
 
 Not yet built: side connections in the load path, catalog parts' own screens fed their
 loads, and fastener and tool counts.
+
+## Which bought parts get the load they carry
+
+A purchased component's rating is only screened against the product's load path when the
+force the path delivers is the force that rating rates. Four families get it today, a ball
+and a roller bearing sharing one rule:
+
+| Family | What it is fed | How the direction is known |
+| --- | --- | --- |
+| Caster | the load its body carries | a caster is rated through its bottom contact |
+| Linear guide | the load its carriage carries | a carriage on a rail lying on its support |
+| Ball and roller bearing | the same load, as an equivalent load | `screening.mountings` says which axis it turns about; on a vertical one the force is a thrust and the entry says so rather than screening it |
+
+**A gas spring is not fed, deliberately.** Its rating is its force along its own axis, and a
+product says nowhere which way the spring points — standing upright the path's vertical force
+is its axial force, and assisting a lid it is not. Screening the rating against that number
+would be screening it against something it does not rate. Declaring the direction a gas
+spring acts along would unblock it, and it would then be fed the way a bearing is.
+
+That list is held by a gate rather than by this page: a census over the component registry
+requires every family whose rating reads a force to be fed from the path or to appear among
+the stated exemptions, so a family added with a force rating fails until someone decides
+which it is. The gate reads the exemptions too, so one whose reason has expired fails.

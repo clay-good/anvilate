@@ -1541,3 +1541,96 @@ def test_a_mounting_states_one_axis_and_where_it_came_from():
     del document["screening"]["mountings"][0]["source"]
     with pytest.raises(ValueError, match="source"):
         parse_product(document)
+
+
+#: Families whose rating reads a force, which the product's vertical load path could in
+#: principle deliver, and which are deliberately **not** fed from it — each with the reason
+#: and what would change it. A family here is a stated decision, not an oversight.
+_NOT_FED_FROM_THE_PATH = {
+    "gas_spring": (
+        "a gas spring's rating is its force along its own axis, and a product says nowhere "
+        "which way the spring points. The vertical force the path delivers is its axial "
+        "force only if it stands upright, and a spring assisting a lid rarely does. Feeding "
+        "the path force in regardless would screen the rating against a number that is not "
+        "the one it rates. Reusing `screening.mountings.axis` was considered and rejected: "
+        "for a bearing that field means the axis it turns about, and giving one field a "
+        "second meaning for a second family is how a declaration stops being readable. "
+        "Unblocked by a declaration of the direction a gas spring acts along, which would "
+        "then be fed the same way `_axis_rated` feeds a bearing."
+    ),
+}
+
+
+def test_every_force_reading_family_is_either_fed_from_the_path_or_excused():
+    """A purchased family whose rating reads a force gets the load it carries, or a reason.
+
+    `_PATH_RATED` and `_AXIS_RATED` are two short dicts against a registry of families, and
+    the failure they invite is silent: a family added with a force rating is simply never
+    fed the load its own body carries, and no test notices, because nothing asserts the
+    relationship between the two tables and the registry.
+
+    So this reads the registry and requires every force-reading family to be in one of the
+    two feeding tables or in `_NOT_FED_FROM_THE_PATH` with its reason written down. A new
+    family fails here until someone decides which it is, which is the point.
+    """
+    from anvilate.components import FAMILY_RATINGS
+    from anvilate.product_screening import _AXIS_RATED, _PATH_RATED
+
+    force_reading = {
+        family
+        for family, (_, reads) in FAMILY_RATINGS.items()
+        if any(dimension == "[force]" for dimension in reads.values())
+    }
+    assert len(force_reading) >= 5, (
+        f"the census found only {sorted(force_reading)}; it has stopped looking"
+    )
+    accounted = set(_PATH_RATED) | set(_AXIS_RATED) | set(_NOT_FED_FROM_THE_PATH)
+    unaccounted = sorted(force_reading - accounted)
+    assert not unaccounted, (
+        "these families' ratings read a force and nothing feeds them the load their body "
+        f"carries, nor says why: {unaccounted}"
+    )
+
+
+def test_the_excuses_are_still_about_families_that_exist_and_still_read_a_force():
+    """The other direction of the gate above, which is the half that rots.
+
+    An exemption outlives its reason: the family is renamed, or gains a declaration that
+    would let it be fed, or stops reading a force at all — and the entry sits there excusing
+    something that is no longer true. Each one must still name a real family that still
+    reads a force and is still not in either feeding table.
+    """
+    from anvilate.components import FAMILY_RATINGS
+    from anvilate.product_screening import _AXIS_RATED, _PATH_RATED
+
+    for family, reason in _NOT_FED_FROM_THE_PATH.items():
+        assert family in FAMILY_RATINGS, f"{family} is excused and is not a family"
+        reads = FAMILY_RATINGS[family][1]
+        assert any(dimension == "[force]" for dimension in reads.values()), (
+            f"{family} is excused from being fed a force and no longer reads one"
+        )
+        assert family not in _PATH_RATED and family not in _AXIS_RATED, (
+            f"{family} is both fed and excused from being fed"
+        )
+        # A reason is the whole value of the exemption, so it has to say something: what the
+        # rating actually rates, and what would unblock it.
+        assert len(reason) > 200, f"{family}'s reason is too short to be one"
+        assert "Unblocked by" in reason, f"{family}'s reason names no way out"
+
+
+def test_a_family_added_with_a_force_rating_would_fail_the_gate():
+    """The premise of the census, exercised rather than asserted.
+
+    The gate is only worth having if a new force-reading family actually trips it. This adds
+    one to the registry, confirms the census refuses it, and puts the registry back.
+    """
+    from anvilate.components import FAMILY_RATINGS
+
+    assert "shock_absorber" not in FAMILY_RATINGS
+    FAMILY_RATINGS["shock_absorber"] = ((), {"load": "[force]"})
+    try:
+        with pytest.raises(AssertionError, match="shock_absorber"):
+            test_every_force_reading_family_is_either_fed_from_the_path_or_excused()
+    finally:
+        del FAMILY_RATINGS["shock_absorber"]
+    test_every_force_reading_family_is_either_fed_from_the_path_or_excused()

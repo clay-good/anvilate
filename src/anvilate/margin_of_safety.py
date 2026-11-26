@@ -831,7 +831,17 @@ class RequiredTest(StatableModel):
     factor_set: Named
 
 
-_STATUS_ORDER = {CheckStatus.NOT_EVALUATED: 0, CheckStatus.FAIL: 1, CheckStatus.PASS: 2}
+def _evaluated_first(row: MarginRow) -> bool:
+    """Whether this row was evaluated, which is what the report sorts on first.
+
+    This was a mapping from each status to a rank, read in one place and only ever compared
+    against zero — so it ranked three of `CheckStatus`'s six members while answering a
+    question with two answers. A row carrying one of the other three raised `KeyError` in
+    the sort. `_row` cannot produce one today, but `MarginRow.status` is typed as the whole
+    enum, so a row built directly, or a new branch in `_row`, would have found it.
+    """
+    return row.status is not CheckStatus.NOT_EVALUATED
+
 
 _COLUMNS = (
     "subsystem",
@@ -1413,7 +1423,7 @@ def margin_table(
                 rows.append(row)
     rows.sort(
         key=lambda row: (
-            _STATUS_ORDER[row.status] != 0,
+            _evaluated_first(row),
             row.margin if row.margin is not None else 0.0,
             row.check,
             row.limit.value,
