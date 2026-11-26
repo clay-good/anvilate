@@ -40,7 +40,7 @@ export-gating.md | Getting the answer out | evidence-bundle, headless-cli, mcp-t
 export-targets.md | Getting the answer out | combinations, headless-cli | -
 failure-mode-coverage.md | Deciding what the answer is worth | dfm-rules, headless-cli, published-contracts, spec-screening | -
 fitness-for-service-screening.md | Screening by discipline | example-highlights | -
-frame-analysis.md | Deciding what the answer is worth | cae-handoff, product-screening | -
+frame-analysis.md | Deciding what the answer is worth | cae-handoff, equipment-anchorage, product-screening | -
 geotechnical-screening.md | Screening by discipline | nothing | -
 headless-cli.md | Start here | README, mcp-tool-contracts, quality-interchange, quickstart, spec-screening | -
 hot-rolled-steel.md | Screening by discipline | example-highlights | -

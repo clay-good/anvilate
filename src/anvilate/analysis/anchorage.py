@@ -46,6 +46,7 @@ load (nothing resists the moment), and a lateral force with no direction.
 from __future__ import annotations
 
 from math import cos, hypot, isfinite, pi, sin
+from typing import Any
 
 from pydantic import ConfigDict, model_validator
 
@@ -61,6 +62,9 @@ __all__ = [
     "anchor_pattern_demand",
     "DIRECTION_SWEEP_STEPS",
     "governing_anchor_direction",
+    "FrameAnchorDemand",
+    "FrameAnchorage",
+    "frame_anchor_demand",
 ]
 
 #: What the answer is a result of. The force that went in and the capacity it is checked
@@ -402,3 +406,228 @@ def governing_anchor_direction(
             subject="anchors",
         )
     return worst
+
+
+# What a frame's anchor demand is a result of. Not the rigid-base statics above: a solved
+# frame has already distributed the load by the stiffness of its own members. Private, and
+# reachable as `FrameAnchorage.method`, because the text is what a reader needs and not a
+# constant to compare against.
+_FRAME_ANCHORAGE_METHOD = (
+    "support reactions of a solved frame: each support is one anchor, its uplift is the "
+    "downward reaction it has to hold and its shear the resultant of the two horizontal "
+    "ones, with no rigid-base assumption and no friction relied on"
+)
+
+_FRAME_SOURCE = "the frame declaration and the solution solved from it"
+
+
+class FrameAnchorDemand(StatableModel):
+    """What one support of a base frame asks of the anchor under it.
+
+    The per-anchor conventions are the rigid-base route's, and so Drake and Elkin's (AISC
+    Engineering Journal 1Q 1999): **anchors in tension only**, and **no friction credited**
+    against the shear. What differs is where the numbers come from — a solved frame rather
+    than a lever-arm division.
+
+    ``moment`` is the resultant of the two overturning moments the support carries, and it
+    is **exactly zero unless the support declared a rotational restraint**. A pinned
+    support cannot carry moment by construction, so whatever the solve returns there is
+    arithmetic noise — this is where reading the magnitude instead of the declaration goes
+    wrong, and it did: a pinned skid came back with 8·10⁻¹⁵ N·m at every corner and all four
+    read as moment-carrying.
+
+    Where ``rotational_restraint`` is set the moment is real, and a single anchor bolt still
+    does not take it — a bolt is a pin. It is not a load to size one for but a sign that
+    either the base plate at that node spreads it into a group of bolts, which is a
+    connection this does not model, or the support should have been released.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    states_requirements = True
+
+    tag: Named
+    tension: Quantity
+    shear: Quantity
+    moment: Quantity
+    #: Whether the support's own declaration holds a rotation about x or y. The fact comes
+    #: from the declaration, never from the size of the reaction.
+    rotational_restraint: bool
+    x: Quantity
+    y: Quantity
+
+    def __str__(self) -> str:
+        return (
+            f"{self.tag}: {render(self.tension, pretty=True)} tension, "
+            f"{render(self.shear, pretty=True)} shear"
+        )
+
+
+class FrameAnchorage(StatableModel):
+    """A solved base frame's supports, each as the anchor demand it is.
+
+    Carries the same tension-only, no-friction conventions as the rigid-base route above,
+    which are Drake and Elkin's (AISC Engineering Journal 1Q 1999); ``method`` states what
+    the numbers are a result of.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    states_requirements = True
+
+    anchors: tuple[FrameAnchorDemand, ...]
+    vertical: Quantity
+    horizontal: Quantity
+    method: Provenance = _FRAME_ANCHORAGE_METHOD
+
+    @property
+    def governing(self) -> FrameAnchorDemand:
+        """The support carrying the most tension, which is where a capacity is checked."""
+        return max(self.anchors, key=lambda a: a.tension.to("N").magnitude)
+
+    @property
+    def uplift(self) -> bool:
+        """Does any support go into tension at all?"""
+        return self.governing.tension.to("N").magnitude > 0.0
+
+    @property
+    def restrained(self) -> tuple[str, ...]:
+        """The supports that declared a rotational restraint no single bolt can deliver.
+
+        From each support's own ``restrained`` freedoms, not from the size of its reaction:
+        a pinned support's moment is zero by construction and the solve returns noise there,
+        so a magnitude test named every corner of a pinned skid.
+        """
+        return tuple(a.tag for a in self.anchors if a.rotational_restraint)
+
+    def of(self, tag: str) -> FrameAnchorDemand:
+        """One support's demand, by node name."""
+        found = next((a for a in self.anchors if a.tag == tag), None)
+        if found is None:
+            raise KeyError(f"{tag!r} is not a support of this frame")
+        return found
+
+    def __str__(self) -> str:
+        if not self.uplift:
+            return (
+                f"no uplift: {len(self.anchors)} support(s), "
+                f"{render(self.horizontal, pretty=True)} horizontal in all"
+            )
+        return f"{self.governing} governs, of {len(self.anchors)} support(s)"
+
+
+def frame_anchor_demand(frame: Any, solution: Any) -> FrameAnchorage:
+    """Each support of a solved base frame as the anchor demand under it.
+
+    Keeps the two conventions the rigid-base route takes from Drake and Elkin (AISC
+    Engineering Journal 1Q 1999): anchors in tension only, and no friction credited against
+    the shear.
+
+    This is the other route to an anchor's load, and it is the better one where a frame is
+    declared. :func:`anchor_pattern_demand` assumes a **rigid base** and divides the
+    leftover moment by lever arm, because an anchor pattern alone says nothing about how
+    stiff the thing bolted to it is. A skid, a stand or a base frame does say: its members
+    have sections and lengths, so the solve distributes the load by their stiffness, and
+    the reaction at each support already *is* that anchor's share.
+
+    **The two routes agree, and that is the point of running both.** On a four-support skid
+    they give the same governing tension to the last digit — 16,625 kN either way for one
+    worked case, and 13,687 kN either way once the post is moved off centre. Two
+    independent implementations, a direct-stiffness solve and a lever-arm hand
+    calculation, landing on the same number is a check on each. What the frame route buys
+    is not accuracy: it is that the structure is declared **once**, and the resultant, the
+    centre of gravity and the lever are derived from it rather than worked out by hand and
+    typed in. Moving that post is the illustration — the pattern route needs to be told the
+    centre of gravity moved, and the frame route already knows.
+
+    The sign convention is the frame's own, with global **Z up**: a support's ``fz`` is
+    positive when it pushes the frame up, which is an anchor bearing in compression and
+    carrying no tension. **Uplift is a negative fz** — the support holding the frame down —
+    and that is what becomes ``tension``. The shear is the resultant of ``fx`` and ``fy``;
+    friction is not credited against it, exactly as in the rigid-base route.
+
+    ``frame`` supplies each support's plan position, so the result can be read against a
+    drawing; ``solution`` comes from :func:`~anvilate.frame.solve_frame`. A solution for a
+    different frame is refused rather than matched up by position in the list.
+    """
+    nodes = {node.name: node for node in getattr(frame, "nodes", ())}
+    supports = getattr(frame, "supports", ())
+    reactions = getattr(solution, "reactions", ())
+    if not supports:
+        raise _refuse(
+            "a base frame carries its load to the anchors through its supports, and this "
+            "frame declares none",
+            subject="frame",
+            source=_FRAME_SOURCE,
+        )
+    by_node = {reaction.node: reaction for reaction in reactions}
+    missing = sorted(support.node for support in supports if support.node not in by_node)
+    if missing:
+        raise _refuse(
+            f"the solution has no reaction at {', '.join(missing)}; it was solved from a "
+            f"different frame than the one passed, and matching reactions to supports by "
+            f"their position in the list would put a load on the wrong anchor",
+            subject="frame and solution",
+            source=_FRAME_SOURCE,
+        )
+    anchors = []
+    for support in supports:
+        reaction = by_node[support.node]
+        node = nodes.get(support.node)
+        if node is None:
+            raise _refuse(
+                f"the support at '{support.node}' names a node the frame does not have",
+                subject="frame",
+                source=_FRAME_SOURCE,
+            )
+        # The declaration decides whether a moment at this support is real. `Freedom` is
+        # imported here rather than at module scope: `anvilate.frame` is a heavier import
+        # than the statics above need, and nothing else in this module touches it.
+        from ..frame import Freedom
+
+        held = set(getattr(support, "restrained", ()))
+        rotational = bool(held & {Freedom.RX, Freedom.RY})
+        # Every component checked before it is used. `max(0.0, -nan)` returns **0,0** —
+        # `max` drops a NaN candidate rather than propagating it — so a non-finite fz would
+        # have become an anchor with no tension at all, which downstream is a bolt nobody
+        # needs to size. The summed `vertical` field happens to catch that one; a NaN in a
+        # component the sum does not reach would not be caught at all, so the guard belongs
+        # here and names the support.
+        for axis in ("fx", "fy", "fz", "mx", "my", "mz"):
+            value = getattr(reaction, axis)
+            if not isfinite(value):
+                raise _refuse(
+                    f"the reaction at '{support.node}' has a non-finite {axis} ({value}); a "
+                    f"solve that did not converge is not an anchor load, and max() would "
+                    f"drop it rather than carry it through",
+                    subject="solution",
+                    source=_FRAME_SOURCE,
+                )
+        anchors.append(
+            FrameAnchorDemand(
+                tag=support.node,
+                # Uplift only. A support pushing up puts its anchor in bearing, and a
+                # negative tension read as a capacity is a hold-down nobody installed —
+                # the same rule the rigid-base route follows.
+                tension=Quantity(magnitude=max(0.0, -reaction.fz), unit="N"),
+                shear=Quantity(magnitude=hypot(reaction.fx, reaction.fy), unit="N"),
+                moment=Quantity(
+                    magnitude=hypot(reaction.mx, reaction.my) if rotational else 0.0,
+                    unit="N*m",
+                ),
+                rotational_restraint=rotational,
+                x=node.x,
+                y=node.y,
+            )
+        )
+    return FrameAnchorage(
+        anchors=tuple(anchors),
+        vertical=Quantity(magnitude=sum(by_node[s.node].fz for s in supports), unit="N"),
+        horizontal=Quantity(
+            magnitude=hypot(
+                sum(by_node[s.node].fx for s in supports),
+                sum(by_node[s.node].fy for s in supports),
+            ),
+            unit="N",
+        ),
+    )

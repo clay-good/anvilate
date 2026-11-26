@@ -17,6 +17,7 @@ from anvilate.analysis.anchorage import (
     AnchorDemand,
     AnchorPosition,
     anchor_pattern_demand,
+    frame_anchor_demand,
 )
 from anvilate.refusal import RefusalError
 from anvilate.units import Quantity
@@ -397,3 +398,265 @@ def test_a_pattern_the_weight_holds_down_has_no_worst_direction():
     assert worst.governing.tension.to("N").magnitude == 0.0
     assert worst.stability_ratio > 1.0
     assert "no uplift" in str(worst)
+
+
+# --- the other route: a declared base frame -------------------------------------------
+#
+# `anchor_pattern_demand` assumes a rigid base because an anchor pattern alone says nothing
+# about the stiffness of what is bolted to it. A skid does say, so its solve distributes the
+# load and each support reaction already IS that anchor's share.
+
+
+def _skid(lateral_kn: float, weight_kn: float = 23.5, fixed: bool = False):
+    """A 1200 x 600 mm skid on four corner supports, loaded at a post 900 mm up."""
+    from anvilate.frame import (
+        Frame,
+        FrameMaterial,
+        FrameMember,
+        FrameNode,
+        FrameSection,
+        Freedom,
+        NodeLoad,
+        Support,
+        solve_frame,
+    )
+
+    material = FrameMaterial(
+        name="S355",
+        elastic_modulus=Q("210 GPa"),
+        shear_modulus=Q("81 GPa"),
+        density=Q("7850 kg/m^3"),
+        source="EN 10025-2 nominal values",
+    )
+    section = FrameSection(
+        name="SHS 100x100x6",
+        area=Q("21.9 cm^2"),
+        second_moment_y=Q("311 cm^4"),
+        second_moment_z=Q("311 cm^4"),
+        torsion_constant=Q("502 cm^4"),
+        source="the profile table for the declared section",
+    )
+
+    def at(name: str, x: float, y: float, z: float = 0.0):
+        return FrameNode(name=name, x=Q(f"{x} mm"), y=Q(f"{y} mm"), z=Q(f"{z} mm"))
+
+    held = (Freedom.UX, Freedom.UY, Freedom.UZ)
+    if fixed:
+        held = (*held, Freedom.RX, Freedom.RY)
+    frame = Frame(
+        name="skid",
+        nodes=(
+            at("a", 0, 0),
+            at("b", 1200, 0),
+            at("c", 1200, 600),
+            at("d", 0, 600),
+            at("top", 600, 300, 900),
+        ),  # fmt: skip
+        members=tuple(
+            FrameMember(name=f"m{i}", start=s, end=e, section=section, material=material)
+            for i, (s, e) in enumerate(
+                (
+                    ("a", "b"),
+                    ("b", "c"),
+                    ("c", "d"),
+                    ("d", "a"),
+                    ("a", "top"),
+                    ("b", "top"),
+                    ("c", "top"),
+                    ("d", "top"),
+                )  # fmt: skip
+            )
+        ),
+        supports=tuple(Support(node=n, restrained=held) for n in ("a", "b", "c", "d")),
+        node_loads=(NodeLoad(node="top", fz=Q(f"-{weight_kn} kN"), fx=Q(f"{lateral_kn} kN")),),
+    )
+    return frame, solve_frame(frame)
+
+
+def test_each_support_of_a_solved_skid_is_one_anchors_demand():
+    frame, solution = _skid(lateral_kn=7.5)
+    result = frame_anchor_demand(frame, solution)
+
+    assert [a.tag for a in result.anchors] == ["a", "b", "c", "d"]
+    # The whole horizontal load arrives, and the whole weight.
+    assert result.horizontal.to("kN").magnitude == pytest.approx(7.5, rel=1e-9)
+    assert result.vertical.to("kN").magnitude == pytest.approx(23.5, rel=1e-9)
+    # Pushed along +x, the two supports it leans towards take the larger shear.
+    assert result.of("b").shear.to("N").magnitude > result.of("a").shear.to("N").magnitude
+    assert result.of("b").shear.to("N").magnitude == pytest.approx(
+        result.of("c").shear.to("N").magnitude, rel=1e-9
+    ), "the skid is symmetric about y, so b and c are the same"
+    # 23,5 kN down over a 1,2 m lever beats 7,5 kN at 900 mm, so nothing lifts.
+    assert not result.uplift
+    assert all(a.tension.to("N").magnitude == 0.0 for a in result.anchors)
+    assert "no uplift" in str(result)
+
+
+def test_a_big_enough_lateral_force_lifts_the_windward_supports():
+    """The case the anchors exist for, and the sign convention that decides it.
+
+    A support's fz is positive when it pushes the frame up; uplift is a NEGATIVE fz, the
+    support holding the frame down, and that is what becomes tension. Reading the sign the
+    other way would report tension on the leeward anchors, which are in bearing.
+    """
+    frame, solution = _skid(lateral_kn=60.0)
+    result = frame_anchor_demand(frame, solution)
+
+    assert result.uplift
+    lifted = [a.tag for a in result.anchors if a.tension.to("N").magnitude > 0]
+    # Pushed along +x, the frame tips about the b-c edge, so a and d lift.
+    assert sorted(lifted) == ["a", "d"]
+    assert result.governing.tag in ("a", "d")
+    assert result.of("b").tension.to("N").magnitude == 0.0
+    assert "governs" in str(result)
+
+
+def test_a_pinned_support_carries_no_moment_however_the_solver_rounds():
+    """The defect this guards: a pinned skid came back with 8e-15 N*m at every corner.
+
+    A support that declares no rotational restraint cannot carry moment by construction, so
+    whatever the solve returns there is arithmetic noise. Taking the fact from the
+    declaration rather than from the magnitude is what makes `restrained` mean anything —
+    a magnitude test named all four corners of a frame that holds no rotation at all.
+    """
+    frame, solution = _skid(lateral_kn=7.5)
+    result = frame_anchor_demand(frame, solution)
+    assert result.restrained == ()
+    assert all(a.moment.to("N*m").magnitude == 0.0 for a in result.anchors)
+    assert all(not a.rotational_restraint for a in result.anchors)
+    # The solver did return a non-zero moment at those pinned nodes; it is just not real.
+    assert any(abs(r.mx) + abs(r.my) > 0 for r in solution.reactions)
+
+
+def test_a_support_that_holds_a_rotation_is_named():
+    """Where the declaration does restrain rotation, the moment is real and reported.
+
+    A single anchor bolt is a pin and does not take it, so naming the support is the useful
+    answer — the base plate there spreads it into a group of bolts, which this does not
+    model, or the support should have been released.
+    """
+    frame, solution = _skid(lateral_kn=7.5, fixed=True)
+    result = frame_anchor_demand(frame, solution)
+    assert sorted(result.restrained) == ["a", "b", "c", "d"]
+    assert all(a.rotational_restraint for a in result.anchors)
+    assert result.of("a").moment.to("N*m").magnitude > 0.0
+
+
+def test_the_frame_route_reproduces_the_rigid_base_statics_exactly():
+    """Two independent implementations landing on the same number, which checks both.
+
+    A direct-stiffness solve and a lever-arm hand calculation are different models of the
+    same hardware, and on a four-support skid they agree to the last digit. The first draft
+    of this test asserted they would DISAGREE — the arithmetic refused it, and the
+    agreement is the far stronger result.
+
+    What the frame route buys is not accuracy but what has to be declared: the pattern route
+    must be told the centre of gravity, and the second case here is the one that shows it.
+    Move the post off centre and the frame knows; the pattern has to be told.
+    """
+    pattern_anchors = (
+        _at("a", 0, 0), _at("b", 1200, 0), _at("c", 1200, 600), _at("d", 0, 600),
+    )  # fmt: skip
+    frame, solution = _skid(lateral_kn=60.0)
+    centred_frame = frame_anchor_demand(frame, solution)
+    centred_pattern = anchor_pattern_demand(
+        anchors=pattern_anchors,
+        weight=Q("23.5 kN"),
+        lateral_force=Q("60 kN"),
+        height=Q("900 mm"),
+        direction=(1.0, 0.0),
+    )
+    assert centred_frame.governing.tension.to("kN").magnitude == pytest.approx(
+        centred_pattern.governing.tension.to("kN").magnitude, rel=1e-9
+    )
+    assert centred_frame.governing.tension.to("kN").magnitude == pytest.approx(16.625)
+
+    # And again with the post moved off centre, where the weight's lever changes.
+    from anvilate.frame import solve_frame
+
+    moved = frame.model_copy(
+        update={
+            "nodes": tuple(
+                node.model_copy(update={"x": Q("300 mm")}) if node.name == "top" else node
+                for node in frame.nodes
+            )
+        }
+    )
+    off_frame = frame_anchor_demand(moved, solve_frame(moved))
+    off_pattern = anchor_pattern_demand(
+        anchors=pattern_anchors,
+        weight=Q("23.5 kN"),
+        lateral_force=Q("60 kN"),
+        height=Q("900 mm"),
+        direction=(1.0, 0.0),
+        centre_of_gravity=(Q("300 mm"), Q("300 mm")),
+    )
+    assert off_frame.governing.tension.to("kN").magnitude == pytest.approx(
+        off_pattern.governing.tension.to("kN").magnitude, rel=1e-9
+    )
+    assert off_frame.governing.tension.to("kN").magnitude == pytest.approx(13.6875)
+    # The move matters: it is not the same answer as the centred case.
+    assert off_frame.governing.tension.to("kN").magnitude < 16.0
+
+
+def test_a_solution_from_another_frame_is_refused():
+    """Matching reactions to supports by list position would load the wrong anchor.
+
+    The Frame model already refuses a support naming a node it does not have, so the way to
+    reach this is a solution genuinely solved from a different frame — here one whose nodes
+    are named differently.
+    """
+    frame, _solution = _skid(lateral_kn=7.5)
+    renamed = frame.model_copy(
+        update={
+            "name": "other skid",
+            "nodes": tuple(
+                node.model_copy(update={"name": f"z{node.name}"}) for node in frame.nodes
+            ),
+            "members": tuple(
+                member.model_copy(update={"start": f"z{member.start}", "end": f"z{member.end}"})
+                for member in frame.members
+            ),
+            "supports": tuple(
+                support.model_copy(update={"node": f"z{support.node}"})
+                for support in frame.supports
+            ),
+            "node_loads": tuple(
+                load.model_copy(update={"node": f"z{load.node}"}) for load in frame.node_loads
+            ),
+        }
+    )
+    from anvilate.frame import solve_frame
+
+    other_solution = solve_frame(renamed)
+    with pytest.raises(RefusalError, match="solved from a different frame"):
+        frame_anchor_demand(frame, other_solution)
+
+
+def test_a_frame_with_no_supports_is_refused():
+    frame, solution = _skid(lateral_kn=7.5)
+    with pytest.raises(RefusalError, match="declares none"):
+        frame_anchor_demand(frame.model_copy(update={"supports": ()}), solution)
+
+
+@pytest.mark.parametrize("axis", ["fx", "fy", "fz", "mx", "my", "mz"])
+def test_a_non_finite_reaction_is_refused_by_name(axis: str):
+    """The NaN-drop trap, closed where it starts.
+
+    `max(0.0, -nan)` returns **0.0**: max drops a NaN candidate rather than propagating it,
+    so an unconverged solve's fz would have become an anchor with no tension — a bolt nobody
+    sizes. The summed `vertical` field catches that one by accident; a NaN in a component
+    the sums do not reach would not be caught at all, so each component is checked here.
+    """
+    frame, solution = _skid(lateral_kn=7.5)
+    poisoned = solution.reactions[0].model_copy(update={axis: float("nan")})
+    with pytest.raises(RefusalError, match=f"non-finite {axis}"):
+        frame_anchor_demand(
+            frame, solution.model_copy(update={"reactions": (poisoned, *solution.reactions[1:])})
+        )
+
+
+def test_max_really_does_drop_a_nan_which_is_why_that_guard_exists():
+    """The premise, asserted, so the guard above is not protecting against nothing."""
+    assert max(0.0, float("nan")) == 0.0
+    assert max(0.0, -float("nan")) == 0.0

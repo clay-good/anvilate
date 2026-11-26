@@ -19,7 +19,15 @@ Builds on `src/anvilate/analysis/building_loads.py` and the anchorage screens in
 - [ ] 2.2 Existing anchorage screens on per-anchor forces; declared overstrength or
       ductility basis — **a build, not a wiring-up**: no concrete breakout or pullout
       screen exists yet; see design.md
-- [ ] 2.3 Base frames through frame analysis when declared
+- [x] 2.3 Base frames through frame analysis when declared
+      (`anchorage.frame_anchor_demand`: each solved support reaction is one anchor's
+      demand, uplift being a negative vertical reaction and the shear the resultant of the
+      two horizontal ones. It reproduces the rigid-base route to the last digit on a
+      four-support skid, which cross-checks both; what it adds is that the centre of
+      gravity, the resultant and the height are derived from the declaration instead of
+      being told. A support declaring a rotational restraint is named, because a bolt is a
+      pin — taken from the declaration, never from a reaction magnitude that is solver
+      noise at a pinned node)
 
 ## 3. Proof
 

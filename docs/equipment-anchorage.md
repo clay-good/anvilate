@@ -29,7 +29,7 @@ never mistaken for the equation's own answer.
 | S_DS, I_p | Yours: the site's spectral acceleration and §13.1.3's importance factor. |
 | H_f, R_μ | Computed, from §13.3.1.1 and §13.3.1.2 — the attachment height over the roof height, the structure's approximate period, and its R and Ω_0. |
 | The vertical force | Computed: 0.2·S_DS·W_p (§13.3.1.6), the one term no coefficient reduces. |
-| The anchor forces | Computed, by [rigid-base statics](walking-working-surfaces.md#the-post-base-and-the-two-anchors-a-hand-pulls-out) from your mass, centre of gravity, footprint and anchor pattern, with **no friction relied on**. |
+| The anchor forces | Computed, two ways. By [rigid-base statics](walking-working-surfaces.md#the-post-base-and-the-two-anchors-a-hand-pulls-out) from your mass, centre of gravity, footprint and anchor pattern; or, where the equipment sits on a declared **base frame**, from that frame's solved support reactions. Either way, **no friction relied on**. |
 | An anchor's **capacity** | Nobody's, yet. The concrete provisions are not implemented; see what is missing below. |
 
 A non-seismic load — a declared wind pressure on rooftop equipment, a machine's own
@@ -76,6 +76,30 @@ on an ordinary roof-mounted cabinet. And the concurrent vertical force buys only
 anchor tension here, because on tall equipment on a tight bolt pattern the weight was
 resisting under 15% of the overturning moment to begin with: the lever is everything, and
 the repair is the pattern.
+
+## On a base frame, the frame is the better declaration
+
+A skid, a stand or a bolted base frame can go through
+[frame analysis](frame-analysis.md) instead: declare its nodes, members and supports, solve
+it, and `frame_anchor_demand(frame, solution)` reads each support's reaction as the anchor
+demand under it. Uplift is a **negative** vertical reaction — the support holding the frame
+down — and the shear is the resultant of the two horizontal ones.
+
+**The two routes agree.** On a four-support skid they give the same governing tension to the
+last digit: 16.625 kN either way for one worked case, and 13.687 kN either way once the post
+is moved off centre. A direct-stiffness solve and a lever-arm hand calculation are different
+models of the same hardware, so their agreement is a check on both.
+
+What the frame route buys is therefore not accuracy — it is that the structure is declared
+**once**. The pattern route has to be *told* the centre of gravity, the resultant and the
+height they act at; the frame derives all three from its own nodes and loads. Moving that
+post is the illustration: the frame knows, and the pattern has to be told again.
+
+One thing it reports that the pattern cannot: a support that declares a **rotational
+restraint** carries a moment, and a single anchor bolt is a pin and does not take it.
+`FrameAnchorage.restrained` names those supports. The fact comes from the declaration and
+never from the size of the reaction — a pinned skid's corners come back with about
+10⁻¹⁴ N·m of solver noise, and reading the magnitude named all four of them.
 
 ## What is not here
 

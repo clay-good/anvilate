@@ -1843,8 +1843,14 @@ def test_the_probe_population_covers_the_share_of_the_surface_it_claims_to():
     # (test_no_input_of_the_bending_resistance_takes_a_non_finite_value), and
     # test_a_bound_call_with_no_modulus_is_refused_rather_than_answered pins the reason the
     # binder cannot reach it.
+    # 105 -> 106: anchorage.frame_anchor_demand takes a Frame and a FrameSolution, the same
+    # shape as anchor_pattern_demand's sequence of AnchorPosition two entries above. Every
+    # component of every reaction it reads is refused non-finite BY NAME in
+    # tests/test_anchorage.py (test_a_non_finite_reaction_is_refused_by_name), and that guard
+    # exists because `max(0.0, -nan)` returns 0,0 rather than a NaN — asserted beside it in
+    # test_max_really_does_drop_a_nan_which_is_why_that_guard_exists.
     # Raise this only with the test that refuses the new function's non-finite input named.
-    assert len(unbuildable) <= 105, (
+    assert len(unbuildable) <= 106, (
         f"{len(unbuildable)} functions have a parameter the binder cannot construct; if "
         "this is growing, the probes are covering less of each new module"
     )

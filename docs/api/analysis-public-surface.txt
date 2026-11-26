@@ -2028,3 +2028,6 @@ en1993_buckling.lateral_torsional_curve
 en1993_buckling.lateral_torsional_slenderness
 en1993_buckling.lateral_torsional_reduction_rolled
 en1993_buckling.lateral_torsional_buckling_resistance
+anchorage.FrameAnchorDemand
+anchorage.FrameAnchorage
+anchorage.frame_anchor_demand

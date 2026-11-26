@@ -528,7 +528,10 @@ modules:
   leeward anchor row, shear shared equally and **no friction relied on**; it produces the
   demand a concrete or steel anchor capacity is checked against. Plus the sweep for the
   governing plan direction of a clause that says "in any direction", whose answer is
-  across the pattern's short side and not, as it looks, the diagonal
+  across the pattern's short side and not, as it looks, the diagonal. Plus the other route
+  to the same answer: a declared base frame's solved support reactions, each one an anchor's
+  demand directly — which reproduces the rigid-base statics to the last digit and derives
+  the centre of gravity and the lever from the declaration instead of being told them
 - :mod:`~anvilate.analysis.nonstructural_seismic` — the seismic design force on a piece of
   equipment, by the edition that governs it. The 2022 form
   (Fp = 0.4·S_DS·I_p·W_p·(H_f/R_μ)·(C_AR/R_po)) read from the 2020 NEHRP Provisions, the
@@ -1237,7 +1240,10 @@ from .anchorage import (
     AnchorageDemand,
     AnchorDemand,
     AnchorPosition,
+    FrameAnchorage,
+    FrameAnchorDemand,
     anchor_pattern_demand,
+    frame_anchor_demand,
     governing_anchor_direction,
 )
 from .antenna import (
@@ -4129,6 +4135,9 @@ __all__ = [
     "anchor_pattern_demand",
     "DIRECTION_SWEEP_STEPS",
     "governing_anchor_direction",
+    "FrameAnchorDemand",
+    "FrameAnchorage",
+    "frame_anchor_demand",
     "ComponentForceEdition",
     "ForceBound",
     "TabulatedCoefficient",
