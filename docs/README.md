@@ -1,6 +1,6 @@
 # Anvilate documentation
 
-Eighty-six pages, arranged by what you are trying to do. The [README](../README.md) is the
+Eighty-seven pages, arranged by what you are trying to do. The [README](../README.md) is the
 front door; this is the map.
 
 ## Start here
@@ -63,6 +63,7 @@ Each pack takes a declared element and returns a cited scorecard.
 | [Margin ledger](margin-ledger.md) | Every applied conservatism attributed and multiplied out, and the double counts named. |
 | [Margins of safety](margin-of-safety.md) | The aerospace margin table: limit and ultimate kept apart, a cited factor set, the governing case of hundreds, as CSV, XLSX and a report section. |
 | [Equipment anchorage](equipment-anchorage.md) | The seismic design force on a piece of equipment by the edition that governs it, ASCE/SEI 7-16 and 7-22 side by side, with every tabulated coefficient declared with the table it was read from and none bundled. |
+| [Eurocode 3 steel](eurocode-steel.md) | EN 1993-1-1 from a cross-section to a member: classification, §6.2 resistance and §6.3 buckling, with every partial factor and every buckling curve the engineer's and none of the standard's tables bundled. |
 | [Structural hand methods](structural-hand-methods.md) | Laminates, random vibration, preloaded joints, fastener groups, sandwich panels, crippling, plasticity and thin-cylinder buckling, each read from a public-domain NASA document and pinned to it. |
 | [Drive trains](drive-trains.md) | One declared input, and every shaft's speed, torque and power derived through the meshes, with the graph held consistent and a typed torque that contradicts it refused. |
 | [Frame analysis](frame-analysis.md) | The member forces a frame carries, solved in the core: five closed forms and an independent solver that agrees, a mechanism named rather than solved around, and what the external doorway is still for. |

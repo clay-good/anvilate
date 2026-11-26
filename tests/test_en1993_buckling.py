@@ -386,3 +386,70 @@ def test_a_length_is_not_a_critical_moment():
             yield_strength=_S355,
             critical_moment=Q("100 mm"),
         )
+
+
+def test_the_eurocode_docs_pages_figures_are_the_modules_own():
+    """Every number docs/eurocode-steel.md argues from, against what the code computes.
+
+    The page's whole job is telling an engineer which numbers are theirs and where the pack
+    refuses, so a figure that has drifted from the code misleads exactly the reader it was
+    written for.
+    """
+    from pathlib import Path
+
+    from anvilate.analysis.en1993_classification import (
+        PartStress,
+        SectionClass,
+        en1993_epsilon,
+        rolled_i_section_class,
+        tubular_section_class,
+    )
+    from anvilate.analysis.en1993_resistance import compression_resistance
+
+    page = (Path(__file__).parents[1] / "docs" / "eurocode-steel.md").read_text()
+
+    # The worked chain the page opens with.
+    classes = rolled_i_section_class(
+        height=Q("340 mm"),
+        width=Q("300 mm"),
+        web_thickness=Q("12 mm"),
+        flange_thickness=Q("21.5 mm"),
+        root_radius=Q("27 mm"),
+        yield_strength=_S355,
+        stress=PartStress.COMPRESSION,
+    )
+    assert classes == (SectionClass.CLASS_1,) * 3
+    assert "class 1, web and flange alike" in page
+    cross_section = compression_resistance(
+        area=Q("170.9 cm^2"), yield_strength=_S355, partial_factor_m0=1.0
+    )
+    assert f"N_c,Rd = {_kn(cross_section):.1f} kN" in page
+    buckling = flexural_buckling_resistance(
+        area=Q("170.9 cm^2"),
+        yield_strength=_S355,
+        partial_factor_m1=_M1,
+        slenderness=0.75,
+        curve=EuropeanBucklingCurve.C,
+    )
+    assert f"N_b,Rd = {_kn(buckling):.1f} kN" in page
+    taken_off = 100 * (1 - _kn(buckling) / _kn(cross_section))
+    assert f"takes {taken_off:.1f}% off" in page
+
+    # The spread between the curves, which the page calls the design decision.
+    a0 = buckling_reduction_factor(slenderness=1.0, curve=EuropeanBucklingCurve.A0)
+    d = buckling_reduction_factor(slenderness=1.0, curve=EuropeanBucklingCurve.D)
+    assert f"curve a₀ keeps {a0:.3f} of the squash load and curve d keeps\n{d:.3f}" in page
+    assert f"**{100 * (a0 / d - 1):.0f}% apart**" in page
+
+    # The tube limits, where the page says the ε² reading matters.
+    epsilon = en1993_epsilon(yield_strength=_S355)
+    assert f"d/t ≤ {90 * epsilon * epsilon:.2f}, not ≤ {90 * epsilon:.2f}" in page
+    assert tubular_section_class(diameter_ratio=60.0, epsilon=epsilon) is SectionClass.CLASS_4
+
+    # And the two statements about the lateral-torsional methods.
+    stocky = {"height": Q("300 mm"), "width": Q("300 mm"), "rolled": True}
+    assert lateral_torsional_curve(**stocky) is EuropeanBucklingCurve.A
+    assert lateral_torsional_curve(alternative_method=True, **stocky) is EuropeanBucklingCurve.B
+    assert "is curve *a* under the general method" in page
+    assert "curve *b* under" in page
+    assert "χ_LT ≤ 1/λ̄_LT²" in page

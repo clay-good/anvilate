@@ -57,3 +57,8 @@ Depends on `add-standards-effectivity` (design basis and edition) and
 - [ ] 4.2 Shared limit states registered once with both code implementations
 - [ ] 4.3 Sample specs: a base plate, a gusset and a beam under a Eurocode design basis
 - [ ] 4.4 A docs page for the Eurocode 3 pack: declaring the design basis and the annex
+      (`docs/eurocode-steel.md` covers the three modules that exist — which numbers are the
+      engineer's, where it refuses, and three things worth knowing before using it. The
+      design-basis and annex half waits on `add-standards-effectivity` wiring and on 1.2's
+      typed nationally determined parameters, so the edition is a fact the page states
+      rather than something a spec declares and the pack enforces)
