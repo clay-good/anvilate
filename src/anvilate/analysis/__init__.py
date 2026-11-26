@@ -115,6 +115,14 @@ modules:
 - :mod:`~anvilate.analysis.aisc_compactness` — AISC 360 Table B4.1b flexural
   classification: the flange and web plastic (λ_p) and noncompact (λ_r) slenderness
   limits, and the compact/noncompact/slender class an element's slenderness falls in
+- :mod:`~anvilate.analysis.en1993_classification` — the Eurocode counterpart: EN 1993-1-1
+  §5.5 and Table 5.2 cross-section classification, classes 1 to 4 from a part's c/t against
+  limits that scale with ε = √(235/f_y). Internal parts, outstand flanges, angles and
+  tubular sections each on their own sheet, with the combined bending-and-compression
+  branches on α and ψ; a rolled I-section's web and flange classified together, the root
+  radius out of both, with the least favourable governing. Read from the European
+  Commission JRC report that reproduces Table 5.2, and checked against the two
+  classifications that report works in full
 - :mod:`~anvilate.analysis.column` — Euler and Johnson buckling, slenderness,
   the minimum section second moment a load requires, the eccentric-load secant
   stress, the Perry-Robertson imperfect-column stress, the lateral-torsional
@@ -1969,6 +1977,17 @@ from .embodied_carbon import (
     embodied_carbon_scorecard,
     material_loss_mass,
     with_declared_factors,
+)
+from .en1993_classification import (
+    FlangeTip,
+    PartStress,
+    SectionClass,
+    angle_in_compression_class,
+    en1993_epsilon,
+    internal_part_class,
+    outstand_flange_class,
+    rolled_i_section_class,
+    tubular_section_class,
 )
 from .energy_storage import (
     battery_backup_time,
@@ -4352,6 +4371,15 @@ __all__ = [
     "classify_flexural_element",
     "flexural_flange_slenderness_limits",
     "flexural_web_slenderness_limits",
+    "SectionClass",
+    "PartStress",
+    "FlangeTip",
+    "en1993_epsilon",
+    "internal_part_class",
+    "outstand_flange_class",
+    "angle_in_compression_class",
+    "tubular_section_class",
+    "rolled_i_section_class",
     "axial_stress",
     "axial_elongation",
     "axial_stiffness",

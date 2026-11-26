@@ -1,57 +1,63 @@
-# Design notes: Eurocode 3 steel pack
+# Design: Eurocode 3 steel pack
 
-Research done on 2026-10-19. Standards are paywalled; "anchor before implementing"
-applies: no clause ships from a remembered edition.
+## What was read, and what could not be (task 1.1)
 
-## Editions and the transition
+EN 1993-1-1 is copyrighted by CEN, sold by the national bodies, and is not readable from
+here. The route that worked for ASCE 7 works here too: **go to the public document that
+reproduces the clause, not to the pages that paraphrase it.**
 
-| Standard | Generation | Dates verified |
-| --- | --- | --- |
-| EN 1993-1-1:2005+A1:2014 | First | Applicable until national withdrawal, latest 2028-03-30 |
-| EN 1993-1-1:2022 | Second | CEN approval 2022-07-24; DAV 2026-03-30; DoP 2027-09-30; DoW 2028-03-30 (JRC 2G Eurocode 3 workshop, 2025-06-03; BSI listing) |
-| EN 1993-1-8:2005 | First | Superseded, applicable until withdrawal |
-| EN 1993-1-8:2024 | Second | Approved 2024-03-27; DIN German version 2025-04 |
+| Source | What it gave |
+| --- | --- |
+| [*Eurocodes: Background and Applications — Design of Steel Buildings*](https://orbi.uliege.be/bitstream/2268/194798/1/Eurocodes%20Background&applications%20design%20of%20steel%20buildings.pdf) (European Commission, JRC; Simões da Silva and Simões, from the 2014 Brussels workshop) | §1.2.2.4 and its Tables 1.1, 1.2 and 1.3, which **state that they reproduce Table 5.2 of EN 1993-1-1**, with clause numbers through §5.5.2. Plus two classifications worked in full, with their intermediate ratios. |
 
-Sources:
-- https://eurocodes.jrc.ec.europa.eu/sites/default/files/2025-08/20250603_2G_Eurocode3_JRC%2BWorkshop_final_website_0.pdf
-- https://www.scia.net/en/news/second-generation-eurocodes-approaching
-- https://genorma.com/en/standards/en-1993-1-8-2024
-- https://tienda.aenor.com/p/norma-cen-en-1993-1-8-2024-64986
+Two mechanics worth keeping. The table pages had to be **read as images**
+(`pdftoppm -r 170 -f <page> -png`, then Read the PNG): `pdftotext` drops every ε, α and ψ
+and every ≤, so the extracted text of Table 5.2 reads `c t  72` — a plausible limit and a
+wrong one. And the report's worked examples are what pin the measurement of `c`, which the
+table itself states only as a figure.
 
-The pack ships with the first generation as its default edition until the owner's
-jurisdiction changes, because that is what reviewers accept today, and declares it.
-The second generation is selectable through the design basis the moment it is anchored.
+**The 2022 edition is not covered.** EN 1993-1-1:2022 renumbered and rewrote parts of §5.5,
+and no public document reproducing it was found. So task 1.1 is half done: the 2005+A1:2014
+generation is read and implemented, and nothing in the pack claims to answer a design basis
+pinning 2022. Task 2.5 (edition differences) waits on the same reading, as does 3.1 for
+EN 1993-1-8.
 
-## Open-source references (not dependencies)
+## What is built (task 2.1)
 
-| Library | License | State | Decision |
-| --- | --- | --- | --- |
-| Blueprints (Blueprints-org) | LGPL-2.1 | NEN-EN 1993-1-1+C2+A1:2016; 108 formulas, 20 tables, 28 figures | Reference for formula transcription checks; Dutch annex values never copied |
-| steelsnakes | not verified | Eurocode 3 "in progress", docs updated 2026-03 | Watch |
-| PySS | not verified | last release 0.6.0, 2020 | Reference only |
-| eurocodepy | not verified | European profile JSON (IPE, HEA, HEB, HEM, L, C, T, pipe, box) | Profile geometry only, through `expand-open-design-data`, after its license is read |
+`anvilate.analysis.en1993_classification` — Table 5.2 in full: internal compression parts,
+outstand flanges, angles and tubular sections, with the combined bending-and-compression
+branches on α and ψ, and a rolled I-section's web and flange classified together under
+clause 5.5.2(6)'s "highest, least favourable class" rule.
 
-Sources: https://github.com/Blueprints-org/blueprints, https://steelsnakes.readthedocs.io/,
-https://pyss.readthedocs.io/en/latest/history.html, https://eurocodepy.readthedocs.io
+**Where it refuses rather than defaults.** α, ψ and k_σ describe a stress distribution the
+caller computed; the standard's own commentary says the combined case needs the
+neutral-axis position and that designers often substitute the compression-only
+classification. Guessing one is the failure that looks like an answer, so each is required
+and refused by name. An outstand asked for a bending-only class is refused too: Table 5.2
+gives it no such column, and inventing one would be this library writing a limit the
+standard does not have.
 
-## Nationally determined parameters
+**Three findings the arithmetic produced**, each now a test:
 
-The recommended values in the standard are bundled with the clause that gives them. A
-national annex value is a user-supplied input with its citation, under the existing
-user-supplied allowables doctrine. The pack has no table of annexes by country, on
-purpose: `add-standards-effectivity` already rules that a jurisdiction map is advisory at
-most, and a wrong γM1 is a wrong buckling resistance.
+- A tubular section's limits go as **ε², not ε**. At S355 the class 3 limit is d/t ≤ 59,58
+  and not ≤ 73,23, and the mistake runs exactly one class optimistic across the whole
+  range. A test at S235 alone cannot see it, because ε and ε² are both 1 there.
+- The two α branches for an internal part **agree at α = 0,5** (36/0,5 and 396/5,5 are both
+  72), and above it the class 1 limit falls away fast — the same ratio that is class 1 at
+  α = 0,5 is class 2 at α = 0,51.
+- A part wholly in compression (α = 1, ψ = 1) reproduces the compression column on all
+  three rows (396/12 = 33, 456/12 = 38, 42/1 = 42), which is the table agreeing with itself
+  and the check that ψ is the right way round. A flipped sign would give 124 — the
+  *bending* limit — for a column web.
 
-## Composition with the AISC pack
+**And one correction to this session's own prose.** The first draft of the module docstring
+claimed the ε-for-ε² mistake read a d/t of 60 as class 2 against the standard's class 3. It
+is class 3 against class 4. The sweep that catches this is running the arithmetic on every
+claim before the claim ships; see also the example's root-radius paragraph, whose first
+draft had the error running in the unsafe direction when it is in fact conservative.
 
-Flexural buckling, lateral-torsional buckling and bolt bearing are limit states both codes
-screen. Under the module contract they share a limit-state registry id; the EN screen
-computes the EN resistance from the EN clause and cites it, and the duplicate detector
-sees one limit state with two code implementations, not two conflicting checks.
+## What is not built
 
-## Golden tests
-
-Worked examples with published numbers, re-derived rather than redistributed: the
-Steel Construction Institute's and Arcelor's free worked examples for the first
-generation, and the JRC "Eurocode 3 worked examples" where the second generation is
-covered. Each test names its source and the edition.
+Tasks 1.2 to 1.4, 2.2 to 2.4, 3.2, 3.3 and 4.1 to 4.4 are untouched. Classification is the
+foundation they all stand on — every resistance in §6.2 branches on the class — so it is
+first, not a slice taken for being easy.

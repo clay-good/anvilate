@@ -9839,3 +9839,35 @@ def test_roof_cabinet_example_shows_the_edition_tripling_the_force():
     assert len(in_tension) == 2
     assert {a.shear.to("N").magnitude for a in demand.anchors} == {d["anchor_shear_n"]}
     _assert_narrates_computed("roof_cabinet_component_force_by_edition.py", namespace)
+
+
+def test_eurocode_classification_example_reproduces_the_reports_two_sections():
+    """The anchor: both worked classifications, and the three readings that go wrong.
+
+    The tube reading is the one worth a test of its own — the standard's coefficients are
+    on epsilon SQUARED, and taking them on epsilon runs one class optimistic, which the
+    example shows disagreeing on three of its four tubes.
+    """
+    namespace = runpy.run_path(str(_EXAMPLES / "eurocode_section_classification.py"))
+    d = namespace["eurocode_section_classification"]()
+
+    assert round(d["heb_web_ratio"], 2) == 20.25
+    assert round(d["heb_flange_ratio"], 2) == 5.44
+    assert round(d["ipe_web_ratio"], 2) == 38.49
+    assert round(d["ipe_flange_ratio"], 2) == 4.79
+    assert d["ipe_web_flat_mm"] == 331
+    # The mistaken reading is LARGER, so it is conservative; the example says so.
+    assert d["ipe_web_full_depth_ratio"] > d["ipe_web_ratio"]
+    # Both worked sections come back class 1, web and flange alike.
+    for entry in (namespace["heb_340_in_compression"](), namespace["ipe_400_in_bending"]()):
+        assert [int(c) for c in entry] == [1, 1, 1]
+    # The tube limits, and the three disagreements.
+    assert round(d["tube_class_3_limit"], 2) == 59.58
+    assert round(d["tube_class_3_limit_mistaken"], 2) == 73.23
+    readings = namespace["tube_readings"]()
+    assert sum(1 for _r, standard, mistaken in readings if standard is not mistaken) == 3
+    for _ratio, standard, mistaken in readings:
+        assert int(mistaken) <= int(standard), "the mistake is optimistic, never pessimistic"
+    # And every refusal is a sentence, not an empty string.
+    assert all(message.strip() for message in namespace["refusals"]().values())
+    _assert_narrates_computed("eurocode_section_classification.py", namespace)

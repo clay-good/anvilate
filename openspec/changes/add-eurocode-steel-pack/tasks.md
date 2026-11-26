@@ -8,6 +8,9 @@ Depends on `add-standards-effectivity` (design basis and edition) and
 
 - [ ] 1.1 Read EN 1993-1-1:2005+A1:2014 and EN 1993-1-1:2022; record each clause the pack
       cites with its edition ("anchor before implementing")
+      (the 2005+A1:2014 generation is read, from the European Commission JRC report that
+      reproduces Table 5.2 with its clause numbers; see design.md. **EN 1993-1-1:2022 could
+      not be read from here**, so nothing claims to answer it and 2.5 waits with it)
 - [ ] 1.2 Nationally determined parameters as typed inputs with bundled recommended values
       and cited user override
 - [ ] 1.3 Steel grade records S235 to S460 by thickness range, cited to the product standard
@@ -15,7 +18,13 @@ Depends on `add-standards-effectivity` (design basis and edition) and
 
 ## 2. Members (EN 1993-1-1)
 
-- [ ] 2.1 Cross-section classification
+- [x] 2.1 Cross-section classification
+      (`anvilate.analysis.en1993_classification`: Table 5.2 in full — internal parts,
+      outstand flanges, angles and tubular sections, the combined branches on α and ψ, and
+      a rolled I-section's web and flange under clause 5.5.2(6). α, ψ and k_σ are refused
+      rather than defaulted, and an outstand has no bending-only column because the table
+      gives it none. Anchored on the report's two worked classifications down to their
+      intermediate ratios)
 - [ ] 2.2 Cross-section resistance: tension, compression, bending, shear, interactions
 - [ ] 2.3 Flexural buckling by the cited curves; lateral-torsional buckling
 - [ ] 2.4 Bending and axial interaction by the declared method
