@@ -135,6 +135,37 @@ curve a₀ keeps "about 40% more" than curve d at λ̄ = 1; it is 55%. And the e
 figures were quoted a digit off in three places. Both were caught by the narrated-figure
 gate and by asserting the spread rather than describing it.
 
+## Task 3.3 was started and stopped: one coefficient could not be sourced
+
+The fillet-weld methods of EN 1993-1-8 §4.5.3 were read from the same report (F. Wald's
+chapter 2, p. 100) and are almost ready to implement. The directional method's first
+inequality is unambiguous:
+
+    √(σ⊥² + 3(τ⊥² + τ∥²)) ≤ f_u/(β_w·γ_M2)                          (report Eq. 2.14)
+
+and Table 2.8 reproduces EN 1993-1-8's Table 4.1 in full: β_w is 0,80 at S235, 0,85 at S275,
+0,90 at S355 and 1,00 at S420 and S460, across EN 10025, EN 10210 and EN 10219. The figure
+also shows the feature worth keeping — σ∥, the normal stress *along* the weld axis, appears
+in the figure and **not** in the check.
+
+**What stopped it is the second inequality.** The report prints `σ⊥ ≤ f_u/γ_M2`. The form
+this repository's author would expect is `σ⊥ ≤ 0,9·f_u/γ_M2`, and the report contains the
+string `0,9` nowhere near a weld and works no directional example to settle it. So one of
+two things is true and this reading cannot say which: either EN 1993-1-8 §4.5.3.2(6) has no
+0,9 and the recollection is wrong, or the report dropped it.
+
+A 10% coefficient on a weld's transverse tension check is not something to ship from memory,
+and "the arithmetic looks right" cannot distinguish the two — both forms are dimensionally
+sound and differ only in how much capacity they grant. **It needs a second public source
+that reproduces §4.5.3.2(6)**: an Access Steel NCCI, another JRC or national-body document,
+or a published worked example whose numbers settle it. Until then nothing is implemented,
+because the simplified method shares the same γ_M2 and β_w and would ship beside it.
+
+Recorded here rather than left as a gap, so the next attempt starts from the question rather
+than rediscovering it. Note also that `anvilate.analysis.weld` is entirely AISC J2.4 and
+does not overlap: the directional increase there is 1,0 + 0,5·sin^1,5 θ on a throat shear,
+which is a different model, not a different notation.
+
 ## What is not built
 
 Tasks 1.2 to 1.4, 2.4, 3.2, 3.3 and 4.1 to 4.4 are untouched, and 1.1 and 2.5 wait on

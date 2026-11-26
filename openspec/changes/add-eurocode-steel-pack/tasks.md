@@ -46,6 +46,10 @@ Depends on `add-standards-effectivity` (design basis and edition) and
 - [ ] 3.1 Read EN 1993-1-8:2005 and EN 1993-1-8:2024; record clauses and editions
 - [ ] 3.2 Bolted connections by category; slip resistance from a declared slip factor
 - [ ] 3.3 Fillet welds by the directional and simplified methods, declared
+      (**read and stopped**: Eq. 2.14's first inequality and Table 4.1's β_w are in hand,
+      but the report prints `σ⊥ ≤ f_u/γ_M2` where the expected form carries 0,9, and it
+      works no directional example to settle it. A 10% coefficient on a weld is not shipped
+      from memory — see design.md for what a second source has to answer)
 
 ## 4. Proof
 
